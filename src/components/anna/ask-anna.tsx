@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, AlertCircle, Sparkles } from "lucide-react";
+import { X, Send, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAnnaStore } from "@/lib/store";
@@ -32,7 +32,7 @@ function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5 px-4">
       <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span className="text-[10px] font-bold text-white">A</span>
+        <span className="text-[8px] font-bold text-white tracking-tight">A.I</span>
       </div>
       <div className="bg-[var(--anna-white)] border border-[var(--anna-border)] rounded-2xl rounded-tl-md px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -157,7 +157,7 @@ export function AskAnna() {
 
   return (
     <>
-      {/* ── Floating Action Button ── */}
+      {/* ── Floating Action Button (Speech Bubble) ── */}
       <AnimatePresence>
         {!askAnnaOpen && (
           <motion.button
@@ -167,18 +167,33 @@ export function AskAnna() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             onClick={() => setAskAnnaOpen(true)}
             className={cn(
-              "fixed z-50 w-14 h-14 rounded-full shadow-lg",
-              "bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)]",
-              "text-white flex items-center justify-center",
-              "transition-colors duration-200",
-              "bottom-8 right-6",
-              "md:bottom-8 md:right-6",
+              "fixed z-50 anna-fab-pulse",
               "bottom-20 right-4",
-              "anna-fab-pulse"
+              "md:bottom-8 md:right-6"
             )}
             aria-label="Open Ask Anna"
           >
-            <Sparkles size={22} strokeWidth={1.8} />
+            <svg
+              viewBox="0 0 64 72"
+              width="56"
+              height="63"
+              className="drop-shadow-lg"
+            >
+              <path
+                d="M32 4a28 28 0 0 1 28 28a28 28 0 0 1-28 28c-3.2 0-6.3-.5-9.2-1.5L14 68l2.8-12.3A27.9 27.9 0 0 1 4 32A28 28 0 0 1 32 4z"
+                className="fill-[var(--anna-sage)] transition-colors group-hover:fill-[var(--anna-sage-dark)]"
+              />
+              <text
+                x="32"
+                y="36"
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="fill-white"
+                style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-manrope), system-ui, sans-serif", letterSpacing: "-0.02em" }}
+              >
+                A.I
+              </text>
+            </svg>
           </motion.button>
         )}
       </AnimatePresence>
@@ -187,26 +202,23 @@ export function AskAnna() {
       <AnimatePresence>
         {askAnnaOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
             transition={{ type: "spring", stiffness: 350, damping: 30 }}
             className={cn(
-              "fixed z-50 bg-[var(--anna-white)] border border-[var(--anna-border)]",
-              "shadow-2xl flex flex-col overflow-hidden",
-              // Desktop
-              "bottom-8 right-6 w-[380px] h-[520px] rounded-2xl",
-              // Mobile: bottom sheet — leave gap at bottom so input bar is never flush with edge
-              "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl",
-              "bottom-2 left-2 right-2 rounded-2xl",
-              "max-h-[70vh] md:max-h-none"
+              "fixed z-50 bg-[var(--anna-white)] shadow-2xl flex flex-col overflow-hidden",
+              // Desktop: positioned card
+              "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
+              // Mobile: full-viewport overlay (no cropping possible)
+              "inset-0 md:inset-auto rounded-none md:rounded-2xl"
             )}
           >
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--anna-border)] bg-[var(--anna-white)] flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">A</span>
+                  <span className="text-[10px] font-bold text-white tracking-tight">A.I</span>
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--anna-slate)]">
@@ -236,10 +248,12 @@ export function AskAnna() {
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full px-6 text-center">
                   <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-4">
-                    <Sparkles
-                      size={24}
-                      className="text-[var(--anna-sage-dark)]"
-                    />
+                    <svg viewBox="0 0 64 72" width="28" height="32">
+                      <path
+                        d="M32 4a28 28 0 0 1 28 28a28 28 0 0 1-28 28c-3.2 0-6.3-.5-9.2-1.5L14 68l2.8-12.3A27.9 27.9 0 0 1 4 32A28 28 0 0 1 32 4z"
+                        className="fill-[var(--anna-sage-dark)]"
+                      />
+                    </svg>
                   </div>
                   <p className="text-sm font-semibold text-[var(--anna-slate)] mb-1">
                     Hi, I&apos;m Anna
@@ -278,8 +292,8 @@ export function AskAnna() {
                       {/* Avatar */}
                       {msg.role === "assistant" && (
                         <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-[10px] font-bold text-white">
-                            A
+                          <span className="text-[8px] font-bold text-white tracking-tight">
+                            A.I
                           </span>
                         </div>
                       )}
@@ -358,19 +372,6 @@ export function AskAnna() {
         )}
       </AnimatePresence>
 
-      {/* ── Backdrop on mobile ── */}
-      <AnimatePresence>
-        {askAnnaOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
-            onClick={() => setAskAnnaOpen(false)}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }

@@ -125,23 +125,35 @@
   }
 }
 
-/* FAB breathing pulse — subtle "alive" signal for AI button */
+/* FAB breathing pulse — subtle "alive" signal for speech bubble button */
 .anna-fab-pulse {
   animation: annaFabPulse 3s ease-in-out infinite;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 0;
+}
+
+.anna-fab-pulse svg {
+  transition: transform 0.2s ease;
 }
 
 @keyframes annaFabPulse {
   0%, 100% {
-    box-shadow: 0 4px 14px rgba(168, 187, 174, 0.4);
+    filter: drop-shadow(0 4px 12px rgba(168, 187, 174, 0.5));
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 4px 20px rgba(168, 187, 174, 0.7);
+    filter: drop-shadow(0 4px 20px rgba(168, 187, 174, 0.8));
     transform: scale(1.06);
   }
 }
 
 .anna-fab-pulse:hover {
   animation: none;
-  transform: scale(1.05);
+}
+
+.anna-fab-pulse:hover svg {
+  transform: scale(1.08);
 }
