@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
-  ImagePlus,
   X,
   Film,
   ImageIcon,
@@ -45,6 +43,15 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const IMAGE_MIME_PREFIX = "image/";
+const VIDEO_MIME_PREFIX = "video/";
+
+function classifyFile(file: File): "PHOTO" | "VIDEO" | null {
+  if (file.type.startsWith(IMAGE_MIME_PREFIX)) return "PHOTO";
+  if (file.type.startsWith(VIDEO_MIME_PREFIX)) return "VIDEO";
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Upload hook
 // ─────────────────────────────────────────────────────────────
@@ -71,7 +78,6 @@ function useFileUpload() {
         }
         const data = await res.json();
 
-        // Create preview URL for images
         const previewUrl =
           fileType === "PHOTO" ? data.fileUrl : undefined;
 
@@ -138,7 +144,7 @@ function Thumbnail({
         <X size={12} />
       </button>
 
-      {/* Video indicator */}
+      {/* Video indicator badge */}
       {isVideo && (
         <div className="absolute bottom-1 left-1 flex items-center gap-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-md">
           <Film size={8} />
@@ -146,46 +152,6 @@ function Thumbnail({
         </div>
       )}
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Add button
-// ─────────────────────────────────────────────────────────────
-
-function AddButton({
-  isVideo,
-  disabled,
-  onClick,
-  uploading,
-}: {
-  isVideo: boolean;
-  disabled: boolean;
-  onClick: () => void;
-  uploading: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || uploading}
-      className={cn(
-        "aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all",
-        disabled || uploading
-          ? "border-[var(--anna-border)] opacity-40 cursor-not-allowed"
-          : "border-[var(--anna-sage)]/50 bg-[var(--anna-sage-light)]/30 hover:bg-[var(--anna-sage-light)]/50 hover:border-[var(--anna-sage)] cursor-pointer"
-      )}
-    >
-      {uploading ? (
-        <Loader2 size={18} className="text-[var(--anna-sage)] animate-spin" />
-      ) : isVideo ? (
-        <PlusCircle size={18} className="text-[var(--anna-sage-dark)]" />
-      ) : (
-        <ImagePlus size={18} className="text-[var(--anna-sage-dark)]" />
-      )}
-      <span className="text-[10px] text-[var(--anna-muted)] font-medium">
-        {uploading ? "Uploading..." : "Add"}
-      </span>
-    </button>
   );
 }
 
@@ -202,43 +168,55 @@ export function MediaUploader({
   maxVideos = 2,
 }: MediaUploaderProps) {
   const { upload, uploading } = useFileUpload();
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handlePhotoSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []);
-      e.target.value = ""; // reset so same file can be re-selected
+  const canAddMore = photos.length < maxPhotos || videos.length < maxVideos;
 
-      for (const file of files) {
-        if (photos.length >= maxPhotos) break;
-        try {
-          const uploaded = await upload(file, "PHOTO", photos.length);
-          onPhotosChange([...photos, uploaded]);
-        } catch (err) {
-          console.error("Photo upload failed:", err);
-        }
-      }
-    },
-    [photos, maxPhotos, upload, onPhotosChange]
-  );
-
-  const handleVideoSelect = useCallback(
+  const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
       e.target.value = "";
 
+      const photosToUpload: File[] = [];
+      const videosToUpload: File[] = [];
+
+      // Classify each file
       for (const file of files) {
-        if (videos.length >= maxVideos) break;
+        const type = classifyFile(file);
+        if (!type) continue; // skip unsupported types
+
+        if (type === "PHOTO" && photosToUpload.length + photos.length < maxPhotos) {
+          photosToUpload.push(file);
+        } else if (type === "VIDEO" && videosToUpload.length + videos.length < maxVideos) {
+          videosToUpload.push(file);
+        }
+      }
+
+      // Upload photos
+      let updatedPhotos = [...photos];
+      for (const file of photosToUpload) {
         try {
-          const uploaded = await upload(file, "VIDEO", videos.length);
-          onVideosChange([...videos, uploaded]);
+          const uploaded = await upload(file, "PHOTO", updatedPhotos.length);
+          updatedPhotos = [...updatedPhotos, uploaded];
+          onPhotosChange(updatedPhotos);
+        } catch (err) {
+          console.error("Photo upload failed:", err);
+        }
+      }
+
+      // Upload videos
+      let updatedVideos = [...videos];
+      for (const file of videosToUpload) {
+        try {
+          const uploaded = await upload(file, "VIDEO", updatedVideos.length);
+          updatedVideos = [...updatedVideos, uploaded];
+          onVideosChange(updatedVideos);
         } catch (err) {
           console.error("Video upload failed:", err);
         }
       }
     },
-    [videos, maxVideos, upload, onVideosChange]
+    [photos, videos, maxPhotos, maxVideos, upload, onPhotosChange, onVideosChange]
   );
 
   const removePhoto = useCallback(
@@ -255,85 +233,74 @@ export function MediaUploader({
     [videos, onVideosChange]
   );
 
+  const totalCount = photos.length + videos.length;
+
   return (
-    <div className="space-y-4">
-      {/* Photos */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
-            <ImageIcon size={12} />
-            Photos
-          </Label>
-          <span className="text-[10px] text-[var(--anna-muted)]">
-            {photos.length}/{maxPhotos}
-          </span>
-        </div>
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-          {photos.map((photo, i) => (
-            <Thumbnail
-              key={photo.fileUrl}
-              file={photo}
-              isVideo={false}
-              onRemove={() => removePhoto(i)}
-            />
-          ))}
-          {photos.length < maxPhotos && (
-            <AddButton
-              isVideo={false}
-              disabled={uploading}
-              onClick={() => photoInputRef.current?.click()}
-              uploading={false}
-            />
-          )}
-        </div>
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,image/heic"
-          multiple
-          className="hidden"
-          onChange={handlePhotoSelect}
-        />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+          <ImageIcon size={12} />
+          Photos & Videos
+        </Label>
+        <span className="text-[10px] text-[var(--anna-muted)]">
+          {photos.length}/{maxPhotos} photos · {videos.length}/{maxVideos} videos
+        </span>
       </div>
 
-      {/* Videos */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
-            <Film size={12} />
-            Videos
-          </Label>
-          <span className="text-[10px] text-[var(--anna-muted)]">
-            {videos.length}/{maxVideos}
-          </span>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-          {videos.map((video, i) => (
-            <Thumbnail
-              key={video.fileUrl}
-              file={video}
-              isVideo={true}
-              onRemove={() => removeVideo(i)}
-            />
-          ))}
-          {videos.length < maxVideos && (
-            <AddButton
-              isVideo={true}
-              disabled={uploading}
-              onClick={() => videoInputRef.current?.click()}
-              uploading={uploading}
-            />
-          )}
-        </div>
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/mp4,video/quicktime,video/webm"
-          multiple
-          className="hidden"
-          onChange={handleVideoSelect}
-        />
+      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+        {/* Photo thumbnails */}
+        {photos.map((photo, i) => (
+          <Thumbnail
+            key={photo.fileUrl}
+            file={photo}
+            isVideo={false}
+            onRemove={() => removePhoto(i)}
+          />
+        ))}
+
+        {/* Video thumbnails */}
+        {videos.map((video, i) => (
+          <Thumbnail
+            key={video.fileUrl}
+            file={video}
+            isVideo={true}
+            onRemove={() => removeVideo(i)}
+          />
+        ))}
+
+        {/* Single unified add button */}
+        {canAddMore && (
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className={cn(
+              "aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 transition-all",
+              uploading
+                ? "border-[var(--anna-border)] opacity-40 cursor-not-allowed"
+                : "border-[var(--anna-sage)]/50 bg-[var(--anna-sage-light)]/30 hover:bg-[var(--anna-sage-light)]/50 hover:border-[var(--anna-sage)] cursor-pointer"
+            )}
+          >
+            {uploading ? (
+              <Loader2 size={18} className="text-[var(--anna-sage)] animate-spin" />
+            ) : (
+              <PlusCircle size={18} className="text-[var(--anna-sage-dark)]" />
+            )}
+            <span className="text-[10px] text-[var(--anna-muted)] font-medium">
+              {uploading ? "Uploading..." : "Add"}
+            </span>
+          </button>
+        )}
       </div>
+
+      {/* Single combined file input */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,video/mp4,video/quicktime,video/webm"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+      />
     </div>
   );
 }
