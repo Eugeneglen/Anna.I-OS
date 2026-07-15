@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +43,7 @@ import {
   Trash2,
   Check,
   X,
+  Camera,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -53,6 +54,89 @@ async function fetchHouseholdDetail(id: string) {
   const res = await fetch(`/api/households/${id}`);
   if (!res.ok) throw new Error("Failed to fetch household");
   return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Member avatar with upload
+// ─────────────────────────────────────────────────────────────
+
+function MemberAvatar({
+  member,
+  onUploaded,
+}: {
+  member: FamilyMember;
+  onUploaded: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("memberId", member.id);
+
+      const res = await fetch("/api/upload-avatar", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Upload failed");
+      }
+      toast.success("Photo updated");
+      onUploaded();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      // Reset so same file can be re-selected
+      e.target.value = "";
+    }
+  };
+
+  const initials = member.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className="relative group/avatar flex-shrink-0">
+      {member.avatarUrl ? (
+        <img
+          src={member.avatarUrl}
+          alt={member.name}
+          className="w-10 h-10 rounded-full object-cover"
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center text-sm font-semibold text-[var(--anna-sage-dark)]">
+          {initials}
+        </div>
+      )}
+      {/* Camera overlay on hover */}
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity disabled:opacity-0"
+        aria-label="Change photo"
+      >
+        {uploading ? (
+          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : (
+          <Camera size={14} className="text-white" />
+        )}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={handleUpload}
+      />
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -431,12 +515,14 @@ export function SettingsPanel() {
               className="flex items-center justify-between py-2 group/row"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center text-xs font-semibold text-[var(--anna-sage-dark)] flex-shrink-0">
-                  {member.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </div>
+                <MemberAvatar
+                  member={member}
+                  onUploaded={() =>
+                    queryClient.invalidateQueries({
+                      queryKey: ["household", selectedHouseholdId],
+                    })
+                  }
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
                     {member.name}

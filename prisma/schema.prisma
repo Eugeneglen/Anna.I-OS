@@ -124,6 +124,7 @@ model FamilyMember {
   name        String
   email       String     @unique
   phone       String?
+  avatarUrl   String?    // relative path e.g. /avatars/xxx.jpg
   role        MemberRole @default(MEMBER)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
