@@ -2,12 +2,33 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL } from "@/lib/constants"
 
+const ALL_CATEGORIES = ["CLEANING", "LAUNDRY", "AIRCON", "HANDYMAN"] as const
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ householdId: string }> }
 ) {
   try {
     const { householdId } = await params
+
+    // Ensure all 4 categories have an autonomy record (upsert missing ones)
+    await db.$transaction(
+      ALL_CATEGORIES.map((category) =>
+        db.householdCategoryAutonomy.upsert({
+          where: {
+            householdId_category: { householdId, category },
+          },
+          create: {
+            householdId,
+            category,
+            currentLevel: 1,
+            verifiedCyclesAtLevel: 0,
+            totalVerifiedCycles: 0,
+          },
+          update: {}, // no-op if exists
+        })
+      )
+    )
 
     const [autonomy, thresholds] = await Promise.all([
       db.householdCategoryAutonomy.findMany({
