@@ -1,5 +1,45 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { z } from "zod"
+
+const patchHouseholdSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(20).optional(),
+  address: z.string().min(1).max(200).optional(),
+  unitNumber: z.string().max(20).optional(),
+  postalCode: z.string().max(10).optional(),
+})
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json()
+    const parsed = patchHouseholdSchema.parse(body)
+
+    const household = await db.household.update({
+      where: { id },
+      data: parsed,
+    })
+
+    return NextResponse.json({ household })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation failed", details: error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    console.error("PATCH /api/households/[id] error:", error)
+    return NextResponse.json(
+      { error: "Failed to update household" },
+      { status: 500 }
+    )
+  }
+}
 
 export async function GET(
   _request: Request,

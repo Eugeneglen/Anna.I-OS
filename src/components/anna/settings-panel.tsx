@@ -1,11 +1,53 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
-import { formatSgd, type Household, type FamilyMember, type Subscription } from "@/lib/types";
-import { Mail, MapPin, Crown, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import {
+  formatSgd,
+  type Household,
+  type FamilyMember,
+  type Subscription,
+} from "@/lib/types";
+import {
+  Mail,
+  MapPin,
+  Phone,
+  Crown,
+  Users,
+  Pencil,
+  Plus,
+  Trash2,
+  Check,
+  X,
+} from "lucide-react";
+
+// ─────────────────────────────────────────────────────────────
+// Data fetching
+// ─────────────────────────────────────────────────────────────
 
 async function fetchHouseholdDetail(id: string) {
   const res = await fetch(`/api/households/${id}`);
@@ -13,8 +55,123 @@ async function fetchHouseholdDetail(id: string) {
   return res.json();
 }
 
+// ─────────────────────────────────────────────────────────────
+// Editable field row
+// ─────────────────────────────────────────────────────────────
+
+function EditableField({
+  label,
+  value,
+  icon: Icon,
+  fieldKey,
+  householdId,
+  isMutating,
+  mutate,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  fieldKey: string;
+  householdId: string;
+  isMutating: boolean;
+  mutate: ReturnType<typeof useMutation>["mutate"];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const handleSave = useCallback(() => {
+    if (!draft.trim() || draft === value) {
+      setDraft(value);
+      setEditing(false);
+      return;
+    }
+    mutate(
+      { [fieldKey]: draft },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          toast.success(`${label} updated`);
+        },
+        onError: () => {
+          setDraft(value);
+          setEditing(false);
+          toast.error(`Failed to update ${label.toLowerCase()}`);
+        },
+      }
+    );
+  }, [draft, value, fieldKey, label, mutate]);
+
+  const handleCancel = useCallback(() => {
+    setDraft(value);
+    setEditing(false);
+  }, [value]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <Icon size={14} className="text-[var(--anna-muted)] flex-shrink-0" />
+      {editing ? (
+        <div className="flex items-center gap-2 flex-1">
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") handleCancel();
+            }}
+            className="h-8 text-sm border-[var(--anna-border)] bg-[var(--anna-bg)] rounded-lg px-2.5"
+            autoFocus
+            disabled={isMutating}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-[var(--anna-success)] hover:bg-[var(--anna-success)]/10 flex-shrink-0"
+            onClick={handleSave}
+            disabled={isMutating}
+          >
+            <Check size={14} />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-[var(--anna-muted)] hover:bg-[var(--anna-bg)] flex-shrink-0"
+            onClick={handleCancel}
+            disabled={isMutating}
+          >
+            <X size={14} />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-sm text-[var(--anna-slate-light)] truncate">
+            {value || "—"}
+          </span>
+          <button
+            onClick={() => {
+              setDraft(value);
+              setEditing(true);
+            }}
+            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+            aria-label={`Edit ${label}`}
+          >
+            <Pencil size={12} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────
+
 export function SettingsPanel() {
-  const { selectedHouseholdId } = useAnnaStore();
+  const { selectedHouseholdId, setHouseholdNames, householdNames } =
+    useAnnaStore();
+  const queryClient = useQueryClient();
+
+  // ── Queries ──
 
   const { data, isLoading } = useQuery({
     queryKey: ["household", selectedHouseholdId],
@@ -22,20 +179,108 @@ export function SettingsPanel() {
     enabled: !!selectedHouseholdId,
   });
 
-  if (isLoading) {
-    return (
-      <div className="p-4 lg:p-6 space-y-4">
-        <Skeleton className="h-8 w-48 rounded-xl bg-[var(--anna-border)]" />
-        <Skeleton className="h-40 w-full rounded-2xl bg-[var(--anna-border)]" />
-        <Skeleton className="h-32 w-full rounded-2xl bg-[var(--anna-border)]" />
-      </div>
-    );
-  }
+  // ── Mutations ──
+
+  const updateHousehold = useMutation({
+    mutationFn: async (patch: Record<string, string>) => {
+      const res = await fetch(`/api/households/${selectedHouseholdId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Update failed");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      queryClient.invalidateQueries({ queryKey: ["households"] });
+      if (variables.name) {
+        setHouseholdNames({
+          ...householdNames,
+          [selectedHouseholdId]: variables.name,
+        });
+      }
+    },
+  });
+
+  const addMember = useMutation({
+    mutationFn: async (body: {
+      name: string;
+      email: string;
+      phone?: string;
+    }) => {
+      const res = await fetch(`/api/households/${selectedHouseholdId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to add member");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Member added");
+      setAddDialogOpen(false);
+      setNewMember({ name: "", email: "", phone: "" });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteMember = useMutation({
+    mutationFn: async (memberId: string) => {
+      const res = await fetch(
+        `/api/households/${selectedHouseholdId}/members/${memberId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to remove member");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Member removed");
+      setDeleteTarget(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ── State ──
+
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newMember, setNewMember] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [deleteTarget, setDeleteTarget] = useState<FamilyMember | null>(null);
+
+  // ── Derived ──
 
   const household: Household | undefined = data?.household;
   const members: FamilyMember[] = data?.members || [];
   const subscriptions: Subscription[] = data?.subscriptions || [];
   const sub = subscriptions[0];
+
+  // ── Render ──
+
+  if (isLoading) {
+    return (
+      <div className="p-4 lg:p-6 space-y-4">
+        <Skeleton className="h-8 w-48 rounded-xl bg-[var(--anna-border)]" />
+        <Skeleton className="h-56 w-full rounded-2xl bg-[var(--anna-border)]" />
+        <Skeleton className="h-40 w-full rounded-2xl bg-[var(--anna-border)]" />
+        <Skeleton className="h-48 w-full rounded-2xl bg-[var(--anna-border)]" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
@@ -46,43 +291,70 @@ export function SettingsPanel() {
         Household configuration and subscription
       </p>
 
-      {/* Household Info */}
-      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
+      {/* ── Household Info ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4 group">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-4">
           Household
         </h3>
-        <div className="space-y-3">
+        <div className="space-y-3.5">
+          {/* Name (uses a dedicated inline row, not EditableField) */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center flex-shrink-0">
               <span className="text-sm font-bold text-[var(--anna-sage-dark)]">
                 {household?.name?.charAt(0) || "?"}
               </span>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                {household?.name}
-              </p>
-              <p className="text-xs text-[var(--anna-muted)]">
-                Owner
-              </p>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div>
+                <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                  {household?.name}
+                </p>
+                <p className="text-xs text-[var(--anna-muted)]">Owner</p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-[var(--anna-slate-light)]">
-            <Mail size={14} className="text-[var(--anna-muted)]" />
-            {household?.email}
-          </div>
+          <EditableField
+            label="Email"
+            value={household?.email || ""}
+            icon={Mail}
+            fieldKey="email"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
 
-          <div className="flex items-center gap-2 text-sm text-[var(--anna-slate-light)]">
-            <MapPin size={14} className="text-[var(--anna-muted)]" />
-            {household?.address}
-            {household?.unitNumber && `, ${household.unitNumber}`}
-            {household?.postalCode && ` ${household.postalCode}`}
+          <EditableField
+            label="Phone"
+            value={household?.phone || ""}
+            icon={Phone}
+            fieldKey="phone"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
+
+          <EditableField
+            label="Address"
+            value={household?.address || ""}
+            icon={MapPin}
+            fieldKey="address"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
+
+          <div className="flex items-center gap-3">
+            <MapPin size={14} className="text-[var(--anna-muted)] flex-shrink-0" />
+            <span className="text-sm text-[var(--anna-slate-light)]">
+              {household?.unitNumber || "—"} &middot;{" "}
+              {household?.postalCode || "—"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Subscription */}
+      {/* ── Subscription (read-only) ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
           Subscription
@@ -135,47 +407,174 @@ export function SettingsPanel() {
         )}
       </div>
 
-      {/* Members */}
+      {/* ── Members ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)]">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
-          <Users size={14} />
-          Members ({members.length})
-        </h3>
-        <div className="space-y-2">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+            <Users size={14} />
+            Members ({members.length})
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-[var(--anna-border)] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)] hover:border-[var(--anna-sage)]"
+            onClick={() => setAddDialogOpen(true)}
+          >
+            <Plus size={12} className="mr-1" />
+            Add
+          </Button>
+        </div>
+        <div className="space-y-1">
           {members.map((member) => (
             <div
               key={member.id}
-              className="flex items-center justify-between py-1.5"
+              className="flex items-center justify-between py-2 group/row"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center text-xs font-semibold text-[var(--anna-sage-dark)]">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center text-xs font-semibold text-[var(--anna-sage-dark)] flex-shrink-0">
                   {member.name
                     .split(" ")
                     .map((n) => n[0])
                     .join("")}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--anna-slate)]">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
                     {member.name}
                   </p>
-                  <p className="text-[11px] text-[var(--anna-muted)]">
+                  <p className="text-[11px] text-[var(--anna-muted)] truncate">
                     {member.email}
                   </p>
                 </div>
               </div>
-              <span
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
-                  member.role === "OWNER"
-                    ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
-                    : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
-                }`}
-              >
-                {member.role}
-              </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
+                    member.role === "OWNER"
+                      ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+                      : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
+                  }`}
+                >
+                  {member.role}
+                </span>
+                {member.role !== "OWNER" && (
+                  <button
+                    onClick={() => setDeleteTarget(member)}
+                    className="p-1.5 rounded-md text-[var(--anna-muted)] hover:text-[var(--anna-error)] hover:bg-[var(--anna-error)]/10 transition-colors opacity-0 group-hover/row:opacity-100 focus:opacity-100"
+                    aria-label={`Remove ${member.name}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* ── Add Member Dialog ── */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+            <DialogDescription>
+              Add a new member to your household.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="member-name" className="text-xs">
+                Name <span className="text-[var(--anna-error)]">*</span>
+              </Label>
+              <Input
+                id="member-name"
+                value={newMember.name}
+                onChange={(e) =>
+                  setNewMember((m) => ({ ...m, name: e.target.value }))
+                }
+                placeholder="Full name"
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="member-email" className="text-xs">
+                Email <span className="text-[var(--anna-error)]">*</span>
+              </Label>
+              <Input
+                id="member-email"
+                type="email"
+                value={newMember.email}
+                onChange={(e) =>
+                  setNewMember((m) => ({ ...m, email: e.target.value }))
+                }
+                placeholder="email@example.com"
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="member-phone" className="text-xs">
+                Phone
+              </Label>
+              <Input
+                id="member-phone"
+                value={newMember.phone}
+                onChange={(e) =>
+                  setNewMember((m) => ({ ...m, phone: e.target.value }))
+                }
+                placeholder="+65 9XXX XXXX"
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="border-[var(--anna-border)]"
+              onClick={() => setAddDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addMember.mutate(newMember)}
+              disabled={
+                !newMember.name.trim() ||
+                !newMember.email.trim() ||
+                addMember.isPending
+              }
+              className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+            >
+              {addMember.isPending ? "Adding..." : "Add Member"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Member Confirmation ── */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {deleteTarget?.name} from the household. They
+              won't have access to household tasks or data anymore.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[var(--anna-border)]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMember.mutate(deleteTarget.id)}
+              disabled={deleteMember.isPending}
+              className="bg-[var(--anna-error)] hover:bg-[var(--anna-error)]/90 text-white"
+            >
+              {deleteMember.isPending ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

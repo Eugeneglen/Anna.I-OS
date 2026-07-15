@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import { QueryProvider } from "@/components/query-provider";
 
 const manrope = Manrope({
@@ -54,6 +55,7 @@ export default function RootLayout({
       >
         <QueryProvider>{children}</QueryProvider>
         <Toaster />
+        <SonnerToaster position="top-center" richColors closeButton duration={3000} toastOptions={{ style: { fontFamily: 'var(--font-manrope), system-ui, sans-serif' } }} />
       </body>
     </html>
   );
