@@ -194,3 +194,30 @@ Stage Summary:
 - Routing Engine: scoring, ranking, auto-dispatch all functional
 - Ask Anna: intent detection → data fetch → LLM response pipeline working
 - Mobile responsive layout confirmed
+---
+Task ID: 6-a
+Agent: Main
+Task: Ask Anna UX Polish — Fix cropping bug, replace subtitle, add FAB pulse, add suggestion chips
+
+Work Log:
+- Analyzed current Ask Anna implementation via VLM screenshot analysis + code review
+- Provided honest UX/product assessment to user (deferred premium redesign to Phase 2, recommended 4 tactical fixes)
+- Fix 1 — Mobile cropping: changed from `bottom-16 h-[70vh]` to `bottom-2 max-h-[70vh]` with `md:max-h-none` for desktop independence; added `pb-[max(0.75rem,env(safe-area-inset-bottom))]` for iOS safe area
+- Fix 2 — Removed "Read-only assistant" subtitle, replaced with "Your household, understood" in sage-dark color with font-medium
+- Fix 3 — Swapped FAB icon from generic `MessageCircle` to `Sparkles` (Lucide); added `anna-fab-pulse` CSS class with 3s breathing animation (scale 1→1.06, box-shadow pulse in sage rgba); hover pauses animation
+- Fix 4 — Added 4 context-aware quick-suggestion chips in empty chat state: escrow balance, vendor history, autonomy progress, upcoming tasks; clicking a chip populates input and focuses
+- Cleaned up unused imports (MessageCircle, ScrollArea)
+- Browser-verified: desktop (1440×900) and mobile (390×844) both pass all checks
+- Verified chip → input population → send → LLM response flow works end-to-end
+- Zero console errors, zero lint errors, clean dev server
+
+Files Modified:
+1. src/components/anna/ask-anna.tsx — FAB icon, panel positioning, subtitle copy, suggestion chips, safe area padding
+2. src/app/globals.css — anna-fab-pulse keyframe animation + hover override
+
+Stage Summary:
+- 4 tactical improvements deployed: cropping fix, subtitle, FAB pulse, suggestion chips
+- Ask Anna now signals "intelligent AI" through Sparkles icon + breathing animation + context-aware chips
+- "Read-only assistant" disclaimer removed — replaced with positive brand statement
+- Input bar fully visible on mobile with safe-area support
+- Full message flow verified: chip click → input populated → send → LLM response received

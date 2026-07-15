@@ -3,10 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Send, AlertCircle } from "lucide-react";
+import { X, Send, AlertCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +44,29 @@ function TypingIndicator() {
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────
+// Quick-suggestion chips (context-aware prompts for empty state)
+// ─────────────────────────────────────────────────────────────
+
+const SUGGESTION_CHIPS = [
+  {
+    label: "What's my escrow balance?",
+    prompt: "What's my current escrow balance?",
+  },
+  {
+    label: "Who cleaned last week?",
+    prompt: "Who was the vendor for my last cleaning task?",
+  },
+  {
+    label: "Am I close to the next autonomy level?",
+    prompt: "How close am I to leveling up autonomy in each category?",
+  },
+  {
+    label: "Upcoming tasks this week",
+    prompt: "What tasks are coming up this week for my household?",
+  },
+];
 
 // ─────────────────────────────────────────────────────────────
 // Main component
@@ -149,15 +171,14 @@ export function AskAnna() {
               "bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)]",
               "text-white flex items-center justify-center",
               "transition-colors duration-200",
-              // Desktop: bottom-right
               "bottom-8 right-6",
-              // Mobile: above tab bar
               "md:bottom-8 md:right-6",
-              "bottom-20 right-4"
+              "bottom-20 right-4",
+              "anna-fab-pulse"
             )}
             aria-label="Open Ask Anna"
           >
-            <MessageCircle size={24} strokeWidth={2} />
+            <Sparkles size={22} strokeWidth={1.8} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -175,9 +196,10 @@ export function AskAnna() {
               "shadow-2xl flex flex-col overflow-hidden",
               // Desktop
               "bottom-8 right-6 w-[380px] h-[520px] rounded-2xl",
-              // Mobile: full-width bottom sheet
+              // Mobile: bottom sheet — leave gap at bottom so input bar is never flush with edge
               "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl",
-              "bottom-16 left-2 right-2 h-[70vh] rounded-t-2xl"
+              "bottom-2 left-2 right-2 rounded-2xl",
+              "max-h-[70vh] md:max-h-none"
             )}
           >
             {/* ── Header ── */}
@@ -190,8 +212,8 @@ export function AskAnna() {
                   <h3 className="text-sm font-semibold text-[var(--anna-slate)]">
                     Ask Anna
                   </h3>
-                  <p className="text-[10px] text-[var(--anna-muted)]">
-                    Read-only assistant
+                  <p className="text-[10px] text-[var(--anna-sage-dark)] font-medium">
+                    Your household, understood
                   </p>
                 </div>
               </div>
@@ -214,18 +236,34 @@ export function AskAnna() {
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full px-6 text-center">
                   <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-4">
-                    <MessageCircle
+                    <Sparkles
                       size={24}
                       className="text-[var(--anna-sage-dark)]"
                     />
                   </div>
-                  <p className="text-sm font-medium text-[var(--anna-slate)] mb-1">
+                  <p className="text-sm font-semibold text-[var(--anna-slate)] mb-1">
                     Hi, I&apos;m Anna
                   </p>
-                  <p className="text-xs text-[var(--anna-muted)] leading-relaxed max-w-[260px]">
-                    Ask me about your household — upcoming tasks, spending,
-                    vendor history, escrow, or autonomy progress.
+                  <p className="text-xs text-[var(--anna-muted)] leading-relaxed max-w-[260px] mb-5">
+                    Ask me about your household — tasks, spending, vendor history, or autonomy progress.
                   </p>
+                  {/* Quick-suggestion chips */}
+                  <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                    {SUGGESTION_CHIPS.map((chip) => (
+                      <button
+                        key={chip.label}
+                        onClick={() => {
+                          setInput(chip.prompt);
+                          setTimeout(() => inputRef.current?.focus(), 50);
+                        }}
+                        className="text-left px-3.5 py-2.5 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] hover:bg-[var(--anna-sage-light)] hover:border-[var(--anna-sage)] transition-all duration-150 group"
+                      >
+                        <p className="text-xs font-medium text-[var(--anna-slate)] group-hover:text-[var(--anna-sage-dark)]">
+                          {chip.label}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 py-4">
@@ -282,9 +320,9 @@ export function AskAnna() {
             </div>
 
             {/* ── Input Bar ── */}
-            <div className="flex-shrink-0 border-t border-[var(--anna-border)] px-3 py-3 bg-[var(--anna-white)]">
+            <div className="flex-shrink-0 border-t border-[var(--anna-border)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[var(--anna-white)]">
               {!selectedHouseholdId ? (
-                <p className="text-xs text-[var(--anna-muted)] text-center py-1">
+                <p className="text-xs text-[var(--anna-muted)] text-center py-1.5">
                   Select a household first
                 </p>
               ) : (

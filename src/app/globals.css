@@ -124,3 +124,24 @@
     transform: translateY(0);
   }
 }
+
+/* FAB breathing pulse — subtle "alive" signal for AI button */
+.anna-fab-pulse {
+  animation: annaFabPulse 3s ease-in-out infinite;
+}
+
+@keyframes annaFabPulse {
+  0%, 100% {
+    box-shadow: 0 4px 14px rgba(168, 187, 174, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(168, 187, 174, 0.7);
+    transform: scale(1.06);
+  }
+}
+
+.anna-fab-pulse:hover {
+  animation: none;
+  transform: scale(1.05);
+}
