@@ -93,3 +93,104 @@ Stage Summary:
 - Full Closed-Loop UI flow: create → dispatch → verify → escrow release → rebook
 - Autonomy promotion at verification approval, pause on dispute
 - Dev logs confirm: households, tasks (with nested bookings/vendors/photos/escrow), subscriptions, autonomy all serving from real DB
+---
+Task ID: 5-b
+Agent: full-stack-developer
+Task: Phase 2B — "Ask Anna" Read-Only LLM Chat
+
+Work Log:
+- Added `askAnnaOpen` / `setAskAnnaOpen` to Zustand AnnaStore for chat panel toggle
+- Built `src/app/api/ask-anna/route.ts` POST endpoint:
+  - Keyword-based intent detection across 7 intents (upcoming, spending, vendor, escrow, autonomy, summary, default)
+  - 6 async data-fetching functions using Prisma: fetchUpcomingTasks, fetchMonthlySpending, fetchVendorHistory, fetchEscrowStatus, fetchAutonomyStatus, fetchHouseholdSummary
+  - Structured data injected into LLM system prompt as JSON context
+  - z-ai-web-dev-sdk used for chat completions (backend only, thinking disabled)
+  - Response format: `{ response: string, dataUsed: string[] }`
+  - All monetary values in SGD cents internally, formatted as `SGD $X.XX`
+- Built `src/components/anna/ask-anna.tsx` chat UI component:
+  - Floating Action Button (sage green, bottom-right, above mobile tab bar)
+  - Animated chat panel: 380×520 desktop, full-width bottom sheet on mobile
+  - User messages: right-aligned sage green bubbles; Anna messages: left-aligned off-white bubbles
+  - 3-dot bounce typing indicator while awaiting LLM response
+  - Empty state with guidance text; error state with inline message
+  - Auto-scroll on new messages; Enter key + send button; input disabled during loading
+  - TanStack Query `useMutation` for API calls; framer-motion for panel animations
+  - Mobile backdrop overlay; close button in header
+- Modified `src/components/anna/layout-shell.tsx` to import and render `<AskAnna />`
+- ESLint: 0 errors; dev server compiled successfully
+
+Stage Summary:
+- 1 new API route, 1 new component, 2 files modified (store + layout-shell)
+- Complete fetch-then-respond pattern: intent detection → DB query → LLM context → natural language response
+- Read-only assistant that cannot create/modify/delete, only reads and explains household data
+- Brand-consistent UI with Anna.I CSS variables and framer-motion animations
+- z-ai-web-dev-sdk strictly in backend API route only
+---
+Task ID: 5-a
+Agent: full-stack-developer
+Task: Phase 2A — Routing Engine (weighted vendor scoring)
+
+Work Log:
+- Added `ScoreBreakdown` and `VendorSuggestion` types to `src/lib/types.ts`
+- Built routing engine `src/lib/routing.ts` with `getSuggestedVendors()` and `autoSelectVendor()`
+- Scoring algorithm: base 100, with weighted bonuses/penalties for affinity (+15 base +5/additional capped +30), rating (avgRating*3 capped +15), disputes (-20 each), reassignments (-5 each), utilisation (penalty if >50% capacity), zone match (+10 for postal prefix overlap), recent completion (+5 if within 7 days)
+- Category match is a hard filter (not scored); only ACTIVE vendors considered
+- Batch-fetched affinity data and today's booking counts for efficient scoring
+- Created `GET /api/tasks/[id]/suggest-vendors` route — validates task is CREATED, returns ranked vendor list with scores and human-readable reasons
+- Modified `POST /api/tasks/[id]/dispatch` — vendorId is now optional in Zod schema; when omitted, calls `autoSelectVendor()` for auto-dispatch; response includes `autoSelected` boolean
+- Lint: 0 errors
+
+Files Created:
+1. src/lib/routing.ts — routing engine with weighted scoring algorithm
+2. src/app/api/tasks/[id]/suggest-vendors/route.ts — GET endpoint for vendor suggestions
+
+Files Modified:
+1. src/lib/types.ts — added ScoreBreakdown + VendorSuggestion types
+2. src/app/api/tasks/[id]/dispatch/route.ts — vendorId now optional, auto-selects via routing engine
+
+Stage Summary:
+- Routing engine fully operational with 7-factor weighted scoring
+- Suggest-vendors API returns ranked list with per-factor breakdown
+- Dispatch route supports both manual (Level 1) and auto-dispatch (Level 3+) via optional vendorId
+- All amounts in SGD cents, proper error handling, Zod validation
+---
+Task ID: 5-c
+Agent: Main
+Task: Phase 2C — Integrate routing suggestions into task detail UI
+
+Work Log:
+- Modified `src/components/anna/task-detail.tsx` to replace old vendor list with routing suggestions
+- When task is CREATED: shows "Routing Suggestions" section with ranked vendor cards
+- Auto-Dispatch button: calls dispatch without vendorId → routing engine auto-picks top vendor
+- Manual selection list: each vendor shows rank badge, name, "Best Match" badge (rank 1), reason string, score with color coding
+- Filtered out old "Dispatch to Vendor" action button for CREATED status (replaced by suggestions panel)
+- Fixed dispatch route: made scheduledStart optional, defaults to tomorrow 10am if omitted
+- Added `cn` import for conditional class names
+
+Stage Summary:
+- Routing engine now fully integrated into the Closed-Loop UI
+- User sees scored, explained vendor recommendations instead of a flat list
+- Auto-dispatch uses routing engine's top pick; manual override available
+- Zero lint errors; browser-verified end-to-end
+---
+Task ID: 5-d
+Agent: Main
+Task: Phase 2D — Browser verification of all Phase 2 flows
+
+Work Log:
+- Verified dashboard renders with household selector, task list, summary cards, Ask Anna FAB
+- Created new cleaning task via New Task form → navigated to dashboard with new task in "AWAITING DISPATCH"
+- Clicked new task → Routing Suggestions panel displayed with 3 ranked vendors:
+  - SparkClean Pro: score 145 (affinity +25, rating +15, recent +5)
+  - FixIt Handyman Co: score 100 (baseline)
+  - GreenSweep Pte Ltd: score 100 (baseline)
+- Auto-Dispatch button shows top vendor name and score
+- Opened Ask Anna chat panel → sent "What's my spending this month?" → received LLM response with household spending data
+- Verified mobile viewport (390×844) renders correctly
+- Checked dev logs: all API calls returning 200, zero errors
+
+Stage Summary:
+- Both Phase 2 deliverables verified working end-to-end in browser
+- Routing Engine: scoring, ranking, auto-dispatch all functional
+- Ask Anna: intent detection → data fetch → LLM response pipeline working
+- Mobile responsive layout confirmed

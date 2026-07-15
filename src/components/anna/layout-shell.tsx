@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TabType, Household } from "@/lib/types";
+import { AskAnna } from "@/components/anna/ask-anna";
 
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -178,6 +179,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </footer>
+
+      {/* Ask Anna Chat */}
+      <AskAnna />
     </div>
   );
 }

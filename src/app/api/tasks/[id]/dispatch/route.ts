@@ -3,10 +3,11 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
+import { autoSelectVendor } from "@/lib/routing"
 
 const dispatchSchema = z.object({
-  vendorId: z.string().min(1),
-  scheduledStart: z.string().transform((v) => new Date(v)),
+  vendorId: z.string().min(1).optional(),
+  scheduledStart: z.string().transform((v) => new Date(v)).optional(),
   scheduledEnd: z.string().transform((v) => new Date(v)).optional(),
 })
 
@@ -26,7 +27,15 @@ export async function POST(
       )
     }
 
-    const { vendorId, scheduledStart, scheduledEnd } = parsed.data
+    const { scheduledStart, scheduledEnd } = parsed.data
+
+    // Default scheduledStart to tomorrow 10am SGT if not provided
+    const start = scheduledStart ?? (function () {
+      const d = new Date()
+      d.setDate(d.getDate() + 1)
+      d.setHours(10, 0, 0, 0)
+      return d
+    })()
 
     // Validate task exists and is in CREATED status
     const task = await db.task.findUnique({ where: { id } })
@@ -40,6 +49,16 @@ export async function POST(
       )
     }
 
+    // Resolve vendorId: use explicit vendorId or auto-select via routing engine
+    let vendorId = parsed.data.vendorId
+    let autoSelected = false
+
+    if (!vendorId) {
+      const suggestion = await autoSelectVendor(id)
+      vendorId = suggestion.vendor.id
+      autoSelected = true
+    }
+
     const now = new Date()
     const amountCents = task.amountCents
     const commissionCents = Math.round((amountCents * PLATFORM_COMMISSION_RATE) / 100)
@@ -50,7 +69,7 @@ export async function POST(
       data: {
         taskId: id,
         vendorId,
-        scheduledStart,
+        scheduledStart: start,
         scheduledEnd: scheduledEnd ?? null,
         status: "assigned",
         dispatchedAt: now,
@@ -127,7 +146,9 @@ export async function POST(
           channel: NotificationChannel.WHATSAPP,
           eventType: NotificationEventType.TASK_DISPATCHED,
           title: "Task Dispatched",
-          body: `Your ${task.category.toLowerCase()} task has been dispatched to ${booking.vendor.name}.`,
+          body: autoSelected
+            ? `Your ${task.category.toLowerCase()} task was auto-dispatched to ${booking.vendor.name}.`
+            : `Your ${task.category.toLowerCase()} task has been dispatched to ${booking.vendor.name}.`,
           status: NotificationStatus.PENDING,
           referenceType: "task",
           referenceId: task.id,
@@ -135,12 +156,13 @@ export async function POST(
       })
     }
 
-    return NextResponse.json({ task: { ...task, status: TaskStatus.DISPATCHED, dispatchedAt: now }, booking, escrow }, { status: 201 })
+    return NextResponse.json(
+      { task: { ...task, status: TaskStatus.DISPATCHED, dispatchedAt: now }, booking, escrow, autoSelected },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("POST /api/tasks/[id]/dispatch error:", error)
-    return NextResponse.json(
-      { error: "Failed to dispatch task" },
-      { status: 500 }
-    )
+    const message = error instanceof Error ? error.message : "Failed to dispatch task"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -23,9 +23,12 @@ import {
   STATUS_LABELS,
   type Task,
   type TaskStatus,
+  type VendorSuggestion,
+  type ScoreBreakdown,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 async function fetchTask(taskId: string): Promise<Task> {
   const res = await fetch(`/api/tasks/${taskId}`);
@@ -34,11 +37,11 @@ async function fetchTask(taskId: string): Promise<Task> {
   return data.task;
 }
 
-async function fetchVendors(category: string) {
-  const res = await fetch(`/api/vendors?category=${category}`);
-  if (!res.ok) throw new Error("Failed to fetch vendors");
+async function fetchVendorSuggestions(taskId: string): Promise<VendorSuggestion[]> {
+  const res = await fetch(`/api/tasks/${taskId}/suggest-vendors`);
+  if (!res.ok) throw new Error("Failed to fetch vendor suggestions");
   const data = await res.json();
-  return data.vendors;
+  return data.suggestions || [];
 }
 
 const actionButtons: Record<
@@ -78,21 +81,21 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     enabled: !!taskId,
   });
 
-  const { data: vendors } = useQuery({
-    queryKey: ["vendors", task?.category],
-    queryFn: () => fetchVendors(task!.category),
-    enabled: !!task?.category && task.status === "CREATED",
+  const { data: suggestions, isLoading: suggestionsLoading } = useQuery({
+    queryKey: ["vendor-suggestions", taskId],
+    queryFn: () => fetchVendorSuggestions(taskId),
+    enabled: !!task && task.status === "CREATED",
   });
 
   // Mutations
   const dispatchMutation = useMutation({
-    mutationFn: async () => {
-      const vendorId = vendors?.[0]?.id;
-      if (!vendorId) throw new Error("No vendor available");
+    mutationFn: async (vendorId?: string) => {
+      const body: Record<string, string> = {};
+      if (vendorId) body.vendorId = vendorId;
       const res = await fetch(`/api/tasks/${taskId}/dispatch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendorId }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Dispatch failed");
       return res.json();
@@ -101,6 +104,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       toast({ title: "Task dispatched successfully" });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["household"] });
     },
     onError: () => {
       toast({ title: "Failed to dispatch task", variant: "destructive" });
@@ -175,10 +179,13 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
-  function handleAction(action: string) {
+  function handleAction(action: string, payload?: string) {
     switch (action) {
       case "dispatch":
-        dispatchMutation.mutate();
+        dispatchMutation.mutate(payload); // undefined = auto-select
+        break;
+      case "dispatch-vendor":
+        dispatchMutation.mutate(payload);
         break;
       case "in-progress":
         updateBookingMutation.mutate({ status: "in_progress" });
@@ -380,34 +387,135 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
       <Separator className="bg-[var(--anna-border)]" />
 
-      {/* Action Buttons */}
+      {/* Vendor Suggestions (CREATED status only) */}
+      {task.status === "CREATED" && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
+            <Zap size={12} className="inline mr-1" />
+            Routing Suggestions
+          </h4>
+          {suggestionsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full rounded-xl bg-[var(--anna-border)]" />
+              <Skeleton className="h-16 w-full rounded-xl bg-[var(--anna-border)]" />
+            </div>
+          ) : suggestions && suggestions.length > 0 ? (
+            <div className="space-y-2">
+              {/* Auto-dispatch button */}
+              <Button
+                onClick={() => handleAction("dispatch")}
+                disabled={dispatchMutation.isPending}
+                className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-11 text-sm font-semibold"
+              >
+                <Zap size={16} className="mr-2" />
+                {dispatchMutation.isPending
+                  ? "Auto-Dispatching..."
+                  : `Auto-Dispatch to ${suggestions[0].vendor.name}`}
+                <Trophy size={14} className="ml-auto text-white/60" />
+              </Button>
+
+              <p className="text-[10px] text-[var(--anna-muted)] text-center font-data">
+                Score {suggestions[0].score} — {suggestions[0].reason}
+              </p>
+
+              {/* Manual selection list */}
+              <div className="mt-3">
+                <p className="text-[10px] uppercase tracking-wider text-[var(--anna-muted)] font-semibold mb-2">
+                  Or select a vendor manually
+                </p>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto anna-scroll">
+                  {suggestions.map((s, idx) => (
+                    <button
+                      key={s.vendor.id}
+                      onClick={() => handleAction("dispatch-vendor", s.vendor.id)}
+                      disabled={dispatchMutation.isPending}
+                      className={cn(
+                        "w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
+                        idx === 0
+                          ? "border-[var(--anna-sage)]/30 bg-[var(--anna-sage-light)]/30"
+                          : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30"
+                      )}
+                    >
+                      {/* Rank badge */}
+                      <div className={cn(
+                        "w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0",
+                        idx === 0
+                          ? "bg-[var(--anna-sage)] text-white"
+                          : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
+                      )}>
+                        {idx + 1}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-[var(--anna-slate)] truncate">
+                            {s.vendor.name}
+                          </span>
+                          {idx === 0 && (
+                            <Badge className="bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)] text-[9px] px-1.5 py-0 h-4 border-0">
+                              Best Match
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[var(--anna-muted)] truncate mt-0.5">
+                          {s.reason}
+                        </p>
+                      </div>
+
+                      {/* Score */}
+                      <div className="text-right flex-shrink-0">
+                        <span className={cn(
+                          "font-data text-sm font-bold",
+                          s.score >= 110 ? "text-[var(--anna-sage-dark)]" : s.score >= 90 ? "text-[var(--anna-slate)]" : "text-[var(--anna-warning)]"
+                        )}>
+                          {s.score}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-[var(--anna-bg)] rounded-xl p-4 text-center">
+              <p className="text-sm text-[var(--anna-muted)]">No eligible vendors available for this category</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <Separator className="bg-[var(--anna-border)]" />
+
+      {/* Action Buttons — hide "dispatch" for CREATED (replaced by suggestions above) */}
       {actions.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-2">
-          {actions.map((a) => {
-            const Icon = a.icon;
-            return (
-              <Button
-                key={a.action}
-                variant={a.variant === "destructive" ? "destructive" : a.variant === "outline" ? "outline" : "default"}
-                onClick={() => handleAction(a.action)}
-                disabled={
-                  dispatchMutation.isPending ||
-                  updateBookingMutation.isPending ||
-                  verifyMutation.isPending ||
-                  escrowMutation.isPending ||
-                  rebookMutation.isPending
-                }
-                className={
-                  a.variant === "default"
-                    ? "bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl"
-                    : "rounded-xl"
-                }
-              >
-                <Icon size={14} className="mr-2" />
-                {a.label}
-              </Button>
-            );
-          })}
+          {actions
+            .filter((a) => task.status !== "CREATED" || a.action !== "dispatch")
+            .map((a) => {
+              const Icon = a.icon;
+              return (
+                <Button
+                  key={a.action}
+                  variant={a.variant === "destructive" ? "destructive" : a.variant === "outline" ? "outline" : "default"}
+                  onClick={() => handleAction(a.action)}
+                  disabled={
+                    dispatchMutation.isPending ||
+                    updateBookingMutation.isPending ||
+                    verifyMutation.isPending ||
+                    escrowMutation.isPending ||
+                    rebookMutation.isPending
+                  }
+                  className={
+                    a.variant === "default"
+                      ? "bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl"
+                      : "rounded-xl"
+                  }
+                >
+                  <Icon size={14} className="mr-2" />
+                  {a.label}
+                </Button>
+              );
+            })}
         </div>
       )}
     </div>

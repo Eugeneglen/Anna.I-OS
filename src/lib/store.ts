@@ -18,6 +18,10 @@ interface AnnaStore {
   taskDetailOpen: boolean;
   setTaskDetailOpen: (open: boolean) => void;
 
+  // Ask Anna chat panel
+  askAnnaOpen: boolean;
+  setAskAnnaOpen: (open: boolean) => void;
+
   // Household list cache
   householdNames: Record<string, string>;
   setHouseholdNames: (names: Record<string, string>) => void;
@@ -39,6 +43,9 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   taskDetailOpen: false,
   setTaskDetailOpen: (open) => set({ taskDetailOpen: open }),
+
+  askAnnaOpen: false,
+  setAskAnnaOpen: (open) => set({ askAnnaOpen: open }),
 
   householdNames: {},
   setHouseholdNames: (names) => set({ householdNames: names }),

@@ -191,3 +191,34 @@ export function formatTime(dateStr: string): string {
     minute: "2-digit",
   });
 }
+
+// ============================================================
+// Routing Engine Types
+// ============================================================
+
+export interface ScoreBreakdown {
+  categoryMatch: boolean;
+  affinityBonus: number;
+  ratingBonus: number;
+  disputePenalty: number;
+  reassignmentPenalty: number;
+  utilisationPenalty: number;
+  zoneMatchBonus: number;
+  recentCompletionBonus: number;
+}
+
+export interface VendorSuggestion {
+  vendor: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    categories: string;
+    status: string;
+    maxTasksPerDay: number;
+    zones: string;
+  };
+  score: number;
+  scoreBreakdown: ScoreBreakdown;
+  reason: string;
+}
