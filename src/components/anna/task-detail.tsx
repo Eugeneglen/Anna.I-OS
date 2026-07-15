@@ -26,7 +26,7 @@ import {
   type VendorSuggestion,
   type ScoreBreakdown,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -265,6 +265,41 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
           <p className="text-sm text-[var(--anna-slate)] leading-relaxed bg-[var(--anna-bg)] rounded-xl p-4">
             {task.instructions}
           </p>
+        </div>
+      )}
+
+      {/* Attachments (Photos & Videos) */}
+      {task.attachments && task.attachments.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            Attachments
+          </h4>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {task.attachments.map((att) =>
+              att.fileType === "PHOTO" ? (
+                <div
+                  key={att.id}
+                  className="aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)]"
+                >
+                  <img
+                    src={att.fileUrl}
+                    alt={att.fileName}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div
+                  key={att.id}
+                  className="aspect-square rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] flex flex-col items-center justify-center gap-1 p-2"
+                >
+                  <Film size={20} className="text-[var(--anna-muted)]" />
+                  <span className="text-[9px] text-[var(--anna-muted)] text-center line-clamp-2">
+                    {att.fileName}
+                  </span>
+                </div>
+              )
+            )}
+          </div>
         </div>
       )}
 

@@ -225,6 +225,23 @@ model Task {
   bookings          Booking[]
   verificationPhotos VerificationPhoto[]
   escrowEntries     EscrowLedger[]
+  attachments       TaskAttachment[]
+}
+
+model TaskAttachment {
+  id           String   @id @default(cuid())
+  taskId       String
+  fileType     String   // "PHOTO" | "VIDEO"
+  fileUrl      String
+  thumbnailUrl String?
+  fileSize     Int      // bytes
+  fileName     String
+  mimeType     String
+  createdAt    DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
 }
 
 model Booking {

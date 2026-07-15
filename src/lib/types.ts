@@ -68,6 +68,7 @@ export interface Task {
   bookings?: Booking[];
   verificationPhotos?: VerificationPhoto[];
   escrowEntries?: EscrowLedger[];
+  attachments?: TaskAttachment[];
 }
 
 export interface Booking {
@@ -114,6 +115,18 @@ export interface EscrowLedger {
   releasedAt?: string | null;
   disputedAt?: string | null;
   disputeReason?: string | null;
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  fileType: "PHOTO" | "VIDEO";
+  fileUrl: string;
+  thumbnailUrl?: string | null;
+  fileSize: number;
+  fileName: string;
+  mimeType: string;
+  createdAt: string;
 }
 
 export interface HouseholdCategoryAutonomy {

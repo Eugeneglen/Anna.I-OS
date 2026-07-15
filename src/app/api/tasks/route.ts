@@ -3,12 +3,22 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
 
+const attachmentSchema = z.object({
+  fileUrl: z.string(),
+  fileType: z.enum(["PHOTO", "VIDEO"]),
+  fileName: z.string(),
+  fileSize: z.number(),
+  mimeType: z.string(),
+})
+
 const createTaskSchema = z.object({
   householdId: z.string().min(1),
   category: z.nativeEnum(ServiceCategory),
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
   recurrencePattern: z.record(z.unknown()).nullable().optional(),
+  scheduledStart: z.string().optional(),
+  attachments: z.array(attachmentSchema).optional(),
 })
 
 // GET /api/tasks?householdId=xxx
@@ -41,6 +51,7 @@ export async function GET(request: Request) {
         },
         verificationPhotos: true,
         escrowEntries: true,
+        attachments: true,
       },
     })
 
@@ -67,7 +78,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, recurrencePattern } = parsed.data
+    const { householdId, category, instructions, amountCents, recurrencePattern, attachments } = parsed.data
 
     // Ensure HouseholdCategoryAutonomy exists for this household+category
     await db.householdCategoryAutonomy.upsert({
@@ -94,7 +105,21 @@ export async function POST(request: Request) {
         instructionsSource: "new",
         amountCents,
         recurrencePattern: recurrencePattern ?? null,
+        ...(attachments && attachments.length > 0
+          ? {
+              attachments: {
+                create: attachments.map((a) => ({
+                  fileType: a.fileType,
+                  fileUrl: a.fileUrl,
+                  fileName: a.fileName,
+                  fileSize: a.fileSize,
+                  mimeType: a.mimeType,
+                })),
+              },
+            }
+          : {}),
       },
+      include: { attachments: true },
     })
 
     return NextResponse.json({ task }, { status: 201 })

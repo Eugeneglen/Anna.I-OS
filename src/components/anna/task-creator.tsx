@@ -18,6 +18,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
+import {
+  MediaUploader,
+  type UploadedFile,
+} from "./media-uploader";
 
 const CATEGORIES: ServiceCategory[] = [
   "CLEANING",
@@ -48,10 +52,22 @@ export function TaskCreator() {
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("10:00");
+  const [photos, setPhotos] = useState<UploadedFile[]>([]);
+  const [videos, setVideos] = useState<UploadedFile[]>([]);
 
   function selectCategory(cat: ServiceCategory) {
     setSelectedCategory(cat);
     setAmountCents(CATEGORY_DEFAULTS[cat].amount);
+  }
+
+  function resetForm() {
+    setSelectedCategory(null);
+    setInstructions("");
+    setAmountCents(0);
+    setRecurrence("ONE_OFF");
+    setScheduledDate("");
+    setPhotos([]);
+    setVideos([]);
   }
 
   const createMutation = useMutation({
@@ -71,6 +87,13 @@ export function TaskCreator() {
           amountCents,
           recurrencePattern: recurrence === "ONE_OFF" ? null : { type: recurrence, interval: 1 },
           scheduledStart,
+          attachments: [...photos, ...videos].map(({ fileUrl, fileType, fileName, fileSize, mimeType }) => ({
+            fileUrl,
+            fileType,
+            fileName,
+            fileSize,
+            mimeType,
+          })),
         }),
       });
       if (!res.ok) throw new Error("Failed to create task");
@@ -81,11 +104,7 @@ export function TaskCreator() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["household"] });
       // Reset form
-      setSelectedCategory(null);
-      setInstructions("");
-      setAmountCents(0);
-      setRecurrence("ONE_OFF");
-      setScheduledDate("");
+      resetForm();
       // Switch to dashboard
       setActiveTab("dashboard");
     },
@@ -148,6 +167,18 @@ export function TaskCreator() {
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="Describe what needs to be done..."
               className="min-h-[100px] rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] resize-none text-sm focus-visible:ring-[var(--anna-sage)]/30"
+            />
+          </div>
+
+          {/* Photo & Video Uploads */}
+          <div className="bg-[var(--anna-white)] rounded-2xl p-4 border border-[var(--anna-border)]">
+            <MediaUploader
+              photos={photos}
+              videos={videos}
+              onPhotosChange={setPhotos}
+              onVideosChange={setVideos}
+              maxPhotos={5}
+              maxVideos={2}
             />
           </div>
 
