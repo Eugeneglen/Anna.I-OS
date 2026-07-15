@@ -19,6 +19,8 @@ const createTaskSchema = z.object({
   recurrencePattern: z.record(z.unknown()).nullable().optional(),
   scheduledStart: z.string().optional(),
   attachments: z.array(attachmentSchema).optional(),
+  jobTypeId: z.string().optional(),
+  quotationId: z.string().optional(),
 })
 
 // GET /api/tasks?householdId=xxx
@@ -78,7 +80,34 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, recurrencePattern, attachments } = parsed.data
+    const { householdId, category, instructions, amountCents, recurrencePattern, attachments, jobTypeId, quotationId } = parsed.data
+
+    // If quotationId provided, validate it exists and belongs to this household
+    let finalAmountCents = amountCents;
+    if (quotationId) {
+      const quotation = await db.quotation.findUnique({
+        where: { id: quotationId },
+      });
+      if (!quotation) {
+        return NextResponse.json(
+          { error: "Quotation not found" },
+          { status: 404 }
+        );
+      }
+      if (quotation.householdId !== householdId) {
+        return NextResponse.json(
+          { error: "Quotation does not belong to this household" },
+          { status: 400 }
+        );
+      }
+      if (quotation.status !== "DRAFT") {
+        return NextResponse.json(
+          { error: "Quotation is not in DRAFT status" },
+          { status: 409 }
+        );
+      }
+      finalAmountCents = quotation.totalCents;
+    }
 
     // Ensure HouseholdCategoryAutonomy exists for this household+category
     await db.householdCategoryAutonomy.upsert({
@@ -103,8 +132,10 @@ export async function POST(request: Request) {
         status: TaskStatus.CREATED,
         instructions: instructions ?? null,
         instructionsSource: "new",
-        amountCents,
+        amountCents: finalAmountCents,
         recurrencePattern: recurrencePattern ?? null,
+        jobTypeId: jobTypeId ?? null,
+        quotationId: quotationId ?? null,
         ...(attachments && attachments.length > 0
           ? {
               attachments: {
@@ -121,6 +152,14 @@ export async function POST(request: Request) {
       },
       include: { attachments: true },
     })
+
+    // If quotationId was provided, update the quotation status to ACCEPTED
+    if (quotationId) {
+      await db.quotation.update({
+        where: { id: quotationId },
+        data: { status: "ACCEPTED" },
+      });
+    }
 
     return NextResponse.json({ task }, { status: 201 })
   } catch (error) {

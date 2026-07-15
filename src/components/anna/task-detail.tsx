@@ -233,7 +233,9 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
           <CategoryIcon category={task.category} size={20} />
           <div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
-              {getCategoryLabel(task.category)}
+              {task.jobType
+                ? `${getCategoryLabel(task.category)} — ${task.jobType.name}`
+                : getCategoryLabel(task.category)}
             </h2>
             <p className="text-xs text-[var(--anna-muted)]">
               Created {formatDate(task.createdAt)}

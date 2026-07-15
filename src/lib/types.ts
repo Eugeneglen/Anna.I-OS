@@ -54,6 +54,8 @@ export interface Task {
   householdId: string;
   category: ServiceCategory;
   status: TaskStatus;
+  jobTypeId?: string | null;
+  quotationId?: string | null;
   recurrencePattern?: string | null;
   instructions?: string | null;
   amountCents: number;
@@ -69,6 +71,8 @@ export interface Task {
   verificationPhotos?: VerificationPhoto[];
   escrowEntries?: EscrowLedger[];
   attachments?: TaskAttachment[];
+  jobType?: { id: string; name: string; slug: string } | null;
+  quotation?: { id: string; totalCents: number; breakdown: QuotationBreakdownItem[] } | null;
 }
 
 export interface Booking {
@@ -235,6 +239,66 @@ export function formatTime(dateStr: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// ============================================================
+// Service Job Types & Quotation (Phase 4A)
+// ============================================================
+
+export interface ServiceJobType {
+  id: string;
+  category: ServiceCategory;
+  name: string;
+  slug: string;
+  description: string;
+  basePriceCents: number;
+  unitLabel: string;
+  pricingRules: {
+    type: "flat" | "per_unit" | "per_room" | "per_item";
+    unitField?: string;
+    multiplierField?: string;
+    areaMultiplier?: {
+      field: string;
+      tiers: { maxSqft: number; multiplier: number }[];
+    };
+  };
+  requiredFields: {
+    key: string;
+    label: string;
+    type: "number" | "select";
+    min?: number;
+    max?: number;
+    defaultValue?: number;
+    options?: { label: string; value: number }[];
+  }[];
+  addOns: {
+    key: string;
+    label: string;
+    priceCents: number;
+    pricingType: "flat" | "per_unit" | "per_room" | "per_item";
+    unitField?: string;
+  }[];
+  sortOrder: number;
+  _count?: { quotations: number };
+}
+
+export interface QuotationBreakdownItem {
+  label: string;
+  amountCents: number;
+}
+
+export interface Quotation {
+  id: string;
+  householdId: string;
+  jobTypeId: string;
+  fieldValues: Record<string, number>;
+  selectedAddOns: string[];
+  baseCents: number;
+  addOnsCents: number;
+  totalCents: number;
+  breakdown: QuotationBreakdownItem[];
+  status: "DRAFT" | "ACCEPTED" | "REJECTED";
+  createdAt: string;
 }
 
 // ============================================================

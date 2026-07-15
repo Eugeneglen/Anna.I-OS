@@ -117,6 +117,12 @@ enum RecipientType {
   VENDOR
 }
 
+enum QuotationStatus {
+  DRAFT
+  ACCEPTED
+  REJECTED
+}
+
 // ======================== CORE TABLES ========================
 
 model Household {
@@ -139,6 +145,7 @@ model Household {
   vendorAffinity   VendorHouseholdAffinity[]
   notifications    Notification[]
   anomalies        Anomaly[]
+  quotations       Quotation[]
 }
 
 model FamilyMember {
@@ -208,6 +215,8 @@ model Task {
   householdId       String
   category          ServiceCategory
   status            TaskStatus      @default(CREATED)
+  jobTypeId         String?
+  quotationId       String?          @unique
   recurrencePattern Json?            // {type, interval, dayOfWeek} — null = one-off
   instructions      String?
   instructionsSource String?         // "new" | "reused" | "modified" — Seed metric
@@ -222,6 +231,8 @@ model Task {
   disputedAt        DateTime?
 
   household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  jobType           ServiceJobType?    @relation(fields: [jobTypeId], references: [id])
+  quotation         Quotation?         @relation(fields: [quotationId], references: [id])
   bookings          Booking[]
   verificationPhotos VerificationPhoto[]
   escrowEntries     EscrowLedger[]
@@ -386,6 +397,53 @@ model Notification {
   household Household @relation(fields: [householdId], references: [id])
   member    FamilyMember? @relation(fields: [memberId], references: [id])
   vendor    Vendor? @relation(fields: [vendorId], references: [id])
+}
+
+// ======================== SERVICE JOB TYPES & QUOTATION (Phase 4A) ========================
+
+model ServiceJobType {
+  id             String          @id @default(cuid())
+  category       ServiceCategory
+  name           String
+  slug           String          @unique
+  description    String          // short one-liner shown on card
+  basePriceCents Int             // base price in SGD cents
+  unitLabel      String          // "per unit", "flat rate", "per room"
+  pricingRules   Json            // { type, unitField?, areaMultiplier? }
+  requiredFields Json            // array of field definitions
+  addOns         Json            // array of { key, label, priceCents }
+  sortOrder      Int             @default(0)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  quotations     Quotation[]
+  tasks          Task[]
+
+  @@index([category, isActive, sortOrder])
+}
+
+model Quotation {
+  id             String          @id @default(cuid())
+  householdId    String
+  jobTypeId      String
+  fieldValues    Json            // user's answers to dynamic fields
+  selectedAddOns Json            // array of add-on keys selected
+  baseCents      Int
+  addOnsCents    Int             @default(0)
+  totalCents     Int
+  breakdown      Json            // line items: [{ label, amountCents }]
+  aiExplanation  String?         // Phase B: LLM-generated explanation
+  status         QuotationStatus  @default(DRAFT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  household      Household       @relation(fields: [householdId], references: [id])
+  jobType        ServiceJobType  @relation(fields: [jobTypeId], references: [id])
+  task           Task?
+
+  @@index([householdId])
+  @@index([jobTypeId])
 }
 
 // ======================== ANOMALY DETECTION (Phase 3) ========================

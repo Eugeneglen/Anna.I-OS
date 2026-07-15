@@ -27,6 +27,9 @@ export async function GET(
         },
         verificationPhotos: true,
         escrowEntries: true,
+        attachments: true,
+        jobType: { select: { id: true, name: true, slug: true } },
+        quotation: { select: { id: true, totalCents: true, breakdown: true } },
       },
     })
 

@@ -275,3 +275,106 @@ Stage Summary:
 - Dashboard shows real-time anomaly banner with expand/collapse, severity badges, acknowledge/dismiss actions
 - All API endpoints returning 200, zero lint errors, zero runtime errors
 - Targeting Seed metric: "human coordinator backstop invoked in <30% of tasks by Month 6" — anomaly data is now instrumented and queryable
+---
+Task ID: 2-3-4
+Agent: full-stack-developer
+Task: Phase 4A Backend — Seed job types, quote calculator, API endpoints
+
+Work Log:
+- Created `prisma/seed-job-types.ts` with 14 ServiceJobType records across 4 categories:
+  - CLEANING (4): Regular Maintenance ($68 flat), Deep Cleaning ($120), Move-in/Move-out ($180), Post-Renovation ($220)
+  - LAUNDRY (3): Wash & Fold ($45 base, multiplier by load size), Ironing Only ($30 flat), Dry Cleaning ($15/item)
+  - AIRCON (3): Standard Service ($40/unit), Chemical Wash ($80/unit), Installation ($150/unit)
+  - HANDYMAN (4): General Repair ($50, complexity multiplier), Plumbing ($80), Electrical ($80), Painting ($120/room, condition multiplier)
+- All pricing rules use structured JSON: type (flat/per_unit/per_room/per_item), unitField, multiplierField, areaMultiplier with 4 tiers
+- Required fields use structured JSON: number (min/max/defaultValue) and select (options with label/value)
+- Add-ons use structured JSON: pricingType (flat/per_unit/per_room/per_item) with optional unitField
+- Successfully ran seed: 14 records inserted, zero errors
+- Created `src/lib/quote-calculator.ts` — pure function `calculateQuote()` with:
+  - 4-step pricing pipeline: per-unit → multiplier → area multiplier → round
+  - Add-on calculation: flat adds directly, per_unit/per_room/per_item multiply by field value
+  - Returns QuoteResult with baseCents, addOnsCents, totalCents, and breakdown line items
+  - Exported TypeScript interfaces: JobTypePricingRules, JobTypeRequiredField, JobTypeAddOn, QuoteLineItem, QuoteResult
+- Created `src/app/api/job-types/route.ts` — GET endpoint:
+  - Required query param: category (validated against ServiceCategory enum via Zod)
+  - Returns active job types ordered by sortOrder, includes quotation count via _count
+- Modified `src/app/api/tasks/route.ts` — POST handler:
+  - Added optional jobTypeId and quotationId to createTaskSchema
+  - When quotationId provided: validates quotation exists, belongs to household, is DRAFT status
+  - Uses quotation.totalCents as amountCents when quotationId present
+  - Creates task with jobTypeId and quotationId
+  - Updates quotation status to ACCEPTED after task creation
+- Created `src/app/api/quote/route.ts` — POST endpoint:
+  - Zod-validated input: householdId, jobTypeId, fieldValues (Record<string, number>), selectedAddOns (string[])
+  - Validates household and job type existence/active status
+  - Parses JSON fields from job type and calls calculateQuote()
+  - Creates Quotation record with full breakdown
+  - Returns quotation with calculated breakdown
+- ESLint: 0 errors, dev server running clean
+
+Files Created:
+1. prisma/seed-job-types.ts — 14 service job types seed script
+2. src/lib/quote-calculator.ts — pure pricing calculation engine
+3. src/app/api/job-types/route.ts — GET endpoint for category-filtered job types
+4. src/app/api/quote/route.ts — POST endpoint for quotation creation
+
+Files Modified:
+1. src/app/api/tasks/route.ts — added jobTypeId/quotationId support with quotation validation and status transition
+
+Stage Summary:
+- Phase 4A backend infrastructure complete: 14 realistic Singapore-priced service job types seeded
+- Quote calculator handles flat, per-unit, per-room, per-item pricing with multiplier and area tier support
+- 3 new API endpoints (job-types GET, quote POST, tasks POST enhanced) enable full quotation → task creation flow
+- All amounts in SGD cents, Zod validation on all inputs, proper error codes (400/404/409/500)
+---
+Task ID: 5-6-7
+Agent: Main
+Task: Phase 4A Frontend — Job type selector, quote builder, task creator integration
+
+Work Log:
+- Added ServiceJobType, Quotation, QuotationBreakdownItem interfaces to src/lib/types.ts
+- Added jobType and quotation optional fields to Task interface
+- Created src/components/anna/job-type-selector.tsx:
+  - Fetches job types via GET /api/job-types?category= using TanStack Query
+  - Renders selection cards in 1-col mobile / 2-col desktop grid
+  - Shows name, description, base price, unit label per card
+  - Selected card shows green border + check badge
+  - Loading state with skeleton cards
+- Created src/components/anna/quote-builder.tsx:
+  - Dynamic fields: number type with +/- stepper buttons, select type with toggle buttons
+  - Add-ons: checkbox list with per-item pricing labels (flat vs /unit vs /room)
+  - Live quote card: sage-tinted card with Calculator icon, real-time total
+  - Expandable breakdown: click "Details" to see line items (base, add-ons, total)
+  - Custom amount fallback: "Enter custom amount" link switches to editable input
+  - "Reset to quoted price" to go back to calculated amount
+  - Uses calculateQuote() client-side for instant updates (pure function, no API call)
+- Rewrote src/components/anna/task-creator.tsx with new flow:
+  - Category → Job Type → Quote Builder → Amount → Instructions → Uploads → Schedule → Create
+  - Category selection clears job type and quote state
+  - Job type selection triggers QuoteBuilder appearance
+  - Amount field auto-populated from live quote, with "Auto-calculated from X" hint
+  - On create: POST /api/quote to persist quotation, then POST /api/tasks with jobTypeId + quotationId
+  - Reset form clears all quote state
+- Updated src/app/api/tasks/[id]/route.ts: include jobType and quotation in task detail response
+- Updated src/components/anna/task-detail.tsx: show "Category — Job Type" in header when jobType present
+- ESLint: 0 errors
+- Dev server: all routes returning 200
+
+Files Created:
+1. src/components/anna/job-type-selector.tsx
+2. src/components/anna/quote-builder.tsx
+
+Files Modified:
+1. src/lib/types.ts — added ServiceJobType, Quotation, QuotationBreakdownItem types; extended Task
+2. src/components/anna/task-creator.tsx — complete rewrite with job type + quote flow
+3. src/app/api/tasks/[id]/route.ts — include jobType + quotation in detail response
+4. src/components/anna/task-detail.tsx — display job type name in header
+
+Stage Summary:
+- Phase 4A complete: structured job type selection replaces manual amount entry
+- New Task flow: Category → Job Type (API-fetched cards) → Dynamic Fields → Add-on Checkboxes → Live Quote → Instructions → Create
+- 14 realistic Singapore-priced job types across 4 categories
+- Rule-based quote calculator runs client-side for instant feedback
+- Custom amount fallback preserved via "Enter custom amount" toggle
+- Task detail shows job type name when available
+- Zero lint errors, all API routes serving 200

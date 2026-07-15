@@ -1,27 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
+import { JobTypeSelector } from "./job-type-selector";
+import { QuoteBuilder } from "./quote-builder";
+import { MediaUploader, type UploadedFile } from "./media-uploader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  CATEGORY_DEFAULTS,
   formatSgd,
   type ServiceCategory,
   type RecurrencePattern,
+  type ServiceJobType,
 } from "@/lib/types";
+import type { QuoteResult } from "@/lib/quote-calculator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
-import {
-  MediaUploader,
-  type UploadedFile,
-} from "./media-uploader";
 
 const CATEGORIES: ServiceCategory[] = [
   "CLEANING",
@@ -47,6 +47,7 @@ export function TaskCreator() {
   const queryClient = useQueryClient();
 
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+  const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
   const [amountCents, setAmountCents] = useState(0);
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
@@ -55,19 +56,50 @@ export function TaskCreator() {
   const [photos, setPhotos] = useState<UploadedFile[]>([]);
   const [videos, setVideos] = useState<UploadedFile[]>([]);
 
+  // Quote state
+  const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
+  const [quoteFieldValues, setQuoteFieldValues] = useState<Record<string, number>>({});
+  const [quoteSelectedAddOns, setQuoteSelectedAddOns] = useState<string[]>([]);
+  const [quotationId, setQuotationId] = useState<string | null>(null);
+
   function selectCategory(cat: ServiceCategory) {
     setSelectedCategory(cat);
-    setAmountCents(CATEGORY_DEFAULTS[cat].amount);
+    setSelectedJobType(null);
+    setQuoteResult(null);
+    setAmountCents(0);
   }
+
+  function selectJobType(jt: ServiceJobType) {
+    setSelectedJobType(jt);
+    setQuoteResult(null);
+    setAmountCents(jt.basePriceCents);
+  }
+
+  const handleQuoteChange = useCallback(
+    (result: QuoteResult | null, fieldValues: Record<string, number>, selectedAddOns: string[]) => {
+      if (result) {
+        setQuoteResult(result);
+        setAmountCents(result.totalCents);
+      }
+      setQuoteFieldValues(fieldValues);
+      setQuoteSelectedAddOns(selectedAddOns);
+    },
+    []
+  );
 
   function resetForm() {
     setSelectedCategory(null);
+    setSelectedJobType(null);
     setInstructions("");
     setAmountCents(0);
     setRecurrence("ONE_OFF");
     setScheduledDate("");
     setPhotos([]);
     setVideos([]);
+    setQuoteResult(null);
+    setQuotationId(null);
+    setQuoteFieldValues({});
+    setQuoteSelectedAddOns([]);
   }
 
   const createMutation = useMutation({
@@ -76,6 +108,25 @@ export function TaskCreator() {
       const scheduledStart = scheduledDate
         ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString()
         : new Date(Date.now() + 86400000).toISOString();
+
+      // Create quotation if we have a job type
+      let qId: string | null = quotationId;
+      if (selectedJobType && !qId && quoteResult) {
+        const quoteRes = await fetch("/api/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            householdId: selectedHouseholdId,
+            jobTypeId: selectedJobType.id,
+            fieldValues: quoteFieldValues,
+            selectedAddOns: quoteSelectedAddOns,
+          }),
+        });
+        if (quoteRes.ok) {
+          const quoteData = await quoteRes.json();
+          qId = quoteData.quotation.id;
+        }
+      }
 
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -87,6 +138,8 @@ export function TaskCreator() {
           amountCents,
           recurrencePattern: recurrence === "ONE_OFF" ? null : { type: recurrence, interval: 1 },
           scheduledStart,
+          jobTypeId: selectedJobType?.id,
+          quotationId: qId,
           attachments: [...photos, ...videos].map(({ fileUrl, fileType, fileName, fileSize, mimeType }) => ({
             fileUrl,
             fileType,
@@ -103,15 +156,16 @@ export function TaskCreator() {
       toast({ title: "Task created successfully!" });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["household"] });
-      // Reset form
       resetForm();
-      // Switch to dashboard
       setActiveTab("dashboard");
     },
     onError: () => {
       toast({ title: "Failed to create task", variant: "destructive" });
     },
   });
+
+  // Determine the effective amount to display
+  const effectiveAmountCents = quoteResult ? amountCents : amountCents;
 
   return (
     <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
@@ -146,7 +200,9 @@ export function TaskCreator() {
                   {getCategoryLabel(cat)}
                 </span>
                 <span className="font-data text-xs text-[var(--anna-muted)]">
-                  {formatSgd(CATEGORY_DEFAULTS[cat].amount)}
+                  {formatSgd(
+                    { CLEANING: 6800, LAUNDRY: 4500, AIRCON: 12000, HANDYMAN: 8000 }[cat]
+                  )}
                 </span>
               </button>
             );
@@ -154,9 +210,53 @@ export function TaskCreator() {
         </div>
       </div>
 
-      {/* Step 2: Task Form */}
+      {/* Step 2: Job Type Selection */}
       {selectedCategory && (
+        <div className="mb-6">
+          <JobTypeSelector
+            category={selectedCategory}
+            selectedJobType={selectedJobType}
+            onSelect={selectJobType}
+          />
+        </div>
+      )}
+
+      {/* Step 3: Task Form */}
+      {selectedJobType && (
         <div className="space-y-5 anna-fade-in">
+          {/* Dynamic Fields + Add-ons + Live Quote */}
+          <QuoteBuilder
+            jobType={selectedJobType}
+            onQuoteChange={handleQuoteChange}
+          />
+
+          {/* Amount display (computed from quote, but editable as custom) */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Amount
+            </Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--anna-muted)] font-data">
+                SGD $
+              </span>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={(effectiveAmountCents / 100).toFixed(2)}
+                onChange={(e) =>
+                  setAmountCents(Math.round(parseFloat(e.target.value) * 100))
+                }
+                className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
+              />
+            </div>
+            {quoteResult && (
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                Auto-calculated from {selectedJobType.name}. Edit to override.
+              </p>
+            )}
+          </div>
+
           {/* Instructions */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
@@ -165,8 +265,8 @@ export function TaskCreator() {
             <Textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Describe what needs to be done..."
-              className="min-h-[100px] rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] resize-none text-sm focus-visible:ring-[var(--anna-sage)]/30"
+              placeholder="Add any specific notes for the vendor..."
+              className="min-h-[80px] rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] resize-none text-sm focus-visible:ring-[var(--anna-sage)]/30"
             />
           </div>
 
@@ -180,28 +280,6 @@ export function TaskCreator() {
               maxPhotos={5}
               maxVideos={2}
             />
-          </div>
-
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-              Amount
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--anna-muted)] font-data">
-                SGD $
-              </span>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={(amountCents / 100).toFixed(2)}
-                onChange={(e) =>
-                  setAmountCents(Math.round(parseFloat(e.target.value) * 100))
-                }
-                className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
-              />
-            </div>
           </div>
 
           {/* Recurrence */}
