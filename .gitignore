@@ -50,5 +50,15 @@ test
 prompt
 
 server.log
+
 # Skills directory
 /skills/
+
+# SQLite database (regenerated via prisma db push)
+db/*.db
+db/*.db-journal
+
+# Sandbox internal files
+.zscripts/
+agent-ctx/
+worklog.md
