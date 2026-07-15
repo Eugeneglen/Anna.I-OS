@@ -1,8 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ============================================================
+// Anna.I — Household Graph Schema (Phase 1)
+// Postgres-compatible structure, SQLite for sandbox prototyping
+// ============================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +12,337 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ======================== ENUMS ========================
+
+enum ServiceCategory {
+  CLEANING
+  LAUNDRY
+  AIRCON
+  HANDYMAN
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum TaskStatus {
+  CREATED
+  DISPATCHED
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+  ESCROW_RELEASED
+  DISPUTED
+}
+
+enum EscrowState {
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+}
+
+enum SubscriptionTier {
+  HOME
+  CARE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+}
+
+enum VendorStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum MemberRole {
+  OWNER
+  MEMBER
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  WEB_PUSH
+  EMAIL
+}
+
+enum NotificationEventType {
+  TASK_CREATED
+  TASK_DISPATCHED
+  VENDOR_EN_ROUTE
+  VERIFICATION_REQUESTED
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  ESCROW_RELEASED
+  DISPUTE_RAISED
+  DISPUTE_RESOLVED
+  REBOOKING_PROMPT
+  AUTONOMY_PROMOTED
+  PREDICTIVE_SUGGESTION
+  SYSTEM_ALERT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum RecipientType {
+  HOUSEHOLD_MEMBER
+  VENDOR
+}
+
+// ======================== CORE TABLES ========================
+
+model Household {
+  id               String          @id @default(cuid())
+  name             String
+  email            String          @unique
+  phone            String?
+  address          String           // estate-level for batching
+  postalCode       String?
+  unitNumber       String?
+  activeCategories String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
+  preferences      Json              // flexible: language, preferred times, notes
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  members          FamilyMember[]
+  tasks            Task[]
+  subscriptions    Subscription[]
+  categoryAutonomy HouseholdCategoryAutonomy[]
+  vendorAffinity   VendorHouseholdAffinity[]
+  notifications    Notification[]
+}
+
+model FamilyMember {
+  id          String     @id @default(cuid())
+  householdId String
+  name        String
+  email       String     @unique
+  phone       String?
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+}
+
+model Vendor {
+  id              String       @id @default(cuid())
+  name            String
+  email           String       @unique
+  phone           String
+  categories      String // JSON array of ServiceCategory
+  status          VendorStatus @default(PENDING)
+  verificationData Json?        // NRIC, background check, certs
+  maxTasksPerDay  Int          @default(6)
+  maxTasksPerWeek Int          @default(30)
+  availability    Json?        // working hours, days off
+  zones           String // JSON array of estate zone strings
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  bookings       Booking[]
+  vendorAffinity VendorHouseholdAffinity[]
+  notifications  Notification[]
+}
+
+// ======================== MEMORY ========================
+
+model VendorHouseholdAffinity {
+  id                String          @id @default(cuid())
+  householdId       String
+  vendorId          String
+  category          ServiceCategory
+  bookingCount      Int             @default(0)
+  completedCount    Int             @default(0)
+  totalRating       Float           @default(0)  // sum; divide by completedCount for avg
+  avgRating         Float?           // denormalized for query speed
+  reassignmentCount Int             @default(0)
+  disputeCount      Int             @default(0)
+  jobOutcomes       Json?           // last N outcomes array
+  lastAssignedAt    DateTime?
+  lastCompletedAt   DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([householdId, vendorId, category])
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vendor    Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+// ======================== TASKS & BOOKINGS ========================
+
+model Task {
+  id                String          @id @default(cuid())
+  householdId       String
+  category          ServiceCategory
+  status            TaskStatus      @default(CREATED)
+  recurrencePattern Json?            // {type, interval, dayOfWeek} — null = one-off
+  instructions      String?
+  instructionsSource String?         // "new" | "reused" | "modified" — Seed metric
+  amountCents       Int             // SGD cents (blended avg ~6800)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  dispatchedAt      DateTime?
+  inProgressAt      DateTime?
+  completedAt       DateTime?
+  verifiedAt        DateTime?
+  escrowReleasedAt  DateTime?
+  disputedAt        DateTime?
+
+  household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  bookings          Booking[]
+  verificationPhotos VerificationPhoto[]
+  escrowEntries     EscrowLedger[]
+}
+
+model Booking {
+  id             String   @id @default(cuid())
+  taskId         String
+  vendorId       String
+  scheduledStart DateTime
+  scheduledEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  rating         Int?      // 1–5
+  ratingComment  String?
+  status         String   @default("assigned") // assigned|accepted|in_progress|completed|cancelled
+  dispatchedAt   DateTime @default(now())
+  acceptedAt     DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  task               Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  vendor             Vendor            @relation(fields: [vendorId], references: [id])
+  verificationPhotos VerificationPhoto[]
+  escrowEntries     EscrowLedger[]
+}
+
+// ======================== VERIFICATION ========================
+
+model VerificationPhoto {
+  id               String   @id @default(cuid())
+  taskId           String
+  bookingId        String
+  fileUrl          String
+  thumbnailUrl     String?
+  uploadedBy       String   // "vendor" | "household"
+  isVerified       Boolean  @default(false)
+  verifiedBy       String?  // memberId who verified
+  verifiedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime @default(now())
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// ======================== ESCROW ========================
+
+model EscrowLedger {
+  id                   String      @id @default(cuid())
+  taskId               String
+  bookingId            String?
+  amountCents          Int
+  state                EscrowState @default(HELD)
+  commissionRate       Float       @default(10.0)
+  commissionCents      Int
+  vendorPayoutCents    Int
+  stripePaymentIntentId String?
+  stripeTransferId     String?
+  createdAt            DateTime    @default(now())
+  heldAt               DateTime    @default(now())
+  releasedAt           DateTime?
+  disputedAt           DateTime?
+  refundedAt           DateTime?
+  disputeReason        String?
+  disputeResolution    String?
+  disputeResolvedBy    String?
+  disputeResolvedAt    DateTime?
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id])
+}
+
+// ======================== SUBSCRIPTION ========================
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  householdId         String
+  tier                SubscriptionTier   @default(HOME)
+  status              SubscriptionStatus @default(ACTIVE)
+  priceCents          Int                @default(800) // Home = SGD $8/mo
+  stripeSubscriptionId String?
+  billingCycleStart   DateTime           @default(now())
+  billingCycleEnd     DateTime?
+  nextBillingDate     DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+}
+
+// ======================== AUTONOMY LADDER ========================
+
+model AutonomyLevelThreshold {
+  id             String          @id @default(cuid())
+  category       ServiceCategory
+  level          Int             // 1–5
+  cyclesRequired Int             // verified bookings to promote
+
+  @@unique([category, level])
+}
+
+model HouseholdCategoryAutonomy {
+  id                    String          @id @default(cuid())
+  householdId           String
+  category              ServiceCategory
+  currentLevel          Int             @default(1) // 1–5
+  verifiedCyclesAtLevel Int             @default(0)
+  totalVerifiedCycles   Int             @default(0)
+  promotionPaused       Boolean         @default(false)
+  lastPromotedAt        DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@unique([householdId, category])
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+}
+
+// ======================== NOTIFICATIONS ========================
+
+model Notification {
+  id                String               @id @default(cuid())
+  householdId       String
+  recipientType     RecipientType
+  memberId          String?              // FK → FamilyMember (when recipientType = HOUSEHOLD_MEMBER)
+  vendorId          String?              // FK → Vendor (when recipientType = VENDOR)
+  channel           NotificationChannel
+  eventType         NotificationEventType
+  title             String
+  body              String
+  status            NotificationStatus   @default(PENDING)
+  referenceType     String?              // "task" | "booking" | "escrow"
+  referenceId       String?
+  externalMessageId String?              // Twilio SID, Push sub ID, etc.
+  errorMessage      String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime             @default(now())
+
+  household Household @relation(fields: [householdId], references: [id])
+  member    FamilyMember? @relation(fields: [memberId], references: [id])
+  vendor    Vendor? @relation(fields: [vendorId], references: [id])
 }

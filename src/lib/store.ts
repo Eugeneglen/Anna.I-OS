@@ -1,0 +1,50 @@
+import { create } from "zustand";
+import type { TabType, Task } from "./types";
+
+interface AnnaStore {
+  // Selected household
+  selectedHouseholdId: string;
+  setSelectedHouseholdId: (id: string) => void;
+
+  // Active tab
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
+
+  // Selected task for detail view
+  selectedTaskId: string | null;
+  setSelectedTaskId: (id: string | null) => void;
+
+  // Task detail panel open (mobile sheet)
+  taskDetailOpen: boolean;
+  setTaskDetailOpen: (open: boolean) => void;
+
+  // Household list cache
+  householdNames: Record<string, string>;
+  setHouseholdNames: (names: Record<string, string>) => void;
+
+  // Helper: select a task and open detail
+  openTaskDetail: (task: Task) => void;
+  closeTaskDetail: () => void;
+}
+
+export const useAnnaStore = create<AnnaStore>((set) => ({
+  selectedHouseholdId: "",
+  setSelectedHouseholdId: (id) => set({ selectedHouseholdId: id }),
+
+  activeTab: "dashboard",
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
+  selectedTaskId: null,
+  setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+
+  taskDetailOpen: false,
+  setTaskDetailOpen: (open) => set({ taskDetailOpen: open }),
+
+  householdNames: {},
+  setHouseholdNames: (names) => set({ householdNames: names }),
+
+  openTaskDetail: (task) =>
+    set({ selectedTaskId: task.id, taskDetailOpen: true }),
+  closeTaskDetail: () =>
+    set({ selectedTaskId: null, taskDetailOpen: false }),
+}));

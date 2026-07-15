@@ -1,0 +1,183 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { Bell, LayoutDashboard, Plus, Brain, Settings } from "lucide-react";
+import { useAnnaStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { TabType, Household } from "@/lib/types";
+
+const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "new-task", label: "New Task", icon: Plus },
+  { key: "autonomy", label: "Autonomy", icon: Brain },
+  { key: "settings", label: "Settings", icon: Settings },
+];
+
+async function fetchHouseholds(): Promise<Household[]> {
+  const res = await fetch("/api/households");
+  if (!res.ok) throw new Error("Failed to fetch households");
+  const data = await res.json();
+  return data.households;
+}
+
+export function LayoutShell({ children }: { children: React.ReactNode }) {
+  const {
+    selectedHouseholdId,
+    setSelectedHouseholdId,
+    activeTab,
+    setActiveTab,
+    householdNames,
+    setHouseholdNames,
+  } = useAnnaStore();
+
+  const { data: households } = useQuery({
+    queryKey: ["households"],
+    queryFn: fetchHouseholds,
+    staleTime: 60_000,
+  });
+
+  // Auto-select first household and cache names
+  if (households && households.length > 0) {
+    const names: Record<string, string> = {};
+    households.forEach((h) => (names[h.id] = h.name));
+    if (JSON.stringify(names) !== JSON.stringify(householdNames)) {
+      setHouseholdNames(names);
+    }
+    if (!selectedHouseholdId && households[0]?.id) {
+      setSelectedHouseholdId(households[0].id);
+    }
+  }
+
+  const currentHouseholdName =
+    householdNames[selectedHouseholdId] || "Loading...";
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[var(--anna-bg)]">
+      {/* Top Nav */}
+      <header className="sticky top-0 z-40 bg-[var(--anna-white)]/80 backdrop-blur-lg border-b border-[var(--anna-border)]">
+        <div className="flex items-center justify-between h-14 px-4 lg:px-6">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-bold tracking-tight text-[var(--anna-sage-dark)]">
+              Anna.I
+            </span>
+            <span className="hidden sm:inline text-[10px] font-data uppercase tracking-widest text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-2 py-0.5 rounded-md">
+              Beta
+            </span>
+          </div>
+
+          {/* Center: Household Selector */}
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedHouseholdId}
+              onValueChange={setSelectedHouseholdId}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-auto min-w-[140px] border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm font-medium"
+              >
+                <SelectValue placeholder="Select household" />
+              </SelectTrigger>
+              <SelectContent>
+                {households?.map((h) => (
+                  <SelectItem key={h.id} value={h.id}>
+                    {h.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Right: Notification Bell */}
+          <button className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors">
+            <Bell size={18} className="text-[var(--anna-slate-light)]" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--anna-error)] rounded-full" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex flex-col w-56 lg:w-64 border-r border-[var(--anna-border)] bg-[var(--anna-white)] p-3 gap-1">
+          <nav className="flex flex-col gap-1">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
+                    isActive
+                      ? "bg-[var(--anna-sage)] text-[var(--anna-white)] shadow-sm"
+                      : "text-[var(--anna-slate-light)] hover:bg-[var(--anna-sage-light)] hover:text-[var(--anna-slate)]"
+                  )}
+                >
+                  <Icon size={18} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar footer info */}
+          <div className="mt-auto pt-4 border-t border-[var(--anna-border)] px-3">
+            <p className="text-xs text-[var(--anna-muted)]">{currentHouseholdName}</p>
+          </div>
+        </aside>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto anna-scroll">{children}</main>
+      </div>
+
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--anna-white)]/95 backdrop-blur-lg border-t border-[var(--anna-border)] safe-area-inset-bottom">
+        <div className="flex items-center justify-around h-14">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[56px]",
+                  isActive
+                    ? "text-[var(--anna-sage-dark)]"
+                    : "text-[var(--anna-muted)]"
+                )}
+              >
+                <Icon size={20} />
+                <span className="text-[10px] font-medium">{tab.label}</span>
+                {isActive && (
+                  <span className="absolute -top-px w-8 h-0.5 bg-[var(--anna-sage)] rounded-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Footer */}
+      <footer className="hidden md:block border-t border-[var(--anna-border)] bg-[var(--anna-white)] mt-auto">
+        <div className="px-6 py-4 flex items-center justify-between">
+          <p className="text-xs text-[var(--anna-muted)]">
+            Anna.I — The Operating System for the Modern Household
+          </p>
+          <p className="text-[10px] font-data text-[var(--anna-muted)]">
+            v0.1.0-beta
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}
