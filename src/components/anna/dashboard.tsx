@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { TaskList } from "./task-list";
 import { TaskDetailPanel } from "./task-detail";
+import { AnomalyBanner } from "./anomaly-banner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSgd, type Task, type Household, type HouseholdCategoryAutonomy } from "@/lib/types";
 import { Activity, CheckCircle2, Shield, Brain } from "lucide-react";
@@ -101,6 +102,9 @@ export function Dashboard() {
           </p>
         )}
       </div>
+
+      {/* Anomaly Alerts */}
+      <AnomalyBanner />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 lg:p-6">

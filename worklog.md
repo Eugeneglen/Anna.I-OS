@@ -221,3 +221,57 @@ Stage Summary:
 - "Read-only assistant" disclaimer removed — replaced with positive brand statement
 - Input bar fully visible on mobile with safe-area support
 - Full message flow verified: chip click → input populated → send → LLM response received
+---
+Task ID: 3
+Agent: Main
+Task: Phase 3 — Anomaly Detector
+
+Work Log:
+- Added 3 new enums to Prisma schema: AnomalyType (VENDOR_LATE, TASK_OVERDUE, VERIFICATION_MISSING, RATING_DROP, ESCROW_DISPUTED), AnomalySeverity (LOW, MEDIUM, HIGH, CRITICAL), AnomalyStatus (ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED)
+- Added Anomaly model with householdId, taskId, bookingId, vendorId, type, severity, message, metadata (JSON), status, timestamps
+- Added @@index on (householdId, status), (type, status), (severity) for query performance
+- Ran db:push + generate — zero migration issues
+- Built anomaly detection engine (src/lib/anomaly-detector.ts) with 5 rule-based detection functions:
+  1. VENDOR_LATE: booking 30+ min past scheduled start with no actualStart
+  2. TASK_OVERDUE: task 4+ hours past dispatch, still not completed
+  3. VERIFICATION_MISSING: task completed 24+ hours ago, no verification photo
+  4. RATING_DROP: latest booking rating 1.5+ points below vendor's historical average (requires 3+ history)
+  5. ESCROW_DISPUTED: event-driven detection from DISPUTED escrow ledger entries
+- Duplicate prevention: checks for existing ACTIVE anomalies per (household, type, bookingId/taskId)
+- Severity auto-escalation: e.g., vendor 60+ min late → HIGH, 120+ min → CRITICAL
+- Added SLA constants to constants.ts: VENDOR_LATE_SLA_MINUTES=30, TASK_OVERDUE_SLA_HOURS=4, VERIFICATION_MISSING_SLA_HOURS=24, RATING_DROP_THRESHOLD=1.5
+- Added ANOMALY_TYPE_LABELS and ANOMALY_SEVERITY_STYLES for UI
+- Added Anomaly types to types.ts
+- Built 3 API endpoints:
+  - GET /api/anomalies?householdId=&status=&severity= — list with severity groupBy counts
+  - POST /api/anomalies/check — runs all 5 detection rules, persists new anomalies, returns detection summary
+  - PATCH /api/anomalies/[id] — acknowledge/resolve/dismiss with Zod validation
+- Built anomaly-banner.tsx dashboard component:
+  - Collapsed: severity-colored banner with count, preview text, Critical/High badges, chevron
+  - Expanded: sorted anomaly rows with severity dot, type label, time ago, message, Acknowledge/Dismiss actions
+  - Re-scan now button (triggers detection), Collapse button
+  - Auto-refresh every 30 seconds via TanStack Query refetchInterval
+  - Integrates into dashboard.tsx between header and summary cards
+- Seeded 3 demo anomalies for Tan Family (VENDOR_LATE MEDIUM, VERIFICATION_MISSING HIGH, TASK_OVERDUE CRITICAL)
+- Browser-verified: banner renders, expands on click, dismiss updates count instantly, zero errors
+
+Files Created:
+1. src/lib/anomaly-detector.ts — 5-rule detection engine
+2. src/app/api/anomalies/route.ts — GET list endpoint
+3. src/app/api/anomalies/check/route.ts — POST detection trigger
+4. src/app/api/anomalies/[id]/route.ts — PATCH acknowledge/dismiss
+5. src/components/anna/anomaly-banner.tsx — dashboard alert UI
+6. prisma/seed-anomalies.ts — demo data seed script
+
+Files Modified:
+1. prisma/schema.prisma — 3 enums + Anomaly model + Household.anomalies relation
+2. src/lib/types.ts — Anomaly, AnomalyType, AnomalySeverity, AnomalyStatus types
+3. src/lib/constants.ts — SLA thresholds + type labels + severity styles
+4. src/components/anna/dashboard.tsx — AnomalyBanner import + render
+
+Stage Summary:
+- Phase 3 Anomaly Detector fully operational
+- 5 detection rules covering all spec requirements (vendor late, task overdue, verification missing, rating drop, escrow disputed)
+- Dashboard shows real-time anomaly banner with expand/collapse, severity badges, acknowledge/dismiss actions
+- All API endpoints returning 200, zero lint errors, zero runtime errors
+- Targeting Seed metric: "human coordinator backstop invoked in <30% of tasks by Month 6" — anomaly data is now instrumented and queryable

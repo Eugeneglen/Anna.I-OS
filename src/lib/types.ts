@@ -163,6 +163,38 @@ export const CATEGORY_DEFAULTS: Record<
   HANDYMAN: { label: "Handyman", amount: 8000, icon: "Wrench" },
 };
 
+// ============================================================
+// Anomaly Detection Types (Phase 3)
+// ============================================================
+
+export type AnomalyType =
+  | "VENDOR_LATE"
+  | "TASK_OVERDUE"
+  | "VERIFICATION_MISSING"
+  | "RATING_DROP"
+  | "ESCROW_DISPUTED";
+
+export type AnomalySeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type AnomalyStatus = "ACTIVE" | "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED";
+
+export interface Anomaly {
+  id: string;
+  householdId: string;
+  taskId?: string | null;
+  bookingId?: string | null;
+  vendorId?: string | null;
+  type: AnomalyType;
+  severity: AnomalySeverity;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+  status: AnomalyStatus;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   CREATED: "Awaiting Dispatch",
   DISPATCHED: "In Progress",

@@ -90,6 +90,28 @@ enum NotificationStatus {
   FAILED
 }
 
+enum AnomalyType {
+  VENDOR_LATE
+  TASK_OVERDUE
+  VERIFICATION_MISSING
+  RATING_DROP
+  ESCROW_DISPUTED
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AnomalyStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
 enum RecipientType {
   HOUSEHOLD_MEMBER
   VENDOR
@@ -116,6 +138,7 @@ model Household {
   categoryAutonomy HouseholdCategoryAutonomy[]
   vendorAffinity   VendorHouseholdAffinity[]
   notifications    Notification[]
+  anomalies        Anomaly[]
 }
 
 model FamilyMember {
@@ -346,4 +369,29 @@ model Notification {
   household Household @relation(fields: [householdId], references: [id])
   member    FamilyMember? @relation(fields: [memberId], references: [id])
   vendor    Vendor? @relation(fields: [vendorId], references: [id])
+}
+
+// ======================== ANOMALY DETECTION (Phase 3) ========================
+
+model Anomaly {
+  id               String         @id @default(cuid())
+  householdId      String
+  taskId           String?
+  bookingId        String?
+  vendorId         String?
+  type             AnomalyType
+  severity         AnomalySeverity @default(MEDIUM)
+  message          String              // human-readable description
+  metadata         Json?               // extra context: { scheduledStart, slaMinutes, currentRating, avgRating, ... }
+  status           AnomalyStatus  @default(ACTIVE)
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, status])
+  @@index([type, status])
+  @@index([severity])
 }
