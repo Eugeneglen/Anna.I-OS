@@ -93,7 +93,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedCategory) throw new Error("Missing fields");
+      if (!category || !selectedHouseholdId) throw new Error("Missing household or category");
       const scheduledStart = scheduledDate
         ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString()
         : new Date(Date.now() + 86400000).toISOString();
