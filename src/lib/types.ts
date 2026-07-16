@@ -170,7 +170,7 @@ export interface Subscription {
   nextBillingDate?: string | null;
 }
 
-export type TabType = "dashboard" | "services" | "new-task" | "autonomy" | "settings";
+export type TabType = "dashboard" | "services" | "autonomy" | "settings";
 
 export const AUTONOMY_LEVELS = [
   "Manual",

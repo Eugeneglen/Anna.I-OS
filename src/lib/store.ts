@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { TabType, Task, ServiceCategory } from "./types";
+import type { TabType, Task } from "./types";
 
 interface AnnaStore {
   // Selected household
@@ -26,10 +26,6 @@ interface AnnaStore {
   householdNames: Record<string, string>;
   setHouseholdNames: (names: Record<string, string>) => void;
 
-  // Pre-selected category (from Services catalog)
-  preselectedCategory: ServiceCategory | null;
-  setPreselectedCategory: (cat: ServiceCategory | null) => void;
-
   // Helper: select a task and open detail
   openTaskDetail: (task: Task) => void;
   closeTaskDetail: () => void;
@@ -53,9 +49,6 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   householdNames: {},
   setHouseholdNames: (names) => set({ householdNames: names }),
-
-  preselectedCategory: null,
-  setPreselectedCategory: (cat) => set({ preselectedCategory: cat }),
 
   openTaskDetail: (task) =>
     set({ selectedTaskId: task.id, taskDetailOpen: true }),

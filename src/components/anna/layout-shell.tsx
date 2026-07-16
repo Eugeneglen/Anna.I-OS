@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, LayoutDashboard, Layers, Plus, Brain, Settings } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, Settings } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -17,7 +17,6 @@ import { AskAnna } from "@/components/anna/ask-anna";
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "services", label: "Services", icon: Layers },
-  { key: "new-task", label: "New Task", icon: Plus },
   { key: "autonomy", label: "Autonomy", icon: Brain },
   { key: "settings", label: "Settings", icon: Settings },
 ];

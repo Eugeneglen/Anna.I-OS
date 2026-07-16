@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAnnaStore } from "@/lib/store";
 import {
   CategoryIcon,
   getCategoryLabel,
 } from "./category-icon";
+import { BookingForm } from "./booking-form";
 import {
   formatSgd,
   CATEGORY_DEFAULTS,
@@ -46,6 +46,11 @@ const CATEGORY_DESCRIPTIONS: Record<ServiceCategory, string> = {
   APPLIANCE_REPAIR: "Diagnosis & repair for home appliances",
 };
 
+type ViewState =
+  | { mode: "browse" }
+  | { mode: "category"; category: ServiceCategory }
+  | { mode: "booking"; category: ServiceCategory; jobType?: ServiceJobType | null };
+
 async function fetchJobTypes(category: ServiceCategory): Promise<ServiceJobType[]> {
   const res = await fetch(`/api/job-types?category=${category}`);
   if (!res.ok) throw new Error("Failed to fetch job types");
@@ -55,11 +60,9 @@ async function fetchJobTypes(category: ServiceCategory): Promise<ServiceJobType[
 
 function CategoryCard({
   category,
-  isSelected,
   onClick,
 }: {
   category: ServiceCategory;
-  isSelected: boolean;
   onClick: () => void;
 }) {
   const defaults = CATEGORY_DEFAULTS[category];
@@ -68,9 +71,7 @@ function CategoryCard({
       onClick={onClick}
       className={cn(
         "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left w-full",
-        isSelected
-          ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/50 shadow-sm"
-          : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 hover:shadow-sm"
+        "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 hover:shadow-sm"
       )}
     >
       <CategoryIcon category={category} size={22} />
@@ -81,10 +82,7 @@ function CategoryCard({
           </span>
           <ChevronRight
             size={16}
-            className={cn(
-              "shrink-0 transition-colors",
-              isSelected ? "text-[var(--anna-sage-dark)]" : "text-[var(--anna-muted)]"
-            )}
+            className="shrink-0 text-[var(--anna-muted)]"
           />
         </div>
         <p className="text-xs text-[var(--anna-muted)] mt-0.5 line-clamp-1">
@@ -188,14 +186,18 @@ function JobTypeSkeleton() {
 }
 
 export function TaskServices() {
-  const { setActiveTab } = useAnnaStore();
-  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+  const [view, setView] = useState<ViewState>({ mode: "browse" });
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Fetch job types when viewing a category
+  const activeCategory = view.mode === "category" ? view.category
+    : view.mode === "booking" ? view.category
+    : null;
+
   const { data: jobTypes, isLoading: isLoadingJobs } = useQuery({
-    queryKey: ["job-types", selectedCategory],
-    queryFn: () => fetchJobTypes(selectedCategory!),
-    enabled: !!selectedCategory,
+    queryKey: ["job-types", activeCategory],
+    queryFn: () => fetchJobTypes(activeCategory!),
+    enabled: !!activeCategory,
   });
 
   // Filter categories by search
@@ -216,20 +218,39 @@ export function TaskServices() {
       })
     : jobTypes;
 
-  function handleBookNow(category: ServiceCategory) {
-    // Store which category to auto-select
-    useAnnaStore.setState({ preselectedCategory: category });
-    setActiveTab("new-task");
+  // --- RENDER: Booking Form ---
+  if (view.mode === "booking") {
+    return (
+      <div className="p-4 lg:p-6 pb-20 md:pb-0">
+        <BookingForm
+          category={view.category}
+          initialJobType={view.jobType ?? null}
+          onBack={() => setView({ mode: "category", category: view.category })}
+          onSuccess={() => setView({ mode: "browse" })}
+        />
+      </div>
+    );
   }
 
+  // --- RENDER: Category Browse / Category Detail ---
   return (
     <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
-      <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
-        Task Services
-      </h1>
-      <p className="text-sm text-[var(--anna-muted)] mb-6">
-        Browse our full catalogue of home services
-      </p>
+      {view.mode === "browse" ? (
+        <>
+          <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
+            Services
+          </h1>
+          <p className="text-sm text-[var(--anna-muted)] mb-6">
+            Browse and book home services
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
+            Services
+          </h1>
+        </>
+      )}
 
       {/* Search */}
       <div className="relative mb-6">
@@ -245,25 +266,27 @@ export function TaskServices() {
         />
       </div>
 
-      {!selectedCategory ? (
-        /* Category Grid */
+      {view.mode === "browse" ? (
+        /* ── Category Grid ── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredCategories.map((cat) => (
             <CategoryCard
               key={cat}
               category={cat}
-              isSelected={false}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => {
+                setSearchQuery("");
+                setView({ mode: "category", category: cat });
+              }}
             />
           ))}
         </div>
       ) : (
-        /* Job Types for Selected Category */
+        /* ── Job Types for Selected Category ── */
         <div>
           {/* Back button */}
           <button
             onClick={() => {
-              setSelectedCategory(null);
+              setView({ mode: "browse" });
               setSearchQuery("");
             }}
             className="flex items-center gap-1.5 text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors mb-4"
@@ -274,13 +297,13 @@ export function TaskServices() {
 
           {/* Category Header */}
           <div className="flex items-center gap-3 mb-4">
-            <CategoryIcon category={selectedCategory} size={24} />
+            <CategoryIcon category={view.category} size={24} />
             <div>
               <h2 className="text-lg font-bold text-[var(--anna-slate)]">
-                {getCategoryLabel(selectedCategory)}
+                {getCategoryLabel(view.category)}
               </h2>
               <p className="text-xs text-[var(--anna-muted)]">
-                {CATEGORY_DESCRIPTIONS[selectedCategory]}
+                {CATEGORY_DESCRIPTIONS[view.category]}
               </p>
             </div>
           </div>
@@ -298,7 +321,7 @@ export function TaskServices() {
                 <JobTypeCard
                   key={jt.id}
                   jobType={jt}
-                  onBook={() => handleBookNow(selectedCategory)}
+                  onBook={() => setView({ mode: "booking", category: view.category, jobType: jt })}
                 />
               ))}
             </div>
@@ -306,37 +329,37 @@ export function TaskServices() {
             <div className="flex flex-col items-center justify-center py-12 text-[var(--anna-muted)]">
               <p className="text-sm">No specific services listed yet</p>
               <p className="text-xs mt-1 mb-4">
-                {searchQuery ? "Try a different search term" : "You can still create a custom task for this category"}
+                {searchQuery ? "Try a different search term" : "You can still create a custom booking for this category"}
               </p>
               <Button
-                onClick={() => handleBookNow(selectedCategory)}
+                onClick={() => setView({ mode: "booking", category: view.category })}
                 size="sm"
                 className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-9 text-xs font-semibold"
               >
-                Create Custom Task
+                Book Custom Service
                 <ArrowRight size={14} className="ml-1.5" />
               </Button>
             </div>
           )}
 
-          {/* Quick Book CTA when no specific job types */}
+          {/* Custom booking CTA when job types exist */}
           {filteredJobTypes && filteredJobTypes.length > 0 && (
             <div className="mt-6 p-4 rounded-2xl bg-[var(--anna-sage-light)]/50 border border-[var(--anna-sage)]/20">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                    Need a custom {getCategoryLabel(selectedCategory).toLowerCase()} service?
+                    Need a custom {getCategoryLabel(view.category).toLowerCase()} service?
                   </p>
                   <p className="text-xs text-[var(--anna-muted)] mt-0.5">
-                    Create a custom task with your own instructions
+                    Create a booking with your own instructions
                   </p>
                 </div>
                 <Button
-                  onClick={() => handleBookNow(selectedCategory)}
+                  onClick={() => setView({ mode: "booking", category: view.category })}
                   size="sm"
                   className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-9 text-xs font-semibold shrink-0"
                 >
-                  New Task
+                  Custom
                   <ArrowRight size={14} className="ml-1.5" />
                 </Button>
               </div>
