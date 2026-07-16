@@ -147,8 +147,10 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
       queryClient.invalidateQueries({ queryKey: ["household"] });
       onSuccess();
     },
-    onError: () => {
-      toast({ title: "Failed to create task", variant: "destructive" });
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to create task";
+      console.error("[BookingForm] mutation error:", err);
+      toast({ title: "Booking failed", description: msg, variant: "destructive" });
     },
   });
 

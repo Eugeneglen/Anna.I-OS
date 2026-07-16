@@ -16,7 +16,7 @@ const createTaskSchema = z.object({
   category: z.nativeEnum(ServiceCategory),
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
-  recurrencePattern: z.record(z.unknown()).nullable().optional(),
+  recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
   scheduledStart: z.string().optional(),
   attachments: z.array(attachmentSchema).optional(),
   jobTypeId: z.string().nullable().optional(),

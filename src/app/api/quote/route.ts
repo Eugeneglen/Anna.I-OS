@@ -11,7 +11,7 @@ import {
 const createQuotationSchema = z.object({
   householdId: z.string().min(1),
   jobTypeId: z.string().min(1),
-  fieldValues: z.record(z.number()),
+  fieldValues: z.record(z.string(), z.number()),
   selectedAddOns: z.array(z.string()),
 });
 
