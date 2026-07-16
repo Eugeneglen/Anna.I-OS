@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Bell, LayoutDashboard, Layers, Brain, Settings } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -45,16 +45,15 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   });
 
-  const initializedRef = useRef(false);
-
-  // Auto-select first household and cache names (via effect to avoid React 19 setState-during-render)
+  // Auto-select first household and cache names (handles stale IDs after re-seed)
   useEffect(() => {
-    if (!households || households.length === 0 || initializedRef.current) return;
-    initializedRef.current = true;
+    if (!households || households.length === 0) return;
     const names: Record<string, string> = {};
     households.forEach((h) => (names[h.id] = h.name));
     setHouseholdNames(names);
-    if (!selectedHouseholdId && households[0]?.id) {
+    // If selected household doesn't exist in the list (e.g. after re-seed), auto-select first
+    const validId = households.some((h) => h.id === selectedHouseholdId);
+    if (!validId) {
       setSelectedHouseholdId(households[0].id);
     }
   }, [households, selectedHouseholdId, setHouseholdNames, setSelectedHouseholdId]);

@@ -1397,13 +1397,21 @@ const jobTypes = [
 
 async function main() {
   console.log("🧹 Clearing existing ServiceJobType records...");
-  const deleted = await db.serviceJobType.deleteMany();
-  console.log(`   Deleted ${deleted.count} records`);
+  try {
+    const deleted = await db.serviceJobType.deleteMany();
+    console.log(`   Deleted ${deleted.count} records`);
+  } catch {
+    console.log("   ⚠️  Could not delete (tasks reference job types) — skipping cleanup");
+  }
 
   console.log("📦 Seeding ServiceJobType records...\n");
 
   for (const jt of jobTypes) {
-    await db.serviceJobType.create({ data: jt });
+    await db.serviceJobType.upsert({
+      where: { slug: jt.slug },
+      update: jt,
+      create: jt,
+    });
     const label = `  ✅ ${jt.category} → ${jt.name}`;
     const price =
       jt.pricingRules.type === "flat"
