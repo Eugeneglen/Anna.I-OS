@@ -19,8 +19,8 @@ const createTaskSchema = z.object({
   recurrencePattern: z.record(z.unknown()).nullable().optional(),
   scheduledStart: z.string().optional(),
   attachments: z.array(attachmentSchema).optional(),
-  jobTypeId: z.string().optional(),
-  quotationId: z.string().optional(),
+  jobTypeId: z.string().nullable().optional(),
+  quotationId: z.string().nullable().optional(),
 })
 
 // GET /api/tasks?householdId=xxx

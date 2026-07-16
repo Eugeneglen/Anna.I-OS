@@ -217,9 +217,9 @@ export function TaskServices() {
     : jobTypes;
 
   function handleBookNow(category: ServiceCategory) {
+    // Store which category to auto-select
+    useAnnaStore.setState({ preselectedCategory: category });
     setActiveTab("new-task");
-    // Store the pre-selected category in the store so TaskCreator can pick it up
-    useAnnaStore.getState().setPreselectedCategory(category);
   }
 
   return (

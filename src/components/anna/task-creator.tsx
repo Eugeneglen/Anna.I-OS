@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
@@ -49,19 +49,11 @@ const RECURRENCE_OPTIONS: {
 ];
 
 export function TaskCreator() {
-  const { selectedHouseholdId, setActiveTab, preselectedCategory, setPreselectedCategory } = useAnnaStore();
+  const { selectedHouseholdId, setActiveTab } = useAnnaStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
-
-  // Sync preselectedCategory from Services catalog
-  useEffect(() => {
-    if (preselectedCategory) {
-      setSelectedCategory(preselectedCategory);
-      setPreselectedCategory(null);
-    }
-  }, [preselectedCategory, setPreselectedCategory]);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
   const [amountCents, setAmountCents] = useState(0);
@@ -81,13 +73,24 @@ export function TaskCreator() {
     setSelectedCategory(cat);
     setSelectedJobType(null);
     setQuoteResult(null);
-    setAmountCents(0);
+    setQuoteFieldValues({});
+    setQuoteSelectedAddOns([]);
+    setAmountCents(CATEGORY_DEFAULTS[cat].amount);
   }
 
   function selectJobType(jt: ServiceJobType) {
-    setSelectedJobType(jt);
-    setQuoteResult(null);
-    setAmountCents(jt.basePriceCents);
+    if (selectedJobType?.id === jt.id) {
+      // Deselect — go back to custom
+      setSelectedJobType(null);
+      setQuoteResult(null);
+      if (selectedCategory) {
+        setAmountCents(CATEGORY_DEFAULTS[selectedCategory].amount);
+      }
+    } else {
+      setSelectedJobType(jt);
+      setQuoteResult(null);
+      setAmountCents(jt.basePriceCents);
+    }
   }
 
   const handleQuoteChange = useCallback(
@@ -171,7 +174,6 @@ export function TaskCreator() {
       toast({ title: "Task created successfully!" });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["household"] });
-      setPreselectedCategory(null);
       resetForm();
       setActiveTab("dashboard");
     },
@@ -180,71 +182,80 @@ export function TaskCreator() {
     },
   });
 
-  // Determine the effective amount to display
-  const effectiveAmountCents = quoteResult ? amountCents : amountCents;
-
   return (
     <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
       <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
         New Task
       </h1>
       <p className="text-sm text-[var(--anna-muted)] mb-6">
-        Select a service category to get started
+        {selectedCategory
+          ? `Configure your ${getCategoryLabel(selectedCategory).toLowerCase()} task`
+          : "Select a service category to get started"}
       </p>
 
-      {/* Step 1: Category Selection */}
-      <div className="mb-6">
+      {/* Step 1: Category Selection — hidden once a category is picked */}
+      <div className={cn("mb-6", selectedCategory && "hidden")}>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
           Category
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => selectCategory(cat)}
-                className={cn(
-                  "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all",
-                  isSelected
-                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/50 shadow-sm"
-                    : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40"
-                )}
-              >
-                <CategoryIcon category={cat} size={24} />
-                <span className="text-sm font-semibold text-[var(--anna-slate)]">
-                  {getCategoryLabel(cat)}
-                </span>
-                <span className="font-data text-xs text-[var(--anna-muted)]">
-                  from {formatSgd(CATEGORY_DEFAULTS[cat].amount)}
-                </span>
-              </button>
-            );
-          })}
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => selectCategory(cat)}
+              className="flex flex-col items-center gap-3 p-4 rounded-2xl border-2 border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 transition-all"
+            >
+              <CategoryIcon category={cat} size={24} />
+              <span className="text-sm font-semibold text-[var(--anna-slate)]">
+                {getCategoryLabel(cat)}
+              </span>
+              <span className="font-data text-xs text-[var(--anna-muted)]">
+                from {formatSgd(CATEGORY_DEFAULTS[cat].amount)}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Step 2: Job Type Selection */}
+      {/* Step 2+: Task Form — shown once a category is selected */}
       {selectedCategory && (
-        <div className="mb-6">
+        <div className="space-y-5 anna-fade-in">
+          {/* Selected category chip + change button */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedCategory(null);
+                setSelectedJobType(null);
+                setQuoteResult(null);
+                setAmountCents(0);
+                setInstructions("");
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 transition-all text-sm"
+            >
+              <CategoryIcon category={selectedCategory} size={14} />
+              <span className="font-medium text-[var(--anna-slate)]">
+                {getCategoryLabel(selectedCategory)}
+              </span>
+              <span className="text-[10px] text-[var(--anna-muted)]">change</span>
+            </button>
+          </div>
+
+          {/* Job Type Selection (optional — only shown if job types exist) */}
           <JobTypeSelector
             category={selectedCategory}
             selectedJobType={selectedJobType}
             onSelect={selectJobType}
           />
-        </div>
-      )}
 
-      {/* Step 3: Task Form */}
-      {selectedJobType && (
-        <div className="space-y-5 anna-fade-in">
-          {/* Dynamic Fields + Add-ons + Live Quote */}
-          <QuoteBuilder
-            jobType={selectedJobType}
-            onQuoteChange={handleQuoteChange}
-          />
+          {/* QuoteBuilder — only shown when a specific job type is selected */}
+          {selectedJobType && (
+            <QuoteBuilder
+              jobType={selectedJobType}
+              onQuoteChange={handleQuoteChange}
+            />
+          )}
 
-          {/* Amount display (computed from quote, but editable as custom) */}
+          {/* Amount */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
               Amount
@@ -257,16 +268,20 @@ export function TaskCreator() {
                 type="number"
                 step="0.01"
                 min="0"
-                value={(effectiveAmountCents / 100).toFixed(2)}
+                value={(amountCents / 100).toFixed(2)}
                 onChange={(e) =>
                   setAmountCents(Math.round(parseFloat(e.target.value) * 100))
                 }
                 className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
               />
             </div>
-            {quoteResult && (
+            {quoteResult ? (
               <p className="text-[10px] text-[var(--anna-muted)]">
-                Auto-calculated from {selectedJobType.name}. Edit to override.
+                Auto-calculated from {selectedJobType?.name}. Edit to override.
+              </p>
+            ) : (
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                Default estimate for {getCategoryLabel(selectedCategory)}. Edit to customize.
               </p>
             )}
           </div>
@@ -279,8 +294,8 @@ export function TaskCreator() {
             <Textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Add any specific notes for the vendor..."
-              className="min-h-[80px] rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] resize-none text-sm focus-visible:ring-[var(--anna-sage)]/30"
+              placeholder="Describe what needs to be done..."
+              className="min-h-[100px] rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] resize-none text-sm focus-visible:ring-[var(--anna-sage)]/30"
             />
           </div>
 
@@ -376,7 +391,7 @@ export function TaskCreator() {
           {/* Create Button */}
           <Button
             onClick={() => createMutation.mutate()}
-            disabled={!instructions.trim() || createMutation.isPending}
+            disabled={!instructions.trim() || createMutation.isPending || amountCents <= 0}
             className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-12 text-sm font-semibold"
           >
             {createMutation.isPending ? "Creating..." : "Create Task"}
