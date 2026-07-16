@@ -1,6 +1,16 @@
 // Anna.I TypeScript type definitions
 
-export type ServiceCategory = "CLEANING" | "LAUNDRY" | "AIRCON" | "HANDYMAN";
+export type ServiceCategory =
+  | "CLEANING"
+  | "LAUNDRY"
+  | "AIRCON"
+  | "PLUMBING"
+  | "ELECTRICAL"
+  | "PAINTING"
+  | "PEST_CONTROL"
+  | "HANDYMAN"
+  | "LOCKSMITH"
+  | "APPLIANCE_REPAIR";
 
 export type TaskStatus =
   | "CREATED"
@@ -174,10 +184,16 @@ export const CATEGORY_DEFAULTS: Record<
   ServiceCategory,
   { label: string; amount: number; icon: string }
 > = {
-  CLEANING: { label: "Cleaning", amount: 6800, icon: "Sparkles" },
-  LAUNDRY: { label: "Laundry", amount: 4500, icon: "Shirt" },
-  AIRCON: { label: "Aircon", amount: 12000, icon: "Wind" },
+  CLEANING: { label: "Cleaning", amount: 8000, icon: "Sparkles" },
+  LAUNDRY: { label: "Laundry", amount: 5000, icon: "Shirt" },
+  AIRCON: { label: "Aircon", amount: 5000, icon: "Wind" },
+  PLUMBING: { label: "Plumbing", amount: 10000, icon: "Droplets" },
+  ELECTRICAL: { label: "Electrical", amount: 8000, icon: "Zap" },
+  PAINTING: { label: "Painting", amount: 32000, icon: "Paintbrush" },
+  PEST_CONTROL: { label: "Pest Control", amount: 12000, icon: "Bug" },
   HANDYMAN: { label: "Handyman", amount: 8000, icon: "Wrench" },
+  LOCKSMITH: { label: "Locksmith", amount: 8000, icon: "KeyRound" },
+  APPLIANCE_REPAIR: { label: "Appliance Repair", amount: 6000, icon: "Refrigerator" },
 };
 
 // ============================================================
@@ -261,6 +277,12 @@ export interface ServiceJobType {
       field: string;
       tiers: { maxSqft: number; multiplier: number }[];
     };
+    surcharges?: {
+      key: string;
+      label: string;
+      amountCents: number;
+      perUnit?: boolean;
+    }[];
   };
   requiredFields: {
     key: string;

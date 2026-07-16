@@ -1,20 +1,43 @@
 "use client";
 
-import { Sparkles, Shirt, Wind, Wrench } from "lucide-react";
+import {
+  Sparkles,
+  Shirt,
+  Wind,
+  Droplets,
+  Zap,
+  Paintbrush,
+  Bug,
+  Wrench,
+  KeyRound,
+  Refrigerator,
+} from "lucide-react";
 import type { ServiceCategory } from "@/lib/types";
 
 const iconMap: Record<ServiceCategory, React.ElementType> = {
   CLEANING: Sparkles,
   LAUNDRY: Shirt,
   AIRCON: Wind,
+  PLUMBING: Droplets,
+  ELECTRICAL: Zap,
+  PAINTING: Paintbrush,
+  PEST_CONTROL: Bug,
   HANDYMAN: Wrench,
+  LOCKSMITH: KeyRound,
+  APPLIANCE_REPAIR: Refrigerator,
 };
 
 const colorMap: Record<ServiceCategory, string> = {
-  CLEANING: "text-[var(--anna-success)] bg-[var(--anna-success)]/10",
-  LAUNDRY: "text-[var(--anna-warning)] bg-[var(--anna-warning)]/10",
-  AIRCON: "text-[var(--anna-slate-light)] bg-[var(--anna-slate-light)]/10",
-  HANDYMAN: "text-[var(--anna-sage-dark)] bg-[var(--anna-sage-dark)]/10",
+  CLEANING: "text-emerald-600 bg-emerald-50",
+  LAUNDRY: "text-amber-600 bg-amber-50",
+  AIRCON: "text-sky-600 bg-sky-50",
+  PLUMBING: "text-blue-600 bg-blue-50",
+  ELECTRICAL: "text-yellow-500 bg-yellow-50",
+  PAINTING: "text-rose-500 bg-rose-50",
+  PEST_CONTROL: "text-red-600 bg-red-50",
+  HANDYMAN: "text-stone-600 bg-stone-100",
+  LOCKSMITH: "text-violet-600 bg-violet-50",
+  APPLIANCE_REPAIR: "text-orange-600 bg-orange-50",
 };
 
 interface CategoryIconProps {
@@ -32,8 +55,7 @@ export function CategoryIcon({
 }: CategoryIconProps) {
   const Icon = iconMap[category];
   const colors = colorMap[category];
-  const label =
-    category.charAt(0) + category.slice(1).toLowerCase();
+  const label = getCategoryLabel(category);
 
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
@@ -56,7 +78,13 @@ export function getCategoryLabel(category: ServiceCategory): string {
     CLEANING: "Cleaning",
     LAUNDRY: "Laundry",
     AIRCON: "Aircon",
+    PLUMBING: "Plumbing",
+    ELECTRICAL: "Electrical",
+    PAINTING: "Painting",
+    PEST_CONTROL: "Pest Control",
     HANDYMAN: "Handyman",
+    LOCKSMITH: "Locksmith",
+    APPLIANCE_REPAIR: "Appliance Repair",
   };
   return labels[category];
 }

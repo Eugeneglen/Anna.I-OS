@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/lib/db";
-import { ServiceCategory } from "@prisma/client";
-
-const categoryValues = Object.values(ServiceCategory) as [string, ...string[]];
+import { CATEGORIES } from "@/lib/constants";
 
 // GET /api/job-types?category=CLEANING
 export async function GET(request: Request) {
@@ -18,11 +15,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const parsed = z.enum(categoryValues).safeParse(category);
-    if (!parsed.success) {
+    if (!CATEGORIES.includes(category as never)) {
       return NextResponse.json(
         {
-          error: `Invalid category. Must be one of: ${categoryValues.join(", ")}`,
+          error: `Invalid category. Must be one of: ${CATEGORIES.join(", ")}`,
         },
         { status: 400 }
       );
@@ -30,7 +26,7 @@ export async function GET(request: Request) {
 
     const jobTypes = await db.serviceJobType.findMany({
       where: {
-        category: parsed.data,
+        category: category as never,
         isActive: true,
       },
       orderBy: { sortOrder: "asc" },

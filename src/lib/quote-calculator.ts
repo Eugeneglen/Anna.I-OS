@@ -8,6 +8,12 @@ export interface JobTypePricingRules {
     field: string;
     tiers: { maxSqft: number; multiplier: number }[];
   };
+  surcharges?: {
+    key: string;
+    label: string;
+    amountCents: number;
+    perUnit?: boolean;
+  }[];
 }
 
 export interface JobTypeRequiredField {
@@ -48,7 +54,8 @@ export interface QuoteResult {
  *   2. If per_unit / per_room / per_item: multiply by fieldValues[unitField]
  *   3. If multiplierField exists: multiply by fieldValues[multiplierField]
  *   4. If areaMultiplier exists: multiply by the matching tier multiplier
- *   5. Round to nearest integer
+ *   5. If surcharges exist and matching fieldValues[surcharge.key] is truthy: add surcharge
+ *   6. Round to nearest integer
  *
  * Add-ons:
  *   - "flat": add priceCents directly
@@ -65,6 +72,12 @@ export function calculateQuote(
   const breakdown: QuoteLineItem[] = [];
   let baseCents = basePriceCents;
 
+  // Get unit count for per_unit pricing
+  const unitCount =
+    pricingRules.unitField && (pricingRules.type === "per_unit" || pricingRules.type === "per_room" || pricingRules.type === "per_item")
+      ? fieldValues[pricingRules.unitField] ?? 1
+      : 1;
+
   // Step 1: Per-unit / per-room / per-item multiplier
   if (
     (pricingRules.type === "per_unit" ||
@@ -72,7 +85,6 @@ export function calculateQuote(
       pricingRules.type === "per_item") &&
     pricingRules.unitField
   ) {
-    const unitCount = fieldValues[pricingRules.unitField] ?? 1;
     baseCents = baseCents * unitCount;
   }
 
@@ -86,7 +98,6 @@ export function calculateQuote(
   if (pricingRules.areaMultiplier) {
     const areaValue = fieldValues[pricingRules.areaMultiplier.field];
     if (areaValue !== undefined) {
-      // Tiers are sorted ascending by maxSqft; find the first tier whose maxSqft >= areaValue
       const sortedTiers = [...pricingRules.areaMultiplier.tiers].sort(
         (a, b) => a.maxSqft - b.maxSqft
       );
@@ -97,14 +108,29 @@ export function calculateQuote(
     }
   }
 
+  // Step 4: Surcharges (triggered by boolean-like field values)
+  let surchargesCents = 0;
+  if (pricingRules.surcharges && pricingRules.surcharges.length > 0) {
+    for (const surcharge of pricingRules.surcharges) {
+      if (fieldValues[surcharge.key]) {
+        const amount = surcharge.perUnit
+          ? surcharge.amountCents * unitCount
+          : surcharge.amountCents;
+        surchargesCents += amount;
+        breakdown.push({ label: surcharge.label, amountCents: Math.round(amount) });
+      }
+    }
+  }
+
   // Round base
   baseCents = Math.round(baseCents);
+  const totalBaseCents = baseCents + Math.round(surchargesCents);
 
-  // Build base line item label
-  const baseLabel = buildBaseLabel(pricingRules, requiredFields, fieldValues);
-  breakdown.push({ label: baseLabel, amountCents: baseCents });
+  // Build base line item
+  const baseLabel = buildBaseLabel(pricingRules, requiredFields, fieldValues, unitCount);
+  breakdown.unshift({ label: baseLabel, amountCents: totalBaseCents });
 
-  // Step 4: Calculate add-ons
+  // Step 5: Calculate add-ons
   let addOnsCents = 0;
   const selectedSet = new Set(selectedAddOnKeys);
 
@@ -128,9 +154,9 @@ export function calculateQuote(
     breakdown.push({ label: addOn.label, amountCents: addOnTotal });
   }
 
-  const totalCents = baseCents + addOnsCents;
+  const totalCents = totalBaseCents + addOnsCents;
 
-  return { baseCents, addOnsCents, totalCents, breakdown };
+  return { baseCents: totalBaseCents, addOnsCents, totalCents, breakdown };
 }
 
 /**
@@ -139,7 +165,8 @@ export function calculateQuote(
 function buildBaseLabel(
   pricingRules: JobTypePricingRules,
   _requiredFields: JobTypeRequiredField[],
-  _fieldValues: Record<string, number>
+  _fieldValues: Record<string, number>,
+  _unitCount: number
 ): string {
   switch (pricingRules.type) {
     case "per_unit":

@@ -8,12 +8,32 @@ export const PLATFORM_COMMISSION_RATE = 10
 /** Blended default job value in SGD cents (SGD $68) */
 export const BLENDED_JOB_VALUE_CENTS = 6800
 
+/** All service categories */
+export const CATEGORIES = [
+  'CLEANING',
+  'LAUNDRY',
+  'AIRCON',
+  'PLUMBING',
+  'ELECTRICAL',
+  'PAINTING',
+  'PEST_CONTROL',
+  'HANDYMAN',
+  'LOCKSMITH',
+  'APPLIANCE_REPAIR',
+] as const
+
 /** Default amountCents per category */
 export const CATEGORY_DEFAULTS: Record<string, number> = {
-  CLEANING: 6800,   // $68
-  LAUNDRY: 4500,    // $45
-  AIRCON: 12000,    // $120
-  HANDYMAN: 8000,   // $80
+  CLEANING: 8000,
+  LAUNDRY: 5000,
+  AIRCON: 5000,
+  PLUMBING: 10000,
+  ELECTRICAL: 8000,
+  PAINTING: 32000,
+  PEST_CONTROL: 12000,
+  HANDYMAN: 8000,
+  LOCKSMITH: 8000,
+  APPLIANCE_REPAIR: 6000,
 }
 
 /** Cycles required per level-up per category */
@@ -21,7 +41,13 @@ export const CATEGORY_CYCLES_PER_LEVEL: Record<string, number> = {
   CLEANING: 2,
   LAUNDRY: 2,
   AIRCON: 3,
+  PLUMBING: 3,
+  ELECTRICAL: 3,
+  PAINTING: 3,
+  PEST_CONTROL: 3,
   HANDYMAN: 3,
+  LOCKSMITH: 2,
+  APPLIANCE_REPAIR: 3,
 }
 
 /** Human-readable autonomy level names */

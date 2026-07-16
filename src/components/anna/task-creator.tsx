@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   formatSgd,
+  CATEGORY_DEFAULTS,
   type ServiceCategory,
   type RecurrencePattern,
   type ServiceJobType,
@@ -27,7 +28,13 @@ const CATEGORIES: ServiceCategory[] = [
   "CLEANING",
   "LAUNDRY",
   "AIRCON",
+  "PLUMBING",
+  "ELECTRICAL",
+  "PAINTING",
+  "PEST_CONTROL",
   "HANDYMAN",
+  "LOCKSMITH",
+  "APPLIANCE_REPAIR",
 ];
 
 const RECURRENCE_OPTIONS: {
@@ -181,7 +188,7 @@ export function TaskCreator() {
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
           Category
         </h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat;
             return (
@@ -200,9 +207,7 @@ export function TaskCreator() {
                   {getCategoryLabel(cat)}
                 </span>
                 <span className="font-data text-xs text-[var(--anna-muted)]">
-                  {formatSgd(
-                    { CLEANING: 6800, LAUNDRY: 4500, AIRCON: 12000, HANDYMAN: 8000 }[cat]
-                  )}
+                  from {formatSgd(CATEGORY_DEFAULTS[cat].amount)}
                 </span>
               </button>
             );
