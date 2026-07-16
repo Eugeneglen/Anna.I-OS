@@ -455,63 +455,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                 Score {suggestions[0].score} — {suggestions[0].reason}
               </p>
 
-              {/* Manual selection list */}
-              <div className="mt-3">
-                <p className="text-[10px] uppercase tracking-wider text-[var(--anna-muted)] font-semibold mb-2">
-                  Or select a vendor manually
-                </p>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto anna-scroll">
-                  {suggestions.map((s, idx) => (
-                    <button
-                      key={s.vendor.id}
-                      onClick={() => handleAction("dispatch-vendor", s.vendor.id)}
-                      disabled={dispatchMutation.isPending}
-                      className={cn(
-                        "w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left",
-                        idx === 0
-                          ? "border-[var(--anna-sage)]/30 bg-[var(--anna-sage-light)]/30"
-                          : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30"
-                      )}
-                    >
-                      {/* Rank badge */}
-                      <div className={cn(
-                        "w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0",
-                        idx === 0
-                          ? "bg-[var(--anna-sage)] text-white"
-                          : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
-                      )}>
-                        {idx + 1}
-                      </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-[var(--anna-slate)] truncate">
-                            {s.vendor.name}
-                          </span>
-                          {idx === 0 && (
-                            <Badge className="bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)] text-[9px] px-1.5 py-0 h-4 border-0">
-                              Best Match
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-[var(--anna-muted)] truncate mt-0.5">
-                          {s.reason}
-                        </p>
-                      </div>
-
-                      {/* Score */}
-                      <div className="text-right flex-shrink-0">
-                        <span className={cn(
-                          "font-data text-sm font-bold",
-                          s.score >= 110 ? "text-[var(--anna-sage-dark)]" : s.score >= 90 ? "text-[var(--anna-slate)]" : "text-[var(--anna-warning)]"
-                        )}>
-                          {s.score}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           ) : (
             <div className="bg-[var(--anna-bg)] rounded-xl p-4 text-center">

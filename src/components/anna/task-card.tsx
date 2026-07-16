@@ -92,7 +92,7 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
             <span className="text-[var(--anna-border)]">|</span>
             <span className="text-[var(--anna-muted)] flex items-center gap-1">
               <Clock size={10} />
-              {formatDate(task.createdAt)}
+              {formatDate(task.scheduledStart ?? booking?.scheduledStart ?? task.createdAt)}
             </span>
             {booking?.vendor?.name && (
               <>

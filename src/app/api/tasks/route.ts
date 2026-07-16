@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, recurrencePattern, attachments, jobTypeId, quotationId } = parsed.data
+    const { householdId, category, instructions, amountCents, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
 
     // If quotationId provided, validate it exists and belongs to this household
     let finalAmountCents = amountCents;
@@ -136,6 +136,7 @@ export async function POST(request: Request) {
         recurrencePattern: recurrencePattern ?? null,
         jobTypeId: jobTypeId ?? null,
         quotationId: quotationId ?? null,
+        scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
         ...(attachments && attachments.length > 0
           ? {
               attachments: {

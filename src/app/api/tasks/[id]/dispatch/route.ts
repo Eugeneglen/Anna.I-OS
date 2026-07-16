@@ -29,14 +29,6 @@ export async function POST(
 
     const { scheduledStart, scheduledEnd } = parsed.data
 
-    // Default scheduledStart to tomorrow 10am SGT if not provided
-    const start = scheduledStart ?? (function () {
-      const d = new Date()
-      d.setDate(d.getDate() + 1)
-      d.setHours(10, 0, 0, 0)
-      return d
-    })()
-
     // Validate task exists and is in CREATED status
     const task = await db.task.findUnique({ where: { id } })
     if (!task) {
@@ -48,6 +40,14 @@ export async function POST(
         { status: 409 }
       )
     }
+
+    // Default scheduledStart to task.scheduledStart, then tomorrow 10am SGT
+    const start = scheduledStart ?? task.scheduledStart ?? (function () {
+      const d = new Date()
+      d.setDate(d.getDate() + 1)
+      d.setHours(10, 0, 0, 0)
+      return d
+    })()
 
     // Resolve vendorId: use explicit vendorId or auto-select via routing engine
     let vendorId = parsed.data.vendorId

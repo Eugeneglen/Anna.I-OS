@@ -235,6 +235,7 @@ model Task {
   verifiedAt        DateTime?
   escrowReleasedAt  DateTime?
   disputedAt        DateTime?
+  scheduledStart    DateTime?
 
   household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
   jobType           ServiceJobType?    @relation(fields: [jobTypeId], references: [id])
