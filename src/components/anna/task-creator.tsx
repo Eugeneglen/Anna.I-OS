@@ -48,15 +48,26 @@ const RECURRENCE_OPTIONS: {
   { value: "MONTHLY", label: "Monthly", desc: "Once a month" },
 ];
 
+// Compute initial state from store once (before component renders)
+function getInitialCategoryState(): { category: ServiceCategory | null; amountCents: number } {
+  const preselected = useAnnaStore.getState().preselectedCategory;
+  if (preselected) {
+    useAnnaStore.setState({ preselectedCategory: null });
+    return { category: preselected, amountCents: CATEGORY_DEFAULTS[preselected].amount };
+  }
+  return { category: null, amountCents: 0 };
+}
+
 export function TaskCreator() {
   const { selectedHouseholdId, setActiveTab } = useAnnaStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+  const [initialState] = useState(getInitialCategoryState);
+  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(initialState.category);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
-  const [amountCents, setAmountCents] = useState(0);
+  const [amountCents, setAmountCents] = useState(initialState.amountCents);
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("10:00");
