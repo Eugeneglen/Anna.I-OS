@@ -42,9 +42,10 @@ interface BookingFormProps {
   initialAmountCents?: number;
   onBack: () => void;
   onSuccess: () => void;
+  backLabel?: string;
 }
 
-export function BookingForm({ category, initialJobType, initialInstructions, initialAmountCents, onBack, onSuccess }: BookingFormProps) {
+export function BookingForm({ category, initialJobType, initialInstructions, initialAmountCents, onBack, onSuccess, backLabel }: BookingFormProps) {
   const { selectedHouseholdId } = useAnnaStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -160,7 +161,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
           className="flex items-center gap-1.5 text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors"
         >
           <ChevronRight size={14} className="rotate-180" />
-          {getCategoryLabel(category)} services
+          {backLabel ?? `${getCategoryLabel(category)} services`}
         </button>
       </div>
 

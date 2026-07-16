@@ -207,6 +207,7 @@ function RebookView({ data }: { data: RebookData }) {
         category={data.category}
         initialInstructions={data.instructions}
         initialAmountCents={data.amountCents}
+        backLabel="Dashboard"
         onBack={goBack}
         onSuccess={onSuccess}
       />
