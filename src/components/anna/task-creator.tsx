@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
@@ -49,11 +49,19 @@ const RECURRENCE_OPTIONS: {
 ];
 
 export function TaskCreator() {
-  const { selectedHouseholdId, setActiveTab } = useAnnaStore();
+  const { selectedHouseholdId, setActiveTab, preselectedCategory, setPreselectedCategory } = useAnnaStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
+
+  // Sync preselectedCategory from Services catalog
+  useEffect(() => {
+    if (preselectedCategory) {
+      setSelectedCategory(preselectedCategory);
+      setPreselectedCategory(null);
+    }
+  }, [preselectedCategory, setPreselectedCategory]);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
   const [amountCents, setAmountCents] = useState(0);
@@ -163,6 +171,7 @@ export function TaskCreator() {
       toast({ title: "Task created successfully!" });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["household"] });
+      setPreselectedCategory(null);
       resetForm();
       setActiveTab("dashboard");
     },
