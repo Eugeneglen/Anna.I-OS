@@ -40,8 +40,11 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
   }
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => openTaskDetail(task)}
+      onKeyDown={(e) => e.key === "Enter" && openTaskDetail(task)}
       className={cn(
         "w-full text-left p-4 rounded-2xl border transition-all duration-200",
         isSelected
@@ -108,21 +111,21 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
                 </span>
               </>
             )}
-            {isCompleted && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={handleRebook}
-                onKeyDown={(e) => e.key === "Enter" && handleRebook(e as unknown as React.MouseEvent)}
-                className="ml-auto inline-flex items-center justify-center h-6 px-2 text-[10px] font-medium rounded-lg border border-[var(--anna-sage)]/30 text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]/50 hover:border-[var(--anna-sage)]/50 transition-colors cursor-pointer select-none"
-              >
-                <RotateCcw size={10} className="mr-1" />
-                Rebook
-              </span>
-            )}
           </div>
+
+          {/* Rebook button — own row, always visible on completed tasks */}
+          {isCompleted && (
+            <button
+              type="button"
+              onClick={handleRebook}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-xl border border-[var(--anna-sage)]/30 text-[var(--anna-sage-dark)] bg-[var(--anna-sage-light)]/40 hover:bg-[var(--anna-sage-light)]/70 hover:border-[var(--anna-sage)]/50 transition-colors cursor-pointer select-none"
+            >
+              <RotateCcw size={13} />
+              Rebook
+            </button>
+          )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
