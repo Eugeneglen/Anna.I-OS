@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAnnaStore } from "@/lib/store";
 import {
   CategoryIcon,
   getCategoryLabel,
@@ -13,6 +14,7 @@ import {
   type ServiceCategory,
   type ServiceJobType,
 } from "@/lib/types";
+import type { RebookData } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -185,7 +187,44 @@ function JobTypeSkeleton() {
   );
 }
 
+/* ── Rebook: renders when rebookData is present in store ── */
+function RebookView({ data }: { data: RebookData }) {
+  const { setActiveTab } = useAnnaStore();
+
+  function goBack() {
+    useAnnaStore.setState({ rebookData: null });
+    setActiveTab("dashboard");
+  }
+
+  function onSuccess() {
+    useAnnaStore.setState({ rebookData: null });
+    setActiveTab("dashboard");
+  }
+
+  return (
+    <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
+      <BookingForm
+        category={data.category}
+        initialInstructions={data.instructions}
+        initialAmountCents={data.amountCents}
+        onBack={goBack}
+        onSuccess={onSuccess}
+      />
+    </div>
+  );
+}
+
+/* ── Main: routes between rebook and normal browse flow ── */
 export function TaskServices() {
+  const rebookData = useAnnaStore((s) => s.rebookData);
+  if (rebookData) {
+    return <RebookView data={rebookData} />;
+  }
+  return <ServicesBrowse />;
+}
+
+/* ── Normal browse → category → booking flow ── */
+function ServicesBrowse() {
   const [view, setView] = useState<ViewState>({ mode: "browse" });
   const [searchQuery, setSearchQuery] = useState("");
 

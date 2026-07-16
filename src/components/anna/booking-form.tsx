@@ -38,19 +38,21 @@ const RECURRENCE_OPTIONS: {
 interface BookingFormProps {
   category: ServiceCategory;
   initialJobType?: ServiceJobType | null;
+  initialInstructions?: string;
+  initialAmountCents?: number;
   onBack: () => void;
   onSuccess: () => void;
 }
 
-export function BookingForm({ category, initialJobType, onBack, onSuccess }: BookingFormProps) {
+export function BookingForm({ category, initialJobType, initialInstructions, initialAmountCents, onBack, onSuccess }: BookingFormProps) {
   const { selectedHouseholdId } = useAnnaStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(initialJobType ?? null);
-  const [instructions, setInstructions] = useState("");
+  const [instructions, setInstructions] = useState(initialInstructions ?? "");
   const [amountCents, setAmountCents] = useState(
-    initialJobType ? initialJobType.basePriceCents : CATEGORY_DEFAULTS[category].amount
+    initialAmountCents ?? (initialJobType ? initialJobType.basePriceCents : CATEGORY_DEFAULTS[category].amount)
   );
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
@@ -90,7 +92,7 @@ export function BookingForm({ category, initialJobType, onBack, onSuccess }: Boo
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!instructions.trim()) throw new Error("Missing fields");
+      if (!selectedCategory) throw new Error("Missing fields");
       const scheduledStart = scheduledDate
         ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString()
         : new Date(Date.now() + 86400000).toISOString();
@@ -240,7 +242,7 @@ export function BookingForm({ category, initialJobType, onBack, onSuccess }: Boo
       {/* Instructions */}
       <div className="space-y-2">
         <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-          Instructions
+          Instructions <span className="font-normal text-[var(--anna-muted)]">(optional)</span>
         </Label>
         <Textarea
           value={instructions}
@@ -342,7 +344,7 @@ export function BookingForm({ category, initialJobType, onBack, onSuccess }: Boo
       {/* Book Now Button */}
       <Button
         onClick={() => createMutation.mutate()}
-        disabled={!instructions.trim() || createMutation.isPending || amountCents <= 0}
+        disabled={createMutation.isPending || amountCents <= 0}
         className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-12 text-sm font-semibold"
       >
         {createMutation.isPending ? "Booking..." : "Book Now"}

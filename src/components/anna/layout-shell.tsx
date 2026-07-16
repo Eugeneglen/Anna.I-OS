@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { Bell, LayoutDashboard, Layers, Brain, Settings } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -44,17 +45,19 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   });
 
-  // Auto-select first household and cache names
-  if (households && households.length > 0) {
+  const initializedRef = useRef(false);
+
+  // Auto-select first household and cache names (via effect to avoid React 19 setState-during-render)
+  useEffect(() => {
+    if (!households || households.length === 0 || initializedRef.current) return;
+    initializedRef.current = true;
     const names: Record<string, string> = {};
     households.forEach((h) => (names[h.id] = h.name));
-    if (JSON.stringify(names) !== JSON.stringify(householdNames)) {
-      setHouseholdNames(names);
-    }
+    setHouseholdNames(names);
     if (!selectedHouseholdId && households[0]?.id) {
       setSelectedHouseholdId(households[0].id);
     }
-  }
+  }, [households, selectedHouseholdId, setHouseholdNames, setSelectedHouseholdId]);
 
   const currentHouseholdName =
     householdNames[selectedHouseholdId] || "Loading...";

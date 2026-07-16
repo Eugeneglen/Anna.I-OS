@@ -5,7 +5,7 @@ import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { formatSgd, formatDate, STATUS_LABELS, type Task, type TaskStatus } from "@/lib/types";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Star, Clock } from "lucide-react";
+import { Star, Clock, RotateCcw } from "lucide-react";
 
 const statusStyles: Record<TaskStatus, string> = {
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
@@ -23,10 +23,21 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
-  const { openTaskDetail, selectedTaskId } = useAnnaStore();
+  const { openTaskDetail, selectedTaskId, setRebookData, setActiveTab } = useAnnaStore();
   const isSelected = selectedTaskId === task.id;
 
   const booking = task.bookings?.[0];
+  const isCompleted = task.status === "COMPLETED" || task.status === "VERIFIED" || task.status === "ESCROW_RELEASED";
+
+  function handleRebook(e: React.MouseEvent) {
+    e.stopPropagation();
+    setRebookData({
+      category: task.category,
+      instructions: task.instructions ?? "",
+      amountCents: task.amountCents,
+    });
+    setActiveTab("services");
+  }
 
   return (
     <button
@@ -96,6 +107,18 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
                   <span className="font-data">{booking.rating}</span>
                 </span>
               </>
+            )}
+            {isCompleted && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={handleRebook}
+                onKeyDown={(e) => e.key === "Enter" && handleRebook(e as unknown as React.MouseEvent)}
+                className="ml-auto inline-flex items-center justify-center h-6 px-2 text-[10px] font-medium rounded-lg border border-[var(--anna-sage)]/30 text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]/50 hover:border-[var(--anna-sage)]/50 transition-colors cursor-pointer select-none"
+              >
+                <RotateCcw size={10} className="mr-1" />
+                Rebook
+              </span>
             )}
           </div>
         </div>

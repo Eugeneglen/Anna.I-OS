@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { TabType, Task } from "./types";
+import type { TabType, Task, ServiceCategory } from "./types";
+
+export interface RebookData {
+  category: ServiceCategory;
+  instructions: string;
+  amountCents: number;
+}
 
 interface AnnaStore {
   // Selected household
@@ -26,6 +32,10 @@ interface AnnaStore {
   householdNames: Record<string, string>;
   setHouseholdNames: (names: Record<string, string>) => void;
 
+  // Rebook data (set by Dashboard, consumed by Services)
+  rebookData: RebookData | null;
+  setRebookData: (data: RebookData | null) => void;
+
   // Helper: select a task and open detail
   openTaskDetail: (task: Task) => void;
   closeTaskDetail: () => void;
@@ -49,6 +59,9 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   householdNames: {},
   setHouseholdNames: (names) => set({ householdNames: names }),
+
+  rebookData: null,
+  setRebookData: (data) => set({ rebookData: data }),
 
   openTaskDetail: (task) =>
     set({ selectedTaskId: task.id, taskDetailOpen: true }),
