@@ -225,9 +225,10 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
             step="0.01"
             min="0"
             value={(amountCents / 100).toFixed(2)}
-            onChange={(e) =>
-              setAmountCents(Math.round(parseFloat(e.target.value) * 100))
-            }
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setAmountCents(Number.isFinite(val) && val >= 0 ? Math.round(val * 100) : 0);
+            }}
             className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
           />
         </div>
@@ -347,7 +348,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
       {/* Book Now Button */}
       <Button
         onClick={() => createMutation.mutate()}
-        disabled={createMutation.isPending || amountCents <= 0}
+        disabled={createMutation.isPending || !amountCents || amountCents <= 0}
         className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-12 text-sm font-semibold"
       >
         {createMutation.isPending ? "Booking..." : "Book Now"}

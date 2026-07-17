@@ -22,19 +22,7 @@ export const CATEGORIES = [
   'APPLIANCE_REPAIR',
 ] as const
 
-/** Default amountCents per category */
-export const CATEGORY_DEFAULTS: Record<string, number> = {
-  CLEANING: 8000,
-  LAUNDRY: 5000,
-  AIRCON: 5000,
-  PLUMBING: 10000,
-  ELECTRICAL: 8000,
-  PAINTING: 32000,
-  PEST_CONTROL: 12000,
-  HANDYMAN: 8000,
-  LOCKSMITH: 8000,
-  APPLIANCE_REPAIR: 6000,
-}
+/** Default amountCents per category — canonical source is types.ts CATEGORY_DEFAULTS */
 
 /** Cycles required per level-up per category */
 export const CATEGORY_CYCLES_PER_LEVEL: Record<string, number> = {

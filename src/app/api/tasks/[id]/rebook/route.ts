@@ -29,19 +29,18 @@ export async function POST(
       },
     })
 
-    // Create REBOOKING_PROMPT notification
+    // Create REBOOKING_PROMPT notification for ALL household members
     const members = await db.familyMember.findMany({
       where: { householdId: originalTask.householdId },
       select: { id: true },
     })
 
-    const firstMember = members[0]
-    if (firstMember) {
+    for (const member of members) {
       await db.notification.create({
         data: {
           householdId: originalTask.householdId,
           recipientType: RecipientType.HOUSEHOLD_MEMBER,
-          memberId: firstMember.id,
+          memberId: member.id,
           channel: NotificationChannel.WHATSAPP,
           eventType: NotificationEventType.REBOOKING_PROMPT,
           title: "Task Rebooked",

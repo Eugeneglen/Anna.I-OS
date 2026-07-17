@@ -88,7 +88,7 @@ export async function PATCH(
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.ESCROW_RELEASED,
               title: "Payment Released",
-              body: `Payment of $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
+              body: `Payment of SGD $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,

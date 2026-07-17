@@ -144,10 +144,19 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
     );
   }, [jobType, fieldValues, selectedAddOns]);
 
-  // Notify parent of quote changes
+  // Notify parent of quote changes (include custom amount when active)
   useEffect(() => {
-    onQuoteChange(quoteResult, fieldValues, selectedAddOns);
-  }, [quoteResult, fieldValues, selectedAddOns, onQuoteChange]);
+    if (useCustomAmount) {
+      // When custom amount is active, override totalCents with the custom value
+      const customResult: QuoteResult = {
+        ...quoteResult,
+        totalCents: customCents,
+      };
+      onQuoteChange(customResult, fieldValues, selectedAddOns);
+    } else {
+      onQuoteChange(quoteResult, fieldValues, selectedAddOns);
+    }
+  }, [quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents, onQuoteChange]);
 
   const displayCents = useCustomAmount ? customCents : quoteResult.totalCents;
 

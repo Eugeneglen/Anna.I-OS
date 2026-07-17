@@ -13,7 +13,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "householdId is required" }, { status: 400 })
     }
 
+    // If no memberId provided, default to first household member to avoid duplicates
+    let memberId = searchParams.get("memberId")
+    if (!memberId) {
+      const firstMember = await db.familyMember.findFirst({
+        where: { householdId },
+        select: { id: true },
+      })
+      memberId = firstMember?.id ?? null
+    }
+
     const where: Record<string, any> = { householdId }
+    if (memberId) {
+      where.memberId = memberId
+    }
 
     if (status && status !== "ALL") {
       where.status = status
@@ -27,13 +40,12 @@ export async function GET(request: Request) {
       take: 50,
     })
 
-    // Get unread count
-    const unreadCount = await db.notification.count({
-      where: {
-        householdId,
-        status: NotificationStatus.PENDING,
-      },
-    })
+    // Get unread count (filtered by memberId too)
+    const unreadWhere: Record<string, any> = { householdId, status: NotificationStatus.PENDING }
+    if (memberId) {
+      unreadWhere.memberId = memberId
+    }
+    const unreadCount = await db.notification.count({ where: unreadWhere })
 
     return NextResponse.json({ notifications, unreadCount })
   } catch (error) {
@@ -52,11 +64,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "householdId required" }, { status: 400 })
       }
 
+      // Also accept optional memberId for targeted mark-read
+      const { memberId: bodyMemberId } = body
+      const markWhere: Record<string, any> = { householdId, status: NotificationStatus.PENDING }
+      if (bodyMemberId) {
+        markWhere.memberId = bodyMemberId
+      }
+
       const result = await db.notification.updateMany({
-        where: {
-          householdId,
-          status: NotificationStatus.PENDING,
-        },
+        where: markWhere,
         data: {
           status: NotificationStatus.READ,
           readAt: new Date(),

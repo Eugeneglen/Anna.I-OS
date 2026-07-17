@@ -75,7 +75,7 @@ export async function POST(
     })
 
     // Trigger autonomy promotion check
-    await checkAndPromoteAutonomy(task.householdId, task.category as any)
+    await checkAndPromoteAutonomy(task.householdId, task.category)
 
     // Create VERIFICATION_APPROVED notification for all household members
     const members = await db.familyMember.findMany({

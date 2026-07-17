@@ -31,6 +31,7 @@ import {
   Layers,
   Camera,
 } from "lucide-react";
+import type { Task } from "@/lib/types";
 
 interface AppNotification {
   id: string;
@@ -158,7 +159,9 @@ export function NotificationPanel() {
       setNotificationPanelOpen(false);
       setActiveTab("dashboard");
       setTimeout(() => {
-        openTaskDetail({ id: n.referenceId } as any);
+        // Use openTaskDetail which accepts a full Task or partial —
+        // the TaskDetailContent component fetches the full task server-side
+        openTaskDetail({ id: n.referenceId } as Task);
       }, 100);
     } else if (n.referenceType === "autonomy") {
       setNotificationPanelOpen(false);
