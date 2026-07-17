@@ -1,0 +1,1439 @@
+     1→import { PrismaClient, ServiceCategory } from "@prisma/client";
+     2→
+     3→const db = new PrismaClient();
+     4→
+     5→// ─── Shared field definitions ────────────────────────────────────────────────
+     6→
+     7→/** Reusable floor-area select field (used by CLEANING & POST-RENOVATION) */
+     8→const floorAreaField = {
+     9→  key: "floorArea",
+    10→  label: "Floor Area",
+    11→  type: "select" as const,
+    12→  options: [
+    13→    { label: "Below 800 sqft", value: 1.0 },
+    14→    { label: "800 – 1,200 sqft", value: 1.2 },
+    15→    { label: "1,200 – 1,800 sqft", value: 1.4 },
+    16→    { label: "Above 1,800 sqft", value: 1.6 },
+    17→  ],
+    18→};
+    19→
+    20→/** Reusable area-based pricing tiers (same breakpoints as floorAreaField) */
+    21→const areaMultiplier = {
+    22→  field: "floorArea",
+    23→  tiers: [
+    24→    { maxSqft: 800, multiplier: 1.0 },
+    25→    { maxSqft: 1200, multiplier: 1.2 },
+    26→    { maxSqft: 1800, multiplier: 1.4 },
+    27→    { maxSqft: 99999, multiplier: 1.6 },
+    28→  ],
+    29→};
+    30→
+    31→/** Shared aircon unit-count field (1–10, default 1) */
+    32→const airconUnitCountField = {
+    33→  key: "unitCount",
+    34→  label: "Number of Units",
+    35→  type: "number" as const,
+    36→  min: 1,
+    37→  max: 10,
+    38→  defaultValue: 1,
+    39→};
+    40→
+    41→/** Shared aircon unit-type select (used by Standard / Chemical Wash / Overhaul for surcharges) */
+    42→const cassetteTypeField = {
+    43→  key: "cassetteType",
+    44→  label: "Unit Type",
+    45→  type: "select" as const,
+    46→  options: [
+    47→    { label: "Standard wall unit", value: 0 },
+    48→    { label: "Ceiling cassette", value: 1 },
+    49→  ],
+    50→};
+    51→
+    52→// ─── Job type data ───────────────────────────────────────────────────────────
+    53→
+    54→const jobTypes = [
+    55→  // ===================== CLEANING (4 types) =====================
+    56→
+    57→  {
+    58→    category: "CLEANING" as ServiceCategory,
+    59→    name: "Regular Maintenance",
+    60→    slug: "cleaning-regular-maintenance",
+    61→    description:
+    62→      "Weekly or bi-weekly home cleaning — 3-hour session with standard surface care",
+    63→    basePriceCents: 8000, // $80/session
+    64→    unitLabel: "per session",
+    65→    pricingRules: {
+    66→      type: "flat",
+    67→      areaMultiplier,
+    68→    },
+    69→    requiredFields: [floorAreaField],
+    70→    addOns: [
+    71→      { key: "pet_hair", label: "Pet Hair Removal", priceCents: 800, pricingType: "flat" },
+    72→      { key: "fridge_clean", label: "Inside Fridge", priceCents: 1000, pricingType: "flat" },
+    73→      { key: "oven_clean", label: "Inside Oven", priceCents: 1500, pricingType: "flat" },
+    74→    ],
+    75→    sortOrder: 0,
+    76→  },
+    77→
+    78→  {
+    79→    category: "CLEANING" as ServiceCategory,
+    80→    name: "Deep Cleaning",
+    81→    slug: "cleaning-deep-cleaning",
+    82→    description:
+    83→      "Thorough top-to-bottom cleaning including hidden corners and fixtures",
+    84→    basePriceCents: 30000, // $300/session
+    85→    unitLabel: "per session",
+    86→    pricingRules: {
+    87→      type: "flat",
+    88→      areaMultiplier,
+    89→    },
+    90→    requiredFields: [
+    91→      {
+    92→        key: "bedrooms",
+    93→        label: "Number of Bedrooms",
+    94→        type: "number" as const,
+    95→        min: 1,
+    96→        max: 5,
+    97→        defaultValue: 3,
+    98→      },
+    99→      {
+   100→        key: "bathrooms",
+   101→        label: "Number of Bathrooms",
+   102→        type: "number" as const,
+   103→        min: 1,
+   104→        max: 4,
+   105→        defaultValue: 2,
+   106→      },
+   107→      floorAreaField,
+   108→    ],
+   109→    addOns: [
+   110→      { key: "window_ext", label: "Window Exterior", priceCents: 2000, pricingType: "flat" },
+   111→      { key: "cabinet_int", label: "Cabinet Interior", priceCents: 2000, pricingType: "flat" },
+   112→      { key: "appliance_clean", label: "Appliance Cleaning", priceCents: 3000, pricingType: "flat" },
+   113→    ],
+   114→    sortOrder: 1,
+   115→  },
+   116→
+   117→  {
+   118→    category: "CLEANING" as ServiceCategory,
+   119→    name: "Move-in / Move-out",
+   120→    slug: "cleaning-move-in-move-out",
+   121→    description: "Comprehensive cleaning for property handover, tenancy start or end",
+   122→    basePriceCents: 35000, // $350/session
+   123→    unitLabel: "per session",
+   124→    pricingRules: {
+   125→      type: "flat",
+   126→      areaMultiplier,
+   127→    },
+   128→    requiredFields: [
+   129→      {
+   130→        key: "bedrooms",
+   131→        label: "Number of Bedrooms",
+   132→        type: "number" as const,
+   133→        min: 1,
+   134→        max: 5,
+   135→        defaultValue: 3,
+   136→      },
+   137→      {
+   138→        key: "bathrooms",
+   139→        label: "Number of Bathrooms",
+   140→        type: "number" as const,
+   141→        min: 1,
+   142→        max: 4,
+   143→        defaultValue: 2,
+   144→      },
+   145→      floorAreaField,
+   146→      {
+   147→        key: "furnishing",
+   148→        label: "Furnishing Level",
+   149→        type: "select" as const,
+   150→        options: [
+   151→          { label: "Unfurnished", value: 1 },
+   152→          { label: "Partially Furnished", value: 1.3 },
+   153→          { label: "Fully Furnished", value: 1.6 },
+   154→        ],
+   155→      },
+   156→    ],
+   157→    addOns: [
+   158→      { key: "window_ext", label: "Window Exterior", priceCents: 2500, pricingType: "flat" },
+   159→      { key: "cabinet_int", label: "Cabinet Interior", priceCents: 2000, pricingType: "flat" },
+   160→    ],
+   161→    sortOrder: 2,
+   162→  },
+   163→
+   164→  {
+   165→    category: "CLEANING" as ServiceCategory,
+   166→    name: "Post-Renovation",
+   167→    slug: "cleaning-post-renovation",
+   168→    description:
+   169→      "Heavy-duty cleaning after renovation works with dust and debris removal",
+   170→    basePriceCents: 50000, // $500/session
+   171→    unitLabel: "per session",
+   172→    pricingRules: {
+   173→      type: "flat",
+   174→      areaMultiplier,
+   175→    },
+   176→    requiredFields: [
+   177→      floorAreaField,
+   178→      {
+   179→        key: "rooms",
+   180→        label: "Number of Rooms",
+   181→        type: "number" as const,
+   182→        min: 1,
+   183→        max: 8,
+   184→        defaultValue: 3,
+   185→      },
+   186→    ],
+   187→    addOns: [
+   188→      { key: "chemical_wash", label: "Chemical Wash", priceCents: 4000, pricingType: "flat" },
+   189→      { key: "window_clean", label: "Window Cleaning", priceCents: 2500, pricingType: "flat" },
+   190→      { key: "high_dusting", label: "High Dusting", priceCents: 3000, pricingType: "flat" },
+   191→    ],
+   192→    sortOrder: 3,
+   193→  },
+   194→
+   195→  // ===================== LAUNDRY (4 types) =====================
+   196→
+   197→  {
+   198→    category: "LAUNDRY" as ServiceCategory,
+   199→    name: "Wash & Fold",
+   200→    slug: "laundry-wash-and-fold",
+   201→    description: "Professional wash, dry, and fold service by load size",
+   202→    basePriceCents: 500, // $5 base → multiplied by load size
+   203→    unitLabel: "per kg",
+   204→    pricingRules: {
+   205→      type: "flat",
+   206→      multiplierField: "loadSize",
+   207→    },
+   208→    requiredFields: [
+   209→      {
+   210→        key: "loadSize",
+   211→        label: "Load Size",
+   212→        type: "select" as const,
+   213→        options: [
+   214→          { label: "Small (3 kg)", value: 1 },
+   215→          { label: "Medium (6 kg)", value: 2 },
+   216→          { label: "Large (10 kg)", value: 3.3 },
+   217→          { label: "XL (15 kg)", value: 5 },
+   218→        ],
+   219→      },
+   220→    ],
+   221→    addOns: [
+   222→      { key: "express", label: "Express Same-Day", priceCents: 1000, pricingType: "flat" },
+   223→      {
+   224→        key: "stain_treatment",
+   225→        label: "Stain Treatment",
+   226→        priceCents: 500, // $5 × loadSize value
+   227→        pricingType: "per_unit",
+   228→        unitField: "loadSize",
+   229→      },
+   230→    ],
+   231→    sortOrder: 0,
+   232→  },
+   233→
+   234→  {
+   235→    category: "LAUNDRY" as ServiceCategory,
+   236→    name: "Ironing Only",
+   237→    slug: "laundry-ironing-only",
+   238→    description: "Professional pressing and ironing for your garments",
+   239→    basePriceCents: 300, // $3/piece
+   240→    unitLabel: "per item",
+   241→    pricingRules: {
+   242→      type: "per_item",
+   243→      unitField: "itemCount",
+   244→    },
+   245→    requiredFields: [
+   246→      {
+   247→        key: "itemCount",
+   248→        label: "Number of Items",
+   249→        type: "number" as const,
+   250→        min: 1,
+   251→        max: 30,
+   252→        defaultValue: 5,
+   253→      },
+   254→    ],
+   255→    addOns: [
+   256→      { key: "express", label: "Express Same-Day", priceCents: 800, pricingType: "flat" },
+   257→    ],
+   258→    sortOrder: 1,
+   259→  },
+   260→
+   261→  {
+   262→    category: "LAUNDRY" as ServiceCategory,
+   263→    name: "Dry Cleaning",
+   264→    slug: "laundry-dry-cleaning",
+   265→    description: "Professional dry cleaning for delicate and formal garments",
+   266→    basePriceCents: 1000, // $10/item
+   267→    unitLabel: "per item",
+   268→    pricingRules: {
+   269→      type: "per_item",
+   270→      unitField: "itemCount",
+   271→    },
+   272→    requiredFields: [
+   273→      {
+   274→        key: "itemCount",
+   275→        label: "Number of Items",
+   276→        type: "number" as const,
+   277→        min: 1,
+   278→        max: 10,
+   279→        defaultValue: 1,
+   280→      },
+   281→    ],
+   282→    addOns: [
+   283→      {
+   284→        key: "express",
+   285→        label: "Express Service",
+   286→        priceCents: 500, // $5/item
+   287→        pricingType: "per_item",
+   288→        unitField: "itemCount",
+   289→      },
+   290→    ],
+   291→    sortOrder: 2,
+   292→  },
+   293→
+   294→  {
+   295→    category: "LAUNDRY" as ServiceCategory,
+   296→    name: "Curtain Cleaning",
+   297→    slug: "laundry-curtain-cleaning",
+   298→    description: "Professional cleaning for all types of curtains and drapes",
+   299→    basePriceCents: 1500, // $15/panel
+   300→    unitLabel: "per item",
+   301→    pricingRules: {
+   302→      type: "per_item",
+   303→      unitField: "panelCount",
+   304→    },
+   305→    requiredFields: [
+   306→      {
+   307→        key: "panelCount",
+   308→        label: "Number of Panels",
+   309→        type: "number" as const,
+   310→        min: 1,
+   311→        max: 10,
+   312→        defaultValue: 2,
+   313→      },
+   314→    ],
+   315→    addOns: [
+   316→      { key: "express", label: "Express Service", priceCents: 2000, pricingType: "flat" },
+   317→    ],
+   318→    sortOrder: 3,
+   319→  },
+   320→
+   321→  // ===================== AIRCON (5 types) =====================
+   322→
+   323→  {
+   324→    category: "AIRCON" as ServiceCategory,
+   325→    name: "Standard Service",
+   326→    slug: "aircon-standard-service",
+   327→    description:
+   328→      "Regular aircon servicing — filter wash, fan coil vacuum, and general check",
+   329→    basePriceCents: 5000, // $50/unit
+   330→    unitLabel: "per unit",
+   331→    pricingRules: {
+   332→      type: "per_unit",
+   333→      unitField: "unitCount",
+   334→      surcharges: [
+   335→        {
+   336→          key: "cassetteType",
+   337→          label: "Ceiling Cassette",
+   338→          amountCents: 8000, // $80/unit
+   339→          perUnit: true,
+   340→        },
+   341→      ],
+   342→    },
+   343→    requiredFields: [airconUnitCountField, cassetteTypeField],
+   344→    addOns: [
+   345→      {
+   346→        key: "filter_replace",
+   347→        label: "Filter Replacement",
+   348→        priceCents: 1500, // $15/unit
+   349→        pricingType: "per_unit",
+   350→        unitField: "unitCount",
+   351→      },
+   352→      { key: "condenser_clean", label: "Condenser Cleaning", priceCents: 2500, pricingType: "flat" },
+   353→    ],
+   354→    sortOrder: 0,
+   355→  },
+   356→
+   357→  {
+   358→    category: "AIRCON" as ServiceCategory,
+   359→    name: "Chemical Wash",
+   360→    slug: "aircon-chemical-wash",
+   361→    description:
+   362→      "Deep chemical cleaning for heavily soiled aircon units — restores airflow",
+   363→    basePriceCents: 9000, // $90/unit
+   364→    unitLabel: "per unit",
+   365→    pricingRules: {
+   366→      type: "per_unit",
+   367→      unitField: "unitCount",
+   368→      surcharges: [
+   369→        {
+   370→          key: "cassetteType",
+   371→          label: "Ceiling Cassette",
+   372→          amountCents: 9000, // $90/unit
+   373→          perUnit: true,
+   374→        },
+   375→      ],
+   376→    },
+   377→    requiredFields: [airconUnitCountField, cassetteTypeField],
+   378→    addOns: [
+   379→      {
+   380→        key: "antibacterial",
+   381→        label: "Anti-Bacterial Wash",
+   382→        priceCents: 2000, // $20/unit
+   383→        pricingType: "per_unit",
+   384→        unitField: "unitCount",
+   385→      },
+   386→    ],
+   387→    sortOrder: 1,
+   388→  },
+   389→
+   390→  {
+   391→    category: "AIRCON" as ServiceCategory,
+   392→    name: "Chemical Overhaul",
+   393→    slug: "aircon-chemical-overhaul",
+   394→    description:
+   395→      "Full chemical overhaul — complete dismantling, deep clean, and reassembly",
+   396→    basePriceCents: 15000, // $150/unit
+   397→    unitLabel: "per unit",
+   398→    pricingRules: {
+   399→      type: "per_unit",
+   400→      unitField: "unitCount",
+   401→      surcharges: [
+   402→        {
+   403→          key: "cassetteType",
+   404→          label: "Ceiling Cassette",
+   405→          amountCents: 10000, // $100/unit
+   406→          perUnit: true,
+   407→        },
+   408→      ],
+   409→    },
+   410→    requiredFields: [
+   411→      {
+   412→        key: "unitCount",
+   413→        label: "Number of Units",
+   414→        type: "number" as const,
+   415→        min: 1,
+   416→        max: 8,
+   417→        defaultValue: 1,
+   418→      },
+   419→      cassetteTypeField,
+   420→    ],
+   421→    addOns: [
+   422→      {
+   423→        key: "gas_topup",
+   424→        label: "Gas Top-Up",
+   425→        priceCents: 4000, // $40/unit
+   426→        pricingType: "per_unit",
+   427→        unitField: "unitCount",
+   428→      },
+   429→    ],
+   430→    sortOrder: 2,
+   431→  },
+   432→
+   433→  {
+   434→    category: "AIRCON" as ServiceCategory,
+   435→    name: "Installation",
+   436→    slug: "aircon-installation",
+   437→    description: "New aircon unit installation with professional mounting and testing",
+   438→    basePriceCents: 20000, // $200/unit
+   439→    unitLabel: "per unit",
+   440→    pricingRules: {
+   441→      type: "per_unit",
+   442→      unitField: "unitCount",
+   443→      multiplierField: "mountType",
+   444→    },
+   445→    requiredFields: [
+   446→      {
+   447→        key: "unitCount",
+   448→        label: "Number of Units",
+   449→        type: "number" as const,
+   450→        min: 1,
+   451→        max: 5,
+   452→        defaultValue: 1,
+   453→      },
+   454→      {
+   455→        key: "mountType",
+   456→        label: "Mount Type",
+   457→        type: "select" as const,
+   458→        options: [
+   459→          { label: "Wall Mount", value: 1 },
+   460→          { label: "Window Unit", value: 1.1 },
+   461→          { label: "Cassette", value: 1.5 },
+   462→        ],
+   463→      },
+   464→    ],
+   465→    addOns: [
+   466→      { key: "piping", label: "Piping Work", priceCents: 8000, pricingType: "flat" },
+   467→      { key: "bracket", label: "Bracket Installation", priceCents: 3000, pricingType: "flat" },
+   468→    ],
+   469→    sortOrder: 3,
+   470→  },
+   471→
+   472→  {
+   473→    category: "AIRCON" as ServiceCategory,
+   474→    name: "Gas Top-up",
+   475→    slug: "aircon-gas-topup",
+   476→    description: "Refrigerant gas top-up to restore cooling efficiency",
+   477→    basePriceCents: 4000, // $40/unit
+   478→    unitLabel: "per unit",
+   479→    pricingRules: {
+   480→      type: "per_unit",
+   481→      unitField: "unitCount",
+   482→    },
+   483→    requiredFields: [airconUnitCountField],
+   484→    addOns: [
+   485→      { key: "leak_detection", label: "Leak Detection", priceCents: 3000, pricingType: "flat" },
+   486→    ],
+   487→    sortOrder: 4,
+   488→  },
+   489→
+   490→  // ===================== PLUMBING (4 types) =====================
+   491→
+   492→  {
+   493→    category: "PLUMBING" as ServiceCategory,
+   494→    name: "Unclogging",
+   495→    slug: "plumbing-unclogging",
+   496→    description: "Clear blocked drains, toilets, and pipes of all severities",
+   497→    basePriceCents: 10000, // $100/job
+   498→    unitLabel: "per job",
+   499→    pricingRules: {
+   500→      type: "flat",
+   501→      multiplierField: "severity",
+   502→    },
+   503→    requiredFields: [
+   504→      {
+   505→        key: "severity",
+   506→        label: "Severity",
+   507→        type: "select" as const,
+   508→        options: [
+   509→          { label: "Minor (slow drain)", value: 1 },
+   510→          { label: "Moderate (partial block)", value: 1.5 },
+   511→          { label: "Severe (complete block)", value: 2.5 },
+   512→        ],
+   513→      },
+   514→    ],
+   515→    addOns: [
+   516→      { key: "camera_inspection", label: "Camera Inspection", priceCents: 5000, pricingType: "flat" },
+   517→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   518→    ],
+   519→    sortOrder: 0,
+   520→  },
+   521→
+   522→  {
+   523→    category: "PLUMBING" as ServiceCategory,
+   524→    name: "Leak Repair",
+   525→    slug: "plumbing-leak-repair",
+   526→    description: "Locate and repair water leaks in pipes, joints, and fittings",
+   527→    basePriceCents: 12000, // $120/job
+   528→    unitLabel: "per job",
+   529→    pricingRules: {
+   530→      type: "flat",
+   531→      multiplierField: "location",
+   532→    },
+   533→    requiredFields: [
+   534→      {
+   535→        key: "location",
+   536→        label: "Leak Location",
+   537→        type: "select" as const,
+   538→        options: [
+   539→          { label: "Exposed Pipe", value: 1 },
+   540→          { label: "Concealed (Wall)", value: 2 },
+   541→          { label: "Concealed (Ceiling)", value: 2.5 },
+   542→        ],
+   543→      },
+   544→    ],
+   545→    addOns: [
+   546→      { key: "parts", label: "Parts (estimated)", priceCents: 2500, pricingType: "flat" },
+   547→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   548→    ],
+   549→    sortOrder: 1,
+   550→  },
+   551→
+   552→  {
+   553→    category: "PLUMBING" as ServiceCategory,
+   554→    name: "Pipe Replacement",
+   555→    slug: "plumbing-pipe-replacement",
+   556→    description: "Replace old, damaged, or corroded pipes with new ones",
+   557→    basePriceCents: 20000, // $200/job
+   558→    unitLabel: "per job",
+   559→    pricingRules: {
+   560→      type: "flat",
+   561→      multiplierField: "length",
+   562→    },
+   563→    requiredFields: [
+   564→      {
+   565→        key: "length",
+   566→        label: "Pipe Length",
+   567→        type: "select" as const,
+   568→        options: [
+   569→          { label: "Short (< 1 m)", value: 1 },
+   570→          { label: "Medium (1 – 3 m)", value: 1.5 },
+   571→          { label: "Long (> 3 m)", value: 2.5 },
+   572→        ],
+   573→      },
+   574→    ],
+   575→    addOns: [
+   576→      { key: "new_parts", label: "New Parts", priceCents: 4000, pricingType: "flat" },
+   577→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   578→    ],
+   579→    sortOrder: 2,
+   580→  },
+   581→
+   582→  {
+   583→    category: "PLUMBING" as ServiceCategory,
+   584→    name: "Fixture Installation",
+   585→    slug: "plumbing-fixture-installation",
+   586→    description: "Install or replace taps, shower heads, water heaters, and basins",
+   587→    basePriceCents: 15000, // $150/job
+   588→    unitLabel: "per job",
+   589→    pricingRules: {
+   590→      type: "flat",
+   591→      multiplierField: "fixtureType",
+   592→    },
+   593→    requiredFields: [
+   594→      {
+   595→        key: "fixtureType",
+   596→        label: "Fixture Type",
+   597→        type: "select" as const,
+   598→        options: [
+   599→          { label: "Tap / Basin", value: 1 },
+   600→          { label: "Shower Head", value: 1.2 },
+   601→          { label: "Water Heater", value: 1.5 },
+   602→        ],
+   603→      },
+   604→    ],
+   605→    addOns: [
+   606→      { key: "supply_lines", label: "Supply Lines", priceCents: 2000, pricingType: "flat" },
+   607→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   608→    ],
+   609→    sortOrder: 3,
+   610→  },
+   611→
+   612→  // ===================== ELECTRICAL (4 types) =====================
+   613→
+   614→  {
+   615→    category: "ELECTRICAL" as ServiceCategory,
+   616→    name: "Power Trip Repair",
+   617→    slug: "electrical-power-trip-repair",
+   618→    description: "Diagnose and fix electrical power trips and circuit issues",
+   619→    basePriceCents: 8000, // $80/job
+   620→    unitLabel: "per job",
+   621→    pricingRules: {
+   622→      type: "flat",
+   623→      multiplierField: "complexity",
+   624→    },
+   625→    requiredFields: [
+   626→      {
+   627→        key: "complexity",
+   628→        label: "Complexity",
+   629→        type: "select" as const,
+   630→        options: [
+   631→          { label: "Simple Reset", value: 1 },
+   632→          { label: "Circuit Diagnosis", value: 1.5 },
+   633→          { label: "DB Box Issue", value: 2.5 },
+   634→        ],
+   635→      },
+   636→    ],
+   637→    addOns: [
+   638→      { key: "replacement_parts", label: "Replacement Parts", priceCents: 3000, pricingType: "flat" },
+   639→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   640→    ],
+   641→    sortOrder: 0,
+   642→  },
+   643→
+   644→  {
+   645→    category: "ELECTRICAL" as ServiceCategory,
+   646→    name: "Power Point Installation",
+   647→    slug: "electrical-power-point-installation",
+   648→    description: "Install new power points, switches, and outlets",
+   649→    basePriceCents: 9000, // $90/point
+   650→    unitLabel: "per unit",
+   651→    pricingRules: {
+   652→      type: "per_unit",
+   653→      unitField: "pointCount",
+   654→      multiplierField: "pointType",
+   655→    },
+   656→    requiredFields: [
+   657→      {
+   658→        key: "pointCount",
+   659→        label: "Number of Points",
+   660→        type: "number" as const,
+   661→        min: 1,
+   662→        max: 10,
+   663→        defaultValue: 1,
+   664→      },
+   665→      {
+   666→        key: "pointType",
+   667→        label: "Point Type",
+   668→        type: "select" as const,
+   669→        options: [
+   670→          { label: "13A Single Socket", value: 1 },
+   671→          { label: "13A Double Socket", value: 1.1 },
+   672→          { label: "15A Aircon Socket", value: 1.4 },
+   673→        ],
+   674→      },
+   675→    ],
+   676→    addOns: [
+   677→      {
+   678→        key: "concealed_wiring",
+   679→        label: "Concealed Wiring",
+   680→        priceCents: 5000, // $50/point
+   681→        pricingType: "per_unit",
+   682→        unitField: "pointCount",
+   683→      },
+   684→      { key: "after_hours", label: "After-Hours Service", priceCents: 4000, pricingType: "flat" },
+   685→    ],
+   686→    sortOrder: 1,
+   687→  },
+   688→
+   689→  {
+   690→    category: "ELECTRICAL" as ServiceCategory,
+   691→    name: "Light Fixture Install",
+   692→    slug: "electrical-light-fixture-install",
+   693→    description: "Install ceiling lights, pendant lamps, and wall-mounted fixtures",
+   694→    basePriceCents: 8000, // $80/point
+   695→    unitLabel: "per unit",
+   696→    pricingRules: {
+   697→      type: "per_unit",
+   698→      unitField: "pointCount",
+   699→      surcharges: [
+   700→        {
+   701→          key: "newWiring",
+   702→          label: "New Wiring Needed",
+   703→          amountCents: 4000, // $40/point
+   704→          perUnit: true,
+   705→        },
+   706→      ],
+   707→    },
+   708→    requiredFields: [
+   709→      {
+   710→        key: "pointCount",
+   711→        label: "Number of Points",
+   712→        type: "number" as const,
+   713→        min: 1,
+   714→        max: 8,
+   715→        defaultValue: 1,
+   716→      },
+   717→      {
+   718→        key: "newWiring",
+   719→        label: "Wiring Status",
+   720→        type: "select" as const,
+   721→        options: [
+   722→          { label: "Existing wiring", value: 0 },
+   723→          { label: "New wiring needed", value: 1 },
+   724→        ],
+   725→      },
+   726→    ],
+   727→    addOns: [
+   728→      {
+   729→        key: "dimmer",
+   730→        label: "Dimmer Switch",
+   731→        priceCents: 3000, // $30/point
+   732→        pricingType: "per_unit",
+   733→        unitField: "pointCount",
+   734→      },
+   735→    ],
+   736→    sortOrder: 2,
+   737→  },
+   738→
+   739→  {
+   740→    category: "ELECTRICAL" as ServiceCategory,
+   741→    name: "Ceiling Fan Installation",
+   742→    slug: "electrical-ceiling-fan-install",
+   743→    description: "Install ceiling fans with secure mounting and electrical connection",
+   744→    basePriceCents: 10000, // $100/unit
+   745→    unitLabel: "per unit",
+   746→    pricingRules: {
+   747→      type: "per_unit",
+   748→      unitField: "unitCount",
+   749→      surcharges: [
+   750→        {
+   751→          key: "noExistingPoint",
+   752→          label: "No Existing Point",
+   753→          amountCents: 5000, // $50/unit
+   754→          perUnit: true,
+   755→        },
+   756→      ],
+   757→    },
+   758→    requiredFields: [
+   759→      {
+   760→        key: "unitCount",
+   761→        label: "Number of Units",
+   762→        type: "number" as const,
+   763→        min: 1,
+   764→        max: 5,
+   765→        defaultValue: 1,
+   766→      },
+   767→      {
+   768→        key: "noExistingPoint",
+   769→        label: "Existing Wiring Point",
+   770→        type: "select" as const,
+   771→        options: [
+   772→          { label: "Has existing point", value: 0 },
+   773→          { label: "No existing point", value: 1 },
+   774→        ],
+   775→      },
+   776→    ],
+   777→    addOns: [
+   778→      { key: "downrod", label: "Downrod Extension", priceCents: 2000, pricingType: "flat" },
+   779→    ],
+   780→    sortOrder: 3,
+   781→  },
+   782→
+   783→  // ===================== PAINTING (3 types) =====================
+   784→
+   785→  {
+   786→    category: "PAINTING" as ServiceCategory,
+   787→    name: "Touch-up / Feature Wall",
+   788→    slug: "painting-touchup-feature-wall",
+   789→    description: "Paint a single accent wall or touch up specific areas",
+   790→    basePriceCents: 15000, // $150/wall
+   791→    unitLabel: "per room",
+   792→    pricingRules: {
+   793→      type: "per_room",
+   794→      unitField: "wallCount",
+   795→      multiplierField: "paintGrade",
+   796→    },
+   797→    requiredFields: [
+   798→      {
+   799→        key: "wallCount",
+   800→        label: "Number of Walls",
+   801→        type: "number" as const,
+   802→        min: 1,
+   803→        max: 6,
+   804→        defaultValue: 1,
+   805→      },
+   806→      {
+   807→        key: "paintGrade",
+   808→        label: "Paint Grade",
+   809→        type: "select" as const,
+   810→        options: [
+   811→          { label: "Standard Matt", value: 1 },
+   812→          { label: "Washable (Eggshell)", value: 1.3 },
+   813→          { label: "Premium (Satin/Gloss)", value: 1.6 },
+   814→        ],
+   815→      },
+   816→    ],
+   817→    addOns: [
+   818→      {
+   819→        key: "ceiling_paint",
+   820→        label: "Ceiling Paint",
+   821→        priceCents: 5000, // $50/wall
+   822→        pricingType: "per_room",
+   823→        unitField: "wallCount",
+   824→      },
+   825→      {
+   826→        key: "paint_supply",
+   827→        label: "Paint Supply",
+   828→        priceCents: 3000, // $30/wall
+   829→        pricingType: "per_room",
+   830→        unitField: "wallCount",
+   831→      },
+   832→    ],
+   833→    sortOrder: 0,
+   834→  },
+   835→
+   836→  {
+   837→    category: "PAINTING" as ServiceCategory,
+   838→    name: "Room Painting",
+   839→    slug: "painting-room-painting",
+   840→    description: "Full room painting including walls with professional finish",
+   841→    basePriceCents: 32000, // $320/room
+   842→    unitLabel: "per room",
+   843→    pricingRules: {
+   844→      type: "per_room",
+   845→      unitField: "roomCount",
+   846→      multiplierField: "wallCondition",
+   847→    },
+   848→    requiredFields: [
+   849→      {
+   850→        key: "roomCount",
+   851→        label: "Number of Rooms",
+   852→        type: "number" as const,
+   853→        min: 1,
+   854→        max: 6,
+   855→        defaultValue: 1,
+   856→      },
+   857→      {
+   858→        key: "wallCondition",
+   859→        label: "Wall Condition",
+   860→        type: "select" as const,
+   861→        options: [
+   862→          { label: "Good (touch-up)", value: 1 },
+   863→          { label: "Fair (2 coats)", value: 1.2 },
+   864→          { label: "Poor (major prep needed)", value: 1.5 },
+   865→        ],
+   866→      },
+   867→    ],
+   868→    addOns: [
+   869→      {
+   870→        key: "ceiling_paint",
+   871→        label: "Ceiling Painting",
+   872→        priceCents: 5000, // $50/room
+   873→        pricingType: "per_room",
+   874→        unitField: "roomCount",
+   875→      },
+   876→      {
+   877→        key: "paint_supply",
+   878→        label: "Paint Supply",
+   879→        priceCents: 3000, // $30/room
+   880→        pricingType: "per_room",
+   881→        unitField: "roomCount",
+   882→      },
+   883→    ],
+   884→    sortOrder: 1,
+   885→  },
+   886→
+   887→  {
+   888→    category: "PAINTING" as ServiceCategory,
+   889→    name: "Whole Unit Painting",
+   890→    slug: "painting-whole-unit",
+   891→    description: "Complete interior painting for the entire flat or apartment",
+   892→    basePriceCents: 70000, // $700/flat rate
+   893→    unitLabel: "flat rate",
+   894→    pricingRules: {
+   895→      type: "flat",
+   896→      multiplierField: "unitType",
+   897→    },
+   898→    requiredFields: [
+   899→      {
+   900→        key: "unitType",
+   901→        label: "Unit Type",
+   902→        type: "select" as const,
+   903→        options: [
+   904→          { label: "2-Room HDB", value: 1 },
+   905→          { label: "3-Room HDB", value: 1.2 },
+   906→          { label: "4-Room HDB", value: 1.5 },
+   907→          { label: "3-Bedroom Condo", value: 2 },
+   908→          { label: "4-Bedroom Condo", value: 2.5 },
+   909→        ],
+   910→      },
+   911→    ],
+   912→    addOns: [
+   913→      { key: "ceiling_paint", label: "Ceiling Painting", priceCents: 20000, pricingType: "flat" },
+   914→      { key: "sealer_primer", label: "Sealer / Primer", priceCents: 15000, pricingType: "flat" },
+   915→      { key: "feature_wall", label: "Feature Wall", priceCents: 8000, pricingType: "flat" },
+   916→    ],
+   917→    sortOrder: 2,
+   918→  },
+   919→
+   920→  // ===================== PEST_CONTROL (4 types) =====================
+   921→
+   922→  {
+   923→    category: "PEST_CONTROL" as ServiceCategory,
+   924→    name: "Cockroach Control",
+   925→    slug: "pest-control-cockroach",
+   926→    description: "Professional cockroach extermination with gel bait and residual spray",
+   927→    basePriceCents: 12000, // $120/session
+   928→    unitLabel: "per session",
+   929→    pricingRules: {
+   930→      type: "flat",
+   931→      multiplierField: "propertyType",
+   932→    },
+   933→    requiredFields: [
+   934→      {
+   935→        key: "propertyType",
+   936→        label: "Property Type",
+   937→        type: "select" as const,
+   938→        options: [
+   939→          { label: "HDB Flat", value: 1 },
+   940→          { label: "Condominium", value: 1.2 },
+   941→          { label: "Landed Property", value: 1.8 },
+   942→        ],
+   943→      },
+   944→    ],
+   945→    addOns: [
+   946→      { key: "followup", label: "Follow-up Visit", priceCents: 8000, pricingType: "flat" },
+   947→      { key: "kitchen_deep", label: "Kitchen Deep-Treatment", priceCents: 3000, pricingType: "flat" },
+   948→    ],
+   949→    sortOrder: 0,
+   950→  },
+   951→
+   952→  {
+   953→    category: "PEST_CONTROL" as ServiceCategory,
+   954→    name: "Mosquito Control",
+   955→    slug: "pest-control-mosquito",
+   956→    description: "Mosquito eradication with fogging and larvicide treatment",
+   957→    basePriceCents: 10000, // $100/session
+   958→    unitLabel: "per session",
+   959→    pricingRules: {
+   960→      type: "flat",
+   961→      multiplierField: "propertyType",
+   962→    },
+   963→    requiredFields: [
+   964→      {
+   965→        key: "propertyType",
+   966→        label: "Property Type",
+   967→        type: "select" as const,
+   968→        options: [
+   969→          { label: "HDB Flat", value: 1 },
+   970→          { label: "Condominium", value: 1.3 },
+   971→          { label: "Landed Property", value: 2 },
+   972→        ],
+   973→      },
+   974→    ],
+   975→    addOns: [
+   976→      { key: "outdoor_fogging", label: "Outdoor Fogging", priceCents: 5000, pricingType: "flat" },
+   977→      { key: "larvicide", label: "Larvicide Treatment", priceCents: 4000, pricingType: "flat" },
+   978→    ],
+   979→    sortOrder: 1,
+   980→  },
+   981→
+   982→  {
+   983→    category: "PEST_CONTROL" as ServiceCategory,
+   984→    name: "Rodent Control",
+   985→    slug: "pest-control-rodent",
+   986→    description: "Rat and mouse control with trapping, baiting, and exclusion",
+   987→    basePriceCents: 15000, // $150/session
+   988→    unitLabel: "per session",
+   989→    pricingRules: {
+   990→      type: "flat",
+   991→      multiplierField: "severity",
+   992→    },
+   993→    requiredFields: [
+   994→      {
+   995→        key: "severity",
+   996→        label: "Infestation Severity",
+   997→        type: "select" as const,
+   998→        options: [
+   999→          { label: "Mild (occasional sighting)", value: 1 },
+  1000→          { label: "Moderate (regular activity)", value: 1.5 },
+  1001→          { label: "Severe (widespread)", value: 2.5 },
+  1002→        ],
+  1003→      },
+  1004→    ],
+  1005→    addOns: [
+  1006→      { key: "followup", label: "Follow-up Visit", priceCents: 8000, pricingType: "flat" },
+  1007→      { key: "bait_station", label: "Bait Station Installation", priceCents: 4000, pricingType: "flat" },
+  1008→    ],
+  1009→    sortOrder: 2,
+  1010→  },
+  1011→
+  1012→  {
+  1013→    category: "PEST_CONTROL" as ServiceCategory,
+  1014→    name: "Termite Control",
+  1015→    slug: "pest-control-termite",
+  1016→    description: "Professional termite treatment with drilling and chemical injection",
+  1017→    basePriceCents: 60000, // $600/session
+  1018→    unitLabel: "per session",
+  1019→    pricingRules: {
+  1020→      type: "flat",
+  1021→      multiplierField: "treatmentType",
+  1022→    },
+  1023→    requiredFields: [
+  1024→      {
+  1025→        key: "treatmentType",
+  1026→        label: "Treatment Type",
+  1027→        type: "select" as const,
+  1028→        options: [
+  1029→          { label: "Spot Treatment", value: 1 },
+  1030→          { label: "Partial Treatment", value: 1.5 },
+  1031→          { label: "Full Treatment", value: 2.5 },
+  1032→        ],
+  1033→      },
+  1034→    ],
+  1035→    addOns: [
+  1036→      { key: "followup_inspect", label: "Follow-up Inspection", priceCents: 10000, pricingType: "flat" },
+  1037→      { key: "warranty_ext", label: "Warranty Extension", priceCents: 15000, pricingType: "flat" },
+  1038→    ],
+  1039→    sortOrder: 3,
+  1040→  },
+  1041→
+  1042→  // ===================== HANDYMAN (4 types) =====================
+  1043→
+  1044→  {
+  1045→    category: "HANDYMAN" as ServiceCategory,
+  1046→    name: "Furniture Assembly",
+  1047→    slug: "handyman-furniture-assembly",
+  1048→    description: "Assemble IKEA and flat-pack furniture professionally",
+  1049→    basePriceCents: 8000, // $80/job
+  1050→    unitLabel: "per job",
+  1051→    pricingRules: {
+  1052→      type: "flat",
+  1053→      multiplierField: "complexity",
+  1054→    },
+  1055→    requiredFields: [
+  1056→      {
+  1057→        key: "complexity",
+  1058→        label: "Complexity",
+  1059→        type: "select" as const,
+  1060→        options: [
+  1061→          { label: "Simple Shelf / Table", value: 1 },
+  1062→          { label: "Medium (Wardrobe / Bed Frame)", value: 1.5 },
+  1063→          { label: "Complex (Full Storage System)", value: 2.5 },
+  1064→        ],
+  1065→      },
+  1066→    ],
+  1067→    addOns: [
+  1068→      { key: "wall_anchoring", label: "Wall Anchoring", priceCents: 2000, pricingType: "flat" },
+  1069→      { key: "disposal", label: "Disposal of Packaging", priceCents: 1500, pricingType: "flat" },
+  1070→    ],
+  1071→    sortOrder: 0,
+  1072→  },
+  1073→
+  1074→  {
+  1075→    category: "HANDYMAN" as ServiceCategory,
+  1076→    name: "TV / Shelf Mounting",
+  1077→    slug: "handyman-tv-shelf-mounting",
+  1078→    description: "Mount TVs, shelves, and decor securely on walls",
+  1079→    basePriceCents: 8000, // $80/item
+  1080→    unitLabel: "per item",
+  1081→    pricingRules: {
+  1082→      type: "per_item",
+  1083→      unitField: "itemCount",
+  1084→      multiplierField: "wallType",
+  1085→    },
+  1086→    requiredFields: [
+  1087→      {
+  1088→        key: "itemCount",
+  1089→        label: "Number of Items",
+  1090→        type: "number" as const,
+  1091→        min: 1,
+  1092→        max: 5,
+  1093→        defaultValue: 1,
+  1094→      },
+  1095→      {
+  1096→        key: "wallType",
+  1097→        label: "Wall Type",
+  1098→        type: "select" as const,
+  1099→        options: [
+  1100→          { label: "Concrete Wall", value: 1 },
+  1101→          { label: "Hollow / Plasterboard Wall", value: 1.3 },
+  1102→        ],
+  1103→      },
+  1104→    ],
+  1105→    addOns: [
+  1106→      { key: "cable_conceal", label: "Cable Concealment", priceCents: 3000, pricingType: "flat" },
+  1107→      { key: "xl_tv", label: "Extra-Large TV (>65\")", priceCents: 2000, pricingType: "flat" },
+  1108→    ],
+  1109→    sortOrder: 1,
+  1110→  },
+  1111→
+  1112→  {
+  1113→    category: "HANDYMAN" as ServiceCategory,
+  1114→    name: "Door Repair",
+  1115→    slug: "handyman-door-repair",
+  1116→    description: "Fix hinges, locks, alignment, and general door issues",
+  1117→    basePriceCents: 10000, // $100/job
+  1118→    unitLabel: "per job",
+  1119→    pricingRules: {
+  1120→      type: "flat",
+  1121→      multiplierField: "issueType",
+  1122→    },
+  1123→    requiredFields: [
+  1124→      {
+  1125→        key: "issueType",
+  1126→        label: "Issue Type",
+  1127→        type: "select" as const,
+  1128→        options: [
+  1129→          { label: "Hinge Adjustment", value: 1 },
+  1130→          { label: "Lock Replacement", value: 1.2 },
+  1131→          { label: "Full Door Repair", value: 2 },
+  1132→        ],
+  1133→      },
+  1134→    ],
+  1135→    addOns: [
+  1136→      { key: "new_lock", label: "New Lock Set", priceCents: 4000, pricingType: "flat" },
+  1137→      { key: "after_hours", label: "After-Hours Service", priceCents: 3000, pricingType: "flat" },
+  1138→    ],
+  1139→    sortOrder: 2,
+  1140→  },
+  1141→
+  1142→  {
+  1143→    category: "HANDYMAN" as ServiceCategory,
+  1144→    name: "General Repair",
+  1145→    slug: "handyman-general-repair",
+  1146→    description: "Quick fixes, minor installations, and general household repairs (1 hr)",
+  1147→    basePriceCents: 8000, // $80/job (1 hr)
+  1148→    unitLabel: "per job",
+  1149→    pricingRules: {
+  1150→      type: "flat",
+  1151→      multiplierField: "complexity",
+  1152→    },
+  1153→    requiredFields: [
+  1154→      {
+  1155→        key: "complexity",
+  1156→        label: "Complexity",
+  1157→        type: "select" as const,
+  1158→        options: [
+  1159→          { label: "Simple (quick fix)", value: 1 },
+  1160→          { label: "Moderate (needs tools)", value: 1.5 },
+  1161→          { label: "Complex (specialised work)", value: 2.5 },
+  1162→        ],
+  1163→      },
+  1164→    ],
+  1165→    addOns: [
+  1166→      { key: "parts", label: "Parts (estimated)", priceCents: 2000, pricingType: "flat" },
+  1167→      { key: "urgent", label: "Urgent Visit", priceCents: 3000, pricingType: "flat" },
+  1168→    ],
+  1169→    sortOrder: 3,
+  1170→  },
+  1171→
+  1172→  // ===================== LOCKSMITH (3 types) =====================
+  1173→
+  1174→  {
+  1175→    category: "LOCKSMITH" as ServiceCategory,
+  1176→    name: "Emergency Unlock",
+  1177→    slug: "locksmith-emergency-unlock",
+  1178→    description: "Emergency door unlocking when you're locked out of your home",
+  1179→    basePriceCents: 8000, // $80/job
+  1180→    unitLabel: "per job",
+  1181→    pricingRules: {
+  1182→      type: "flat",
+  1183→      multiplierField: "doorType",
+  1184→      surcharges: [
+  1185→        {
+  1186→          key: "afterHours",
+  1187→          label: "After 6PM / Weekend",
+  1188→          amountCents: 4000, // $40 flat
+  1189→          perUnit: false,
+  1190→        },
+  1191→      ],
+  1192→    },
+  1193→    requiredFields: [
+  1194→      {
+  1195→        key: "doorType",
+  1196→        label: "Door Type",
+  1197→        type: "select" as const,
+  1198→        options: [
+  1199→          { label: "HDB Main Door", value: 1 },
+  1200→          { label: "Condo Gate", value: 1.3 },
+  1201→          { label: "Digital Lock", value: 1.5 },
+  1202→        ],
+  1203→      },
+  1204→      {
+  1205→        key: "afterHours",
+  1206→        label: "Service Time",
+  1207→        type: "select" as const,
+  1208→        options: [
+  1209→          { label: "Standard hours", value: 0 },
+  1210→          { label: "After 6PM / Weekend", value: 1 },
+  1211→        ],
+  1212→      },
+  1213→    ],
+  1214→    addOns: [
+  1215→      { key: "lock_replace", label: "Lock Replacement", priceCents: 5000, pricingType: "flat" },
+  1216→    ],
+  1217→    sortOrder: 0,
+  1218→  },
+  1219→
+  1220→  {
+  1221→    category: "LOCKSMITH" as ServiceCategory,
+  1222→    name: "Lock Change",
+  1223→    slug: "locksmith-lock-change",
+  1224→    description: "Replace existing locks with new mortise, digital, or gate locks",
+  1225→    basePriceCents: 10000, // $100/lock
+  1226→    unitLabel: "per unit",
+  1227→    pricingRules: {
+  1228→      type: "per_unit",
+  1229→      unitField: "lockCount",
+  1230→      multiplierField: "lockType",
+  1231→    },
+  1232→    requiredFields: [
+  1233→      {
+  1234→        key: "lockCount",
+  1235→        label: "Number of Locks",
+  1236→        type: "number" as const,
+  1237→        min: 1,
+  1238→        max: 5,
+  1239→        defaultValue: 1,
+  1240→      },
+  1241→      {
+  1242→        key: "lockType",
+  1243→        label: "Lock Type",
+  1244→        type: "select" as const,
+  1245→        options: [
+  1246→          { label: "Mortise Lock", value: 1 },
+  1247→          { label: "Digital Lock", value: 2 },
+  1248→          { label: "Gate Lock", value: 0.8 },
+  1249→        ],
+  1250→      },
+  1251→    ],
+  1252→    addOns: [
+  1253→      {
+  1254→        key: "extra_keys",
+  1255→        label: "Additional Keys",
+  1256→        priceCents: 1500, // $15/key
+  1257→        pricingType: "per_item",
+  1258→        unitField: "lockCount",
+  1259→      },
+  1260→      { key: "disposal", label: "Disposal", priceCents: 1000, pricingType: "flat" },
+  1261→    ],
+  1262→    sortOrder: 1,
+  1263→  },
+  1264→
+  1265→  {
+  1266→    category: "LOCKSMITH" as ServiceCategory,
+  1267→    name: "Digital Lock Install",
+  1268→    slug: "locksmith-digital-lock-install",
+  1269→    description: "Professional installation of smart and digital door locks",
+  1270→    basePriceCents: 20000, // $200/lock
+  1271→    unitLabel: "per unit",
+  1272→    pricingRules: {
+  1273→      type: "per_unit",
+  1274→      unitField: "lockCount",
+  1275→      multiplierField: "brand",
+  1276→    },
+  1277→    requiredFields: [
+  1278→      {
+  1279→        key: "lockCount",
+  1280→        label: "Number of Locks",
+  1281→        type: "number" as const,
+  1282→        min: 1,
+  1283→        max: 3,
+  1284→        defaultValue: 1,
+  1285→      },
+  1286→      {
+  1287→        key: "brand",
+  1288→        label: "Lock Brand / Tier",
+  1289→        type: "select" as const,
+  1290→        options: [
+  1291→          { label: "Standard", value: 1 },
+  1292→          { label: "Samsung / Yale", value: 1.3 },
+  1293→          { label: "Premium (Aqara / Schlage)", value: 1.6 },
+  1294→        ],
+  1295→      },
+  1296→    ],
+  1297→    addOns: [
+  1298→      { key: "retrofit", label: "Retrofit Existing Door", priceCents: 5000, pricingType: "flat" },
+  1299→      { key: "wifi_module", label: "WiFi Module", priceCents: 8000, pricingType: "flat" },
+  1300→    ],
+  1301→    sortOrder: 2,
+  1302→  },
+  1303→
+  1304→  // ===================== APPLIANCE_REPAIR (3 types) =====================
+  1305→
+  1306→  {
+  1307→    category: "APPLIANCE_REPAIR" as ServiceCategory,
+  1308→    name: "Diagnosis Visit",
+  1309→    slug: "appliance-repair-diagnosis",
+  1310→    description:
+  1311→      "On-site diagnosis visit to identify appliance faults (waived if repair proceeds)",
+  1312→    basePriceCents: 6000, // $60/visit
+  1313→    unitLabel: "per job",
+  1314→    pricingRules: {
+  1315→      type: "flat",
+  1316→      multiplierField: "applianceType",
+  1317→    },
+  1318→    requiredFields: [
+  1319→      {
+  1320→        key: "applianceType",
+  1321→        label: "Appliance Type",
+  1322→        type: "select" as const,
+  1323→        options: [
+  1324→          { label: "Washing Machine", value: 1 },
+  1325→          { label: "Refrigerator", value: 1 },
+  1326→          { label: "Dryer", value: 1 },
+  1327→          { label: "Oven / Stove", value: 1.2 },
+  1328→        ],
+  1329→      },
+  1330→    ],
+  1331→    addOns: [] as { key: string; label: string; priceCents: number; pricingType: string; unitField?: string }[],
+  1332→    sortOrder: 0,
+  1333→  },
+  1334→
+  1335→  {
+  1336→    category: "APPLIANCE_REPAIR" as ServiceCategory,
+  1337→    name: "Washing Machine Repair",
+  1338→    slug: "appliance-repair-washing-machine",
+  1339→    description: "Repair washing machine faults — drum, motor, control board, and more",
+  1340→    basePriceCents: 12000, // $120/job
+  1341→    unitLabel: "per job",
+  1342→    pricingRules: {
+  1343→      type: "flat",
+  1344→      multiplierField: "issueType",
+  1345→    },
+  1346→    requiredFields: [
+  1347→      {
+  1348→        key: "issueType",
+  1349→        label: "Issue Type",
+  1350→        type: "select" as const,
+  1351→        options: [
+  1352→          { label: "Drum Issue", value: 1 },
+  1353→          { label: "Motor Problem", value: 1.5 },
+  1354→          { label: "Control Board", value: 2 },
+  1355→        ],
+  1356→      },
+  1357→    ],
+  1358→    addOns: [
+  1359→      { key: "parts", label: "Replacement Parts", priceCents: 4000, pricingType: "flat" },
+  1360→      { key: "same_day", label: "Same-Day Repair", priceCents: 3000, pricingType: "flat" },
+  1361→    ],
+  1362→    sortOrder: 1,
+  1363→  },
+  1364→
+  1365→  {
+  1366→    category: "APPLIANCE_REPAIR" as ServiceCategory,
+  1367→    name: "Fridge Repair",
+  1368→    slug: "appliance-repair-fridge",
+  1369→    description: "Repair refrigerator faults — thermostat, compressor, gas leak, and more",
+  1370→    basePriceCents: 15000, // $150/job
+  1371→    unitLabel: "per job",
+  1372→    pricingRules: {
+  1373→      type: "flat",
+  1374→      multiplierField: "issueType",
+  1375→    },
+  1376→    requiredFields: [
+  1377→      {
+  1378→        key: "issueType",
+  1379→        label: "Issue Type",
+  1380→        type: "select" as const,
+  1381→        options: [
+  1382→          { label: "Thermostat", value: 1 },
+  1383→          { label: "Compressor", value: 1.8 },
+  1384→          { label: "Gas Leak", value: 1.5 },
+  1385→        ],
+  1386→      },
+  1387→    ],
+  1388→    addOns: [
+  1389→      { key: "parts", label: "Replacement Parts", priceCents: 5000, pricingType: "flat" },
+  1390→      { key: "same_day", label: "Same-Day Repair", priceCents: 3000, pricingType: "flat" },
+  1391→    ],
+  1392→    sortOrder: 2,
+  1393→  },
+  1394→];
+  1395→
+  1396→// ─── Seed execution ──────────────────────────────────────────────────────────
+  1397→
+  1398→async function _main() {
+  1399→  console.log("🧹 Clearing existing ServiceJobType records...");
+  1400→  try {
+  1401→    const deleted = await db.serviceJobType.deleteMany();
+  1402→    console.log(`   Deleted ${deleted.count} records`);
+  1403→  } catch {
+  1404→    console.log("   ⚠️  Could not delete (tasks reference job types) — skipping cleanup");
+  1405→  }
+  1406→
+  1407→  console.log("📦 Seeding ServiceJobType records...\n");
+  1408→
+  1409→  for (const jt of jobTypes) {
+  1410→    await db.serviceJobType.upsert({
+  1411→      where: { slug: jt.slug },
+  1412→      update: jt,
+  1413→      create: jt,
+  1414→    });
+  1415→    const label = `  ✅ ${jt.category} → ${jt.name}`;
+  1416→    const price =
+  1417→      jt.pricingRules.type === "flat"
+  1418→        ? `$${jt.basePriceCents / 100} flat`
+  1419→        : `$${jt.basePriceCents / 100}/${jt.unitLabel.replace("per ", "")}`;
+  1420→    console.log(`${label}  (${price})`);
+  1421→  }
+  1422→
+  1423→  const count = await db.serviceJobType.count();
+  1424→  console.log(`\n🎉 Done! ${count} service job types in database.`);
+  1425→}
+  1426→
+  1427→export async function main() {
+  1428→  await _main();
+  1429→}
+  1430→
+  1431→// Run directly when executed as a script
+  1432→if (typeof require !== 'undefined' && require.main === module) {
+  1433→  _main()
+  1434→    .catch((e) => {
+  1435→      console.error("❌ Seed failed:", e);
+  1436→      process.exit(1);
+  1437→    })
+  1438→    .finally(() => db.$disconnect());
+  1439→}
