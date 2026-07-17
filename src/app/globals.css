@@ -79,6 +79,41 @@
   --ring: #A8BBAE;
 }
 
+.dark {
+  --anna-sage: #B0C4B5;
+  --anna-sage-dark: #8A9F8E;
+  --anna-sage-light: #252E29;
+  --anna-slate: #E2E6E3;
+  --anna-slate-light: #9AABAE;
+  --anna-bg: #111613;
+  --anna-white: #1A211D;
+  --anna-border: #2A3230;
+  --anna-muted: #7A8B8E;
+  --anna-success: #6BBF76;
+  --anna-warning: #E0B050;
+  --anna-error: #E0645A;
+  --anna-radius: 0.75rem;
+
+  --background: #111613;
+  --foreground: #E2E6E3;
+  --card: #1A211D;
+  --card-foreground: #E2E6E3;
+  --popover: #1A211D;
+  --popover-foreground: #E2E6E3;
+  --primary: #B0C4B5;
+  --primary-foreground: #111613;
+  --secondary: #252E29;
+  --secondary-foreground: #E2E6E3;
+  --muted: #252E29;
+  --muted-foreground: #7A8B8E;
+  --accent: #252E29;
+  --accent-foreground: #E2E6E3;
+  --destructive: #E0645A;
+  --border: #2A3230;
+  --input: #2A3230;
+  --ring: #B0C4B5;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

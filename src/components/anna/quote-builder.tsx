@@ -269,7 +269,7 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
                 onChange={(e) =>
                   setCustomCents(Math.round(parseFloat(e.target.value) * 100))
                 }
-                className="flex-1 bg-white/60 border border-[var(--anna-sage)]/30 rounded-lg px-3 py-1.5 font-data text-2xl font-bold text-[var(--anna-sage-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30"
+                className="flex-1 bg-[var(--anna-white)]/60 border border-[var(--anna-sage)]/30 rounded-lg px-3 py-1.5 font-data text-2xl font-bold text-[var(--anna-sage-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30"
               />
             </div>
           ) : (

@@ -428,7 +428,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                       Rejected
                     </Badge>
                   ) : (
-                    <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 h-5">
+                    <Badge className="bg-[var(--anna-warning)] text-white text-[9px] px-1.5 py-0 h-5">
                       <Clock size={10} className="mr-0.5" />
                       Pending
                     </Badge>

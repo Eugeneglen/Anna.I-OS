@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { QueryProvider } from "@/components/query-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -51,11 +52,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${manrope.variable} ${jetbrainsMono.variable} antialiased bg-[var(--anna-bg)] text-[var(--anna-slate)]`}
+        className={`${manrope.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >
-        <QueryProvider>{children}</QueryProvider>
-        <Toaster />
-        <SonnerToaster position="top-center" richColors closeButton duration={3000} toastOptions={{ style: { fontFamily: 'var(--font-manrope), system-ui, sans-serif' } }} />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryProvider>{children}</QueryProvider>
+          <Toaster />
+          <SonnerToaster position="top-center" richColors closeButton duration={3000} toastOptions={{ style: { fontFamily: 'var(--font-manrope), system-ui, sans-serif' } }} />
+        </ThemeProvider>
       </body>
     </html>
   );

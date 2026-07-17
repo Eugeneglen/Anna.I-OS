@@ -80,14 +80,14 @@ function AnomalyRow({
       <div className="flex items-center gap-1 flex-shrink-0">
         <button
           onClick={() => onAcknowledge(anomaly.id)}
-          className="p-1.5 rounded-lg hover:bg-white/60 text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-[var(--anna-white)]/60 text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
           title="Acknowledge"
         >
           <Eye size={14} />
         </button>
         <button
           onClick={() => onDismiss(anomaly.id)}
-          className="p-1.5 rounded-lg hover:bg-white/60 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-white/60 dark:hover:bg-[var(--anna-white)]/60 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors"
           title="Dismiss"
         >
           <X size={14} />
@@ -207,28 +207,28 @@ export function AnomalyBanner() {
         onClick={() => setExpanded(!expanded)}
         className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
           hasCritical
-            ? "bg-red-50 border-red-200 hover:bg-red-100/70"
-            : "bg-amber-50 border-amber-200 hover:bg-amber-100/70"
+            ? "bg-red-50 border-red-200 hover:bg-red-100/70 dark:bg-red-950/30 dark:border-red-800/40 dark:hover:bg-red-950/50"
+            : "bg-amber-50 border-amber-200 hover:bg-amber-100/70 dark:bg-amber-950/30 dark:border-amber-800/40 dark:hover:bg-amber-950/50"
         }`}
       >
-        <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/80 flex-shrink-0">
+        <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--anna-white)]/80 flex-shrink-0">
           {hasCritical ? (
-            <ShieldAlert size={16} className="text-red-600" />
+            <ShieldAlert size={16} className="text-red-600 dark:text-red-400" />
           ) : (
-            <AlertTriangle size={16} className="text-amber-600" />
+            <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
           )}
         </div>
         <div className="flex-1 text-left min-w-0">
           <p
             className={`text-sm font-semibold ${
-              hasCritical ? "text-red-800" : "text-amber-800"
+              hasCritical ? "text-red-800 dark:text-red-300" : "text-amber-800 dark:text-amber-300"
             }`}
           >
             {anomalies.length} Active {anomalies.length === 1 ? "Alert" : "Alerts"}
           </p>
           <p
             className={`text-[11px] truncate ${
-              hasCritical ? "text-red-600/70" : "text-amber-600/70"
+              hasCritical ? "text-red-600/70 dark:text-red-400/70" : "text-amber-600/70 dark:text-amber-400/70"
             }`}
           >
             {sorted[0]?.message}
