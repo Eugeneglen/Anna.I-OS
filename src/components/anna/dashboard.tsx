@@ -4,14 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { AnomalyBanner } from "./anomaly-banner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatSgd, type Task, type Household, type HouseholdCategoryAutonomy, type TaskStatus, CATEGORY_DEFAULTS } from "@/lib/types";
+import { formatSgd, STATUS_LABELS, type Task, type Household, type HouseholdCategoryAutonomy, type TaskStatus, CATEGORY_DEFAULTS } from "@/lib/types";
 import {
   Activity,
   CheckCircle2,
   Shield,
   Brain,
   ChevronRight,
-  Clock,
+  CalendarClock,
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -64,87 +64,82 @@ function SummaryCard({
   );
 }
 
-// ─── Activity Today Event ────────────────────────────────────
+// ─── Upcoming (Next 7 Days) ────────────────────────────────
 
-interface TodayEvent {
-  time: string;
-  label: string;
-  detail: string;
-  category?: string;
-  taskId?: string;
-  color: string;
+interface UpcomingItem {
+ dateLabel: string;
+ category: string;
+ instructions: string;
+ statusLabel: string;
+ statusColor: string;
+ amount: string;
+ vendor: string;
+ taskId: string;
 }
 
-function computeTodayEvents(tasks: Task[]): TodayEvent[] {
+function computeUpcoming(tasks: Task[]): UpcomingItem[] {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const events: TodayEvent[] = [];
+  const weekEnd = new Date(todayStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  weekEnd.setHours(23, 59, 59, 999);
 
-  const timeStr = (dateStr?: string | null) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    if (d < todayStart) return "";
-    return d.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" });
+  const statusColors: Record<string, string> = {
+    CREATED: "text-[var(--anna-warning)]",
+    DISPATCHED: "text-[var(--anna-sage-dark)]",
+    IN_PROGRESS: "text-[var(--anna-sage-dark)]",
+    COMPLETED: "text-[var(--anna-slate-light)]",
+    DISPUTED: "text-[var(--anna-error)]",
   };
 
-  for (const t of tasks) {
-    const catLabel = CATEGORY_DEFAULTS[t.category]?.label ?? t.category;
-    const prefix = catLabel;
+  const items: UpcomingItem[] = [];
 
-    if (t.verifiedAt && new Date(t.verifiedAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.verifiedAt),
-        label: `${prefix} verified`,
-        detail: formatSgd(t.amountCents),
-        taskId: t.id,
-        color: "text-[var(--anna-success)]",
-      });
-    } else if (t.completedAt && new Date(t.completedAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.completedAt),
-        label: `${prefix} completed`,
-        detail: formatSgd(t.amountCents),
-        taskId: t.id,
-        color: "text-[var(--anna-sage-dark)]",
-      });
-    } else if (t.inProgressAt && new Date(t.inProgressAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.inProgressAt),
-        label: `${prefix} started`,
-        detail: t.bookings?.[0]?.vendor?.name ?? "",
-        taskId: t.id,
-        color: "text-[var(--anna-sage)]",
-      });
-    } else if (t.dispatchedAt && new Date(t.dispatchedAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.dispatchedAt),
-        label: `${prefix} dispatched`,
-        detail: t.bookings?.[0]?.vendor?.name ?? "",
-        taskId: t.id,
-        color: "text-[var(--anna-warning)]",
-      });
-    } else if (t.disputedAt && new Date(t.disputedAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.disputedAt),
-        label: `${prefix} disputed`,
-        detail: "",
-        taskId: t.id,
-        color: "text-[var(--anna-error)]",
-      });
-    } else if (new Date(t.createdAt) >= todayStart) {
-      events.push({
-        time: timeStr(t.createdAt),
-        label: `${prefix} created`,
-        detail: formatSgd(t.amountCents),
-        taskId: t.id,
-        color: "text-[var(--anna-slate-light)]",
-      });
+  for (const t of tasks) {
+    // Only include actionable tasks (not verified/escrow released — those are done)
+    if (t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") continue;
+
+    const refDate = new Date(t.scheduledStart ?? t.createdAt);
+
+    // Include if: scheduled within next 7 days, or created today without a schedule
+    const isInWindow = refDate >= todayStart && refDate <= weekEnd;
+    const isUnscheduledCreated = !t.scheduledStart && t.status === "CREATED" && new Date(t.createdAt) >= todayStart;
+
+    if (!isInWindow && !isUnscheduledCreated) continue;
+
+    // Friendly date label
+    let dateLabel: string;
+    if (refDate.toDateString() === todayStart.toDateString()) {
+      dateLabel = "Today";
+    } else {
+      const tomorrow = new Date(todayStart);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (refDate.toDateString() === tomorrow.toDateString()) {
+        dateLabel = "Tomorrow";
+      } else {
+        dateLabel = refDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
+      }
     }
+
+    items.push({
+      dateLabel,
+      category: CATEGORY_DEFAULTS[t.category]?.label ?? t.category,
+      instructions: t.instructions ?? "",
+      statusLabel: STATUS_LABELS[t.status],
+      statusColor: statusColors[t.status] ?? "text-[var(--anna-muted)]",
+      amount: formatSgd(t.amountCents),
+      vendor: t.bookings?.[0]?.vendor?.name ?? "",
+      taskId: t.id,
+    });
   }
 
-  // Sort by time, most recent first
-  events.sort((a, b) => b.time.localeCompare(a.time));
-  return events;
+  // Sort by reference date, soonest first
+  items.sort((a, b) => {
+    const tA = tasks.find((t) => t.id === a.taskId)!;
+    const tB = tasks.find((t) => t.id === b.taskId)!;
+    return new Date(tA.scheduledStart ?? tA.createdAt).getTime() - new Date(tB.scheduledStart ?? tB.createdAt).getTime();
+  });
+
+  return items;
 }
 
 // ─── Dashboard Component ─────────────────────────────────────
@@ -213,8 +208,8 @@ export function Dashboard() {
       ? (autonomy.reduce((s, a) => s + a.currentLevel, 0) / autonomy.length).toFixed(1)
       : "0.0";
 
-  // Activity Today
-  const todayEvents = computeTodayEvents(tasks);
+  // Upcoming (Next 7 Days)
+  const upcomingItems = computeUpcoming(tasks);
 
   return (
     <div className="pb-20 md:pb-0">
@@ -265,28 +260,34 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Activity Today */}
+      {/* Upcoming (Next 7 Days) */}
       <div className="px-4 lg:px-6 pb-4 lg:pb-6">
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
           {/* Section header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--anna-border)]">
             <div className="flex items-center gap-2">
-              <Clock size={14} className="text-[var(--anna-sage-dark)]" />
+              <CalendarClock size={14} className="text-[var(--anna-sage-dark)]" />
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-slate)]">
-                Activity Today
+                Upcoming
               </h3>
-              {todayEvents.length > 0 && (
+              <span className="text-[10px] text-[var(--anna-muted)] font-normal normal-case tracking-normal">
+                Next 7 Days
+              </span>
+              {upcomingItems.length > 0 && (
                 <span className="font-data text-[10px] text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-1.5 py-0.5 rounded-md">
-                  {todayEvents.length}
+                  {upcomingItems.length}
                 </span>
               )}
             </div>
             <button
               type="button"
               onClick={() => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                navigateToActivity({ dateFrom: today, sort: "newest" });
+                const from = new Date();
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(from);
+                to.setDate(to.getDate() + 7);
+                to.setHours(23, 59, 59, 999);
+                navigateToActivity({ dateFrom: from, dateTo: to, sort: "newest" });
               }}
               className="flex items-center gap-1 text-[10px] font-medium text-[var(--anna-sage-dark)] hover:text-[var(--anna-sage)] transition-colors"
             >
@@ -295,40 +296,48 @@ export function Dashboard() {
             </button>
           </div>
 
-          {/* Events list */}
-          {todayEvents.length === 0 ? (
+          {/* Upcoming list */}
+          {upcomingItems.length === 0 ? (
             <div className="px-4 py-6 text-center">
-              <p className="text-xs text-[var(--anna-muted)]">No activity today yet</p>
+              <p className="text-xs text-[var(--anna-muted)]">No upcoming tasks in the next 7 days</p>
             </div>
           ) : (
-            <div className="divide-y divide-[var(--anna-border)] max-h-48 overflow-y-auto anna-scroll">
-              {todayEvents.slice(0, 5).map((event, idx) => (
+            <div className="divide-y divide-[var(--anna-border)] max-h-64 overflow-y-auto anna-scroll">
+              {upcomingItems.slice(0, 5).map((item, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => {
-                    if (event.taskId) {
-                      navigateToActivity({ search: "" });
-                      // Also select the task for detail view after navigation
-                      const task = tasks.find((t) => t.id === event.taskId);
-                      if (task) {
-                        useAnnaStore.getState().openTaskDetail(task);
-                      }
-                    }
+                    navigateToActivity({ search: "" });
+                    const task = tasks.find((t) => t.id === item.taskId);
+                    if (task) useAnnaStore.getState().openTaskDetail(task);
                   }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-[var(--anna-sage-light)]/30 transition-colors flex items-center gap-3"
+                  className="w-full text-left px-4 py-3 hover:bg-[var(--anna-sage-light)]/30 transition-colors"
                 >
-                  <span className="font-data text-[10px] text-[var(--anna-muted)] w-12 shrink-0">
-                    {event.time}
-                  </span>
-                  <span className={cn("text-xs font-medium", event.color)}>
-                    {event.label}
-                  </span>
-                  {event.detail && (
-                    <span className="text-[10px] text-[var(--anna-muted)] ml-auto shrink-0">
-                      {event.detail}
+                  <div className="flex items-center gap-3">
+                    <span className="font-data text-[11px] text-[var(--anna-muted)] w-16 shrink-0">
+                      {item.dateLabel}
                     </span>
-                  )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-[var(--anna-slate)]">{item.category}</span>
+                        <span className={cn("text-[10px] font-medium", item.statusColor)}>
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                      {item.instructions && (
+                        <p className="text-[11px] text-[var(--anna-muted)] truncate mt-0.5">
+                          {item.instructions}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-data text-xs text-[var(--anna-slate)]">{item.amount}</span>
+                      {item.vendor && (
+                        <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">{item.vendor}</p>
+                      )}
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
