@@ -1395,7 +1395,7 @@ const jobTypes = [
 
 // ─── Seed execution ──────────────────────────────────────────────────────────
 
-async function main() {
+async function _main() {
   console.log("🧹 Clearing existing ServiceJobType records...");
   try {
     const deleted = await db.serviceJobType.deleteMany();
@@ -1424,9 +1424,16 @@ async function main() {
   console.log(`\n🎉 Done! ${count} service job types in database.`);
 }
 
-main()
-  .catch((e) => {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(() => db.$disconnect());
+export async function main() {
+  await _main();
+}
+
+// Run directly when executed as a script
+if (typeof require !== 'undefined' && require.main === module) {
+  _main()
+    .catch((e) => {
+      console.error("❌ Seed failed:", e);
+      process.exit(1);
+    })
+    .finally(() => db.$disconnect());
+}

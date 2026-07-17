@@ -158,7 +158,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                   Railway Console
                 </p>
                 <code className="text-xs text-[var(--anna-sage-dark)] font-mono leading-relaxed block whitespace-pre-wrap">
-{`npx prisma db deploy
+{`npx prisma db push
 npx prisma db seed`}
                 </code>
               </div>

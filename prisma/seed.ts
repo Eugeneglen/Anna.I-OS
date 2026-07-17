@@ -2,25 +2,37 @@
  * Unified seed entry point for `npx prisma db seed`
  * Runs all three seed scripts in dependency order.
  *
- * Railway usage:
- *   npx prisma db deploy && npx prisma db seed
+ * Railway Console:
+ *   npx prisma db push && npx prisma db seed
  */
+
+import { PrismaClient } from "@prisma/client";
+
+const db = new PrismaClient();
 
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
   console.log("║  Anna.I — Database Seed                     ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 
-  // Each seed file runs itself on import (calls main() as side effect).
-  // We import sequentially to respect dependency order.
+  await db.$connect();
+
+  // 1. Service job types (no dependencies)
   console.log("📦 [1/3] Seeding service job types...");
-  await import("./seed-job-types");
+  const { main: seedJobTypes } = await import("./seed-job-types");
+  await seedJobTypes();
 
+  // 2. Households, members, vendors, tasks, bookings
   console.log("\n📦 [2/3] Seeding households & demo data...");
-  await import("./seed-demo");
+  const { main: seedDemo } = await import("./seed-demo");
+  await seedDemo();
 
+  // 3. Anomalies (depends on households + tasks from step 2)
   console.log("\n📦 [3/3] Seeding anomalies...");
-  await import("./seed-anomalies");
+  const { main: seedAnomalies } = await import("./seed-anomalies");
+  await seedAnomalies();
+
+  await db.$disconnect();
 
   console.log("\n╔══════════════════════════════════════════════╗");
   console.log("║  🎉 All seeds completed successfully!      ║");

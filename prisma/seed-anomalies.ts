@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 
 const db = new PrismaClient()
 
-async function main() {
+async function _main() {
   // Find Tan Family household
   const tanFamily = await db.household.findFirst({ where: { name: 'Tan Family' } })
   if (!tanFamily) {
@@ -93,6 +93,11 @@ async function main() {
   console.log('   3. TASK_OVERDUE (CRITICAL) — Handyman 5h overdue')
 }
 
-main()
-  .catch(console.error)
-  .finally(() => db.$disconnect())
+export async function main() {
+  await _main();
+}
+
+// Run directly when executed as a script
+if (typeof require !== 'undefined' && require.main === module) {
+  _main().catch(console.error).finally(() => db.$disconnect());
+}
