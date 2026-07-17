@@ -41,7 +41,16 @@ async function fetchTasks(householdId: string): Promise<Task[]> {
 
 export function TaskList() {
   const { selectedHouseholdId } = useAnnaStore();
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+
+  // Initialize filters — consume pending filter from store if set by dashboard cards
+  const [filters, setFilters] = useState<TaskFilters>(() => {
+    const pending = useAnnaStore.getState().pendingTaskFilter;
+    if (pending) {
+      useAnnaStore.getState().setPendingTaskFilter(null);
+      return { ...DEFAULT_FILTERS, ...pending };
+    }
+    return DEFAULT_FILTERS;
+  });
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks", selectedHouseholdId],

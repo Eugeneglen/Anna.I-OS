@@ -4,6 +4,7 @@ import { LayoutShell } from "@/components/anna/layout-shell";
 import { Dashboard } from "@/components/anna/dashboard";
 import { TaskServices } from "@/components/anna/task-services";
 import { AutonomyPanel } from "@/components/anna/autonomy-panel";
+import { ActivityTab } from "@/components/anna/activity-tab";
 import { SettingsPanel } from "@/components/anna/settings-panel";
 import { useAnnaStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,6 +13,7 @@ const VIEWS: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
   services: TaskServices,
   autonomy: AutonomyPanel,
+  activity: ActivityTab,
   settings: SettingsPanel,
 };
 

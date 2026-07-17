@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { TabType, Task, ServiceCategory } from "./types";
+import type { TabType, Task, ServiceCategory, TaskStatus } from "./types";
+import type { TaskFilters } from "@/components/anna/task-filters";
 
 export interface RebookData {
   category: ServiceCategory;
@@ -36,6 +37,10 @@ interface AnnaStore {
   notificationPanelOpen: boolean;
   setNotificationPanelOpen: (open: boolean) => void;
 
+  // Pending task filter (set by Dashboard cards, consumed by Activity tab)
+  pendingTaskFilter: Partial<TaskFilters> | null;
+  setPendingTaskFilter: (filter: Partial<TaskFilters> | null) => void;
+
   // Rebook data (set by Dashboard, consumed by Services)
   rebookData: RebookData | null;
   setRebookData: (data: RebookData | null) => void;
@@ -69,6 +74,9 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   notificationPanelOpen: false,
   setNotificationPanelOpen: (open) => set({ notificationPanelOpen: open }),
+
+  pendingTaskFilter: null,
+  setPendingTaskFilter: (filter) => set({ pendingTaskFilter: filter }),
 
   openTaskDetail: (task) =>
     set({ selectedTaskId: task.id, taskDetailOpen: true }),

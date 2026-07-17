@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, Settings, Home } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Settings, Home } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +21,7 @@ const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "services", label: "Services", icon: Layers },
   { key: "autonomy", label: "Autonomy", icon: Brain },
+  { key: "activity", label: "Activity", icon: ListChecks },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
