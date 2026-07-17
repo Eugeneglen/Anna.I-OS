@@ -137,15 +137,16 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       const res = await fetch(`/api/tasks/${taskId}/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId, fileUrl: "https://placehold.co/400x300" }),
+        body: JSON.stringify({ bookingId }),
       });
       if (!res.ok) throw new Error("Verification failed");
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Task verified" });
+      toast({ title: "Task verified — autonomy updated" });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["autonomy"] });
     },
   });
 

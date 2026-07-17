@@ -32,6 +32,10 @@ interface AnnaStore {
   householdNames: Record<string, string>;
   setHouseholdNames: (names: Record<string, string>) => void;
 
+  // Notification panel
+  notificationPanelOpen: boolean;
+  setNotificationPanelOpen: (open: boolean) => void;
+
   // Rebook data (set by Dashboard, consumed by Services)
   rebookData: RebookData | null;
   setRebookData: (data: RebookData | null) => void;
@@ -62,6 +66,9 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   rebookData: null,
   setRebookData: (data) => set({ rebookData: data }),
+
+  notificationPanelOpen: false,
+  setNotificationPanelOpen: (open) => set({ notificationPanelOpen: open }),
 
   openTaskDetail: (task) =>
     set({ selectedTaskId: task.id, taskDetailOpen: true }),

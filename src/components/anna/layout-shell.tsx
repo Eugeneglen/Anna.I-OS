@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
+import { NotificationPanel } from "@/components/anna/notification-panel";
 
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -38,6 +39,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     setActiveTab,
     householdNames,
     setHouseholdNames,
+    notificationPanelOpen,
+    setNotificationPanelOpen,
   } = useAnnaStore();
 
   const { data: households, isLoading: householdsLoading } = useQuery({
@@ -45,6 +48,22 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     queryFn: fetchHouseholds,
     staleTime: 60_000,
   });
+
+  // Unread notification count (runs in background for badge)
+  const { data: notifData } = useQuery({
+    queryKey: ["notifications", selectedHouseholdId, "count"],
+    queryFn: async () => {
+      if (!selectedHouseholdId) return { unreadCount: 0 };
+      const res = await fetch(`/api/notifications?householdId=${selectedHouseholdId}`);
+      if (!res.ok) return { unreadCount: 0 };
+      return res.json();
+    },
+    enabled: !!selectedHouseholdId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+  const unreadCount = notifData?.unreadCount || 0;
 
   const isEmptyDb = !householdsLoading && households?.length === 0;
 
@@ -101,9 +120,16 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Right: Notification Bell */}
-          <button className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors">
+          <button
+            onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
+            className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
+          >
             <Bell size={18} className="text-[var(--anna-slate-light)]" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--anna-error)] rounded-full" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[var(--anna-sage-dark)] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -158,7 +184,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                   Railway Console
                 </p>
                 <code className="text-xs text-[var(--anna-sage-dark)] font-mono leading-relaxed block whitespace-pre-wrap">
-{`npx prisma db push
+{`npx prisma migrate deploy
 npx prisma db seed`}
                 </code>
               </div>
@@ -211,6 +237,9 @@ npx prisma db seed`}
 
       {/* Ask Anna Chat */}
       <AskAnna />
+
+      {/* Notification Panel */}
+      <NotificationPanel />
     </div>
   );
 }

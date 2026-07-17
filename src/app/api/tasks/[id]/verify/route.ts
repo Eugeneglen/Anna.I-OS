@@ -2,10 +2,10 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { checkAndPromoteAutonomy } from "@/lib/autonomy"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
-  fileUrl: z.string().url().min(1),
 })
 
 export async function POST(
@@ -24,48 +24,75 @@ export async function POST(
       )
     }
 
-    const { bookingId, fileUrl } = parsed.data
+    const { bookingId } = parsed.data
 
     // Validate task exists and status is COMPLETED
-    const task = await db.task.findUnique({ where: { id } })
+    const task = await db.task.findUnique({
+      where: { id },
+      include: {
+        bookings: { where: { id: bookingId }, take: 1 },
+      },
+    })
+
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
+
     if (task.status !== TaskStatus.COMPLETED) {
       return NextResponse.json(
-        { error: `Task must be COMPLETED to upload verification photos — current status is ${task.status}` },
+        { error: `Task must be COMPLETED to verify — current status is ${task.status}` },
         { status: 409 }
       )
     }
 
-    // Create VerificationPhoto
-    const photo = await db.verificationPhoto.create({
-      data: {
+    const booking = task.bookings[0]
+    if (!booking) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    }
+
+    // Mark any existing unverified photos as verified
+    const updatedPhotos = await db.verificationPhoto.updateMany({
+      where: {
         taskId: id,
         bookingId,
-        fileUrl,
-        uploadedBy: "vendor",
         isVerified: false,
+      },
+      data: {
+        isVerified: true,
+        verifiedBy: "homehold",
+        verifiedAt: new Date(),
       },
     })
 
-    // Create notification
+    // Update task status to VERIFIED
+    const now = new Date()
+    const verifiedTask = await db.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.VERIFIED,
+        verifiedAt: now,
+      },
+    })
+
+    // Trigger autonomy promotion check
+    await checkAndPromoteAutonomy(task.householdId, task.category as any)
+
+    // Create VERIFICATION_APPROVED notification for all household members
     const members = await db.familyMember.findMany({
       where: { householdId: task.householdId },
       select: { id: true },
     })
 
-    const firstMember = members[0]
-    if (firstMember) {
+    for (const member of members) {
       await db.notification.create({
         data: {
           householdId: task.householdId,
           recipientType: RecipientType.HOUSEHOLD_MEMBER,
-          memberId: firstMember.id,
+          memberId: member.id,
           channel: NotificationChannel.WHATSAPP,
-          eventType: NotificationEventType.VERIFICATION_REQUESTED,
-          title: "Verification Photo Uploaded",
-          body: `A verification photo has been uploaded for your ${task.category.toLowerCase()} task. Please review and approve or reject.`,
+          eventType: NotificationEventType.VERIFICATION_APPROVED,
+          title: "Task Verified",
+          body: `Your ${task.category.toLowerCase()} task has been verified successfully. Escrow is ready for release.`,
           status: NotificationStatus.PENDING,
           referenceType: "task",
           referenceId: task.id,
@@ -73,11 +100,14 @@ export async function POST(
       })
     }
 
-    return NextResponse.json({ photo }, { status: 201 })
+    return NextResponse.json({
+      task: verifiedTask,
+      photosVerified: updatedPhotos.count,
+    }, { status: 200 })
   } catch (error) {
     console.error("POST /api/tasks/[id]/verify error:", error)
     return NextResponse.json(
-      { error: "Failed to upload verification photo" },
+      { error: "Failed to verify task" },
       { status: 500 }
     )
   }
