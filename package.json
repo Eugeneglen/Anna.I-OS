@@ -16,7 +16,7 @@
     "db:restore": "bash scripts/db-restore.sh",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "seed": "bun run prisma/seed-job-types.ts && bun run prisma/seed-demo.ts && bun run prisma/seed-anomalies.ts"
+    "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

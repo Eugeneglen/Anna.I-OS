@@ -3,7 +3,7 @@
  * Runs all three seed scripts in dependency order.
  *
  * Railway Console:
- *   npx prisma db push && npx prisma db seed
+ *   npx prisma migrate deploy && npx prisma db seed
  */
 
 import { PrismaClient } from "@prisma/client";

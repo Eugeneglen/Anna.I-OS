@@ -96,8 +96,3 @@ async function _main() {
 export async function main() {
   await _main();
 }
-
-// Run directly when executed as a script
-if (typeof require !== 'undefined' && require.main === module) {
-  _main().catch(console.error).finally(() => db.$disconnect());
-}
