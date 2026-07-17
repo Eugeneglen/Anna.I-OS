@@ -16,6 +16,9 @@
     "db:restore": "bash scripts/db-restore.sh",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
+    "db:provider": "bash scripts/switch-provider.sh",
+    "db:provider:local": "bash scripts/switch-provider.sh local",
+    "db:provider:prod": "bash scripts/switch-provider.sh prod",
     "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
