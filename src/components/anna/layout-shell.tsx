@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
 import { NotificationPanel } from "@/components/anna/notification-panel";
@@ -23,7 +22,6 @@ const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "autonomy", label: "Autonomy", icon: Brain },
   { key: "activity", label: "Activity", icon: ListChecks },
   { key: "escrow", label: "Escrow", icon: Landmark },
-  { key: "settings", label: "Settings", icon: Settings },
 ];
 
 async function fetchHouseholds(): Promise<Household[]> {
@@ -121,18 +119,30 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             </Select>
           </div>
 
-          {/* Right: Notification Bell */}
-          <button
-            onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
-            className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
-          >
-            <Bell size={18} className="text-[var(--anna-slate-light)]" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[var(--anna-sage-dark)] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </button>
+          {/* Right: Notification Bell + Settings */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
+              className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
+            >
+              <Bell size={18} className="text-[var(--anna-slate-light)]" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[var(--anna-sage-dark)] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={cn(
+                "p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors",
+                activeTab === "settings" ? "bg-[var(--anna-sage-light)]" : ""
+              )}
+              aria-label="Settings"
+            >
+              <Settings size={18} className="text-[var(--anna-slate-light)]" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -162,9 +172,21 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Sidebar footer info */}
-          <div className="mt-auto pt-4 border-t border-[var(--anna-border)] px-3">
-            <p className="text-xs text-[var(--anna-muted)]">{currentHouseholdName}</p>
+          {/* Settings — separated from main nav */}
+          <div className="mt-auto pt-2 border-t border-[var(--anna-border)]">
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full",
+                activeTab === "settings"
+                  ? "bg-[var(--anna-sage)] text-[var(--anna-white)] shadow-sm"
+                  : "text-[var(--anna-slate-light)] hover:bg-[var(--anna-sage-light)] hover:text-[var(--anna-slate)]"
+              )}
+            >
+              <Settings size={18} />
+              Settings
+            </button>
+            <p className="text-xs text-[var(--anna-muted)] px-3 mt-2">{currentHouseholdName}</p>
           </div>
         </aside>
 
