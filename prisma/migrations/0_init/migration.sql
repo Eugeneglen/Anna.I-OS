@@ -1,6 +1,54 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateEnum
+CREATE TYPE "ServiceCategory" AS ENUM ('CLEANING', 'LAUNDRY', 'AIRCON', 'PLUMBING', 'ELECTRICAL', 'PAINTING', 'PEST_CONTROL', 'HANDYMAN', 'LOCKSMITH', 'APPLIANCE_REPAIR');
+
+-- CreateEnum
+CREATE TYPE "TaskStatus" AS ENUM ('CREATED', 'DISPATCHED', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED', 'ESCROW_RELEASED', 'DISPUTED');
+
+-- CreateEnum
+CREATE TYPE "EscrowState" AS ENUM ('HELD', 'RELEASED', 'DISPUTED', 'REFUNDED');
+
+-- CreateEnum
+CREATE TYPE "SubscriptionTier" AS ENUM ('HOME', 'CARE');
+
+-- CreateEnum
+CREATE TYPE "SubscriptionStatus" AS ENUM ('ACTIVE', 'CANCELLED', 'PAST_DUE');
+
+-- CreateEnum
+CREATE TYPE "VendorStatus" AS ENUM ('PENDING', 'ACTIVE', 'SUSPENDED');
+
+-- CreateEnum
+CREATE TYPE "MemberRole" AS ENUM ('OWNER', 'MEMBER');
+
+-- CreateEnum
+CREATE TYPE "NotificationChannel" AS ENUM ('WHATSAPP', 'WEB_PUSH', 'EMAIL');
+
+-- CreateEnum
+CREATE TYPE "NotificationEventType" AS ENUM ('TASK_CREATED', 'TASK_DISPATCHED', 'VENDOR_EN_ROUTE', 'VERIFICATION_REQUESTED', 'VERIFICATION_APPROVED', 'VERIFICATION_REJECTED', 'ESCROW_RELEASED', 'DISPUTE_RAISED', 'DISPUTE_RESOLVED', 'REBOOKING_PROMPT', 'AUTONOMY_PROMOTED', 'PREDICTIVE_SUGGESTION', 'SYSTEM_ALERT');
+
+-- CreateEnum
+CREATE TYPE "NotificationStatus" AS ENUM ('PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "AnomalyType" AS ENUM ('VENDOR_LATE', 'TASK_OVERDUE', 'VERIFICATION_MISSING', 'RATING_DROP', 'ESCROW_DISPUTED');
+
+-- CreateEnum
+CREATE TYPE "AnomalySeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "AnomalyStatus" AS ENUM ('ACTIVE', 'ACKNOWLEDGED', 'RESOLVED', 'DISMISSED');
+
+-- CreateEnum
+CREATE TYPE "RecipientType" AS ENUM ('HOUSEHOLD_MEMBER', 'VENDOR');
+
+-- CreateEnum
+CREATE TYPE "QuotationStatus" AS ENUM ('DRAFT', 'ACCEPTED', 'REJECTED');
+
 -- CreateTable
 CREATE TABLE "Household" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT,
@@ -9,91 +57,95 @@ CREATE TABLE "Household" (
     "unitNumber" TEXT,
     "activeCategories" TEXT NOT NULL,
     "preferences" JSONB NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Household_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "FamilyMember" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT,
     "avatarUrl" TEXT,
-    "role" TEXT NOT NULL DEFAULT 'MEMBER',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "FamilyMember_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "role" "MemberRole" NOT NULL DEFAULT 'MEMBER',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FamilyMember_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Vendor" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
     "categories" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "status" "VendorStatus" NOT NULL DEFAULT 'PENDING',
     "verificationData" JSONB,
     "maxTasksPerDay" INTEGER NOT NULL DEFAULT 6,
     "maxTasksPerWeek" INTEGER NOT NULL DEFAULT 30,
     "availability" JSONB,
     "zones" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Vendor_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "VendorHouseholdAffinity" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
+    "category" "ServiceCategory" NOT NULL,
     "bookingCount" INTEGER NOT NULL DEFAULT 0,
     "completedCount" INTEGER NOT NULL DEFAULT 0,
-    "totalRating" REAL NOT NULL DEFAULT 0,
-    "avgRating" REAL,
+    "totalRating" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "avgRating" DOUBLE PRECISION,
     "reassignmentCount" INTEGER NOT NULL DEFAULT 0,
     "disputeCount" INTEGER NOT NULL DEFAULT 0,
     "jobOutcomes" JSONB,
-    "lastAssignedAt" DATETIME,
-    "lastCompletedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "VendorHouseholdAffinity_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "VendorHouseholdAffinity_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "lastAssignedAt" TIMESTAMP(3),
+    "lastCompletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "VendorHouseholdAffinity_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Task" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'CREATED',
+    "category" "ServiceCategory" NOT NULL,
+    "status" "TaskStatus" NOT NULL DEFAULT 'CREATED',
     "jobTypeId" TEXT,
     "quotationId" TEXT,
     "recurrencePattern" JSONB,
     "instructions" TEXT,
     "instructionsSource" TEXT,
     "amountCents" INTEGER NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "dispatchedAt" DATETIME,
-    "inProgressAt" DATETIME,
-    "completedAt" DATETIME,
-    "verifiedAt" DATETIME,
-    "escrowReleasedAt" DATETIME,
-    "disputedAt" DATETIME,
-    "scheduledStart" DATETIME,
-    CONSTRAINT "Task_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Task_jobTypeId_fkey" FOREIGN KEY ("jobTypeId") REFERENCES "ServiceJobType" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "Task_quotationId_fkey" FOREIGN KEY ("quotationId") REFERENCES "Quotation" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "dispatchedAt" TIMESTAMP(3),
+    "inProgressAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "verifiedAt" TIMESTAMP(3),
+    "escrowReleasedAt" TIMESTAMP(3),
+    "disputedAt" TIMESTAMP(3),
+    "scheduledStart" TIMESTAMP(3),
+
+    CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "TaskAttachment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "fileType" TEXT NOT NULL,
     "fileUrl" TEXT NOT NULL,
@@ -101,35 +153,36 @@ CREATE TABLE "TaskAttachment" (
     "fileSize" INTEGER NOT NULL,
     "fileName" TEXT NOT NULL,
     "mimeType" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "TaskAttachment_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TaskAttachment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Booking" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
-    "scheduledStart" DATETIME NOT NULL,
-    "scheduledEnd" DATETIME,
-    "actualStart" DATETIME,
-    "actualEnd" DATETIME,
+    "scheduledStart" TIMESTAMP(3) NOT NULL,
+    "scheduledEnd" TIMESTAMP(3),
+    "actualStart" TIMESTAMP(3),
+    "actualEnd" TIMESTAMP(3),
     "rating" INTEGER,
     "ratingComment" TEXT,
     "status" TEXT NOT NULL DEFAULT 'assigned',
-    "dispatchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "acceptedAt" DATETIME,
-    "completedAt" DATETIME,
-    "cancelledAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Booking_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Booking_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "dispatchedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "acceptedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "VerificationPhoto" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "bookingId" TEXT NOT NULL,
     "fileUrl" TEXT NOT NULL,
@@ -137,107 +190,110 @@ CREATE TABLE "VerificationPhoto" (
     "uploadedBy" TEXT NOT NULL,
     "isVerified" BOOLEAN NOT NULL DEFAULT false,
     "verifiedBy" TEXT,
-    "verifiedAt" DATETIME,
+    "verifiedAt" TIMESTAMP(3),
     "rejectionReason" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "VerificationPhoto_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "VerificationPhoto_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "VerificationPhoto_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "EscrowLedger" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "bookingId" TEXT,
     "amountCents" INTEGER NOT NULL,
-    "state" TEXT NOT NULL DEFAULT 'HELD',
-    "commissionRate" REAL NOT NULL DEFAULT 10.0,
+    "state" "EscrowState" NOT NULL DEFAULT 'HELD',
+    "commissionRate" DOUBLE PRECISION NOT NULL DEFAULT 10.0,
     "commissionCents" INTEGER NOT NULL,
     "vendorPayoutCents" INTEGER NOT NULL,
     "stripePaymentIntentId" TEXT,
     "stripeTransferId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "heldAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "releasedAt" DATETIME,
-    "disputedAt" DATETIME,
-    "refundedAt" DATETIME,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "heldAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "releasedAt" TIMESTAMP(3),
+    "disputedAt" TIMESTAMP(3),
+    "refundedAt" TIMESTAMP(3),
     "disputeReason" TEXT,
     "disputeResolution" TEXT,
     "disputeResolvedBy" TEXT,
-    "disputeResolvedAt" DATETIME,
-    CONSTRAINT "EscrowLedger_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "EscrowLedger_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "disputeResolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "EscrowLedger_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Subscription" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
-    "tier" TEXT NOT NULL DEFAULT 'HOME',
-    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "tier" "SubscriptionTier" NOT NULL DEFAULT 'HOME',
+    "status" "SubscriptionStatus" NOT NULL DEFAULT 'ACTIVE',
     "priceCents" INTEGER NOT NULL DEFAULT 800,
     "stripeSubscriptionId" TEXT,
-    "billingCycleStart" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "billingCycleEnd" DATETIME,
-    "nextBillingDate" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Subscription_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "billingCycleStart" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "billingCycleEnd" TIMESTAMP(3),
+    "nextBillingDate" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "AutonomyLevelThreshold" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "category" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "category" "ServiceCategory" NOT NULL,
     "level" INTEGER NOT NULL,
-    "cyclesRequired" INTEGER NOT NULL
+    "cyclesRequired" INTEGER NOT NULL,
+
+    CONSTRAINT "AutonomyLevelThreshold_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "HouseholdCategoryAutonomy" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
+    "category" "ServiceCategory" NOT NULL,
     "currentLevel" INTEGER NOT NULL DEFAULT 1,
     "verifiedCyclesAtLevel" INTEGER NOT NULL DEFAULT 0,
     "totalVerifiedCycles" INTEGER NOT NULL DEFAULT 0,
     "promotionPaused" BOOLEAN NOT NULL DEFAULT false,
-    "lastPromotedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "HouseholdCategoryAutonomy_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "lastPromotedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HouseholdCategoryAutonomy_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Notification" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
-    "recipientType" TEXT NOT NULL,
+    "recipientType" "RecipientType" NOT NULL,
     "memberId" TEXT,
     "vendorId" TEXT,
-    "channel" TEXT NOT NULL,
-    "eventType" TEXT NOT NULL,
+    "channel" "NotificationChannel" NOT NULL,
+    "eventType" "NotificationEventType" NOT NULL,
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "status" "NotificationStatus" NOT NULL DEFAULT 'PENDING',
     "referenceType" TEXT,
     "referenceId" TEXT,
     "externalMessageId" TEXT,
     "errorMessage" TEXT,
-    "sentAt" DATETIME,
-    "deliveredAt" DATETIME,
-    "readAt" DATETIME,
-    "failedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Notification_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "Notification_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "FamilyMember" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "Notification_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "sentAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
+    "readAt" TIMESTAMP(3),
+    "failedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ServiceJobType" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "category" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
+    "category" "ServiceCategory" NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -248,13 +304,15 @@ CREATE TABLE "ServiceJobType" (
     "addOns" JSONB NOT NULL,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ServiceJobType_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Quotation" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
     "jobTypeId" TEXT NOT NULL,
     "fieldValues" JSONB NOT NULL,
@@ -264,30 +322,31 @@ CREATE TABLE "Quotation" (
     "totalCents" INTEGER NOT NULL,
     "breakdown" JSONB NOT NULL,
     "aiExplanation" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'DRAFT',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Quotation_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "Quotation_jobTypeId_fkey" FOREIGN KEY ("jobTypeId") REFERENCES "ServiceJobType" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "status" "QuotationStatus" NOT NULL DEFAULT 'DRAFT',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Quotation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Anomaly" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "householdId" TEXT NOT NULL,
     "taskId" TEXT,
     "bookingId" TEXT,
     "vendorId" TEXT,
-    "type" TEXT NOT NULL,
-    "severity" TEXT NOT NULL DEFAULT 'MEDIUM',
+    "type" "AnomalyType" NOT NULL,
+    "severity" "AnomalySeverity" NOT NULL DEFAULT 'MEDIUM',
     "message" TEXT NOT NULL,
     "metadata" JSONB,
-    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "acknowledgedAt" DATETIME,
-    "resolvedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Anomaly_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "status" "AnomalyStatus" NOT NULL DEFAULT 'ACTIVE',
+    "acknowledgedAt" TIMESTAMP(3),
+    "resolvedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Anomaly_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -334,4 +393,67 @@ CREATE INDEX "Anomaly_type_status_idx" ON "Anomaly"("type", "status");
 
 -- CreateIndex
 CREATE INDEX "Anomaly_severity_idx" ON "Anomaly"("severity");
+
+-- AddForeignKey
+ALTER TABLE "FamilyMember" ADD CONSTRAINT "FamilyMember_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VendorHouseholdAffinity" ADD CONSTRAINT "VendorHouseholdAffinity_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VendorHouseholdAffinity" ADD CONSTRAINT "VendorHouseholdAffinity_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_jobTypeId_fkey" FOREIGN KEY ("jobTypeId") REFERENCES "ServiceJobType"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_quotationId_fkey" FOREIGN KEY ("quotationId") REFERENCES "Quotation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaskAttachment" ADD CONSTRAINT "TaskAttachment_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Booking" ADD CONSTRAINT "Booking_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Booking" ADD CONSTRAINT "Booking_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationPhoto" ADD CONSTRAINT "VerificationPhoto_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationPhoto" ADD CONSTRAINT "VerificationPhoto_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EscrowLedger" ADD CONSTRAINT "EscrowLedger_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EscrowLedger" ADD CONSTRAINT "EscrowLedger_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HouseholdCategoryAutonomy" ADD CONSTRAINT "HouseholdCategoryAutonomy_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "FamilyMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Quotation" ADD CONSTRAINT "Quotation_jobTypeId_fkey" FOREIGN KEY ("jobTypeId") REFERENCES "ServiceJobType"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Anomaly" ADD CONSTRAINT "Anomaly_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -17,7 +17,7 @@ async function main() {
   await import("./seed-job-types");
 
   console.log("\n📦 [2/3] Seeding households & demo data...");
-  await import("./seed-demo");
+  await import("./seed");
 
   console.log("\n📦 [3/3] Seeding anomalies...");
   await import("./seed-anomalies");

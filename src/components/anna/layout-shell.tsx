@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, Settings } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, Settings, Home } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
 
@@ -39,11 +40,13 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     setHouseholdNames,
   } = useAnnaStore();
 
-  const { data: households } = useQuery({
+  const { data: households, isLoading: householdsLoading } = useQuery({
     queryKey: ["households"],
     queryFn: fetchHouseholds,
     staleTime: 60_000,
   });
+
+  const isEmptyDb = !householdsLoading && households?.length === 0;
 
   // Auto-select first household and cache names (handles stale IDs after re-seed)
   useEffect(() => {
@@ -58,8 +61,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     }
   }, [households, selectedHouseholdId, setHouseholdNames, setSelectedHouseholdId]);
 
-  const currentHouseholdName =
-    householdNames[selectedHouseholdId] || "Loading...";
+  const currentHouseholdName = householdNames[selectedHouseholdId] || (householdsLoading ? "Loading..." : "");
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--anna-bg)]">
@@ -139,7 +141,32 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto anna-scroll">{children}</main>
+        <main className="flex-1 overflow-y-auto anna-scroll">
+          {isEmptyDb ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-6">
+                <Home size={28} className="text-[var(--anna-sage-dark)]" />
+              </div>
+              <h2 className="text-xl font-semibold text-[var(--anna-slate)] mb-2">
+                Welcome to Anna.I
+              </h2>
+              <p className="text-sm text-[var(--anna-muted)] max-w-sm mb-8">
+                Your household management system is ready. Seed the database with sample data to explore the dashboard.
+              </p>
+              <div className="bg-[var(--anna-bg)] rounded-2xl border border-[var(--anna-border)] p-5 max-w-md text-left">
+                <p className="text-xs font-semibold text-[var(--anna-slate)] mb-2 uppercase tracking-wider">
+                  Railway Console
+                </p>
+                <code className="text-xs text-[var(--anna-sage-dark)] font-mono leading-relaxed block whitespace-pre-wrap">
+{`npx prisma db deploy
+npx prisma db seed`}
+                </code>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
 
       {/* Mobile Bottom Tab Bar */}
