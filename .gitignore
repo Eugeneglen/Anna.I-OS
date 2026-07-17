@@ -61,4 +61,6 @@ db/*.db-journal
 # Sandbox internal files
 .zscripts/
 agent-ctx/
-worklog.mdtool-results
+worklog.md
+tool-results/
+upload/
