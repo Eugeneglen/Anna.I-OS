@@ -30,6 +30,10 @@ import {
   Brain,
   Layers,
   Camera,
+  Timer,
+  HourglassIcon,
+  TrendingDown,
+  Landmark,
 } from "lucide-react";
 import type { Task } from "@/lib/types";
 
@@ -59,6 +63,11 @@ const EVENT_ICONS: Record<string, React.ElementType> = {
   AUTONOMY_PROMOTED: Trophy,
   PREDICTIVE_SUGGESTION: Brain,
   SYSTEM_ALERT: MessageSquare,
+  ANOMALY_VENDOR_LATE: Timer,
+  ANOMALY_TASK_OVERDUE: HourglassIcon,
+  ANOMALY_VERIFICATION_MISSING: Camera,
+  ANOMALY_RATING_DROP: TrendingDown,
+  ANOMALY_ESCROW_DISPUTED: Landmark,
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -75,6 +84,11 @@ const EVENT_COLORS: Record<string, string> = {
   AUTONOMY_PROMOTED: "text-amber-600",
   PREDICTIVE_SUGGESTION: "text-purple-600",
   SYSTEM_ALERT: "text-[var(--anna-muted)]",
+  ANOMALY_VENDOR_LATE: "text-amber-600",
+  ANOMALY_TASK_OVERDUE: "text-red-600",
+  ANOMALY_VERIFICATION_MISSING: "text-orange-600",
+  ANOMALY_RATING_DROP: "text-orange-500",
+  ANOMALY_ESCROW_DISPUTED: "text-red-700",
 };
 
 function formatRelativeTime(dateStr: string): string {
@@ -155,17 +169,19 @@ export function NotificationPanel() {
       markReadMutation.mutate(n.id);
     }
 
-    if (n.referenceType === "task" && n.referenceId) {
+    // Anomaly notifications with a task reference → Activity tab + task detail
+    if ((n.referenceType === "task" || n.referenceType === "anomaly") && n.referenceId) {
       setNotificationPanelOpen(false);
-      setActiveTab("dashboard");
+      setActiveTab("activity");
       setTimeout(() => {
-        // Use openTaskDetail which accepts a full Task or partial —
-        // the TaskDetailContent component fetches the full task server-side
         openTaskDetail({ id: n.referenceId } as Task);
       }, 100);
     } else if (n.referenceType === "autonomy") {
       setNotificationPanelOpen(false);
       setActiveTab("autonomy");
+    } else if (n.referenceType === "booking") {
+      setNotificationPanelOpen(false);
+      setActiveTab("activity");
     }
   }
 

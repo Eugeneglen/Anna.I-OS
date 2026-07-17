@@ -10,6 +10,7 @@ import {
   VERIFICATION_MISSING_SLA_HOURS,
   RATING_DROP_THRESHOLD,
 } from "@/lib/constants";
+import { createAnomalyNotification } from "@/lib/notify";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -398,6 +399,16 @@ export async function runAnomalyDetection(
       },
     });
     created++;
+
+    // Phase 5: Bridge — create a notification for the anomaly
+    await createAnomalyNotification({
+      householdId: a.householdId,
+      type: a.type,
+      severity: a.severity,
+      message: a.message,
+      taskId: a.taskId,
+      bookingId: a.bookingId,
+    });
   }
 
   const skipped = allDetected.length - filtered.length;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { triggerAnomalyDetection } from "@/lib/notify"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -210,6 +211,9 @@ export async function PATCH(
 
         return { updatedTask, updatedEscrow }
       })
+
+      // Phase 5: Background anomaly detection (dispute triggers ESCROW_DISPUTED check)
+      triggerAnomalyDetection(task.householdId);
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }

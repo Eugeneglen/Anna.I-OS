@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { checkAndPromoteAutonomy } from "@/lib/autonomy"
+import { triggerAnomalyDetection } from "@/lib/notify"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
@@ -99,6 +100,9 @@ export async function POST(
         },
       })
     }
+
+    // Phase 5: Background anomaly detection
+    triggerAnomalyDetection(task.householdId);
 
     return NextResponse.json({
       task: verifiedTask,

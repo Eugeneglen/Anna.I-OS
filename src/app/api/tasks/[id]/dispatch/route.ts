@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, VendorStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
 import { autoSelectVendor } from "@/lib/routing"
+import { triggerAnomalyDetection } from "@/lib/notify"
 
 const dispatchSchema = z.object({
   vendorId: z.string().min(1).optional(),
@@ -188,6 +189,9 @@ export async function POST(
 
       return { booking, escrow, updatedTask }
     })
+
+    // Phase 5: Background anomaly detection (fire-and-forget, don't await)
+    triggerAnomalyDetection(task.householdId);
 
     return NextResponse.json(
       { task: result.updatedTask, booking: result.booking, escrow: result.escrow, autoSelected },
