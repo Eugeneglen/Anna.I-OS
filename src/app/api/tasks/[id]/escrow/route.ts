@@ -44,118 +44,160 @@ export async function PATCH(
     const now = new Date()
 
     if (action === "release") {
-      // Release escrow
-      const updatedEscrow = await db.escrowLedger.update({
-        where: { id: escrow.id },
-        data: { state: EscrowState.RELEASED, releasedAt: now },
-      })
-
-      // Update task status
-      const updatedTask = await db.task.update({
-        where: { id },
-        data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
-      })
-
-      // Create ESCROW_RELEASED notification
-      const members = await db.familyMember.findMany({
-        where: { householdId: task.householdId },
-        select: { id: true },
-      })
-
-      const firstMember = members[0]
-      if (firstMember) {
-        await db.notification.create({
-          data: {
-            householdId: task.householdId,
-            recipientType: RecipientType.HOUSEHOLD_MEMBER,
-            memberId: firstMember.id,
-            channel: NotificationChannel.WHATSAPP,
-            eventType: NotificationEventType.ESCROW_RELEASED,
-            title: "Payment Released",
-            body: `Payment of $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
-            status: NotificationStatus.PENDING,
-            referenceType: "task",
-            referenceId: task.id,
-          },
-        })
-
-        // REBOOKING_PROMPT notification
-        await db.notification.create({
-          data: {
-            householdId: task.householdId,
-            recipientType: RecipientType.HOUSEHOLD_MEMBER,
-            memberId: firstMember.id,
-            channel: NotificationChannel.WHATSAPP,
-            eventType: NotificationEventType.REBOOKING_PROMPT,
-            title: "Rebook This Task?",
-            body: `Would you like to rebook your ${task.category.toLowerCase()} task?`,
-            status: NotificationStatus.PENDING,
-            referenceType: "task",
-            referenceId: task.id,
-          },
-        })
+      // C-2 FIX: Validate task is VERIFIED before allowing escrow release
+      if (task.status !== TaskStatus.VERIFIED) {
+        return NextResponse.json(
+          { error: `Task must be VERIFIED to release escrow — current status is ${task.status}` },
+          { status: 409 }
+        )
       }
 
-      return NextResponse.json({ task: updatedTask, escrow: updatedEscrow })
+      // C-2 FIX: Validate escrow is in HELD state
+      if (escrow.state !== EscrowState.HELD) {
+        return NextResponse.json(
+          { error: `Escrow cannot be released — current state is ${escrow.state}` },
+          { status: 409 }
+        )
+      }
+
+      const result = await db.$transaction(async (tx) => {
+        // Release escrow
+        const updatedEscrow = await tx.escrowLedger.update({
+          where: { id: escrow.id },
+          data: { state: EscrowState.RELEASED, releasedAt: now },
+        })
+
+        // Update task status
+        const updatedTask = await tx.task.update({
+          where: { id },
+          data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
+        })
+
+        // H-5 FIX: Create ESCROW_RELEASED notification for ALL members
+        const members = await tx.familyMember.findMany({
+          where: { householdId: task.householdId },
+          select: { id: true },
+        })
+
+        for (const member of members) {
+          await tx.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.ESCROW_RELEASED,
+              title: "Payment Released",
+              body: `Payment of $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          })
+
+          // REBOOKING_PROMPT notification
+          await tx.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.REBOOKING_PROMPT,
+              title: "Rebook This Task?",
+              body: `Would you like to rebook your ${task.category.toLowerCase()} task?`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          })
+        }
+
+        return { updatedTask, updatedEscrow }
+      })
+
+      return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }
 
     if (action === "dispute") {
-      // Dispute escrow
-      const updatedEscrow = await db.escrowLedger.update({
-        where: { id: escrow.id },
-        data: {
-          state: EscrowState.DISPUTED,
-          disputedAt: now,
-          disputeReason: reason ?? "No reason provided",
-        },
-      })
-
-      // Update task status
-      const updatedTask = await db.task.update({
-        where: { id },
-        data: { status: TaskStatus.DISPUTED, disputedAt: now },
-      })
-
-      // Pause autonomy promotion for this household+category
-      await db.householdCategoryAutonomy.upsert({
-        where: {
-          householdId_category: { householdId: task.householdId, category: task.category },
-        },
-        create: {
-          householdId: task.householdId,
-          category: task.category,
-          promotionPaused: true,
-        },
-        update: {
-          promotionPaused: true,
-        },
-      })
-
-      // Create DISPUTE_RAISED notification
-      const members = await db.familyMember.findMany({
-        where: { householdId: task.householdId },
-        select: { id: true },
-      })
-
-      const firstMember = members[0]
-      if (firstMember) {
-        await db.notification.create({
-          data: {
-            householdId: task.householdId,
-            recipientType: RecipientType.HOUSEHOLD_MEMBER,
-            memberId: firstMember.id,
-            channel: NotificationChannel.WHATSAPP,
-            eventType: NotificationEventType.DISPUTE_RAISED,
-            title: "Dispute Raised",
-            body: `A dispute has been raised for your ${task.category.toLowerCase()} task.${reason ? ` Reason: ${reason}` : ""} Our team will review it shortly.`,
-            status: NotificationStatus.PENDING,
-            referenceType: "task",
-            referenceId: task.id,
-          },
-        })
+      // C-2 FIX: Validate task is in a disputable state (COMPLETED or VERIFIED)
+      const disputableStatuses = [TaskStatus.COMPLETED, TaskStatus.VERIFIED, TaskStatus.IN_PROGRESS]
+      if (!disputableStatuses.includes(task.status)) {
+        return NextResponse.json(
+          { error: `Task cannot be disputed — current status is ${task.status}. Only COMPLETED, VERIFIED, or IN_PROGRESS tasks can be disputed.` },
+          { status: 409 }
+        )
       }
 
-      return NextResponse.json({ task: updatedTask, escrow: updatedEscrow })
+      // C-2 FIX: Validate escrow is in HELD state (can't re-dispute a released/disputed escrow)
+      if (escrow.state !== EscrowState.HELD) {
+        return NextResponse.json(
+          { error: `Escrow cannot be disputed — current state is ${escrow.state}` },
+          { status: 409 }
+        )
+      }
+
+      const result = await db.$transaction(async (tx) => {
+        // Dispute escrow
+        const updatedEscrow = await tx.escrowLedger.update({
+          where: { id: escrow.id },
+          data: {
+            state: EscrowState.DISPUTED,
+            disputedAt: now,
+            disputeReason: reason ?? "No reason provided",
+          },
+        })
+
+        // Update task status
+        const updatedTask = await tx.task.update({
+          where: { id },
+          data: { status: TaskStatus.DISPUTED, disputedAt: now },
+        })
+
+        // Pause autonomy promotion for this household+category
+        await tx.householdCategoryAutonomy.upsert({
+          where: {
+            householdId_category: { householdId: task.householdId, category: task.category },
+          },
+          create: {
+            householdId: task.householdId,
+            category: task.category,
+            promotionPaused: true,
+            currentLevel: 1,
+            verifiedCyclesAtLevel: 0,
+            totalVerifiedCycles: 0,
+          },
+          update: {
+            promotionPaused: true,
+          },
+        })
+
+        // H-5 FIX: Create DISPUTE_RAISED notification for ALL members
+        const members = await tx.familyMember.findMany({
+          where: { householdId: task.householdId },
+          select: { id: true },
+        })
+
+        for (const member of members) {
+          await tx.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.DISPUTE_RAISED,
+              title: "Dispute Raised",
+              body: `A dispute has been raised for your ${task.category.toLowerCase()} task.${reason ? ` Reason: ${reason}` : ""} Our team will review it shortly.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          })
+        }
+
+        return { updatedTask, updatedEscrow }
+      })
+
+      return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })

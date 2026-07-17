@@ -64,100 +64,110 @@ export async function POST(
     const commissionCents = Math.round((amountCents * PLATFORM_COMMISSION_RATE) / 100)
     const vendorPayoutCents = amountCents - commissionCents
 
-    // Create Booking
-    const booking = await db.booking.create({
-      data: {
-        taskId: id,
-        vendorId,
-        scheduledStart: start,
-        scheduledEnd: scheduledEnd ?? null,
-        status: "assigned",
-        dispatchedAt: now,
-      },
-      include: {
-        vendor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            categories: true,
-            status: true,
+    // C-1 FIX: Wrap all DB writes in a transaction for atomicity
+    const result = await db.$transaction(async (tx) => {
+      // Create Booking
+      const booking = await tx.booking.create({
+        data: {
+          taskId: id,
+          vendorId,
+          scheduledStart: start,
+          scheduledEnd: scheduledEnd ?? null,
+          status: "assigned",
+          dispatchedAt: now,
+        },
+        include: {
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              categories: true,
+              status: true,
+            },
           },
         },
-      },
-    })
+      })
 
-    // Create EscrowLedger
-    const escrow = await db.escrowLedger.create({
-      data: {
-        taskId: id,
-        bookingId: booking.id,
-        amountCents,
-        state: "HELD",
-        commissionRate: PLATFORM_COMMISSION_RATE,
-        commissionCents,
-        vendorPayoutCents,
-        heldAt: now,
-      },
-    })
+      // Create EscrowLedger
+      const escrow = await tx.escrowLedger.create({
+        data: {
+          taskId: id,
+          bookingId: booking.id,
+          amountCents,
+          state: "HELD",
+          commissionRate: PLATFORM_COMMISSION_RATE,
+          commissionCents,
+          vendorPayoutCents,
+          heldAt: now,
+        },
+      })
 
-    // Update task status
-    await db.task.update({
-      where: { id },
-      data: { status: TaskStatus.DISPATCHED, dispatchedAt: now },
-    })
+      // Update task status
+      const updatedTask = await tx.task.update({
+        where: { id },
+        data: { status: TaskStatus.DISPATCHED, dispatchedAt: now },
+        include: {
+          bookings: { include: { vendor: { select: { id: true, name: true, email: true, phone: true, categories: true, status: true } } } },
+          escrowEntries: true,
+          jobType: { select: { id: true, name: true, slug: true } },
+          quotation: { select: { id: true, totalCents: true, breakdown: true } },
+        },
+      })
 
-    // Update or create VendorHouseholdAffinity
-    await db.vendorHouseholdAffinity.upsert({
-      where: {
-        householdId_vendorId_category: {
+      // Update or create VendorHouseholdAffinity
+      await tx.vendorHouseholdAffinity.upsert({
+        where: {
+          householdId_vendorId_category: {
+            householdId: task.householdId,
+            vendorId,
+            category: task.category,
+          },
+        },
+        create: {
           householdId: task.householdId,
           vendorId,
           category: task.category,
+          bookingCount: 1,
+          lastAssignedAt: now,
         },
-      },
-      create: {
-        householdId: task.householdId,
-        vendorId,
-        category: task.category,
-        bookingCount: 1,
-        lastAssignedAt: now,
-      },
-      update: {
-        bookingCount: { increment: 1 },
-        lastAssignedAt: now,
-      },
-    })
-
-    // Create notification for household members
-    const members = await db.familyMember.findMany({
-      where: { householdId: task.householdId },
-      select: { id: true },
-    })
-
-    const firstMember = members[0]
-    if (firstMember) {
-      await db.notification.create({
-        data: {
-          householdId: task.householdId,
-          recipientType: RecipientType.HOUSEHOLD_MEMBER,
-          memberId: firstMember.id,
-          channel: NotificationChannel.WHATSAPP,
-          eventType: NotificationEventType.TASK_DISPATCHED,
-          title: "Task Dispatched",
-          body: autoSelected
-            ? `Your ${task.category.toLowerCase()} task was auto-dispatched to ${booking.vendor.name}.`
-            : `Your ${task.category.toLowerCase()} task has been dispatched to ${booking.vendor.name}.`,
-          status: NotificationStatus.PENDING,
-          referenceType: "task",
-          referenceId: task.id,
+        update: {
+          bookingCount: { increment: 1 },
+          lastAssignedAt: now,
         },
       })
-    }
+
+      // H-5 FIX: Create notification for ALL household members
+      const members = await tx.familyMember.findMany({
+        where: { householdId: task.householdId },
+        select: { id: true },
+      })
+
+      for (const member of members) {
+        await tx.notification.create({
+          data: {
+            householdId: task.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.TASK_DISPATCHED,
+            title: "Task Dispatched",
+            body: autoSelected
+              ? `Your ${task.category.toLowerCase()} task was auto-dispatched to ${booking.vendor.name}.`
+              : `Your ${task.category.toLowerCase()} task has been dispatched to ${booking.vendor.name}.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "task",
+            referenceId: task.id,
+          },
+        })
+      }
+
+      return { booking, escrow, updatedTask }
+    })
 
     return NextResponse.json(
-      { task: { ...task, status: TaskStatus.DISPATCHED, dispatchedAt: now }, booking, escrow, autoSelected },
+      { task: result.updatedTask, booking: result.booking, escrow: result.escrow, autoSelected },
       { status: 201 }
     )
   } catch (error) {

@@ -78,6 +78,8 @@ export async function GET(
         where: { householdId: id },
         orderBy: { createdAt: "desc" },
         include: {
+          jobType: { select: { id: true, name: true, slug: true } },
+          quotation: { select: { id: true, totalCents: true, breakdown: true } },
           bookings: {
             include: {
               vendor: {
@@ -94,6 +96,7 @@ export async function GET(
           },
           verificationPhotos: true,
           escrowEntries: true,
+          attachments: true,
         },
       }),
       db.subscription.findMany({ where: { householdId: id } }),

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, AlertTriangle } from "lucide-react";
 import type { TaskStatus } from "@/lib/types";
 
 const STEPS: { key: TaskStatus; label: string }[] = [
@@ -53,7 +53,7 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
                 {isCompleted || isCurrent ? (
                   <Check size={12} strokeWidth={3} />
                 ) : isDisputedStep ? (
-                  <span className="text-[10px]">!</span>
+                  <AlertTriangle size={10} strokeWidth={3} />
                 ) : (
                   <span className="text-[10px]">{i + 1}</span>
                 )}
@@ -74,10 +74,14 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
           );
         })}
       </div>
-      {/* Connector line */}
+      {/* M-11 FIX: Connector line turns red when disputed */}
       <div className="absolute top-3 left-3 right-3 h-0.5 bg-[var(--anna-border)] -z-0">
         <div
-          className="h-full bg-[var(--anna-sage)] transition-all duration-500"
+          className={`h-full transition-all duration-500 ${
+            isDisputed
+              ? "bg-[var(--anna-error)]"
+              : "bg-[var(--anna-sage)]"
+          }`}
           style={{
             width: `${(currentIndex / (STEPS.length - 1)) * 100}%`,
           }}

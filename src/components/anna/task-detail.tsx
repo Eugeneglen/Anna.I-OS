@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { StatusTimeline } from "./status-timeline";
 import { EscrowBadge } from "./escrow-badge";
@@ -24,9 +25,8 @@ import {
   type Task,
   type TaskStatus,
   type VendorSuggestion,
-  type ScoreBreakdown,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +57,7 @@ const actionButtons: Record<
   ],
   VERIFIED: [{ label: "Release Escrow", icon: ShieldCheck, variant: "default", action: "release" }],
   ESCROW_RELEASED: [{ label: "Rebook", icon: RefreshCw, variant: "outline", action: "rebook" }],
-  DISPUTED: [{ label: "Resolve Dispute", icon: AlertTriangle, variant: "outline", action: "resolve" }],
+  DISPUTED: [{ label: "Resolve Dispute", icon: RotateCcw, variant: "outline", action: "resolve" }],
 };
 
 const statusBadgeStyles: Record<TaskStatus, string> = {
@@ -180,6 +180,31 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
+  // H-4 FIX: Implement resolve dispute action
+  const resolveDisputeMutation = useMutation({
+    mutationFn: async () => {
+      // Resolve dispute by resetting task back to COMPLETED (allowing re-verification)
+      const bookingId = task?.bookings?.[0]?.id;
+      if (!bookingId) throw new Error("No booking found");
+      const res = await fetch(`/api/tasks/${taskId}/resolve-dispute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId }),
+      });
+      if (!res.ok) throw new Error("Failed to resolve dispute");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Dispute resolved — task returned to Pending Verification" });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["anomalies"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to resolve dispute", variant: "destructive" });
+    },
+  });
+
   function handleAction(action: string, payload?: string) {
     switch (action) {
       case "dispatch":
@@ -205,6 +230,10 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         break;
       case "rebook":
         rebookMutation.mutate();
+        break;
+      case "resolve":
+        // H-4 FIX: Now actually calls the resolve mutation
+        resolveDisputeMutation.mutate();
         break;
     }
   }
@@ -388,14 +417,20 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-1 right-1">
+                  {/* H-3 FIX: Show three states — Verified, Pending, Rejected */}
                   {photo.isVerified ? (
                     <Badge className="bg-[var(--anna-success)] text-white text-[9px] px-1.5 py-0 h-5">
                       <CheckCircle size={10} className="mr-0.5" />
                       Verified
                     </Badge>
-                  ) : (
+                  ) : photo.rejectionReason ? (
                     <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-5">
                       Rejected
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 h-5">
+                      <Clock size={10} className="mr-0.5" />
+                      Pending
                     </Badge>
                   )}
                 </div>
@@ -439,7 +474,6 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             </div>
           ) : suggestions && suggestions.length > 0 ? (
             <div className="space-y-2">
-              {/* Auto-dispatch button */}
               <Button
                 onClick={() => handleAction("dispatch")}
                 disabled={dispatchMutation.isPending}
@@ -468,7 +502,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
       <Separator className="bg-[var(--anna-border)]" />
 
-      {/* Action Buttons — hide "dispatch" for CREATED (replaced by suggestions above) */}
+      {/* Action Buttons */}
       {actions.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-2">
           {actions
@@ -485,7 +519,8 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                     updateBookingMutation.isPending ||
                     verifyMutation.isPending ||
                     escrowMutation.isPending ||
-                    rebookMutation.isPending
+                    rebookMutation.isPending ||
+                    resolveDisputeMutation.isPending
                   }
                   className={
                     a.variant === "default"
@@ -506,26 +541,29 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
 export function TaskDetailPanel() {
   const { selectedTaskId, taskDetailOpen, closeTaskDetail } = useAnnaStore();
+  const isMobile = useIsMobile();
 
   return (
     <>
       {/* Desktop: inline panel below task list */}
-      {selectedTaskId && !taskDetailOpen && (
-        <div className="hidden md:block border-t border-[var(--anna-border)] bg-[var(--anna-white)]">
+      {selectedTaskId && !isMobile && (
+        <div className="border-t border-[var(--anna-border)] bg-[var(--anna-white)]">
           <TaskDetailContent taskId={selectedTaskId} />
         </div>
       )}
 
       {/* Mobile: Sheet overlay */}
-      <Sheet open={taskDetailOpen} onOpenChange={(open) => !open && closeTaskDetail()}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl anna-scroll">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Task Detail</SheetTitle>
-            <SheetDescription>View and manage this task</SheetDescription>
-          </SheetHeader>
-          {selectedTaskId && <TaskDetailContent taskId={selectedTaskId} />}
-        </SheetContent>
-      </Sheet>
+      {isMobile && (
+        <Sheet open={taskDetailOpen} onOpenChange={(open) => !open && closeTaskDetail()}>
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl anna-scroll">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Task Detail</SheetTitle>
+              <SheetDescription>View and manage this task</SheetDescription>
+            </SheetHeader>
+            {selectedTaskId && <TaskDetailContent taskId={selectedTaskId} />}
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   );
 }

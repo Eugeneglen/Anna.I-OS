@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────
-// Data fetching
-// ─────────────────────────────────────────────────────────────
-
 async function fetchAnomalies(householdId: string) {
   const res = await fetch(
     `/api/anomalies?householdId=${householdId}&status=ACTIVE`
@@ -42,10 +38,6 @@ async function triggerDetection(householdId: string) {
   return res.json();
 }
 
-// ─────────────────────────────────────────────────────────────
-// Severity badge
-// ─────────────────────────────────────────────────────────────
-
 function SeverityDot({ severity }: { severity: AnomalySeverity }) {
   const styles = ANOMALY_SEVERITY_STYLES[severity];
   return (
@@ -54,10 +46,6 @@ function SeverityDot({ severity }: { severity: AnomalySeverity }) {
     />
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-// Single anomaly row
-// ─────────────────────────────────────────────────────────────
 
 function AnomalyRow({
   anomaly,
@@ -109,10 +97,6 @@ function AnomalyRow({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Time ago helper
-// ─────────────────────────────────────────────────────────────
-
 function getTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -124,10 +108,6 @@ function getTimeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main banner component
-// ─────────────────────────────────────────────────────────────
-
 export function AnomalyBanner() {
   const { selectedHouseholdId } = useAnnaStore();
   const queryClient = useQueryClient();
@@ -138,16 +118,22 @@ export function AnomalyBanner() {
     queryKey: ["anomalies", selectedHouseholdId],
     queryFn: () => fetchAnomalies(selectedHouseholdId),
     enabled: !!selectedHouseholdId,
-    refetchInterval: 30_000, // Auto-refresh every 30s
+    refetchInterval: 30_000,
   });
 
-  // Auto-trigger detection on mount
+  // M-5 FIX: Auto-trigger detection on mount and when household changes
   const detectionMutation = useMutation({
     mutationFn: () => triggerDetection(selectedHouseholdId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["anomalies", selectedHouseholdId] });
     },
   });
+
+  useEffect(() => {
+    if (selectedHouseholdId) {
+      detectionMutation.mutate();
+    }
+  }, [selectedHouseholdId]);
 
   // Acknowledge mutation
   const acknowledgeMutation = useMutation({

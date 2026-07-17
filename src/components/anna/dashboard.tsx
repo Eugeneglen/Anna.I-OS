@@ -66,6 +66,12 @@ export function Dashboard() {
   const household: Household | undefined = data?.household;
   const tasks: Task[] = data?.tasks || [];
   const autonomy: HouseholdCategoryAutonomy[] = data?.categoryAutonomy || [];
+  const members: { name: string; role: string }[] = data?.members || [];
+
+  // M-8 FIX: Use actual member name instead of hardcoded "Sarah"
+  const memberName = members.length > 0 ? members[0].name.split(" ")[0] : "there";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   // Compute summary stats
   const activeTasks = tasks.filter(
@@ -87,14 +93,14 @@ export function Dashboard() {
       ? (autonomy.reduce((s, a) => s + a.currentLevel, 0) / autonomy.length).toFixed(1)
       : "0.0";
 
-  const memberName = "Sarah"; // Phase 1 hardcoded
+
 
   return (
     <div className="pb-20 md:pb-0">
       {/* Header */}
       <div className="p-4 lg:p-6 pb-0">
         <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
-          Good morning, {memberName}
+          {greeting}, {memberName}
         </h1>
         {household && (
           <p className="text-sm text-[var(--anna-muted)] mt-0.5">
@@ -135,23 +141,10 @@ export function Dashboard() {
       </div>
 
       {/* Task List */}
-      {!selectedTaskId ? (
-        <TaskList />
-      ) : (
-        <div className="md:hidden">
-          <TaskList />
-        </div>
-      )}
+      <TaskList />
 
-      {/* Task Detail (desktop: inline below list) */}
-      <div className="hidden md:block">
-        <TaskDetailPanel />
-      </div>
-
-      {/* Task Detail (mobile: sheet) */}
-      <div className="md:hidden">
-        <TaskDetailPanel />
-      </div>
+      {/* H-2 FIX: TaskDetailPanel handles both desktop and mobile rendering internally */}
+      <TaskDetailPanel />
     </div>
   );
 }

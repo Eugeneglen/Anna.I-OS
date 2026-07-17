@@ -402,8 +402,8 @@ model Notification {
   createdAt         DateTime             @default(now())
 
   household Household @relation(fields: [householdId], references: [id])
-  member    FamilyMember? @relation(fields: [memberId], references: [id])
-  vendor    Vendor? @relation(fields: [vendorId], references: [id])
+  member    FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull) // C-3 FIX: allow member deletion
+  vendor    Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 }
 
 // ======================== SERVICE JOB TYPES & QUOTATION (Phase 4A) ========================

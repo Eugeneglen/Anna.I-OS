@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from '@prisma/client'
-import { checkAndPromoteAutonomy } from '@/lib/autonomy'
+import { NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from '@prisma/client'
 
 const patchVerificationSchema = z.object({
   action: z.enum(['approve', 'reject']),
@@ -54,38 +53,6 @@ export async function PATCH(
         },
       })
 
-      // Update task status to VERIFIED
-      await db.task.update({
-        where: { id: photo.taskId },
-        data: { status: TaskStatus.VERIFIED, verifiedAt: now },
-      })
-
-      // Notify household members
-      const members = await db.familyMember.findMany({
-        where: { householdId: photo.task.householdId },
-        select: { id: true },
-      })
-
-      for (const member of members) {
-        await db.notification.create({
-          data: {
-            householdId: photo.task.householdId,
-            recipientType: RecipientType.HOUSEHOLD_MEMBER,
-            memberId: member.id,
-            channel: NotificationChannel.WHATSAPP,
-            eventType: NotificationEventType.VERIFICATION_APPROVED,
-            title: 'Verification Approved',
-            body: `Your ${photo.task.category.toLowerCase()} task has been verified.`,
-            status: NotificationStatus.PENDING,
-            referenceType: 'task',
-            referenceId: photo.taskId,
-          },
-        })
-      }
-
-      // AUTO-CHECK AUTONOMY PROMOTION
-      await checkAndPromoteAutonomy(photo.task.householdId, photo.task.category)
-
       // Update VendorHouseholdAffinity
       if (photo.booking) {
         const affinityKey = {
@@ -128,6 +95,10 @@ export async function PATCH(
           })
         }
       }
+
+      // Note: We do NOT call checkAndPromoteAutonomy() here.
+      // The canonical flow uses POST /api/tasks/[id]/verify (bulk verify) which handles autonomy.
+      // Calling it here too would cause double-counting (C-4 fix).
 
       return NextResponse.json({ verificationPhoto: updatedPhoto })
     }

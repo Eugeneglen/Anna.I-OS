@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -99,6 +100,7 @@ export function NotificationPanel() {
     setActiveTab,
   } = useAnnaStore();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const { data, isLoading } = useQuery({
     queryKey: ["notifications", selectedHouseholdId],
@@ -111,7 +113,7 @@ export function NotificationPanel() {
       return res.json();
     },
     enabled: !!selectedHouseholdId && notificationPanelOpen,
-    refetchInterval: 30_000, // Refresh every 30s
+    refetchInterval: 30_000,
   });
 
   const notifications: AppNotification[] = data?.notifications || [];
@@ -148,16 +150,13 @@ export function NotificationPanel() {
   });
 
   function handleNotificationClick(n: AppNotification) {
-    // Mark as read
     if (n.status === "PENDING") {
       markReadMutation.mutate(n.id);
     }
 
-    // Navigate to relevant content
     if (n.referenceType === "task" && n.referenceId) {
       setNotificationPanelOpen(false);
       setActiveTab("dashboard");
-      // Open task detail — we'll use a timeout to let the tab switch render first
       setTimeout(() => {
         openTaskDetail({ id: n.referenceId } as any);
       }, 100);
@@ -169,10 +168,10 @@ export function NotificationPanel() {
 
   return (
     <>
-      {/* Desktop: Popover-style panel */}
-      {notificationPanelOpen && (
+      {/* H-1 FIX: Desktop: Popover-style panel */}
+      {!isMobile && notificationPanelOpen && (
         <div
-          className="hidden md:block fixed inset-0 z-50"
+          className="fixed inset-0 z-50"
           onClick={() => setNotificationPanelOpen(false)}
         >
           <div className="absolute top-14 right-4 lg:right-6 w-96 max-h-[70vh] bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] shadow-2xl z-50 flex flex-col anna-fade-in"
@@ -190,30 +189,32 @@ export function NotificationPanel() {
         </div>
       )}
 
-      {/* Mobile: Sheet overlay */}
-      <Sheet open={notificationPanelOpen} onOpenChange={setNotificationPanelOpen}>
-        <SheetContent side="right" className="w-full sm:w-96 anna-scroll">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Bell size={18} />
-              Notifications
-            </SheetTitle>
-            <SheetDescription>
-              Stay updated on your household tasks
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-4">
-            <NotificationListContent
-              notifications={notifications}
-              unreadCount={unreadCount}
-              isLoading={isLoading}
-              onNotificationClick={handleNotificationClick}
-              onMarkAllRead={() => markAllReadMutation.mutate()}
-              isMarkingAll={markAllReadMutation.isPending}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* H-1 FIX: Mobile: Sheet overlay (only rendered on mobile via useIsMobile) */}
+      {isMobile && (
+        <Sheet open={notificationPanelOpen} onOpenChange={setNotificationPanelOpen}>
+          <SheetContent side="right" className="w-full sm:w-96 anna-scroll">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Bell size={18} />
+                Notifications
+              </SheetTitle>
+              <SheetDescription>
+                Stay updated on your household tasks
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-4">
+              <NotificationListContent
+                notifications={notifications}
+                unreadCount={unreadCount}
+                isLoading={isLoading}
+                onNotificationClick={handleNotificationClick}
+                onMarkAllRead={() => markAllReadMutation.mutate()}
+                isMarkingAll={markAllReadMutation.isPending}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   );
 }

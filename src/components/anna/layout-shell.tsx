@@ -223,9 +223,9 @@ npx prisma db seed`}
         </div>
       </nav>
 
-      {/* Footer */}
-      <footer className="hidden md:block border-t border-[var(--anna-border)] bg-[var(--anna-white)] mt-auto">
-        <div className="px-6 py-4 flex items-center justify-between">
+      {/* L-3 FIX: Footer inside flex container with mt-auto for sticky behavior */}
+      <footer className="hidden md:flex border-t border-[var(--anna-border)] bg-[var(--anna-white)] mt-auto flex-shrink-0">
+        <div className="w-full px-6 py-4 flex items-center justify-between">
           <p className="text-xs text-[var(--anna-muted)]">
             Anna.I — The Operating System for the Modern Household
           </p>

@@ -37,6 +37,9 @@ export async function GET(request: Request) {
       where: { householdId },
       orderBy: { createdAt: "desc" },
       include: {
+        // H-7 FIX: Add jobType and quotation includes
+        jobType: { select: { id: true, name: true, slug: true } },
+        quotation: { select: { id: true, totalCents: true, breakdown: true } },
         bookings: {
           include: {
             vendor: {
@@ -81,6 +84,12 @@ export async function POST(request: Request) {
     }
 
     const { householdId, category, instructions, amountCents, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
+
+    // M-1 FIX: Validate household exists
+    const household = await db.household.findUnique({ where: { id: householdId } })
+    if (!household) {
+      return NextResponse.json({ error: "Household not found" }, { status: 404 })
+    }
 
     // If quotationId provided, validate it exists and belongs to this household
     let finalAmountCents = amountCents;

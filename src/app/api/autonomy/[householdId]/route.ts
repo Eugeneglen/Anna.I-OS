@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL } from "@/lib/constants"
+import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL, CATEGORIES } from "@/lib/constants"
 
-const ALL_CATEGORIES = ["CLEANING", "LAUNDRY", "AIRCON", "HANDYMAN"] as const
+// C-6 FIX: Use all 10 categories from constants instead of hardcoded 4
+const ALL_CATEGORIES = CATEGORIES as readonly string[]
 
 export async function GET(
   _request: Request,
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const { householdId } = await params
 
-    // Ensure all 4 categories have an autonomy record (upsert missing ones)
+    // Ensure all categories have an autonomy record (upsert missing ones)
     await db.$transaction(
       ALL_CATEGORIES.map((category) =>
         db.householdCategoryAutonomy.upsert({
