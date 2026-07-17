@@ -249,7 +249,7 @@ export function Dashboard() {
           label="Escrow Held"
           value={formatSgd(escrowHeld)}
           sub="Pending release"
-          onClick={() => navigateToActivity({ statuses: ["VERIFIED"] as TaskStatus[] })}
+          onClick={() => setActiveTab("escrow")}
         />
         <SummaryCard
           icon={Brain}

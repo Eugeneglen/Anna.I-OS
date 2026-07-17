@@ -5,6 +5,7 @@ import { Dashboard } from "@/components/anna/dashboard";
 import { TaskServices } from "@/components/anna/task-services";
 import { AutonomyPanel } from "@/components/anna/autonomy-panel";
 import { ActivityTab } from "@/components/anna/activity-tab";
+import { EscrowPanel } from "@/components/anna/escrow-panel";
 import { SettingsPanel } from "@/components/anna/settings-panel";
 import { useAnnaStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,6 +15,7 @@ const VIEWS: Record<string, React.ComponentType> = {
   services: TaskServices,
   autonomy: AutonomyPanel,
   activity: ActivityTab,
+  escrow: EscrowPanel,
   settings: SettingsPanel,
 };
 
