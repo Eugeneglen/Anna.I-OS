@@ -59,7 +59,7 @@ export async function POST(
       },
       data: {
         isVerified: true,
-        verifiedBy: "homehold",
+        verifiedBy: "household",
         verifiedAt: new Date(),
       },
     })

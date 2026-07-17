@@ -23,17 +23,20 @@ export async function PATCH(
     }
 
     if (action === "read-all") {
-      // body should include householdId
-      const { householdId } = body
+      // body should include householdId and optionally memberId
+      const { householdId, memberId } = body
       if (!householdId) {
         return NextResponse.json({ error: "householdId required for read-all" }, { status: 400 })
       }
 
+      const markWhere: Record<string, unknown> = { householdId, status: NotificationStatus.PENDING }
+      // B-8 FIX: Filter by memberId if provided, to avoid marking other members' notifications
+      if (memberId) {
+        markWhere.memberId = memberId
+      }
+
       const result = await db.notification.updateMany({
-        where: {
-          householdId,
-          status: NotificationStatus.PENDING,
-        },
+        where: markWhere,
         data: {
           status: NotificationStatus.READ,
           readAt: new Date(),

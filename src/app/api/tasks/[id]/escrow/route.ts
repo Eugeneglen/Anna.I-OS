@@ -147,6 +147,20 @@ export async function PATCH(
           },
         })
 
+        // B-9 FIX: Cancel the active booking to prevent inconsistent state
+        const activeBooking = await tx.booking.findFirst({
+          where: {
+            taskId: id,
+            status: { in: ["assigned", "accepted", "in_progress"] },
+          },
+        });
+        if (activeBooking) {
+          await tx.booking.update({
+            where: { id: activeBooking.id },
+            data: { status: "cancelled", cancelledAt: now },
+          });
+        }
+
         // Update task status
         const updatedTask = await tx.task.update({
           where: { id },

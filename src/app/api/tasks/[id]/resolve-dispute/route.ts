@@ -69,11 +69,11 @@ export async function POST(
       })
 
       // Reset task to COMPLETED (allowing re-verification)
+      // B-10 FIX: Preserve disputedAt for audit trail — don't null it out
       const updatedTask = await tx.task.update({
         where: { id },
         data: {
           status: TaskStatus.COMPLETED,
-          disputedAt: null,
         },
         include: {
           bookings: true,

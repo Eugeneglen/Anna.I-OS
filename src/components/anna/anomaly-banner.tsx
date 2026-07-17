@@ -133,7 +133,7 @@ export function AnomalyBanner() {
     if (selectedHouseholdId) {
       detectionMutation.mutate();
     }
-  }, [selectedHouseholdId]);
+  }, [selectedHouseholdId, detectionMutation]);
 
   // Acknowledge mutation
   const acknowledgeMutation = useMutation({

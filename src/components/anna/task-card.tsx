@@ -102,7 +102,7 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
                 </span>
               </>
             )}
-            {task.status === "VERIFIED" && booking?.rating && (
+            {isCompleted && booking?.rating && (
               <>
                 <span className="text-[var(--anna-border)]">|</span>
                 <span className="flex items-center gap-0.5 text-[var(--anna-warning)]">

@@ -62,10 +62,6 @@ function AutonomyCard({
     ? nextThreshold.cyclesRequired - autonomy.verifiedCyclesAtLevel
     : 0;
   const isMaxLevel = currentLevel >= 5;
-  const nextLevelName = isMaxLevel
-    ? null
-    : AUTONOMY_LEVELS[currentLevel]; // currentLevel is 1-indexed, AUTONOMY_LEVELS is 0-indexed
-
   // Build segments: 5 segments, filled = currentLevel, highlighted = next
   const segments = Array.from({ length: 5 }, (_, i) => ({
     index: i,

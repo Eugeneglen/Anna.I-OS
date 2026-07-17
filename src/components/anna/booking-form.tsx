@@ -138,7 +138,17 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
           })),
         }),
       });
-      if (!res.ok) throw new Error("Failed to create task");
+      if (!res.ok) {
+        // B-7 FIX: Clean up orphaned quotation if task creation fails
+        if (qId) {
+          fetch(`/api/quote/cleanup`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quotationId: qId }),
+          }).catch(() => { /* best-effort cleanup */ });
+        }
+        throw new Error("Failed to create task");
+      }
       return res.json();
     },
     onSuccess: () => {

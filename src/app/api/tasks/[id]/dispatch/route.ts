@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { TaskStatus, VendorStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
 import { autoSelectVendor } from "@/lib/routing"
 
@@ -57,6 +57,29 @@ export async function POST(
       const suggestion = await autoSelectVendor(id)
       vendorId = suggestion.vendor.id
       autoSelected = true
+    } else {
+      // B-3 FIX: Validate explicit vendorId exists, is ACTIVE, and matches category
+      const vendor = await db.vendor.findUnique({ where: { id: vendorId } })
+      if (!vendor) {
+        return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
+      }
+      if (vendor.status !== VendorStatus.ACTIVE) {
+        return NextResponse.json(
+          { error: `Vendor is not active — current status is ${vendor.status}` },
+          { status: 409 }
+        )
+      }
+      try {
+        const cats: string[] = JSON.parse(vendor.categories)
+        if (!cats.includes(task.category)) {
+          return NextResponse.json(
+            { error: `Vendor does not serve ${task.category} category` },
+            { status: 409 }
+          )
+        }
+      } catch {
+        return NextResponse.json({ error: "Vendor categories data is invalid" }, { status: 500 })
+      }
     }
 
     const now = new Date()

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 
+const REBOOKABLE_STATUSES = [TaskStatus.VERIFIED, TaskStatus.ESCROW_RELEASED]
+
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -13,6 +15,14 @@ export async function POST(
     const originalTask = await db.task.findUnique({ where: { id } })
     if (!originalTask) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    }
+
+    // B-2 FIX: Only allow rebooking completed tasks
+    if (!REBOOKABLE_STATUSES.includes(originalTask.status)) {
+      return NextResponse.json(
+        { error: `Only VERIFIED or ESCROW_RELEASED tasks can be rebooked — current status is ${originalTask.status}` },
+        { status: 409 }
+      )
     }
 
     // Clone the original task as a new one-off

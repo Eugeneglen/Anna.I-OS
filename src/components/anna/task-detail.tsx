@@ -26,7 +26,7 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, Camera, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,7 @@ const actionButtons: Record<
 > = {
   CREATED: [{ label: "Dispatch to Vendor", icon: Send, variant: "default", action: "dispatch" }],
   DISPATCHED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
-  IN_PROGRESS: [{ label: "Complete & Upload Photo", icon: Camera, variant: "outline", action: "complete" }],
+  IN_PROGRESS: [{ label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" }],
   COMPLETED: [
     { label: "Verify Photo", icon: ThumbsUp, variant: "default", action: "verify" },
     { label: "Reject & Dispute", icon: ThumbsDown, variant: "destructive", action: "dispute" },
@@ -217,7 +217,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         updateBookingMutation.mutate({ status: "in_progress" });
         break;
       case "complete":
-        updateBookingMutation.mutate({ status: "completed", rating: 5 });
+        updateBookingMutation.mutate({ status: "completed" });
         break;
       case "verify":
         verifyMutation.mutate();
