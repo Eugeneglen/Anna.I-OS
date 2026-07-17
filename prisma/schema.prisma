@@ -1,6 +1,6 @@
 // ============================================================
 // Anna.I — Household Graph Schema (Phase 1)
-// Postgres-compatible structure, SQLite for sandbox prototyping
+// PostgreSQL (production) / SQLite (local sandbox)
 // ============================================================
 
 generator client {
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
