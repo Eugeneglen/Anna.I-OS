@@ -6,7 +6,7 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "NEXT_TELEMETRY_DISABLED=1 nohup npx next dev -p 3000 > dev.log 2>&1 & disown",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
