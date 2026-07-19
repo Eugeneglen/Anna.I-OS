@@ -5,7 +5,7 @@ import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { formatSgd, formatDate, STATUS_LABELS, type Task, type TaskStatus } from "@/lib/types";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Star, Clock, RotateCcw } from "lucide-react";
+import { Star, Clock, RotateCcw, Zap } from "lucide-react";
 
 const statusStyles: Record<TaskStatus, string> = {
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
@@ -112,6 +112,13 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
               </>
             )}
           </div>
+
+          {/* Automation badge */}
+          {task.metadata && (task.metadata as Record<string, unknown>).autoDispatched && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--anna-sage-dark)] bg-[var(--anna-sage)]/10 rounded-full px-2 py-0.5 mt-2">
+              <Zap size={9} /> Auto
+            </span>
+          )}
 
           {/* Rebook button — own row, always visible on completed tasks */}
           {isCompleted && (

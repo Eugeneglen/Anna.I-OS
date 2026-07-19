@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
+import { triggerAutomationOnTaskCreated } from "@/lib/automation"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -170,6 +171,9 @@ export async function POST(request: Request) {
         data: { status: "ACCEPTED" },
       });
     }
+
+    // Phase 7: Fire-and-forget auto-dispatch check (Level 3+)
+    triggerAutomationOnTaskCreated(task.id, householdId, category)
 
     return NextResponse.json({ task }, { status: 201 })
   } catch (error) {

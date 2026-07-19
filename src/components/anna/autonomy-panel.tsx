@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,11 +11,27 @@ import {
   type AutonomyLevelThreshold,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Lock, ArrowRight } from "lucide-react";
+import { Lock, ArrowRight, Zap, Pause, Play } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 async function fetchAutonomy(householdId: string) {
   const res = await fetch(`/api/autonomy/${householdId}`);
   if (!res.ok) throw new Error("Failed to fetch autonomy");
+  return res.json();
+}
+
+async function patchAutonomy(
+  householdId: string,
+  category: string,
+  data: { promotionPaused?: boolean; currentLevel?: number }
+) {
+  const res = await fetch(`/api/autonomy/${householdId}/${category}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update autonomy");
   return res.json();
 }
 
@@ -35,8 +51,8 @@ function AutonomySegment({
         filled
           ? "bg-[var(--anna-sage)]"
           : highlighted
-          ? "bg-[var(--anna-sage)]/30 border border-dashed border-[var(--anna-sage)]/50"
-          : "bg-[var(--anna-border)]"
+            ? "bg-[var(--anna-sage)]/30 border border-dashed border-[var(--anna-sage)]/50"
+            : "bg-[var(--anna-border)]"
       )}
       title={AUTONOMY_LEVELS[index]}
     />
@@ -46,10 +62,14 @@ function AutonomySegment({
 function AutonomyCard({
   autonomy,
   thresholds,
+  householdId,
 }: {
   autonomy: HouseholdCategoryAutonomy;
   thresholds: AutonomyLevelThreshold[];
+  householdId: string;
 }) {
+  const queryClient = useQueryClient();
+
   const categoryThresholds = thresholds
     .filter((t) => t.category === autonomy.category)
     .sort((a, b) => a.level - b.level);
@@ -62,16 +82,39 @@ function AutonomyCard({
     ? nextThreshold.cyclesRequired - autonomy.verifiedCyclesAtLevel
     : 0;
   const isMaxLevel = currentLevel >= 5;
-  // Build segments: 5 segments, filled = currentLevel, highlighted = next
+
+  // Automation capabilities at current level
+  const canAutoDispatch = currentLevel >= 3;
+  const canAutoVerify = currentLevel >= 4;
+  const canAutoRelease = currentLevel >= 5;
+
   const segments = Array.from({ length: 5 }, (_, i) => ({
     index: i,
     filled: i < currentLevel,
     highlighted: i === currentLevel && !isMaxLevel,
   }));
 
+  const togglePauseMutation = useMutation({
+    mutationFn: (paused: boolean) =>
+      patchAutonomy(householdId, autonomy.category, {
+        promotionPaused: paused,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["autonomy", householdId] });
+      toast.success(
+        autonomy.promotionPaused
+          ? "Promotion resumed"
+          : "Promotion paused"
+      );
+    },
+    onError: () => {
+      toast.error("Failed to update setting");
+    },
+  });
+
   return (
     <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] hover:shadow-sm transition-shadow">
-      {/* Header: icon + name + level */}
+      {/* Header: icon + name + level + pause button */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <CategoryIcon category={autonomy.category} size={18} />
@@ -81,7 +124,7 @@ function AutonomyCard({
             </h3>
             <p className="text-xs text-[var(--anna-muted)]">
               {autonomy.promotionPaused && (
-                <span className="inline-flex items-center gap-1 mr-2">
+                <span className="inline-flex items-center gap-1 mr-2 text-amber-600 dark:text-amber-400">
                   <Lock size={10} />
                   Paused
                 </span>
@@ -93,8 +136,29 @@ function AutonomyCard({
             </p>
           </div>
         </div>
-        <div className="font-data text-xs text-[var(--anna-muted)]">
-          {autonomy.totalVerifiedCycles} verified
+        <div className="flex items-center gap-2">
+          <span className="font-data text-xs text-[var(--anna-muted)]">
+            {autonomy.totalVerifiedCycles} verified
+          </span>
+          <button
+            onClick={() =>
+              togglePauseMutation.mutate(!autonomy.promotionPaused)
+            }
+            disabled={togglePauseMutation.isPending}
+            className={cn(
+              "p-1.5 rounded-lg border transition-colors",
+              autonomy.promotionPaused
+                ? "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-950"
+                : "border-[var(--anna-border)] text-[var(--anna-muted)] hover:bg-[var(--anna-border)]/50 hover:text-[var(--anna-slate)]"
+            )}
+            title={autonomy.promotionPaused ? "Resume promotion" : "Pause promotion"}
+          >
+            {autonomy.promotionPaused ? (
+              <Play size={13} />
+            ) : (
+              <Pause size={13} />
+            )}
+          </button>
         </div>
       </div>
 
@@ -110,6 +174,30 @@ function AutonomyCard({
         <span>Manual</span>
         <span>Full Auto</span>
       </div>
+
+      {/* Active automation capabilities */}
+      {(canAutoDispatch || canAutoVerify || canAutoRelease) && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {canAutoDispatch && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
+              <Zap size={9} />
+              Auto-Dispatch
+            </span>
+          )}
+          {canAutoVerify && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
+              <Zap size={9} />
+              Auto-Verify
+            </span>
+          )}
+          {canAutoRelease && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
+              <Zap size={9} />
+              Auto-Release
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Next level info */}
       {!isMaxLevel && nextThreshold ? (
@@ -175,6 +263,7 @@ export function AutonomyPanel() {
               key={a.id}
               autonomy={a}
               thresholds={thresholds}
+              householdId={selectedHouseholdId}
             />
           ))}
         </div>

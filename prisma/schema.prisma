@@ -241,6 +241,7 @@ model Task {
   escrowReleasedAt  DateTime?
   disputedAt        DateTime?
   scheduledStart    DateTime?
+  metadata          Json?             // Phase 7: { autoDispatched, autoVerified, autoEscrowReleased }
 
   household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
   jobType           ServiceJobType?    @relation(fields: [jobTypeId], references: [id])

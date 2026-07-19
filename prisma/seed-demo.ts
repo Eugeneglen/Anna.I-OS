@@ -86,26 +86,30 @@ async function _main() {
   ] } })
   console.log('🧹 Cleaned up old demo data')
 
-  // ============ 1. AUTONOMY LEVEL THRESHOLDS ============
-  const categories = ['CLEANING', 'LAUNDRY', 'AIRCON', 'HANDYMAN'] as const
+  // ============ 1. AUTONOMY LEVEL THRESHOLDS (all 10 categories) ============
   const cyclesByCategory: Record<string, number> = {
     CLEANING: 2,
     LAUNDRY: 2,
     AIRCON: 3,
+    PLUMBING: 3,
+    ELECTRICAL: 3,
+    PAINTING: 3,
+    PEST_CONTROL: 3,
     HANDYMAN: 3,
+    LOCKSMITH: 2,
+    APPLIANCE_REPAIR: 3,
   }
 
-  for (const category of categories) {
-    const cycles = cyclesByCategory[category]
+  for (const [category, cycles] of Object.entries(cyclesByCategory)) {
     for (let level = 1; level <= 5; level++) {
       await db.autonomyLevelThreshold.upsert({
         where: { category_level: { category, level } },
         update: {},
-        create: { category, level, cyclesRequired: cycles },
+        create: { category: category as 'CLEANING', level, cyclesRequired: cycles },
       })
     }
   }
-  console.log('✅ Autonomy level thresholds seeded')
+  console.log(`✅ Autonomy level thresholds seeded (${Object.keys(cyclesByCategory).length} categories × 5 levels)`)
 
   // ============ 2. DEMO HOUSEHOLDS (deterministic IDs) ============
 
@@ -451,7 +455,7 @@ async function _main() {
   console.log('=== SEED COMPLETE ===')
   console.log(`Households: 3 | Members: 4 | Vendors: 5`)
   console.log(`Tasks: 9 (1 verified, 1 dispatched, 7 created)`)
-  console.log(`Autonomy thresholds: 20 (4 categories × 5 levels)`)
+  console.log(`Autonomy thresholds: ${Object.keys(cyclesByCategory).length * 5} (${Object.keys(cyclesByCategory).length} categories × 5 levels)`)
   console.log(`Subscriptions: 3 (all Home tier)`)
 }
 
