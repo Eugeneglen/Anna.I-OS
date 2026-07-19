@@ -1,29 +1,42 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { VendorSchedule, type VendorScheduleItem, type VendorInfo } from "./vendor-schedule";
 import { VendorEarnings } from "./vendor-earnings";
 import { VendorTaskDetail } from "./vendor-task-detail";
+import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { CalendarDays, Wallet } from "lucide-react";
 
-// ─── Props ───────────────────────────────────────────────
-
-interface VendorPanelProps {
-  vendorId: string;
-  className?: string;
+async function fetchVendors() {
+  const res = await fetch("/api/vendors");
+  if (!res.ok) return [];
+  return res.json();
 }
 
 // ─── Main component ──────────────────────────────────────
 
-export function VendorPanel({ vendorId, className }: VendorPanelProps) {
+export function VendorPanel({ className }: { className?: string }) {
+  const { selectedVendorId, setSelectedVendorId } = useAnnaStore();
   const [activeTab, setActiveTab] = useState<"schedule" | "earnings">("schedule");
   const [selectedBooking, setSelectedBooking] = useState<VendorScheduleItem | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<VendorInfo | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: vendors } = useQuery({
+    queryKey: ["vendors-list"],
+    queryFn: fetchVendors,
+    staleTime: 60_000,
+  });
+
+  const vendorId = selectedVendorId || vendors?.[0]?.id || "";
+  const vendor = vendors?.find((v: { id: string }) => v.id === vendorId);
 
   const handleSelectBooking = useCallback((booking: VendorScheduleItem, vendor: VendorInfo) => {
     setSelectedBooking(booking);
@@ -82,23 +95,49 @@ export function VendorPanel({ vendorId, className }: VendorPanelProps) {
     <div className={cn("pb-20 md:pb-0", className)}>
       {/* Header */}
       <div className="p-4 lg:p-6 pb-0">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center">
-            <CalendarDays size={18} className="text-[var(--anna-sage-dark)]" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center">
+              <CalendarDays size={18} className="text-[var(--anna-sage-dark)]" />
+            </div>
+            <div>
+              <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
+                Vendor Portal
+              </h1>
+              <p className="text-sm text-[var(--anna-muted)] mt-0.5">
+                Manage your jobs, track earnings
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
-              Vendor Portal
-            </h1>
-            <p className="text-sm text-[var(--anna-muted)] mt-0.5">
-              Manage your jobs, track earnings
-            </p>
-          </div>
+          {vendors && vendors.length > 0 && (
+            <Select
+              value={vendorId}
+              onValueChange={(id) => { setSelectedVendorId(id); queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] }); }}
+            >
+              <SelectTrigger size="sm" className="w-auto min-w-[140px] border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm font-medium">
+                <SelectValue placeholder="Select vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                {vendors.map((v: { id: string; name: string; vendorType?: string }) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name} {v.vendorType === "SME" ? "(SME)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="px-4 lg:px-6 mt-4">
+      {!vendorId ? (
+        <div className="text-center py-16 text-[var(--anna-muted)]">
+          <p className="text-sm">No vendors available</p>
+          <p className="text-xs mt-1">Seed the database to see vendor data</p>
+        </div>
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="px-4 lg:px-6 mt-4">
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as "schedule" | "earnings")}
@@ -134,16 +173,18 @@ export function VendorPanel({ vendorId, className }: VendorPanelProps) {
         </Tabs>
       </div>
 
-      {/* Task detail panel */}
-      <VendorTaskDetail
-        booking={selectedBooking}
-        vendor={selectedVendor}
-        open={detailOpen}
-        onClose={handleCloseDetail}
-        onAction={handleAction}
-        isActionPending={actionMutation.isPending}
-        vendorId={vendorId}
-      />
+          {/* Task detail panel */}
+          <VendorTaskDetail
+            booking={selectedBooking}
+            vendor={selectedVendor}
+            open={detailOpen}
+            onClose={handleCloseDetail}
+            onAction={handleAction}
+            isActionPending={actionMutation.isPending}
+            vendorId={vendorId}
+          />
+        </>
+      )}
     </div>
   );
 }

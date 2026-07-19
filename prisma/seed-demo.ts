@@ -211,7 +211,8 @@ async function _main() {
     create: {
       id: IDS.vendors.sparkclean,
       name: 'SparkClean Pro', email: 'ops@sparkclean.sg', phone: '+65 9000 1111',
-      categories: JSON.stringify(['CLEANING']), status: 'ACTIVE',
+      categories: JSON.stringify(['CLEANING']), status: 'ACTIVE', vendorType: 'MICRO',
+      staffCount: 3, dailyCapacity: 6,
       verificationData: JSON.stringify({ nricVerified: true, backgroundCheckDate: '2025-01-15', certifications: ['NEA Cleaning', 'WSQ Certificate'] }),
       maxTasksPerDay: 6, maxTasksPerWeek: 28,
       availability: JSON.stringify({ workingDays: ['Mon','Tue','Wed','Thu','Fri'], workingHours: '08:00-18:00' }),
@@ -224,7 +225,8 @@ async function _main() {
     create: {
       id: IDS.vendors.freshwash,
       name: 'FreshWash Laundry', email: 'hello@freshwash.sg', phone: '+65 9000 2222',
-      categories: JSON.stringify(['LAUNDRY']), status: 'ACTIVE',
+      categories: JSON.stringify(['LAUNDRY']), status: 'ACTIVE', vendorType: 'SME',
+      staffCount: 8, dailyCapacity: 12,
       verificationData: JSON.stringify({ nricVerified: true, backgroundCheckDate: '2025-02-01', certifications: ['WSQ Laundry Operations'] }),
       maxTasksPerDay: 8, maxTasksPerWeek: 40,
       availability: JSON.stringify({ workingDays: ['Mon','Tue','Wed','Thu','Fri','Sat'], workingHours: '07:00-20:00' }),
@@ -237,7 +239,8 @@ async function _main() {
     create: {
       id: IDS.vendors.coolair,
       name: 'CoolAir Services', email: 'bookings@coolair.sg', phone: '+65 9000 3333',
-      categories: JSON.stringify(['AIRCON']), status: 'ACTIVE',
+      categories: JSON.stringify(['AIRCON']), status: 'ACTIVE', vendorType: 'MICRO',
+      staffCount: 2, dailyCapacity: 4,
       verificationData: JSON.stringify({ nricVerified: true, backgroundCheckDate: '2025-01-20', certifications: ['BCA Aircon Servicing','NEA Registered'] }),
       maxTasksPerDay: 4, maxTasksPerWeek: 20,
       availability: JSON.stringify({ workingDays: ['Mon','Tue','Wed','Thu','Fri','Sat'], workingHours: '09:00-17:00' }),
@@ -250,7 +253,8 @@ async function _main() {
     create: {
       id: IDS.vendors.fixit,
       name: 'FixIt Handyman Co', email: 'support@fixit.sg', phone: '+65 9000 4444',
-      categories: JSON.stringify(['HANDYMAN','CLEANING']), status: 'ACTIVE',
+      categories: JSON.stringify(['HANDYMAN','CLEANING']), status: 'ACTIVE', vendorType: 'SME',
+      staffCount: 10, dailyCapacity: 15,
       verificationData: JSON.stringify({ nricVerified: true, backgroundCheckDate: '2025-03-01', certifications: ['BCA General Builder','WSQ Cleaning'] }),
       maxTasksPerDay: 5, maxTasksPerWeek: 25,
       availability: JSON.stringify({ workingDays: ['Mon','Tue','Wed','Thu','Fri','Sat'], workingHours: '08:00-19:00' }),
@@ -263,7 +267,8 @@ async function _main() {
     create: {
       id: IDS.vendors.greensweep,
       name: 'GreenSweep Pte Ltd', email: 'ops@greensweep.sg', phone: '+65 9000 5555',
-      categories: JSON.stringify(['CLEANING','LAUNDRY']), status: 'ACTIVE',
+      categories: JSON.stringify(['CLEANING','LAUNDRY']), status: 'ACTIVE', vendorType: 'SME',
+      staffCount: 12, dailyCapacity: 18,
       verificationData: JSON.stringify({ nricVerified: true, backgroundCheckDate: '2025-02-15', certifications: ['NEA Cleaning','Eco-Certified'] }),
       maxTasksPerDay: 6, maxTasksPerWeek: 30,
       availability: JSON.stringify({ workingDays: ['Mon','Tue','Wed','Thu','Fri'], workingHours: '08:00-18:00' }),
@@ -272,6 +277,62 @@ async function _main() {
   })
 
   console.log('✅ 5 demo vendors created')
+
+  // ============ 4b. VENDOR STAFF (SME only) ============
+  const freshwashStaff = ['Ahmad R.', 'Siti N.', 'Raju K.', 'Mei Ling', 'Devan S.', 'Priya M.', 'Farid H.', 'Lin Wei']
+  for (const name of freshwashStaff) {
+    await db.vendorStaff.create({
+      data: { vendorId: IDS.vendors.freshwash, name, contact: `${name.toLowerCase().replace(/ /g, '.')}@freshwash.sg`, role: 'staff' },
+    })
+  }
+  const fixitStaff = ['Raj', 'Sam', 'Kumar', 'Muthu', 'Ali', 'Devi', 'Siti', 'Ravi', 'Nathan', 'Farah']
+  for (const name of fixitStaff) {
+    await db.vendorStaff.create({
+      data: { vendorId: IDS.vendors.fixit, name, contact: `${name.toLowerCase()}@fixit.sg`, role: 'staff' },
+    })
+  }
+  const greensweepStaff = ['Jason T.', 'Wei Ming', 'Yati M.', 'Bala K.', 'Siti H.', 'Aisha R.', 'Kumar S.', 'Nora L.', 'Farhan A.', 'Diana C.', 'Rizal H.', 'Mei F.']
+  for (const name of greensweepStaff) {
+    await db.vendorStaff.create({
+      data: { vendorId: IDS.vendors.greensweep, name, contact: `${name.toLowerCase().replace(/ /g, '.')}@greensweep.sg`, role: 'staff' },
+    })
+  }
+  console.log('✅ 30 vendor staff created (3 SME × ~10 staff)')
+
+  // ============ 4c. PLANS & FEATURES (data model only) ============
+  const plans = [
+    { id: 'plan-micro', name: 'Micro', description: 'For solo/owner-operated vendors' },
+    { id: 'plan-sme', name: 'SME', description: 'For small-to-medium teams (8–15 staff)' },
+    { id: 'plan-enterprise', name: 'Enterprise', description: 'For larger organizations (future)' },
+  ]
+  for (const p of plans) {
+    await db.plan.upsert({ where: { id: p.id }, update: {}, create: p })
+  }
+
+  const features = [
+    { id: 'feat-team', key: 'team_management', name: 'Team Management', description: 'Assign staff to jobs' },
+    { id: 'feat-analytics', key: 'advanced_analytics', name: 'Advanced Analytics', description: 'Detailed performance dashboards' },
+    { id: 'feat-multi-branch', key: 'multi_branch', name: 'Multi-Branch', description: 'Manage multiple locations' },
+    { id: 'feat-api', key: 'api_access', name: 'API Access', description: 'REST API for integrations' },
+    { id: 'feat-automation', key: 'custom_automation', name: 'Custom Automation', description: 'Build custom workflow rules' },
+  ]
+  for (const f of features) {
+    await db.feature.upsert({ where: { id: f.id }, update: {}, create: f })
+  }
+
+  // Micro plan gets team_management. SME gets team_management + advanced_analytics.
+  await db.planFeature.create({ data: { planId: 'plan-micro', featureId: 'feat-team' } })
+  await db.planFeature.create({ data: { planId: 'plan-sme', featureId: 'feat-team' } })
+  await db.planFeature.create({ data: { planId: 'plan-sme', featureId: 'feat-analytics' } })
+
+  // Assign plans to vendors
+  for (const vid of [IDS.vendors.sparkclean, IDS.vendors.coolair]) {
+    await db.vendorPlan.upsert({ where: { vendorId: vid }, update: {}, create: { vendorId: vid, planId: 'plan-micro' } })
+  }
+  for (const vid of [IDS.vendors.freshwash, IDS.vendors.fixit, IDS.vendors.greensweep]) {
+    await db.vendorPlan.upsert({ where: { vendorId: vid }, update: {}, create: { vendorId: vid, planId: 'plan-sme' } })
+  }
+  console.log('✅ 3 plans, 5 features, 8 plan assignments created')
 
   // ============ 5. SUBSCRIPTIONS ============
   for (const hh of [household1, household2, household3]) {

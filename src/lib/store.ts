@@ -45,6 +45,14 @@ interface AnnaStore {
   rebookData: RebookData | null;
   setRebookData: (data: RebookData | null) => void;
 
+  // View mode: "household" | "vendor"
+  viewMode: "household" | "vendor";
+  setViewMode: (mode: "household" | "vendor") => void;
+
+  // Selected vendor ID (for vendor portal)
+  selectedVendorId: string;
+  setSelectedVendorId: (id: string) => void;
+
   // Helper: select a task and open detail
   openTaskDetail: (task: Task) => void;
   closeTaskDetail: () => void;
@@ -71,6 +79,12 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   rebookData: null,
   setRebookData: (data) => set({ rebookData: data }),
+
+  viewMode: "household",
+  setViewMode: (mode) => set({ viewMode: mode }),
+
+  selectedVendorId: "",
+  setSelectedVendorId: (id) => set({ selectedVendorId: id }),
 
   notificationPanelOpen: false,
   setNotificationPanelOpen: (open) => set({ notificationPanelOpen: open }),

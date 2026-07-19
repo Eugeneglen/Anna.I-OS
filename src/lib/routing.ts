@@ -33,12 +33,12 @@ function calcReassignmentPenalty(reassignmentCount: number): number {
   return -5 * reassignmentCount
 }
 
-/** Utilisation: penalise if >50% capacity, -(todayBookings / maxTasksPerDay * 10) */
+/** Utilisation: penalise if >50% daily capacity, -(todayBookings / dailyCapacity * 10) */
 function calcUtilisationPenalty(
   todayBookings: number,
-  maxTasksPerDay: number
+  dailyCapacity: number
 ): number {
-  const utilisation = todayBookings / maxTasksPerDay
+  const utilisation = todayBookings / dailyCapacity
   if (utilisation <= 0.5) return 0
   return -(utilisation * 10)
 }
@@ -134,7 +134,7 @@ export async function getSuggestedVendors(
       phone: true,
       categories: true,
       status: true,
-      maxTasksPerDay: true,
+      dailyCapacity: true,
       zones: true,
     },
   })
@@ -204,7 +204,7 @@ export async function getSuggestedVendors(
     )
     const utilisationPenalty = calcUtilisationPenalty(
       todayCount,
-      vendor.maxTasksPerDay
+      vendor.dailyCapacity
     )
     const zoneMatchBonus = calcZoneMatchBonus(
       vendorZones,
@@ -246,7 +246,8 @@ export async function getSuggestedVendors(
         phone: vendor.phone,
         categories: vendor.categories,
         status: vendor.status,
-        maxTasksPerDay: vendor.maxTasksPerDay,
+        maxTasksPerDay: vendor.dailyCapacity,
+        dailyCapacity: vendor.dailyCapacity,
         zones: vendor.zones,
       },
       score,

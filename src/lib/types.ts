@@ -350,6 +350,7 @@ export interface VendorSuggestion {
     categories: string;
     status: string;
     maxTasksPerDay: number;
+    dailyCapacity: number;
     zones: string;
   };
   score: number;

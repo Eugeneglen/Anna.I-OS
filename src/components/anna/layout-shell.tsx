@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, Sun, Moon } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, Sun, Moon, Briefcase } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import {
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
 import { NotificationPanel } from "@/components/anna/notification-panel";
+import { VendorPanel } from "@/components/vendor/vendor-panel";
 
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -42,6 +43,10 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     setHouseholdNames,
     notificationPanelOpen,
     setNotificationPanelOpen,
+    viewMode,
+    setViewMode,
+    selectedVendorId,
+    setSelectedVendorId,
   } = useAnnaStore();
 
   const { data: households, isLoading: householdsLoading } = useQuery({
@@ -123,8 +128,21 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             </Select>
           </div>
 
-          {/* Right: Theme Toggle + Notification Bell + Settings */}
+          {/* Right: Vendor Toggle + Theme Toggle + Notification Bell + Settings */}
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setViewMode(viewMode === "household" ? "vendor" : "household")}
+              className={cn(
+                "p-2 rounded-xl transition-colors",
+                viewMode === "vendor"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                  : "hover:bg-[var(--anna-sage-light)]"
+              )}
+              aria-label="Toggle vendor view"
+              title={viewMode === "vendor" ? "Switch to Household view" : "Switch to Vendor view"}
+            >
+              <Briefcase size={18} className={viewMode === "vendor" ? "" : "text-[var(--anna-slate-light)]"} />
+            </button>
             <button
               onClick={() => setTheme(isDark ? "light" : "dark")}
               className="p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
@@ -203,7 +221,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto anna-scroll">
-          {isEmptyDb ? (
+          {viewMode === "vendor" ? (
+            <VendorPanel />
+          ) : isEmptyDb ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-6 text-center">
               <div className="w-16 h-16 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-6">
                 <Home size={28} className="text-[var(--anna-sage-dark)]" />
