@@ -32,6 +32,7 @@ import {
   type FamilyMember,
   type Subscription,
 } from "@/lib/types";
+import { useTheme } from "next-themes";
 import {
   Mail,
   MapPin,
@@ -44,7 +45,9 @@ import {
   Check,
   X,
   Camera,
+  Moon,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 // ─────────────────────────────────────────────────────────────
 // Data fetching
@@ -250,6 +253,19 @@ function EditableField({
 // Main component
 // ─────────────────────────────────────────────────────────────
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <Switch
+      checked={isDark}
+      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+      aria-label="Toggle night mode"
+    />
+  );
+}
+
 export function SettingsPanel() {
   const { selectedHouseholdId, setHouseholdNames, householdNames } =
     useAnnaStore();
@@ -435,6 +451,25 @@ export function SettingsPanel() {
               {household?.postalCode || "—"}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* ── Appearance ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
+          Appearance
+        </h3>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[var(--anna-bg)] flex items-center justify-center">
+              <Moon size={16} className="text-[var(--anna-slate-light)]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[var(--anna-slate)]">Night mode</p>
+              <p className="text-xs text-[var(--anna-muted)]">Switch to dark theme</p>
+            </div>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
 

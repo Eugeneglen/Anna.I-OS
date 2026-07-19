@@ -2,8 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, Sun, Moon, Briefcase } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, Briefcase } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -88,8 +87,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
   const currentHouseholdName = householdNames[selectedHouseholdId] || (householdsLoading ? "Loading..." : "");
 
-  const { theme, setTheme } = useTheme();
-  const isDark = theme === "dark";
+
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--anna-bg)]">
@@ -142,13 +140,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               title={viewMode === "vendor" ? "Switch to Household view" : "Switch to Vendor view"}
             >
               <Briefcase size={18} className={viewMode === "vendor" ? "" : "text-[var(--anna-slate-light)]"} />
-            </button>
-            <button
-              onClick={() => setTheme(isDark ? "light" : "dark")}
-              className="p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {isDark ? <Sun size={18} className="text-[var(--anna-slate-light)]" /> : <Moon size={18} className="text-[var(--anna-slate-light)]" />}
             </button>
             <button
               onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
