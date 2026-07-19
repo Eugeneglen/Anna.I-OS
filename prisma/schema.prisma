@@ -59,6 +59,12 @@ enum VendorStatus {
   PENDING
   ACTIVE
   SUSPENDED
+  OFFBOARDED
+}
+
+enum VendorType {
+  MICRO
+  SME
 }
 
 enum MemberRole {
@@ -181,6 +187,9 @@ model Vendor {
   phone           String
   categories      String // JSON array of ServiceCategory
   status          VendorStatus @default(PENDING)
+  vendorType      VendorType  @default(MICRO)
+  staffCount      Int          @default(1)
+  dailyCapacity   Int          @default(6)
   verificationData Json?        // NRIC, background check, certs
   maxTasksPerDay  Int          @default(6)
   maxTasksPerWeek Int          @default(30)
@@ -189,8 +198,11 @@ model Vendor {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  bookings       Booking[]
+  bookings        Booking[]
+  staff           VendorStaff[]
   vendorAffinity VendorHouseholdAffinity[]
+  vendorPlan     VendorPlan?
+  featureOverrides VendorFeatureOverride[]
   notifications  Notification[]
 }
 
@@ -269,25 +281,27 @@ model TaskAttachment {
 }
 
 model Booking {
-  id             String   @id @default(cuid())
-  taskId         String
-  vendorId       String
-  scheduledStart DateTime
-  scheduledEnd   DateTime?
-  actualStart    DateTime?
-  actualEnd      DateTime?
-  rating         Int?      // 1–5
-  ratingComment  String?
-  status         String   @default("assigned") // assigned|accepted|in_progress|completed|cancelled
-  dispatchedAt   DateTime @default(now())
-  acceptedAt     DateTime?
-  completedAt    DateTime?
-  cancelledAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(cuid())
+  taskId           String
+  vendorId         String
+  assignedStaffId  String?  // SME: which vendor_staff is assigned
+  scheduledStart   DateTime
+  scheduledEnd     DateTime?
+  actualStart      DateTime?
+  actualEnd        DateTime?
+  rating           Int?      // 1–5
+  ratingComment    String?
+  status           String   @default("assigned") // assigned|accepted|in_progress|completed|cancelled
+  dispatchedAt     DateTime @default(now())
+  acceptedAt       DateTime?
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   task               Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
   vendor             Vendor            @relation(fields: [vendorId], references: [id])
+  assignedStaff      VendorStaff?      @relation(fields: [assignedStaffId], references: [id])
   verificationPhotos VerificationPhoto[]
   escrowEntries     EscrowLedger[]
 }
@@ -457,6 +471,85 @@ model Quotation {
 
   @@index([householdId])
   @@index([jobTypeId])
+}
+
+// ======================== VENDOR STAFF (SME Roster) ========================
+
+model VendorStaff {
+  id        String   @id @default(cuid())
+  vendorId  String
+  name      String
+  contact   String  // phone or email
+  role      String   @default("staff") // staff | manager | owner (future RBAC)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor  Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([vendorId])
+}
+
+// ======================== VENDOR ENTITLEMENT & PLANS ========================
+// Data model only — no SME/Enterprise-tier UI until post-pilot.
+// Use hasFeature(vendorId, featureKey) for all feature checks.
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String   @unique // Micro | SME | Enterprise
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendorPlans  VendorPlan[]  @relation("VendorPlanPlan")
+  planFeatures PlanFeature[]
+}
+
+model Feature {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. team_management, advanced_analytics, multi_branch, api_access, custom_automation
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  planFeatures      PlanFeature[]
+  vendorOverrides  VendorFeatureOverride[]
+}
+
+model PlanFeature {
+  id        String  @id @default(cuid())
+  planId    String
+  featureId String
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureId])
+}
+
+model VendorPlan {
+  id            String   @id @default(cuid())
+  vendorId      String   @unique
+  planId        String
+  effectiveDate  DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  plan   Plan   @relation("VendorPlanPlan", fields: [planId], references: [id])
+}
+
+model VendorFeatureOverride {
+  id        String  @id @default(cuid())
+  vendorId  String
+  featureId String
+  enabled    Boolean @default(true)
+
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, featureId])
 }
 
 // ======================== ANOMALY DETECTION (Phase 3) ========================

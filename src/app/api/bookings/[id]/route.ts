@@ -3,7 +3,6 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
-import { triggerAutomationOnBookingCompleted } from "@/lib/automation"
 
 // C-7 FIX: Extend schema to accept rating and ratingComment
 const patchBookingSchema = z.object({
@@ -123,13 +122,10 @@ export async function PATCH(
         data: { status: TaskStatus.COMPLETED, completedAt: now },
       })
 
-      // Phase 7: Fire-and-forget auto-verify check (Level 4+)
-      triggerAutomationOnBookingCompleted(
-        booking.taskId,
-        booking.task.householdId,
-        booking.task.category as "CLEANING",
-        id
-      )
+    // Verification and escrow release remain manual at all autonomy levels
+    // per the canonical Closed-Loop brand promise (CLAUDE.md).
+    // L4 (Predictive Pre-Booking) and L5 (Full Autonomous) are
+    // future phases that do NOT automate verification or escrow.
     }
 
     // C-5 FIX: Reset task status on booking cancellation

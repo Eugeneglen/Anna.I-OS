@@ -1,27 +1,30 @@
 // ============================================================
-// Anna.I — Autonomy Automation Engine (Phase 7)
-// Event-driven automation: auto-dispatch, auto-verify, auto-escrow-release
+// Anna.I — Autonomy Automation Engine
+// Event-driven automation: auto-dispatch (Level 3)
+// ============================================================
+//
+// CANONICAL REMAP (per CLAUDE.md):
+//   L3 = Auto-Dispatch          → ACTIVE (this file)
+//   L4 = Predictive Pre-Booking → LOCKED (requires Phase 4 — Predictive Scheduler)
+//   L5 = Full Autonomous         → LOCKED (requires Phase 5 — NLU/Write-Capable)
+//
+// Photo verification and escrow release remain MANUAL at all levels.
+// This is the core Closed-Loop brand promise — it does not soften
+// as a household earns more autonomy. (CLAUDE.md, Autonomy Ladder)
 // ============================================================
 
 import { db } from "@/lib/db"
 import {
   ServiceCategory,
   TaskStatus,
-  EscrowState,
   NotificationEventType,
-  NotificationStatus,
-  RecipientType,
-  NotificationChannel,
 } from "@prisma/client"
 import { PLATFORM_COMMISSION_RATE, AUTONOMY_LEVEL_NAMES } from "./constants"
 import { autoSelectVendor } from "./routing"
 import { createNotification, triggerAnomalyDetection } from "./notify"
-import { checkAndPromoteAutonomy } from "./autonomy"
 
-/** Minimum autonomy level required for each automation action */
+/** Minimum autonomy level required for auto-dispatch */
 const AUTO_DISPATCH_LEVEL = 3
-const AUTO_VERIFY_LEVEL = 4
-const AUTO_ESCROW_RELEASE_LEVEL = 5
 
 /** Helper: get current autonomy level for a household+category */
 async function getAutonomyLevel(
@@ -171,144 +174,11 @@ export async function checkAutoDispatch(
 }
 
 // ─────────────────────────────────────────────────────────────
-// AUTO-VERIFY (Level 4+)
-// Triggered after booking completion. Verifies the task
-// automatically if autonomy level >= 4 and photos exist.
-// ─────────────────────────────────────────────────────────────
-
-export async function checkAutoVerify(
-  taskId: string,
-  householdId: string,
-  category: ServiceCategory,
-  bookingId: string
-) {
-  try {
-    const level = await getAutonomyLevel(householdId, category)
-    if (level < AUTO_VERIFY_LEVEL) return null
-
-    // Confirm task is COMPLETED
-    const task = await db.task.findUnique({ where: { id: taskId } })
-    if (!task || task.status !== TaskStatus.COMPLETED) return null
-
-    const now = new Date()
-
-    // Mark unverified photos as verified by automation
-    await db.verificationPhoto.updateMany({
-      where: { taskId, bookingId, isVerified: false },
-      data: {
-        isVerified: true,
-        verifiedBy: "automation",
-        verifiedAt: now,
-      },
-    })
-
-    // Update task to VERIFIED
-    const verifiedTask = await db.task.update({
-      where: { id: taskId },
-      data: { status: TaskStatus.VERIFIED, verifiedAt: now },
-    })
-
-    // Trigger autonomy promotion check
-    await checkAndPromoteAutonomy(householdId, category)
-
-    // Mark automation flag
-    await setAutomationFlag(taskId, "autoVerified")
-
-    // Notify household
-    await createNotification({
-      householdId,
-      eventType: NotificationEventType.VERIFICATION_APPROVED,
-      title: "Auto-Verified",
-      body: `Your ${category.toLowerCase()} task was automatically verified. Escrow is ready for release.`,
-      referenceType: "task",
-      referenceId: taskId,
-    })
-
-    triggerAnomalyDetection(householdId)
-
-    console.log(
-      `[automation] Auto-verified task ${taskId} (Level ${AUTONOMY_LEVEL_NAMES[level - 1]})`
-    )
-    return verifiedTask
-  } catch (err) {
-    console.error(`[automation] Auto-verify failed for task ${taskId}:`, err)
-    return null
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// AUTO-ESCROW-RELEASE (Level 5)
-// Triggered after verification. Releases escrow automatically
-// if autonomy level >= 5.
-// ─────────────────────────────────────────────────────────────
-
-export async function checkAutoEscrowRelease(
-  taskId: string,
-  householdId: string,
-  category: ServiceCategory
-) {
-  try {
-    const level = await getAutonomyLevel(householdId, category)
-    if (level < AUTO_ESCROW_RELEASE_LEVEL) return null
-
-    // Confirm task is VERIFIED with HELD escrow
-    const task = await db.task.findUnique({
-      where: { id: taskId },
-      include: { escrowEntries: true },
-    })
-    if (!task || task.status !== TaskStatus.VERIFIED) return null
-
-    const escrow = task.escrowEntries[0]
-    if (!escrow || escrow.state !== "HELD") return null
-
-    const now = new Date()
-
-    const result = await db.$transaction(async (tx) => {
-      const updatedEscrow = await tx.escrowLedger.update({
-        where: { id: escrow.id },
-        data: { state: EscrowState.RELEASED, releasedAt: now },
-      })
-
-      const updatedTask = await tx.task.update({
-        where: { id: taskId },
-        data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
-      })
-
-      return { updatedTask, updatedEscrow }
-    })
-
-    // Mark automation flag
-    await setAutomationFlag(taskId, "autoEscrowReleased")
-
-    // Notify household
-    await createNotification({
-      householdId,
-      eventType: NotificationEventType.ESCROW_RELEASED,
-      title: "Auto-Released",
-      body: `Payment of SGD $${(escrow.vendorPayoutCents / 100).toFixed(2)} was automatically released to the vendor.`,
-      referenceType: "task",
-      referenceId: taskId,
-    })
-
-    console.log(
-      `[automation] Auto-released escrow for task ${taskId} (Level ${AUTONOMY_LEVEL_NAMES[level - 1]})`
-    )
-    return result
-  } catch (err) {
-    console.error(
-      `[automation] Auto-escrow-release failed for task ${taskId}:`,
-      err
-    )
-    return null
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Convenience: fire-and-forget trigger (matches anomaly pattern)
+// FIRE-AND-FORGET TRIGGER
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Fire-and-forget automation checks after a task is created.
+ * Fire-and-forget automation check after a task is created.
  * Call this from the task creation route.
  */
 export function triggerAutomationOnTaskCreated(
@@ -317,29 +187,4 @@ export function triggerAutomationOnTaskCreated(
   category: ServiceCategory
 ) {
   checkAutoDispatch(taskId, householdId, category).catch(() => {})
-}
-
-/**
- * Fire-and-forget automation checks after a booking is completed.
- * Call this from the booking update route.
- */
-export function triggerAutomationOnBookingCompleted(
-  taskId: string,
-  householdId: string,
-  category: ServiceCategory,
-  bookingId: string
-) {
-  checkAutoVerify(taskId, householdId, category, bookingId).catch(() => {})
-}
-
-/**
- * Fire-and-forget automation checks after a task is verified.
- * Call this from the verify route.
- */
-export function triggerAutomationOnVerified(
-  taskId: string,
-  householdId: string,
-  category: ServiceCategory
-) {
-  checkAutoEscrowRelease(taskId, householdId, category).catch(() => {})
 }

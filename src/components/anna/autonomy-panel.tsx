@@ -39,10 +39,12 @@ function AutonomySegment({
   index,
   filled,
   highlighted,
+  locked,
 }: {
   index: number;
   filled: boolean;
   highlighted: boolean;
+  locked?: boolean;
 }) {
   return (
     <div
@@ -50,11 +52,13 @@ function AutonomySegment({
         "h-2.5 flex-1 rounded-full transition-all duration-300",
         filled
           ? "bg-[var(--anna-sage)]"
-          : highlighted
-            ? "bg-[var(--anna-sage)]/30 border border-dashed border-[var(--anna-sage)]/50"
-            : "bg-[var(--anna-border)]"
+          : locked
+            ? "bg-[var(--anna-border)] opacity-50"
+            : highlighted
+              ? "bg-[var(--anna-sage)]/30 border border-dashed border-[var(--anna-sage)]/50"
+              : "bg-[var(--anna-border)]"
       )}
-      title={AUTONOMY_LEVELS[index]}
+      title={locked ? `${AUTONOMY_LEVELS[index]} (Coming Soon)` : AUTONOMY_LEVELS[index]}
     />
   );
 }
@@ -83,15 +87,21 @@ function AutonomyCard({
     : 0;
   const isMaxLevel = currentLevel >= 5;
 
-  // Automation capabilities at current level
+  // Only L3 (Auto-Dispatch) is active. L4/L5 are locked until their phases ship.
   const canAutoDispatch = currentLevel >= 3;
-  const canAutoVerify = currentLevel >= 4;
-  const canAutoRelease = currentLevel >= 5;
+  const isL4Locked = currentLevel >= 3; // L4+ segments show locked for L4/L5
+  const isL5Locked = currentLevel >= 4;
+
+  // L4 (Predictive Pre-Booking) and L5 (Full Autonomous) are not yet available.
+  // Per CLAUDE.md: L4 unlocked by Phase 4 (Predictive Scheduler),
+  // L5 unlocked by Phase 5 (NLU/Write-Capable).
+  const activeCapabilityLevel = 3; // Only auto-dispatch is live
 
   const segments = Array.from({ length: 5 }, (_, i) => ({
     index: i,
     filled: i < currentLevel,
-    highlighted: i === currentLevel && !isMaxLevel,
+    highlighted: i === currentLevel && !isMaxLevel && currentLevel < activeCapabilityLevel,
+    locked: i + 1 > activeCapabilityLevel,
   }));
 
   const togglePauseMutation = useMutation({
@@ -175,27 +185,27 @@ function AutonomyCard({
         <span>Full Auto</span>
       </div>
 
-      {/* Active automation capabilities */}
-      {(canAutoDispatch || canAutoVerify || canAutoRelease) && (
+      {/* Active automation capability (L3: Auto-Dispatch only) */}
+      {canAutoDispatch && (
         <div className="flex flex-wrap gap-1.5 mb-3">
-          {canAutoDispatch && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
-              <Zap size={9} />
-              Auto-Dispatch
-            </span>
-          )}
-          {canAutoVerify && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
-              <Zap size={9} />
-              Auto-Verify
-            </span>
-          )}
-          {canAutoRelease && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
-              <Zap size={9} />
-              Auto-Release
-            </span>
-          )}
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
+            <Zap size={9} />
+            Auto-Dispatch
+          </span>
+        </div>
+      )}
+
+      {/* Locked capabilities notice */}
+      {(isL4Locked || isL5Locked) && (
+        <div className="flex items-center gap-1.5 text-[10px] text-[var(--anna-muted)] mb-3">
+          <Lock size={10} />
+          <span>
+            {isL4Locked && !isL5Locked
+              ? "Predictive Pre-Booking — coming soon"
+              : isL5Locked
+                ? "Predictive Pre-Booking & Full Autonomous — coming soon"
+                : "Full Autonomous — coming soon"}
+          </span>
         </div>
       )}
 
@@ -248,7 +258,8 @@ export function AutonomyPanel() {
       </h1>
       <p className="text-sm text-[var(--anna-muted)] mb-6">
         As Anna.I verifies more bookings per category, it earns trust and
-        graduates to higher autonomy levels.
+        graduates to higher autonomy levels. Verification and escrow release
+        remain manual at every level — that protection is constant.
       </p>
 
       {autonomyData.length === 0 ? (

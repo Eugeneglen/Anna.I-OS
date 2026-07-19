@@ -56,7 +56,10 @@ export interface Vendor {
   email: string;
   phone: string;
   categories: string;
-  status: "PENDING" | "ACTIVE" | "SUSPENDED";
+  status: "PENDING" | "ACTIVE" | "SUSPENDED" | "OFFBOARDED";
+  vendorType?: "MICRO" | "SME";
+  staffCount?: number;
+  dailyCapacity?: number;
 }
 
 export interface Task {

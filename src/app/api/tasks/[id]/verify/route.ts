@@ -4,7 +4,6 @@ import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { checkAndPromoteAutonomy } from "@/lib/autonomy"
 import { triggerAnomalyDetection } from "@/lib/notify"
-import { triggerAutomationOnVerified } from "@/lib/automation"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
@@ -104,9 +103,6 @@ export async function POST(
 
     // Phase 5: Background anomaly detection
     triggerAnomalyDetection(task.householdId);
-
-    // Phase 7: Fire-and-forget auto-escrow-release check (Level 5)
-    triggerAutomationOnVerified(id, task.householdId, task.category)
 
     return NextResponse.json({
       task: verifiedTask,
