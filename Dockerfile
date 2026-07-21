@@ -59,8 +59,8 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/package.json ./
 
-EXPOSE 3000
-ENV PORT=3000
+EXPOSE 8080
+ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["bun", "server.js"]
