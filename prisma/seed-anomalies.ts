@@ -1,6 +1,5 @@
-import { PrismaClient, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from '@prisma/client'
-
-const db = new PrismaClient()
+import { db } from './seed-db'
+import { NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from '@prisma/client'
 
 async function _main() {
   // Find Tan Family household

@@ -1,6 +1,5 @@
-import { PrismaClient, ServiceCategory } from "@prisma/client";
-
-const db = new PrismaClient();
+import { db } from './seed-db'
+import { ServiceCategory } from "@prisma/client";
 
 // ─── Shared field definitions ────────────────────────────────────────────────
 

@@ -2,13 +2,14 @@
  * Unified seed entry point for `npx prisma db seed`
  * Runs all three seed scripts in dependency order.
  *
+ * All sub-scripts share ONE PrismaClient via prisma/seed-db.ts
+ * to avoid exhausting PostgreSQL connection limits.
+ *
  * Railway Console:
  *   npx prisma migrate deploy && npx prisma db seed
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const db = new PrismaClient();
+import { db } from "./seed-db";
 
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");

@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const db = new PrismaClient()
+import { db } from './seed-db'
 
 // ═══════════════════════════════════════════════════════════
 // DETERMINISTIC IDs — re-seeding always produces the same IDs
