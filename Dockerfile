@@ -8,10 +8,14 @@
 #
 # Rule: node_modules is copied in full — Prisma CLI needs
 # the complete dependency tree at runtime.
+#
+# Railway: This service MUST use the "Dockerfile" builder,
+# NOT Railpack/Nixpacks. Click "Force Dockerfile builder"
+# in Railway Settings if it defaults to Railpack.
 # ============================================================
 
 FROM node:20-slim AS base
-RUN corepack enable && corepack prepare bun@latest --activate
+RUN npm install -g bun
 WORKDIR /app
 
 # ── Stage 1: Install dependencies ────────────────────────────
@@ -37,7 +41,7 @@ RUN cp -r .next/static .next/standalone/.next/ && \
 
 # ── Stage 3: Production runtime ──────────────────────────────
 FROM node:20-slim AS runner
-RUN corepack enable && corepack prepare bun@latest --activate
+RUN npm install -g bun
 WORKDIR /app
 ENV NODE_ENV=production
 
