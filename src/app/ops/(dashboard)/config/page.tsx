@@ -6,14 +6,22 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Save, Info, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
-import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL, PLATFORM_COMMISSION_RATE } from "@/lib/constants";
+import {
+  AUTONOMY_LEVEL_NAMES,
+  MAX_AUTONOMY_LEVEL,
+  PLATFORM_COMMISSION_RATE,
+} from "@/lib/constants";
 
 function formatPrice(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -55,7 +63,7 @@ export default function ConfigPage() {
   const thresholds = data?.thresholds || [];
   const isAdmin = user?.role === "ADMIN";
 
-  // Threshold editing state — derive from query data
+  // Threshold editing state
   const thresholdEdits = (() => {
     const edits: Record<string, number> = {};
     for (const t of thresholds) {
@@ -64,7 +72,9 @@ export default function ConfigPage() {
     return edits;
   })();
 
-  const [localEdits, setLocalEdits] = useState<Record<string, number> | null>(null);
+  const [localEdits, setLocalEdits] = useState<Record<string, number> | null>(
+    null
+  );
   const edits = localEdits ?? thresholdEdits;
 
   function setThreshold(category: string, level: number, value: number) {
@@ -79,7 +89,10 @@ export default function ConfigPage() {
       const [category, level] = key.split("-");
       return { category, level: parseInt(level), cyclesRequired };
     });
-    configMutation.mutate({ action: "save_thresholds", thresholds: arr });
+    configMutation.mutate({
+      action: "save_thresholds",
+      thresholds: arr,
+    });
   }
 
   function toggleJobType(id: string, isActive: boolean) {
@@ -87,209 +100,306 @@ export default function ConfigPage() {
   }
 
   if (isLoading) {
-    return <div className="space-y-3"><Skeleton className="h-10 w-48" /><Skeleton className="h-96 w-full" /></div>;
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-48 rounded-xl bg-[var(--anna-border)]" />
+        <Skeleton className="h-96 w-full rounded-2xl bg-[var(--anna-border)]" />
+      </div>
+    );
   }
 
-  const uniqueCats = [...new Set(jobTypes.map((j: Record<string, unknown>) => j.category as string))];
+  const uniqueCats = [
+    ...new Set(
+      jobTypes.map((j: Record<string, unknown>) => j.category as string)
+    ),
+  ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20 md:pb-0 anna-fade-in">
       <div>
-        <h2 className="text-lg font-semibold">Configuration</h2>
-        <p className="text-sm text-muted-foreground">Manage categories, pricing, and autonomy thresholds</p>
+        <h2 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
+          Configuration
+        </h2>
+        <p className="text-sm text-[var(--anna-muted)] mt-0.5">
+          Manage categories, pricing, and autonomy thresholds
+        </p>
       </div>
 
       <Tabs defaultValue="categories">
-        <TabsList>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="thresholds">Autonomy</TabsTrigger>
+        <TabsList className="bg-[var(--anna-white)] border border-[var(--anna-border)] rounded-xl p-1">
+          <TabsTrigger
+            value="categories"
+            className="rounded-lg data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-[var(--anna-white)] text-xs font-medium text-[var(--anna-slate-light)]"
+          >
+            Categories
+          </TabsTrigger>
+          <TabsTrigger
+            value="pricing"
+            className="rounded-lg data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-[var(--anna-white)] text-xs font-medium text-[var(--anna-slate-light)]"
+          >
+            Pricing
+          </TabsTrigger>
+          <TabsTrigger
+            value="thresholds"
+            className="rounded-lg data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-[var(--anna-white)] text-xs font-medium text-[var(--anna-slate-light)]"
+          >
+            Autonomy
+          </TabsTrigger>
         </TabsList>
 
         {/* ===== CATEGORIES TAB ===== */}
         <TabsContent value="categories" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Service Categories</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left px-4 py-2.5 font-medium">Category</th>
-                      <th className="text-left px-4 py-2.5 font-medium">Status</th>
+          <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--anna-border)]">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                Service Categories
+              </h3>
+            </div>
+            <div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--anna-border)] bg-[var(--anna-bg)]">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Category
+                    </th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categories.map((c: Record<string, unknown>) => (
+                    <tr
+                      key={c.name as string}
+                      className="border-b border-[var(--anna-border)] last:border-0"
+                    >
+                      <td className="px-5 py-3 font-medium text-[var(--anna-slate)]">
+                        {c.label as string}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "text-[10px] font-medium",
+                            c.isActive
+                              ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+                              : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
+                          )}
+                        >
+                          {c.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {categories.map((c: Record<string, unknown>) => (
-                      <tr key={c.name as string} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-medium">{c.label as string}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="secondary" className={c.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}>
-                            {c.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Active categories are available to households. Inactive categories (Painting, Pest Control, Locksmith) are config-only and not shown to users.
-              </p>
-            </CardContent>
-          </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[var(--anna-muted)]">
+            Active categories are available to households. Inactive categories
+            (Painting, Pest Control, Locksmith) are config-only and not shown to
+            users.
+          </p>
         </TabsContent>
 
         {/* ===== PRICING TAB ===== */}
         <TabsContent value="pricing" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Service Job Types</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    Commission: {PLATFORM_COMMISSION_RATE}%
-                  </Badge>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs text-xs">
-                      Anna.I sets all prices. Vendor payout = price minus {PLATFORM_COMMISSION_RATE}% commission.
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
+          <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                Service Job Types
+              </h3>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-data border-[var(--anna-border)] text-[var(--anna-slate-light)]"
+                >
+                  Commission: {PLATFORM_COMMISSION_RATE}%
+                </Badge>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="h-3.5 w-3.5 text-[var(--anna-muted)]" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    Anna.I sets all prices. Vendor payout = price minus{" "}
+                    {PLATFORM_COMMISSION_RATE}% commission.
+                  </TooltipContent>
+                </Tooltip>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-96 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b sticky top-0">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-medium">Category</th>
-                        <th className="text-left px-4 py-2.5 font-medium">Service</th>
-                        <th className="text-right px-4 py-2.5 font-medium">Price</th>
-                        <th className="text-left px-4 py-2.5 font-medium">Unit</th>
-                        <th className="text-center px-4 py-2.5 font-medium">Active</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {jobTypes.map((j: Record<string, unknown>) => (
-                        <tr key={j.id as string} className="border-b last:border-0 hover:bg-gray-50">
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {(j.category as string).replace(/_/g, " ")}
-                          </td>
-                          <td className="px-4 py-2.5 font-medium">{j.name as string}</td>
-                          <td className="px-4 py-2.5 text-right font-mono text-sm">
-                            {formatPrice(j.basePriceCents as number)}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {j.unitLabel as string}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            {isAdmin ? (
-                              <Switch
-                                checked={j.isActive as boolean}
-                                onCheckedChange={(v) => toggleJobType(j.id as string, v)}
-                                className="mx-auto"
-                              />
-                            ) : (
-                              <Badge variant="secondary" className={j.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}>
-                                {j.isActive ? "On" : "Off"}
-                              </Badge>
+            </div>
+            <div className="max-h-96 overflow-y-auto anna-scroll">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--anna-border)] bg-[var(--anna-bg)] sticky top-0">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Category
+                    </th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Service
+                    </th>
+                    <th className="text-right px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Price
+                    </th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Unit
+                    </th>
+                    <th className="text-center px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Active
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobTypes.map((j: Record<string, unknown>) => (
+                    <tr
+                      key={j.id as string}
+                      className="border-b border-[var(--anna-border)] last:border-0 hover:bg-[var(--anna-sage-light)]/30 transition-colors"
+                    >
+                      <td className="px-5 py-2.5 text-xs text-[var(--anna-muted)]">
+                        {(j.category as string).replace(/_/g, " ")}
+                      </td>
+                      <td className="px-5 py-2.5 font-medium text-[var(--anna-slate)]">
+                        {j.name as string}
+                      </td>
+                      <td className="px-5 py-2.5 text-right font-data text-sm text-[var(--anna-slate)]">
+                        {formatPrice(j.basePriceCents as number)}
+                      </td>
+                      <td className="px-5 py-2.5 text-xs text-[var(--anna-muted)]">
+                        {j.unitLabel as string}
+                      </td>
+                      <td className="px-5 py-2.5 text-center">
+                        {isAdmin ? (
+                          <Switch
+                            checked={j.isActive as boolean}
+                            onCheckedChange={(v) =>
+                              toggleJobType(j.id as string, v)
+                            }
+                            className="mx-auto"
+                          />
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-[10px] font-medium",
+                              j.isActive
+                                ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+                                : "bg-[var(--anna-bg)] text-[var(--anna-muted)]"
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                          >
+                            {j.isActive ? "On" : "Off"}
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* Blended value callout */}
-          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+            <AlertTriangle
+              className="h-4 w-4 mt-0.5 shrink-0"
+            />
             <div>
-              <p className="font-medium">Blended Job Value: $68.00</p>
-              <p className="mt-0.5">Revalidation needed — calibrated for original 4-category mix, now 7 active categories.</p>
+              <p className="font-semibold">
+                Blended Job Value:{" "}
+                <span className="font-data">$68.00</span>
+              </p>
+              <p className="mt-0.5 opacity-80">
+                Revalidation needed — calibrated for original 4-category mix, now
+                7 active categories.
+              </p>
             </div>
           </div>
         </TabsContent>
 
         {/* ===== AUTONOMY THRESHOLDS TAB ===== */}
         <TabsContent value="thresholds" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Autonomy Thresholds</CardTitle>
-                <Button
-                  onClick={saveThresholds}
-                  disabled={configMutation.isPending}
-                  size="sm"
-                  style={{ backgroundColor: "#10b981" }}
-                  className="text-white"
-                >
-                  <Save className="h-3.5 w-3.5 mr-1" />
-                  {configMutation.isPending ? "Saving..." : "Save All"}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-96 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b sticky top-0">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-medium">Category</th>
-                        {Array.from({ length: MAX_AUTONOMY_LEVEL }, (_, i) => (
-                          <th key={i} className="text-center px-3 py-2.5 font-medium text-xs">
-                            L{i + 1}
-                            <br />
-                            <span className="font-normal text-muted-foreground">
-                              {AUTONOMY_LEVEL_NAMES[i]}
-                            </span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {uniqueCats.map((cat: string) => (
-                        <tr key={cat} className="border-b last:border-0 hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-medium text-xs">
-                            {cat.replace(/_/g, " ")}
-                          </td>
-                          {Array.from({ length: MAX_AUTONOMY_LEVEL }, (_, i) => {
-                            const key = `${cat}-${i + 1}`;
-                            return (
-                              <td key={key} className="px-1 py-2.5 text-center">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={edits[key] ?? 0}
-                                  onChange={(e) =>
-                                    setThreshold(cat, i + 1, parseInt(e.target.value) || 0)
-                                  }
-                                  className="w-16 h-8 text-center text-xs mx-auto"
-                                />
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Number of verified booking cycles required before a household can be promoted to each autonomy level.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                Autonomy Thresholds
+              </h3>
+              <Button
+                onClick={saveThresholds}
+                disabled={configMutation.isPending}
+                size="sm"
+                className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl text-xs font-semibold"
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {configMutation.isPending ? "Saving..." : "Save All"}
+              </Button>
+            </div>
+            <div className="max-h-96 overflow-y-auto anna-scroll">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--anna-border)] bg-[var(--anna-bg)] sticky top-0">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                      Category
+                    </th>
+                    {Array.from(
+                      { length: MAX_AUTONOMY_LEVEL },
+                      (_, i) => (
+                        <th
+                          key={i}
+                          className="text-center px-2 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]"
+                        >
+                          <span className="font-data">L{i + 1}</span>
+                          <br />
+                          <span className="font-normal normal-case tracking-normal">
+                            {AUTONOMY_LEVEL_NAMES[i]}
+                          </span>
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {uniqueCats.map((cat: string) => (
+                    <tr
+                      key={cat}
+                      className="border-b border-[var(--anna-border)] last:border-0 hover:bg-[var(--anna-sage-light)]/30 transition-colors"
+                    >
+                      <td className="px-5 py-2.5 font-medium text-xs text-[var(--anna-slate)]">
+                        {cat.replace(/_/g, " ")}
+                      </td>
+                      {Array.from(
+                        { length: MAX_AUTONOMY_LEVEL },
+                        (_, i) => {
+                          const key = `${cat}-${i + 1}`;
+                          return (
+                            <td
+                              key={key}
+                              className="px-1 py-2.5 text-center"
+                            >
+                              <Input
+                                type="number"
+                                min={0}
+                                value={edits[key] ?? 0}
+                                onChange={(e) =>
+                                  setThreshold(
+                                    cat,
+                                    i + 1,
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                className="w-16 h-8 text-center text-xs font-data mx-auto rounded-lg border-[var(--anna-border)]"
+                              />
+                            </td>
+                          );
+                        }
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[var(--anna-muted)]">
+            Number of verified booking cycles required before a household can be
+            promoted to each autonomy level.
+          </p>
         </TabsContent>
       </Tabs>
     </div>

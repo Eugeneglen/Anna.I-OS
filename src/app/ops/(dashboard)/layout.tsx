@@ -20,6 +20,7 @@ import {
   Menu,
   LogOut,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface OpsUser {
   id: string;
@@ -46,12 +47,15 @@ const NAV_ITEMS = [
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, string> = {
-    ADMIN: "bg-emerald-100 text-emerald-700",
-    COORDINATOR: "bg-amber-100 text-amber-700",
-    ANALYST: "bg-slate-100 text-slate-600",
+    ADMIN: "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]",
+    COORDINATOR: "bg-amber-50 text-amber-700",
+    ANALYST: "bg-[var(--anna-bg)] text-[var(--anna-muted)]",
   };
   return (
-    <Badge variant="secondary" className={styles[role] || "bg-slate-100"}>
+    <Badge
+      variant="secondary"
+      className={cn("text-[10px] font-medium px-1.5 py-0", styles[role] || "bg-[var(--anna-bg)]")}
+    >
       {role}
     </Badge>
   );
@@ -68,37 +72,47 @@ function SidebarNav() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Logo */}
       <div className="px-4 py-5">
-        <h1 className="text-xl font-bold" style={{ color: "#10b981" }}>Anna.I</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Ops Control Centre</p>
+        <h1 className="text-lg font-bold tracking-tight text-[var(--anna-sage-dark)]">
+          Anna.I
+        </h1>
+        <p className="text-[10px] font-data uppercase tracking-widest text-[var(--anna-muted)] mt-0.5">
+          Ops Control Centre
+        </p>
       </div>
-      <Separator />
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+      <Separator className="bg-[var(--anna-border)]" />
+
+      {/* Navigation */}
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto anna-scroll">
         {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
           const isActive = item.active && pathname.startsWith(item.href);
           return (
             <button
               key={item.label}
               onClick={() => item.active && router.push(item.href)}
               disabled={!item.active}
-              className={`w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              className={cn(
+                "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
                 isActive
-                  ? "bg-emerald-50 text-emerald-700"
+                  ? "bg-[var(--anna-sage)] text-[var(--anna-white)] shadow-sm"
                   : item.active
-                  ? "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  : "text-gray-400 cursor-not-allowed"
-              }`}
+                    ? "text-[var(--anna-slate-light)] hover:bg-[var(--anna-sage-light)] hover:text-[var(--anna-slate)]"
+                    : "text-[var(--anna-muted)] cursor-not-allowed"
+              )}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" />
               <span>{item.label}</span>
               {!item.active && (
-                <span className="ml-auto text-[10px] text-gray-400">Soon</span>
+                <span className="ml-auto text-[10px] font-data">Soon</span>
               )}
             </button>
           );
         })}
       </nav>
-      <Separator />
+
+      <Separator className="bg-[var(--anna-border)]" />
       <div className="p-3">
         <UserSection onLogout={handleLogout} />
       </div>
@@ -109,17 +123,31 @@ function SidebarNav() {
 function UserSection({ onLogout }: { onLogout: () => void }) {
   const user = useOpsUser();
   if (!user) return null;
-  const initials = user.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  const initials = user.name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
   return (
     <div className="flex items-center gap-3">
       <Avatar className="h-8 w-8">
-        <AvatarFallback className="text-xs bg-emerald-100 text-emerald-700">{initials}</AvatarFallback>
+        <AvatarFallback className="text-xs bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)] font-medium">
+          {initials}
+        </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{user.name}</p>
+        <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
+          {user.name}
+        </p>
         <RoleBadge role={user.role} />
       </div>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onLogout}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 hover:bg-[var(--anna-sage-light)] text-[var(--anna-slate-light)]"
+        onClick={onLogout}
+      >
         <LogOut className="h-4 w-4" />
       </Button>
     </div>
@@ -129,7 +157,11 @@ function UserSection({ onLogout }: { onLogout: () => void }) {
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
 
-  const { data: user, isLoading, error } = useQuery<OpsUser | null>({
+  const {
+    data: user,
+    isLoading,
+    error,
+  } = useQuery<OpsUser | null>({
     queryKey: ["ops-session"],
     queryFn: async () => {
       const res = await fetch("/api/ops/session");
@@ -150,10 +182,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--anna-bg)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" style={{ borderColor: "#10b981" }} />
-          <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto border-[var(--anna-sage-dark)]" />
+          <p className="mt-3 text-sm text-[var(--anna-muted)]">Loading...</p>
         </div>
       </div>
     );
@@ -161,28 +193,40 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <OpsUserContext.Provider value={user}>
-      <div className="min-h-screen flex bg-white">
-        <aside className="hidden md:flex md:w-60 md:flex-col border-r bg-white">
+      <div className="min-h-screen flex bg-[var(--anna-bg)]">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">
           <SidebarNav />
         </aside>
+
+        {/* Main Content */}
         <main className="flex-1 min-w-0 overflow-auto">
-          <div className="md:hidden flex items-center justify-between border-b px-4 py-3">
+          {/* Mobile Header */}
+          <div className="md:hidden flex items-center justify-between border-b border-[var(--anna-border)] bg-[var(--anna-white)]/80 backdrop-blur-lg px-4 py-3 sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Menu className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-[var(--anna-sage-light)]"
+                  >
+                    <Menu className="h-4 w-4 text-[var(--anna-slate-light)]" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-60 p-0">
+                <SheetContent side="left" className="w-60 p-0 bg-[var(--anna-white)]">
                   <SidebarNav />
                 </SheetContent>
               </Sheet>
-              <h1 className="text-sm font-bold" style={{ color: "#10b981" }}>Anna.I</h1>
+              <h1 className="text-sm font-bold text-[var(--anna-sage-dark)]">
+                Anna.I
+              </h1>
             </div>
             <RoleBadge role={user.role} />
           </div>
-          <div className="p-4 md:p-6">{children}</div>
+
+          {/* Page Content */}
+          <div className="p-4 md:p-6 anna-fade-in">{children}</div>
         </main>
       </div>
     </OpsUserContext.Provider>
