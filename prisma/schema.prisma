@@ -576,3 +576,40 @@ model Anomaly {
   @@index([type, status])
   @@index([severity])
 }
+
+// ======================== OPS AUTH & AUDIT ========================
+
+enum OpsRole {
+  ADMIN
+  COORDINATOR
+  ANALYST
+}
+
+model OpsUser {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  role         OpsRole    @default(COORDINATOR)
+  passwordHash String
+  createdAt    DateTime   @default(now())
+  lastLoginAt  DateTime?
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  userName   String
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user OpsUser @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
