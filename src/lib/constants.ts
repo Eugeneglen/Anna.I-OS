@@ -22,6 +22,24 @@ export const CATEGORIES = [
   'APPLIANCE_REPAIR',
 ] as const
 
+/** Categories available to households in the pilot (Painting, Pest Control, Locksmith are config-only/inactive) */
+export const ACTIVE_CATEGORIES = [
+  'CLEANING',
+  'LAUNDRY',
+  'AIRCON',
+  'HANDYMAN',
+  'ELECTRICAL',
+  'PLUMBING',
+  'APPLIANCE_REPAIR',
+] as const
+
+/** Inactive categories — exist in enum/ServiceJobType for future activation, but not shown to households */
+export const INACTIVE_CATEGORIES = [
+  'PAINTING',
+  'PEST_CONTROL',
+  'LOCKSMITH',
+] as const
+
 /** Default amountCents per category — canonical source is types.ts CATEGORY_DEFAULTS */
 
 /** Cycles required per level-up per category */
