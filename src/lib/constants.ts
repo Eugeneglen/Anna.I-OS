@@ -93,6 +93,25 @@ export const VERIFICATION_MISSING_SLA_HOURS = 24
 /** Minimum rating drop (out of 5) to trigger RATING_DROP anomaly */
 export const RATING_DROP_THRESHOLD = 1.5
 
+// ============================================================
+// Predictive Scheduler Configuration (Phase 4)
+// ============================================================
+
+/** Hours before scheduled start when a predicted task becomes locked (no more cancel/edit) */
+export const PREDICTIVE_LOCK_HOURS = 48
+
+/** Minimum completed+verified bookings needed to learn a household's cycle */
+export const PREDICTIVE_MIN_BOOKINGS = 3
+
+/** Maximum number of past bookings to consider when learning cycle intervals */
+export const PREDICTIVE_MAX_HISTORY = 5
+
+/** Default cycle fallback in days if learning fails (used as safe upper bound) */
+export const PREDICTIVE_DEFAULT_CYCLE_DAYS = 14
+
+/** Maximum future prediction window in days (never predict >30 days out) */
+export const PREDICTIVE_MAX_FUTURE_DAYS = 30
+
 /** Human-readable labels for anomaly types */
 export const ANOMALY_TYPE_LABELS: Record<string, string> = {
   VENDOR_LATE: 'Vendor Late',

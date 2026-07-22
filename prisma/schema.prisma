@@ -29,6 +29,7 @@ enum ServiceCategory {
 
 enum TaskStatus {
   CREATED
+  PREDICTED
   DISPATCHED
   IN_PROGRESS
   COMPLETED
@@ -254,6 +255,9 @@ model Task {
   disputedAt        DateTime?
   scheduledStart    DateTime?
   metadata          Json?             // Phase 7: { autoDispatched, autoVerified, autoEscrowReleased }
+  lockAt            DateTime?          // Phase 4: Predictive — deadline before which household can cancel/edit
+  cancelledAt       DateTime?          // Phase 4: Predictive — when household cancelled this prediction
+  cancelReason      String?            // Phase 4: Predictive — household's cancel reason
 
   household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
   jobType           ServiceJobType?    @relation(fields: [jobTypeId], references: [id])

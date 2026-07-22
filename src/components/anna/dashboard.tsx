@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { AnomalyBanner } from "./anomaly-banner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +14,10 @@ import {
   ChevronRight,
   CalendarClock,
   ArrowRight,
+  Sparkles,
+  X,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,17 +69,19 @@ function SummaryCard({
   );
 }
 
-// ─── Upcoming (Next 7 Days) ────────────────────────────────
+// ─── Upcoming Item (shared) ────────────────────────────────
 
 interface UpcomingItem {
- dateLabel: string;
- category: string;
- instructions: string;
- statusLabel: string;
- statusColor: string;
- amount: string;
- vendor: string;
- taskId: string;
+  dateLabel: string;
+  category: string;
+  instructions: string;
+  statusLabel: string;
+  statusColor: string;
+  amount: string;
+  vendor: string;
+  taskId: string;
+  isPredicted: boolean;
+  lockAt?: string | null;
 }
 
 function computeUpcoming(tasks: Task[]): UpcomingItem[] {
@@ -85,11 +92,10 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
   weekEnd.setHours(23, 59, 59, 999);
 
   // 24-hour freshness window for unscheduled tasks.
-  // If a CREATED task has no scheduledStart and is older than this,
-  // it's NOT "upcoming" — it's stale/waiting.
   const freshnessCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const statusColors: Record<string, string> = {
+    PREDICTED: "text-[var(--anna-sage-dark)]",
     CREATED: "text-[var(--anna-warning)]",
     DISPATCHED: "text-[var(--anna-sage-dark)]",
     IN_PROGRESS: "text-[var(--anna-sage-dark)]",
@@ -103,14 +109,15 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
     // Only include actionable tasks (not verified/escrow released — those are done)
     if (t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") continue;
 
+    const isPredicted = t.status === "PREDICTED";
+
     // Determine reference date: use scheduledStart if set, else createdAt
     const refDate = new Date(t.scheduledStart ?? t.createdAt);
 
     // Include if: scheduled within next 7 days
     const isInWindow = refDate >= todayStart && refDate <= weekEnd;
 
-    // Unscheduled CREATED tasks: only show if created within last 24 hours.
-    // This prevents stale demo data from cluttering the card.
+    // Unscheduled CREATED tasks: only show if created within last 24 hours
     const isFreshUnscheduled =
       !t.scheduledStart &&
       t.status === "CREATED" &&
@@ -136,22 +143,83 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
       dateLabel,
       category: CATEGORY_DEFAULTS[t.category]?.label ?? t.category,
       instructions: t.instructions ?? "",
-      statusLabel: STATUS_LABELS[t.status],
+      statusLabel: isPredicted ? "AI Predicted" : STATUS_LABELS[t.status],
       statusColor: statusColors[t.status] ?? "text-[var(--anna-muted)]",
       amount: formatSgd(t.amountCents),
       vendor: t.bookings?.[0]?.vendor?.name ?? "",
       taskId: t.id,
+      isPredicted,
+      lockAt: t.lockAt,
     });
   }
 
-  // Sort by reference date, soonest first
+  // Sort: predicted first (top), then by reference date
   items.sort((a, b) => {
     const tA = tasks.find((t) => t.id === a.taskId)!;
     const tB = tasks.find((t) => t.id === b.taskId)!;
+    // Predicted tasks at the top
+    if (a.isPredicted !== b.isPredicted) return a.isPredicted ? -1 : 1;
     return new Date(tA.scheduledStart ?? tA.createdAt).getTime() - new Date(tB.scheduledStart ?? tB.createdAt).getTime();
   });
 
   return items;
+}
+
+// ─── Lock Countdown Helper ────────────────────────────────
+
+function getLockCountdown(lockAt: string): { text: string; isUrgent: boolean } {
+  const now = new Date();
+  const lock = new Date(lockAt);
+  const diffMs = lock.getTime() - now.getTime();
+
+  if (diffMs <= 0) return { text: "Locking soon...", isUrgent: true };
+
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+  const remainHours = diffHours % 24;
+
+  if (diffDays > 1) {
+    return { text: `Editable for ${diffDays}d ${remainHours}h`, isUrgent: false };
+  } else if (diffDays === 1) {
+    return { text: `Editable for 1d ${remainHours}h`, isUrgent: false };
+  } else if (diffHours >= 1) {
+    return { text: `Editable for ${diffHours}h`, isUrgent: diffHours <= 6 };
+  } else {
+    const diffMin = Math.floor(diffMs / (1000 * 60));
+    return { text: `Editable for ${diffMin}m`, isUrgent: true };
+  }
+}
+
+// ─── Cancel Predicted Button ────────────────────────────────
+
+function CancelPredictedButton({
+  taskId,
+  onCancel,
+  isCancelling,
+}: {
+  taskId: string;
+  onCancel: (id: string) => void;
+  isCancelling: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={isCancelling}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCancel(taskId);
+      }}
+      className={cn(
+        "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all shrink-0",
+        "border border-[var(--anna-error)]/20 text-[var(--anna-error)]",
+        "hover:bg-[var(--anna-error)]/5 disabled:opacity-50"
+      )}
+      title="Cancel this prediction"
+    >
+      {isCancelling ? <Loader2 size={10} className="animate-spin" /> : <X size={10} />}
+      Cancel
+    </button>
+  );
 }
 
 // ─── Dashboard Component ─────────────────────────────────────
@@ -162,6 +230,9 @@ export function Dashboard() {
     setActiveTab,
     setPendingTaskFilter,
   } = useAnnaStore();
+  const queryClient = useQueryClient();
+
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["household", selectedHouseholdId],
@@ -169,10 +240,32 @@ export function Dashboard() {
     enabled: !!selectedHouseholdId,
   });
 
-  const navigateToActivity = (filter: Record<string, unknown>) => {
+  const navigateToActivity = useCallback((filter: Record<string, unknown>) => {
     setPendingTaskFilter(filter as any);
     setActiveTab("activity");
-  };
+  }, [setPendingTaskFilter, setActiveTab]);
+
+  const handleCancelPredicted = useCallback(async (taskId: string) => {
+    setCancellingId(taskId);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/cancel-predictive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Cancelled by household" }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Failed to cancel");
+        return;
+      }
+      // Refetch household data
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+    } catch {
+      alert("Failed to cancel prediction");
+    } finally {
+      setCancellingId(null);
+    }
+  }, [queryClient, selectedHouseholdId]);
 
   if (isLoading) {
     return (
@@ -193,7 +286,6 @@ export function Dashboard() {
   const autonomy: HouseholdCategoryAutonomy[] = data?.categoryAutonomy || [];
   const members: { name: string; role: string }[] = data?.members || [];
 
-  // M-8 FIX: Use actual member name instead of hardcoded "Sarah"
   const memberName = members.length > 0 ? members[0].name.split(" ")[0] : "there";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -202,6 +294,7 @@ export function Dashboard() {
   const activeTasks = tasks.filter(
     (t) => t.status === "CREATED" || t.status === "DISPATCHED" || t.status === "IN_PROGRESS"
   );
+  const predictedTasks = tasks.filter((t) => t.status === "PREDICTED");
   const completedTasks = tasks.filter(
     (t) => t.status === "VERIFIED" || t.status === "ESCROW_RELEASED"
   );
@@ -222,6 +315,10 @@ export function Dashboard() {
 
   // Upcoming (Next 7 Days)
   const upcomingItems = computeUpcoming(tasks);
+
+  // Predicted items for the dedicated section
+  const predictedItems = upcomingItems.filter((i) => i.isPredicted);
+  const regularItems = upcomingItems.filter((i) => !i.isPredicted);
 
   return (
     <div className="pb-20 md:pb-0">
@@ -272,7 +369,101 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Upcoming (Next 7 Days) */}
+      {/* ── AI Predicted Bookings ── */}
+      {predictedItems.length > 0 && (
+        <div className="px-4 lg:px-6 pb-3 lg:pb-4">
+          <div className="rounded-2xl border-2 border-[var(--anna-sage)]/30 overflow-hidden bg-gradient-to-br from-[var(--anna-sage-light)]/40 to-[var(--anna-white)]">
+            {/* Section header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--anna-sage)]/20">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center">
+                  <Sparkles size={12} className="text-white" />
+                </div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+                  AI Predicted
+                </h3>
+                <span className="text-[10px] text-[var(--anna-sage-dark)]/70 font-normal normal-case tracking-normal">
+                  Pre-booked by Anna.I
+                </span>
+                <span className="font-data text-[10px] text-[var(--anna-sage-dark)] bg-[var(--anna-sage)]/10 px-1.5 py-0.5 rounded-md">
+                  {predictedItems.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Predicted task list */}
+            <div className="divide-y divide-[var(--anna-sage)]/10 max-h-72 overflow-y-auto anna-scroll">
+              {predictedItems.map((item, idx) => {
+                const countdown = item.lockAt ? getLockCountdown(item.lockAt) : null;
+                return (
+                  <div
+                    key={idx}
+                    className="px-4 py-3 hover:bg-[var(--anna-sage-light)]/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Date column */}
+                      <div className="shrink-0 w-16 pt-0.5">
+                        <span className="font-data text-[11px] text-[var(--anna-muted)]">
+                          {item.dateLabel}
+                        </span>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-[var(--anna-slate)]">
+                            {item.category}
+                          </span>
+                          {/* AI badge */}
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wider bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] px-1.5 py-0.5 rounded-md">
+                            <Brain size={9} />
+                            Predicted
+                          </span>
+                        </div>
+                        {item.instructions && (
+                          <p className="text-[11px] text-[var(--anna-muted)] truncate mt-0.5">
+                            {item.instructions}
+                          </p>
+                        )}
+
+                        {/* Lock countdown */}
+                        {countdown && (
+                          <div className={cn(
+                            "flex items-center gap-1 mt-1.5",
+                            countdown.isUrgent ? "text-[var(--anna-error)]" : "text-[var(--anna-muted)]"
+                          )}>
+                            <Clock size={10} />
+                            <span className="text-[10px] font-medium">{countdown.text}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right column: amount + cancel */}
+                      <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
+                        <span className="font-data text-xs text-[var(--anna-slate)]">{item.amount}</span>
+                        <CancelPredictedButton
+                          taskId={item.taskId}
+                          onCancel={handleCancelPredicted}
+                          isCancelling={cancellingId === item.taskId}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer hint */}
+            <div className="px-4 py-2 border-t border-[var(--anna-sage)]/20">
+              <p className="text-[10px] text-[var(--anna-sage-dark)]/60 text-center">
+                Based on your booking patterns. Cancel or edit anytime before the lock deadline.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming (Next 7 Days) — Regular tasks only */}
       <div className="px-4 lg:px-6 pb-4 lg:pb-6">
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
           {/* Section header */}
@@ -285,9 +476,9 @@ export function Dashboard() {
               <span className="text-[10px] text-[var(--anna-muted)] font-normal normal-case tracking-normal">
                 Next 7 Days
               </span>
-              {upcomingItems.length > 0 && (
+              {regularItems.length > 0 && (
                 <span className="font-data text-[10px] text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-1.5 py-0.5 rounded-md">
-                  {upcomingItems.length}
+                  {regularItems.length}
                 </span>
               )}
             </div>
@@ -309,13 +500,17 @@ export function Dashboard() {
           </div>
 
           {/* Upcoming list */}
-          {upcomingItems.length === 0 ? (
+          {regularItems.length === 0 ? (
             <div className="px-4 py-6 text-center">
-              <p className="text-xs text-[var(--anna-muted)]">No upcoming tasks in the next 7 days</p>
+              <p className="text-xs text-[var(--anna-muted)]">
+                {upcomingItems.length === 0
+                  ? "No upcoming tasks in the next 7 days"
+                  : "All upcoming tasks are shown above"}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-[var(--anna-border)] max-h-64 overflow-y-auto anna-scroll">
-              {upcomingItems.slice(0, 5).map((item, idx) => (
+              {regularItems.slice(0, 5).map((item, idx) => (
                 <button
                   key={idx}
                   type="button"

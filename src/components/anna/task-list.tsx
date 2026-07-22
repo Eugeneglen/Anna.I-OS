@@ -9,7 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SearchX } from "lucide-react";
 import type { Task, TaskStatus } from "@/lib/types";
 
-const STATUS_GROUPS: { statuses: TaskStatus[]; title: string; emptyText: string }[] = [
+const STATUS_GROUPS: { statuses: TaskStatus[]; title: string; emptyText: string; isPredicted?: boolean }[] = [
+  {
+    statuses: ["PREDICTED"],
+    title: "AI Predicted",
+    emptyText: "No predicted bookings",
+    isPredicted: true,
+  },
   {
     statuses: ["CREATED"],
     title: "Awaiting Dispatch",

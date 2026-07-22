@@ -75,7 +75,14 @@ export async function GET(
         orderBy: { createdAt: "asc" },
       }),
       db.task.findMany({
-        where: { householdId: id },
+        where: {
+          householdId: id,
+          // Exclude cancelled predicted tasks
+          OR: [
+            { cancelledAt: null },
+            { status: { not: "PREDICTED" } },
+          ],
+        },
         orderBy: { createdAt: "desc" },
         include: {
           jobType: { select: { id: true, name: true, slug: true } },

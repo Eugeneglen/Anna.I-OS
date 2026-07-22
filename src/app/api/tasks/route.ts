@@ -44,7 +44,14 @@ export async function GET(request: Request) {
     }
 
     const tasks = await db.task.findMany({
-      where: { householdId },
+      where: {
+        householdId,
+        // Exclude cancelled predicted tasks
+        OR: [
+          { cancelledAt: null },
+          { status: { not: "PREDICTED" } },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
         // H-7 FIX: Add jobType and quotation includes

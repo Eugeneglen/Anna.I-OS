@@ -26,7 +26,7 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ const actionButtons: Record<
   TaskStatus,
   { label: string; icon: React.ElementType; variant: "default" | "outline" | "destructive"; action: string }[]
 > = {
+  PREDICTED: [{ label: "Cancel Prediction", icon: X, variant: "destructive", action: "cancel-predicted" }],
   CREATED: [{ label: "Dispatch to Vendor", icon: Send, variant: "default", action: "dispatch" }],
   DISPATCHED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
   IN_PROGRESS: [{ label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" }],
@@ -61,6 +62,7 @@ const actionButtons: Record<
 };
 
 const statusBadgeStyles: Record<TaskStatus, string> = {
+  PREDICTED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
   DISPATCHED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   IN_PROGRESS: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
@@ -205,6 +207,32 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
+  // Phase 4: Cancel predicted task mutation
+  const cancelPredictedMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tasks/${taskId}/cancel-predictive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Cancelled by household" }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to cancel prediction");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Prediction cancelled" });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["household"] });
+      closeTaskDetail();
+    },
+    onError: (err) => {
+      toast({ title: err.message || "Failed to cancel", variant: "destructive" });
+    },
+  });
+
   function handleAction(action: string, payload?: string) {
     switch (action) {
       case "dispatch":
@@ -234,6 +262,9 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       case "resolve":
         // H-4 FIX: Now actually calls the resolve mutation
         resolveDisputeMutation.mutate();
+        break;
+      case "cancel-predicted":
+        cancelPredictedMutation.mutate();
         break;
     }
   }
@@ -279,6 +310,46 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
           {STATUS_LABELS[task.status]}
         </Badge>
       </div>
+
+      {/* Phase 4: Predicted Task Info */}
+      {task.status === "PREDICTED" && (
+        <div className="rounded-2xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[var(--anna-sage-light)]/40 to-[var(--anna-white)] p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-sage)] flex items-center justify-center">
+              <Sparkles size={16} className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--anna-sage-dark)]">AI Predicted Booking</p>
+              <p className="text-[10px] text-[var(--anna-sage-dark)]/60">
+                Based on your household's booking patterns
+              </p>
+            </div>
+          </div>
+
+          {task.scheduledStart && (
+            <div className="flex items-center gap-2 text-xs text-[var(--anna-slate)]">
+              <Clock size={12} className="text-[var(--anna-muted)]" />
+              <span>Scheduled: {formatDate(task.scheduledStart)} at {formatTime(task.scheduledStart)}</span>
+            </div>
+          )}
+
+          {task.lockAt && (
+            <div className={cn(
+              "flex items-center gap-2 text-xs rounded-xl px-3 py-2",
+              new Date() > new Date(task.lockAt)
+                ? "bg-[var(--anna-error)]/10 text-[var(--anna-error)]"
+                : "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+            )}>
+              <Clock size={12} />
+              <span className="font-medium">
+                {new Date() > new Date(task.lockAt)
+                  ? "Lock deadline passed — cannot cancel"
+                  : `Editable until ${new Date(task.lockAt).toLocaleDateString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Amount */}
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 flex items-center justify-between">
@@ -520,7 +591,8 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                     verifyMutation.isPending ||
                     escrowMutation.isPending ||
                     rebookMutation.isPending ||
-                    resolveDisputeMutation.isPending
+                    resolveDisputeMutation.isPending ||
+                    cancelPredictedMutation.isPending
                   }
                   className={
                     a.variant === "default"

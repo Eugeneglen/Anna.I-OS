@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { triggerAnomalyDetection } from "@/lib/notify"
+import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -115,6 +116,9 @@ export async function PATCH(
 
         return { updatedTask, updatedEscrow }
       })
+
+      // Phase 4: Fire-and-forget predictive scheduling for L4+ households
+      triggerPredictiveScheduling(task.householdId, task.category as any, task.id)
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }

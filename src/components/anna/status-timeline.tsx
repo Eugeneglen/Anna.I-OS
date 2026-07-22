@@ -4,6 +4,7 @@ import { Check, AlertTriangle } from "lucide-react";
 import type { TaskStatus } from "@/lib/types";
 
 const STEPS: { key: TaskStatus; label: string }[] = [
+  { key: "PREDICTED", label: "AI Predicted" },
   { key: "CREATED", label: "Created" },
   { key: "DISPATCHED", label: "Dispatched" },
   { key: "IN_PROGRESS", label: "In Progress" },
