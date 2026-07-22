@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, Briefcase } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -175,7 +175,18 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Settings — separated from main nav */}
-          <div className="mt-auto pt-2 border-t border-[var(--anna-border)]">
+          {/* Vendor Portal link */}
+          <div className="mt-auto pt-2">
+            <a
+              href="/vendor/login"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--anna-muted)] hover:bg-[var(--anna-bg)] hover:text-[var(--anna-slate)] transition-all w-full"
+            >
+              <Briefcase size={18} />
+              Vendor Portal
+              <span className="ml-auto text-[10px] font-data">&rarr;</span>
+            </a>
+          </div>
+          <div className="pt-2 border-t border-[var(--anna-border)]">
             <button
               onClick={() => setActiveTab("settings")}
               className={cn(

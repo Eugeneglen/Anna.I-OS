@@ -1,4 +1,5 @@
 import { db } from './seed-db'
+import * as bcrypt from 'bcryptjs'
 
 // ═══════════════════════════════════════════════════════════
 // DETERMINISTIC IDs — re-seeding always produces the same IDs
@@ -273,6 +274,15 @@ async function _main() {
   })
 
   console.log('✅ 5 demo vendors created')
+
+  // ============ 4a. VENDOR AUTH (portal login credentials) ============
+  // Set passwordHash for vendors that should have portal access
+  const vendorPasswordHash = await bcrypt.hash('vendor123', 10)
+  await db.vendor.updateMany({
+    where: { email: { in: ['ops@sparkclean.sg', 'hello@freshwash.sg', 'bookings@coolair.sg', 'support@fixit.sg', 'ops@greensweep.sg'] } },
+    data: { passwordHash: vendorPasswordHash },
+  })
+  console.log('✅ Vendor portal credentials set (password: vendor123)')
 
   // ============ 4b. VENDOR STAFF (SME only) ============
   const freshwashStaff = ['Ahmad R.', 'Siti N.', 'Raju K.', 'Mei Ling', 'Devan S.', 'Priya M.', 'Farid H.', 'Lin Wei']

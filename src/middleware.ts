@@ -1,30 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.OPS_JWT_SECRET || "anna-ops-dev-secret";
-const secret = new TextEncoder().encode(JWT_SECRET);
+const OPS_JWT_SECRET = process.env.OPS_JWT_SECRET || "anna-ops-dev-secret";
+const VENDOR_JWT_SECRET = process.env.VENDOR_JWT_SECRET || "anna-vendor-dev-secret";
+const opsSecret = new TextEncoder().encode(OPS_JWT_SECRET);
+const vendorSecret = new TextEncoder().encode(VENDOR_JWT_SECRET);
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Only protect /ops/* page routes (not API routes — those self-authenticate)
-  if (!pathname.startsWith("/ops") || pathname === "/ops/login") {
-    return NextResponse.next();
+  // ── Ops routes ──
+  if (pathname.startsWith("/ops")) {
+    if (pathname === "/ops/login") {
+      return NextResponse.next();
+    }
+
+    const token = req.cookies.get("ops_token")?.value;
+    if (!token) {
+      return NextResponse.redirect(new URL("/ops/login", req.url));
+    }
+
+    try {
+      await jwtVerify(token, opsSecret);
+      return NextResponse.next();
+    } catch {
+      return NextResponse.redirect(new URL("/ops/login", req.url));
+    }
   }
 
-  const token = req.cookies.get("ops_token")?.value;
-  if (!token) {
-    return NextResponse.redirect(new URL("/ops/login", req.url));
+  // ── Vendor routes ──
+  if (pathname.startsWith("/vendor")) {
+    if (pathname === "/vendor/login") {
+      return NextResponse.next();
+    }
+
+    const token = req.cookies.get("vendor_token")?.value;
+    if (!token) {
+      return NextResponse.redirect(new URL("/vendor/login", req.url));
+    }
+
+    try {
+      await jwtVerify(token, vendorSecret);
+      return NextResponse.next();
+    } catch {
+      return NextResponse.redirect(new URL("/vendor/login", req.url));
+    }
   }
 
-  try {
-    await jwtVerify(token, secret);
-    return NextResponse.next();
-  } catch {
-    return NextResponse.redirect(new URL("/ops/login", req.url));
-  }
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/ops", "/ops/:path((?!login).*)"],
+  matcher: [
+    "/ops",
+    "/ops/:path((?!login).*)",
+    "/vendor",
+    "/vendor/:path((?!login).*)",
+  ],
 };

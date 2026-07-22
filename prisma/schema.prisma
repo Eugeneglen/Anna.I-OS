@@ -196,6 +196,7 @@ model Vendor {
   maxTasksPerWeek Int          @default(30)
   availability    Json?        // working hours, days off
   zones           String // JSON array of estate zone strings
+  passwordHash     String?     // vendor portal login (null = ops-managed, no self-serve access)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
