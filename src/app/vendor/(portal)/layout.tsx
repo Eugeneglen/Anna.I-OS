@@ -19,6 +19,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VendorAiChat } from "@/components/vendor/vendor-ai-chat";
 
 interface VendorUser {
   id: string;
@@ -239,6 +240,9 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
           <div className="p-4 md:p-6 anna-fade-in">{children}</div>
         </main>
       </div>
+
+      {/* Vendor AI Chat */}
+      <VendorAiChat />
     </VendorUserContext.Provider>
   );
 }
