@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -159,19 +159,24 @@ function UserSection({ onLogout }: { onLogout: () => void }) {
 
 export default function VendorPortalLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const [timedOut, setTimedOut] = useState(false);
+  const mounted = useRef(false);
 
   const {
     data: user,
     isLoading,
     error,
+    isError,
   } = useQuery<VendorUser | null>({
     queryKey: ["vendor-session"],
     queryFn: async () => {
       const res = await fetch("/api/vendor/session");
       if (res.status === 401) {
-        router.push("/vendor/login");
+        // Use hard redirect as fallback — router.push may not fire inside queryFn
+        window.location.replace("/vendor/login");
         return null;
       }
+      if (!res.ok) return null;
       const data = await res.json();
       return data.vendor as VendorUser;
     },
@@ -179,16 +184,47 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     staleTime: 5 * 60 * 1000,
   });
 
+  // Redirect on error or when session fetch returned null (unauthenticated)
   useEffect(() => {
-    if (error) router.push("/vendor/login");
-  }, [error, router]);
+    mounted.current = true;
+    if (isError || (!isLoading && !user && mounted.current)) {
+      window.location.replace("/vendor/login");
+    }
+  }, [isError, error, isLoading, user]);
+
+  // Safety timeout: if loading takes more than 8s, force redirect to login
+  useEffect(() => {
+    if (!isLoading && !user) return; // already handled above
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [isLoading, user]);
 
   if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--anna-bg)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto border-[var(--anna-sage-dark)]" />
-          <p className="mt-3 text-sm text-[var(--anna-muted)]">Loading...</p>
+          {timedOut ? (
+            <>
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <p className="text-sm font-medium text-[var(--anna-slate)]">Unable to load session</p>
+              <p className="text-xs text-[var(--anna-muted)] mt-1 mb-3">Your session may have expired</p>
+              <button
+                onClick={() => window.location.replace("/vendor/login")}
+                className="text-xs font-medium text-[var(--anna-sage-dark)] hover:underline underline-offset-2"
+              >
+                Sign in again
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto border-[var(--anna-sage-dark)]" />
+              <p className="mt-3 text-sm text-[var(--anna-muted)]">Loading...</p>
+            </>
+          )}
         </div>
       </div>
     );
