@@ -57,6 +57,7 @@ server.log
 # SQLite database (regenerated via prisma db push)
 db/*.db
 db/*.db-journal
+db/backups/
 
 # Sandbox internal files
 .zscripts/

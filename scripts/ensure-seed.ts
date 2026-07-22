@@ -1,9 +1,10 @@
 /**
  * ensure-seed.ts — Checks if the database has demo data.
- * If critical tables are empty (Household, ServiceJobType), runs the full seed.
+ * If critical tables are empty (Household, ServiceJobType, OpsUser), runs the full seed.
  *
- * This is called automatically before the dev server starts to prevent
- * the "empty database" problem where the app loads but shows no content.
+ * IMPORTANT: OpsUser is treated as a hard requirement. If OpsUser is empty but
+ * other tables have data (e.g. from a broken previous deploy), we still re-seed
+ * because the seed scripts are idempotent (deleteMany + createMany).
  *
  * Usage:
  *   npx tsx scripts/ensure-seed.ts
@@ -34,14 +35,18 @@ async function main() {
 
     const empty = results.filter((r) => r.count === 0);
     const allEmpty = results.every((r) => r.count === 0);
+    const opsUserEmpty = results.find((r) => r.name === "OpsUser")!.count === 0;
 
     for (const r of results) {
       const status = r.count > 0 ? `✅ ${r.count} rows` : "⚠️  empty";
       console.log(`  ${r.name}: ${status}`);
     }
 
-    if (allEmpty) {
-      console.log("\n🚨 Database is completely empty. Running full seed...");
+    if (allEmpty || opsUserEmpty) {
+      const reason = allEmpty
+        ? "Database is completely empty"
+        : "OpsUser table is empty (required for /ops login)";
+      console.log(`\n🚨 ${reason}. Running full seed...`);
       console.log("─".repeat(50));
       const { main: seed } = await import("../prisma/seed");
       await seed();

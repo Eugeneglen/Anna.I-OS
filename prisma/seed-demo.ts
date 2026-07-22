@@ -42,94 +42,44 @@ const IDS = {
 } as const
 
 async function _main() {
-  // ============ 0. CLEANUP — remove old demo data to allow safe re-seed ============
-  const demoEmails = [
-    'tan.family@example.com',
-    'lim.residence@example.com',
-    'chen.household@example.com',
-  ]
-
-  // Find any existing households (even with different IDs) to clean up
-  const existingHHs = await db.household.findMany({
-    where: { email: { in: demoEmails } },
-    select: { id: true },
-  })
-  const allHhIds = [...new Set([...Object.values(IDS.households), ...existingHHs.map(h => h.id)])]
-  const vendorIds = Object.values(IDS.vendors)
-  const vendorEmails = ['ops@sparkclean.sg', 'hello@freshwash.sg', 'bookings@coolair.sg', 'support@fixit.sg', 'ops@greensweep.sg'] as const;
-
+  // ============ 0. CLEANUP — nuclear delete in FK-safe order ============
+  // Delete ALL rows (no where clause) to make seed truly idempotent.
+  // This works because:
+  //   - seed.ts runs seed-ops FIRST (OpsUser/AuditLog are untouched here)
+  //   - seed-job-types re-seeds ServiceJobType/AutonomyLevelThreshold
+  //   - Topological order prevents FK constraint violations
   // ══════════════════════════════════════════════════════════════
-  // CLEANUP — delete in topological order (children BEFORE parents)
-  //
-  // PostgreSQL enforces RESTRICT by default when onDelete is omitted.
-  // Every table with a FK pointing to Vendor/Household must be
-  // cleared before the parent row is deleted.
-  //
-  // FK audit (schema.prisma):
-  //   VendorPlan          → Vendor      (RESTRICT — no onDelete)  ← was the crash
-  //   Booking             → Vendor      (RESTRICT — no onDelete)
-  //   VendorFeatureOverride → Vendor    (Cascade — but clean anyway)
-  //   VendorStaff         → Vendor      (Cascade — but clean for idempotency)
-  //   VendorHouseholdAffinity → Vendor  (Cascade)
-  //   Notification        → Vendor      (SetNull — safe, but clean for hygiene)
-  //   Notification        → Household   (RESTRICT — no onDelete)
-  //   Quotation           → Household   (RESTRICT — no onDelete)
-  //   FamilyMember        → Household   (Cascade)
-  //   Subscription        → Household   (Cascade)
-  //   HouseholdCategoryAutonomy → Household (Cascade)
-  //   Anomaly             → Household   (Cascade)
-  //   VendorHouseholdAffinity → Household (Cascade)
-  //   Booking             → VendorStaff (RESTRICT — no onDelete)
-  //   VerificationPhoto   → Booking     (RESTRICT — no onDelete)
-  //   EscrowLedger        → Booking     (RESTRICT — no onDelete)
-  // ══════════════════════════════════════════════════════════════
+  console.log('🧹 Cleaning all demo data (FK-safe order)...')
 
-  // ── Level 0: Leaf tables (no other table depends on these) ──
-  await db.verificationPhoto.deleteMany({ where: { taskId: { in: Object.values(IDS.tasks) } } })
-  await db.escrowLedger.deleteMany({ where: { taskId: { in: Object.values(IDS.tasks) } } })
-  await db.taskAttachment.deleteMany({ where: { taskId: { in: Object.values(IDS.tasks) } } })
+  // Level 0: Leaf tables
+  await db.verificationPhoto.deleteMany()
+  await db.escrowLedger.deleteMany()
+  await db.taskAttachment.deleteMany()
 
-  // ── Level 1: Mid-level (Booking refs Task + Vendor + VendorStaff) ──
-  await db.booking.deleteMany({ where: { OR: [
-    { taskId: { in: Object.values(IDS.tasks) } },
-    { vendorId: { in: vendorIds } },
-  ] } })
+  // Level 1: Booking (refs Task + Vendor + VendorStaff)
+  await db.booking.deleteMany()
 
-  // ── Level 2: Vendor-dependent children (MUST precede vendor.deleteMany) ──
-  await db.vendorPlan.deleteMany({ where: { vendorId: { in: vendorIds } } })
-  await db.vendorFeatureOverride.deleteMany({ where: { vendorId: { in: vendorIds } } })
-  await db.vendorStaff.deleteMany({ where: { vendorId: { in: vendorIds } } })
+  // Level 2: Vendor-dependent (MUST precede vendor)
+  await db.vendorPlan.deleteMany()
+  await db.vendorFeatureOverride.deleteMany()
+  await db.vendorStaff.deleteMany()
 
-  // ── Level 3: Shared + household-dependent tables ──
-  await db.vendorHouseholdAffinity.deleteMany({ where: { OR: [
-    { householdId: { in: allHhIds } },
-    { vendorId: { in: vendorIds } },
-  ] } })
-  await db.notification.deleteMany({ where: { OR: [
-    { householdId: { in: allHhIds } },
-    { vendorId: { in: vendorIds } },
-  ] } })
-  await db.quotation.deleteMany({ where: { householdId: { in: allHhIds } } })
-  await db.householdCategoryAutonomy.deleteMany({ where: { householdId: { in: allHhIds } } })
-  await db.subscription.deleteMany({ where: { householdId: { in: allHhIds } } })
-  await db.familyMember.deleteMany({ where: { OR: [
-    { id: { in: Object.values(IDS.members) } },
-    { householdId: { in: allHhIds } },
-  ] } })
-  await db.anomaly.deleteMany({ where: { householdId: { in: allHhIds } } })
+  // Level 3: Shared tables
+  await db.vendorHouseholdAffinity.deleteMany()
+  await db.notification.deleteMany()
+  await db.quotation.deleteMany()
+  await db.householdCategoryAutonomy.deleteMany()
+  await db.subscription.deleteMany()
+  await db.familyMember.deleteMany()
+  await db.anomaly.deleteMany()
 
-  // ── Level 4: Tasks (after all Booking/VerificationPhoto/EscrowLedger gone) ──
-  await db.task.deleteMany({ where: { OR: [
-    { id: { in: Object.values(IDS.tasks) } },
-    { householdId: { in: allHhIds } },
-  ] } })
+  // Level 4: Tasks
+  await db.task.deleteMany()
 
-  // ── Level 5: Parent tables (all dependents cleared) ──
-  await db.household.deleteMany({ where: { email: { in: demoEmails } } })
-  await db.vendor.deleteMany({ where: { OR: [
-    { id: { in: vendorIds } },
-    { email: { in: [...vendorEmails] as string[] } },
-  ] } })
+  // Level 5: Parent tables
+  await db.household.deleteMany()
+  await db.vendor.deleteMany()
+
   console.log('🧹 Cleaned up old demo data')
 
   // ============ 1. AUTONOMY LEVEL THRESHOLDS (all 10 categories) ============
