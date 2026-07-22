@@ -55,6 +55,10 @@ COPY --from=builder /app/prisma ./prisma
 # Seed scripts
 COPY --from=builder /app/scripts ./scripts
 
+# Entrypoint (runs prisma db push + seed before server start)
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+
 # Next.js standalone output
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/package.json ./
@@ -63,4 +67,4 @@ EXPOSE 8080
 ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["bun", "server.js"]
+CMD ["./entrypoint.sh"]
