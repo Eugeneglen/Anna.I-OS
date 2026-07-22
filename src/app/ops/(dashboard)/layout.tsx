@@ -35,11 +35,11 @@ export function useOpsUser() {
 }
 
 const NAV_ITEMS = [
+  { label: "Analytics", href: "/ops/analytics", icon: BarChart3, active: true },
+  { label: "Bookings", href: "/ops/bookings", icon: Calendar, active: true },
+  { label: "Households", href: "/ops/households", icon: Home, active: true },
   { label: "Vendors", href: "/ops/vendors", icon: Users, active: true },
   { label: "Config", href: "/ops/config", icon: Settings, active: true },
-  { label: "Analytics", href: "#", icon: BarChart3, active: false },
-  { label: "Bookings", href: "#", icon: Calendar, active: false },
-  { label: "Households", href: "#", icon: Home, active: false },
   { label: "Autonomy", href: "#", icon: Zap, active: false },
   { label: "Notifications", href: "#", icon: Bell, active: false },
   { label: "Anomalies", href: "#", icon: AlertTriangle, active: false },
