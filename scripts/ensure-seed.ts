@@ -64,7 +64,11 @@ async function main() {
     }
   } catch (e) {
     console.error("❌ Seed check failed:", e);
-    // Don't crash the dev server — just warn
+    if (process.env.NODE_ENV === "production") {
+      console.error("   CRITICAL: Seed failure in production — crashing so container restarts.");
+      process.exit(1);
+    }
+    // In dev, don't crash — just warn
     console.log("   Continuing with dev server start...");
   } finally {
     await db.$disconnect();

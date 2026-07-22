@@ -28,6 +28,18 @@ export default function OpsLoginPage() {
 
       if (!res.ok) {
         toast.error(data.error || "Login failed");
+        // Auto-attempt database repair if credentials look correct
+        if (data.error === "Invalid credentials") {
+          try {
+            const repairRes = await fetch("/api/ops/ensure-users", { method: "POST" });
+            const repairData = await repairRes.json();
+            if (repairData.created) {
+              toast.success("Database repaired — please try logging in again");
+            }
+          } catch {
+            // silent fail — the repair link is available as fallback
+          }
+        }
         return;
       }
 
@@ -132,6 +144,27 @@ export default function OpsLoginPage() {
             </div>
           </div>
         </div>
+
+        {/* Database repair link (hidden unless needed) */}
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const res = await fetch("/api/ops/ensure-users", { method: "POST" });
+              const data = await res.json();
+              if (data.success) {
+                toast.success(data.message);
+              } else {
+                toast.error(data.error || "Repair failed");
+              }
+            } catch {
+              toast.error("Network error during repair");
+            }
+          }}
+          className="mt-4 mx-auto block text-[10px] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] underline underline-offset-2 transition-colors cursor-pointer"
+        >
+          Repair database / re-seed users
+        </button>
 
         {/* Footer */}
         <p className="mt-6 text-center text-[10px] text-[var(--anna-muted)]">

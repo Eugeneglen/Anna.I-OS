@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 import { createOpsToken } from "@/lib/ops-auth";
 
+/** In production (Railway HTTPS), cookies MUST have secure:true or browsers reject them */
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -17,6 +20,7 @@ export async function POST(req: NextRequest) {
     const user = await db.opsUser.findUnique({ where: { email } });
 
     if (!user) {
+      console.warn(`[/api/ops/auth] User not found: ${email} (OpsUser count: ${await db.opsUser.count().catch(() => -1)})`);
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -25,6 +29,7 @@ export async function POST(req: NextRequest) {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      console.warn(`[/api/ops/auth] Wrong password for: ${email}`);
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     res.cookies.set("ops_token", token, {
       httpOnly: true,
-      secure: false,
+      secure: IS_PRODUCTION,
       sameSite: "lax",
       path: "/",
       maxAge: 8 * 3600,
@@ -68,7 +73,7 @@ export async function DELETE() {
     const res = NextResponse.json({ success: true });
     res.cookies.set("ops_token", "", {
       httpOnly: true,
-      secure: false,
+      secure: IS_PRODUCTION,
       sameSite: "lax",
       path: "/",
       maxAge: 0,

@@ -59,6 +59,9 @@ db/*.db
 db/*.db-journal
 db/backups/
 
+# Prisma migrations (this project uses db push, not migrate)
+/prisma/migrations/
+
 # Sandbox internal files
 .zscripts/
 agent-ctx/

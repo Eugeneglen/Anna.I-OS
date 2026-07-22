@@ -45,9 +45,11 @@ async function main() {
   console.log("╚══════════════════════════════════════════════╝\n");
 }
 
-main().catch((e) => {
-  console.error("❌ Seed failed:", e);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+  });
+}
 
 export default main;
