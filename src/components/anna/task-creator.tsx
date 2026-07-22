@@ -63,6 +63,9 @@ export function TaskCreator() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Today's date in YYYY-MM-DD format (used as min for date picker)
+  const todayISO = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
+
   const [initialState] = useState(getInitialCategoryState);
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(initialState.category);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
@@ -381,6 +384,7 @@ export function TaskCreator() {
               <Input
                 type="date"
                 value={scheduledDate}
+                min={todayISO}
                 onChange={(e) => setScheduledDate(e.target.value)}
                 className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
               />

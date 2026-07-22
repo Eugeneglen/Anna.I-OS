@@ -13,7 +13,6 @@ import {
   ChevronRight,
   CalendarClock,
   ArrowRight,
-  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +84,11 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
   weekEnd.setDate(weekEnd.getDate() + 7);
   weekEnd.setHours(23, 59, 59, 999);
 
+  // 24-hour freshness window for unscheduled tasks.
+  // If a CREATED task has no scheduledStart and is older than this,
+  // it's NOT "upcoming" — it's stale/waiting.
+  const freshnessCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
   const statusColors: Record<string, string> = {
     CREATED: "text-[var(--anna-warning)]",
     DISPATCHED: "text-[var(--anna-sage-dark)]",
@@ -99,14 +103,20 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
     // Only include actionable tasks (not verified/escrow released — those are done)
     if (t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") continue;
 
+    // Determine reference date: use scheduledStart if set, else createdAt
     const refDate = new Date(t.scheduledStart ?? t.createdAt);
 
-    // Include if: scheduled within next 7 days, or created today without a schedule
+    // Include if: scheduled within next 7 days
     const isInWindow = refDate >= todayStart && refDate <= weekEnd;
-    const isUnscheduledCreated = !t.scheduledStart && t.status === "CREATED" && new Date(t.createdAt) >= todayStart;
 
-    // Also skip unscheduled CREATED tasks whose createdAt is in the past (stale demo data)
-    if (!isInWindow && !isUnscheduledCreated) continue;
+    // Unscheduled CREATED tasks: only show if created within last 24 hours.
+    // This prevents stale demo data from cluttering the card.
+    const isFreshUnscheduled =
+      !t.scheduledStart &&
+      t.status === "CREATED" &&
+      new Date(t.createdAt) >= freshnessCutoff;
+
+    if (!isInWindow && !isFreshUnscheduled) continue;
 
     // Friendly date label
     let dateLabel: string;
@@ -139,89 +149,6 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
     const tA = tasks.find((t) => t.id === a.taskId)!;
     const tB = tasks.find((t) => t.id === b.taskId)!;
     return new Date(tA.scheduledStart ?? tA.createdAt).getTime() - new Date(tB.scheduledStart ?? tB.createdAt).getTime();
-  });
-
-  return items;
-}
-
-// ─── Recent Activity (Last 7 Days) ──────────────────────────
-
-interface RecentItem {
-  dateLabel: string;
-  category: string;
-  instructions: string;
-  statusLabel: string;
-  statusColor: string;
-  amount: string;
-  vendor: string;
-  taskId: string;
-}
-
-function computeRecent(tasks: Task[]): RecentItem[] {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sevenDaysAgo = new Date(todayStart);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  sevenDaysAgo.setHours(0, 0, 0, 0);
-
-  const statusColors: Record<string, string> = {
-    COMPLETED: "text-[var(--anna-slate-light)]",
-    VERIFIED: "text-[var(--anna-success)]",
-    ESCROW_RELEASED: "text-[var(--anna-muted)]",
-    DISPATCHED: "text-[var(--anna-sage-dark)]",
-    IN_PROGRESS: "text-[var(--anna-sage-dark)]",
-    DISPUTED: "text-[var(--anna-error)]",
-  };
-
-  const items: RecentItem[] = [];
-
-  for (const t of tasks) {
-    // Use the most recent meaningful timestamp
-    const refDate = new Date(
-      t.verifiedAt ||
-      t.escrowReleasedAt ||
-      t.completedAt ||
-      t.dispatchedAt ||
-      t.scheduledStart ||
-      t.createdAt
-    );
-
-    // Only include tasks with activity in the last 7 days
-    if (refDate < sevenDaysAgo) continue;
-
-    // Friendly date label
-    let dateLabel: string;
-    if (refDate.toDateString() === todayStart.toDateString()) {
-      dateLabel = "Today";
-    } else {
-      const yesterday = new Date(todayStart);
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (refDate.toDateString() === yesterday.toDateString()) {
-        dateLabel = "Yesterday";
-      } else {
-        dateLabel = refDate.toLocaleDateString("en-SG", { day: "numeric", month: "short" });
-      }
-    }
-
-    items.push({
-      dateLabel,
-      category: CATEGORY_DEFAULTS[t.category]?.label ?? t.category,
-      instructions: t.instructions ?? "",
-      statusLabel: STATUS_LABELS[t.status],
-      statusColor: statusColors[t.status] ?? "text-[var(--anna-muted)]",
-      amount: formatSgd(t.amountCents),
-      vendor: t.bookings?.[0]?.vendor?.name ?? "",
-      taskId: t.id,
-    });
-  }
-
-  // Sort by reference date, most recent first
-  items.sort((a, b) => {
-    const tA = tasks.find((t) => t.id === a.taskId)!;
-    const tB = tasks.find((t) => t.id === b.taskId)!;
-    const dA = new Date(tA.verifiedAt || tA.escrowReleasedAt || tA.completedAt || tA.dispatchedAt || tA.createdAt);
-    const dB = new Date(tB.verifiedAt || tB.escrowReleasedAt || tB.completedAt || tB.dispatchedAt || tB.createdAt);
-    return dB.getTime() - dA.getTime();
   });
 
   return items;
@@ -295,9 +222,6 @@ export function Dashboard() {
 
   // Upcoming (Next 7 Days)
   const upcomingItems = computeUpcoming(tasks);
-
-  // Recent Activity (Last 7 Days)
-  const recentItems = computeRecent(tasks);
 
   return (
     <div className="pb-20 md:pb-0">

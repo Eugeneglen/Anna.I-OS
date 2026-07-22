@@ -18,7 +18,16 @@ const createTaskSchema = z.object({
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
   recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
-  scheduledStart: z.string().optional(),
+  scheduledStart: z.string().optional().refine(
+    (val) => {
+      if (!val) return true; // optional — skip if not provided
+      // Reject dates before today (Singapore timezone)
+      const todaySG = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
+      const dateOnly = val.substring(0, 10); // extract YYYY-MM-DD
+      return dateOnly >= todaySG;
+    },
+    { message: "Scheduled date cannot be in the past" }
+  ),
   attachments: z.array(attachmentSchema).optional(),
   jobTypeId: z.string().nullable().optional(),
   quotationId: z.string().nullable().optional(),

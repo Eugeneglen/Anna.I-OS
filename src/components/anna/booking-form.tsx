@@ -58,6 +58,9 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("10:00");
+
+  // Today's date in YYYY-MM-DD format (used as min for date picker)
+  const todayISO = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
   const [photos, setPhotos] = useState<UploadedFile[]>([]);
   const [videos, setVideos] = useState<UploadedFile[]>([]);
 
@@ -337,6 +340,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
           <Input
             type="date"
             value={scheduledDate}
+            min={todayISO}
             onChange={(e) => setScheduledDate(e.target.value)}
             className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
           />
