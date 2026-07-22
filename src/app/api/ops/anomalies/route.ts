@@ -5,7 +5,7 @@ import { z } from "zod";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status") || "ACTIVE";
+    const status = searchParams.get("status") || "";
     const severity = searchParams.get("severity") || "";
     const type = searchParams.get("type") || "";
     const search = searchParams.get("search") || "";
@@ -20,7 +20,6 @@ export async function GET(request: Request) {
       where.OR = [
         { message: { contains: search } },
         { household: { name: { contains: search } } },
-        { vendor: { name: { contains: search } } },
       ];
     }
     if (cursor) {
@@ -35,15 +34,6 @@ export async function GET(request: Request) {
           take: limit,
           include: {
             household: { select: { id: true, name: true, postalCode: true } },
-            vendor: { select: { id: true, name: true } },
-            task: {
-              select: {
-                id: true,
-                category: true,
-                amountCents: true,
-                status: true,
-              },
-            },
           },
         }),
         db.anomaly.groupBy({
@@ -61,6 +51,46 @@ export async function GET(request: Request) {
         }),
       ]);
 
+    // Manually resolve vendor and task data (no Prisma relations on Anomaly)
+    const vendorIds = [
+      ...new Set(
+        anomalies
+          .map((a) => a.vendorId)
+          .filter((v): v is string => !!v)
+      ),
+    ];
+    const taskIds = [
+      ...new Set(
+        anomalies
+          .map((a) => a.taskId)
+          .filter((v): v is string => !!v)
+      ),
+    ];
+
+    const [vendors, tasks] = await Promise.all([
+      vendorIds.length > 0
+        ? db.vendor.findMany({
+            where: { id: { in: vendorIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      taskIds.length > 0
+        ? db.task.findMany({
+            where: { id: { in: taskIds } },
+            select: { id: true, category: true, amountCents: true, status: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const vendorMap = Object.fromEntries(vendors.map((v) => [v.id, v]));
+    const taskMap = Object.fromEntries(tasks.map((t) => [t.id, t]));
+
+    const enriched = anomalies.map((a) => ({
+      ...a,
+      vendor: a.vendorId ? vendorMap[a.vendorId] || null : null,
+      task: a.taskId ? taskMap[a.taskId] || null : null,
+    }));
+
     const nextCursor =
       anomalies.length === limit
         ? anomalies[anomalies.length - 1].createdAt.toISOString()
@@ -77,7 +107,7 @@ export async function GET(request: Request) {
     );
 
     return NextResponse.json({
-      anomalies,
+      anomalies: enriched,
       nextCursor,
       severityCounts: severityMap,
       typeCounts: typeMap,
