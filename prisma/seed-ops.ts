@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { db } from './seed-db'
 import * as bcrypt from "bcryptjs";
-
-const db = new PrismaClient();
 const SALT_ROUNDS = 10;
 const DEFAULT_HASH = bcrypt.hashSync("anna1234", SALT_ROUNDS);
 
@@ -25,5 +23,5 @@ export async function main() {
 if (require.main === module) {
   main()
     .catch((e) => { console.error(e); process.exit(1); })
-    .finally(() => db.$disconnect());
+    .finally(() => db.$disconnect?.());
 }

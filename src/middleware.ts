@@ -26,5 +26,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/ops/:path((?!login).*)"],
+  matcher: ["/ops", "/ops/:path((?!login).*)"],
 };
