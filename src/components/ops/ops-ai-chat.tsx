@@ -7,11 +7,12 @@ import {
   X,
   Send,
   AlertCircle,
-  Briefcase,
-  CalendarDays,
+  BarChart3,
+  Users,
+  Home,
+  Zap,
+  AlertTriangle,
   Wallet,
-  Star,
-  Clock,
   MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ interface ChatMessage {
   timestamp: number;
 }
 
-interface VendorAiResponse {
+interface OpsAiResponse {
   response: string;
   dataUsed: string[];
 }
@@ -40,8 +41,8 @@ interface VendorAiResponse {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5 px-4">
-      <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Briefcase size={12} className="text-white" />
+      <div className="w-7 h-7 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center flex-shrink-0 mt-0.5">
+        <BarChart3 size={12} className="text-white" />
       </div>
       <div className="bg-[var(--anna-white)] border border-[var(--anna-border)] rounded-2xl rounded-tl-md px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -55,29 +56,39 @@ function TypingIndicator() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Quick-suggestion chips (vendor-scoped)
+// Quick-suggestion chips (ops-scoped)
 // ─────────────────────────────────────────────────────────────
 
 const SUGGESTION_CHIPS = [
   {
-    label: "What jobs do I have today?",
-    prompt: "What jobs do I have scheduled for today?",
-    icon: CalendarDays,
+    label: "Platform overview",
+    prompt: "Give me a platform health overview — households, vendors, bookings, escrow state.",
+    icon: BarChart3,
   },
   {
-    label: "Check my earnings",
-    prompt: "How much have I earned and what's pending payout?",
+    label: "Vendor fleet status",
+    prompt: "Show me all vendors with their status, type, ratings, and utilisation.",
+    icon: Users,
+  },
+  {
+    label: "Anomaly report",
+    prompt: "What anomalies are currently active on the platform?",
+    icon: AlertTriangle,
+  },
+  {
+    label: "Autonomy distribution",
+    prompt: "What's the autonomy level distribution across households? How many are at each level?",
+    icon: Zap,
+  },
+  {
+    label: "Escrow summary",
+    prompt: "What's the current escrow state — held, released, disputed?",
     icon: Wallet,
   },
   {
-    label: "What's my rating?",
-    prompt: "What's my current rating and performance overview?",
-    icon: Star,
-  },
-  {
-    label: "This week's schedule",
-    prompt: "Show me my schedule for this week",
-    icon: Clock,
+    label: "Household landscape",
+    prompt: "Show me all households with their autonomy levels and task counts.",
+    icon: Home,
   },
 ];
 
@@ -85,7 +96,7 @@ const SUGGESTION_CHIPS = [
 // Main component
 // ─────────────────────────────────────────────────────────────
 
-export function VendorAiChat() {
+export function OpsAiChat() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -94,8 +105,8 @@ export function VendorAiChat() {
 
   // Mutation for sending messages
   const mutation = useMutation({
-    mutationFn: async (msg: string): Promise<VendorAiResponse> => {
-      const res = await fetch("/api/vendor/ai", {
+    mutationFn: async (msg: string): Promise<OpsAiResponse> => {
+      const res = await fetch("/api/ops/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg }),
@@ -173,10 +184,10 @@ export function VendorAiChat() {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             onClick={() => setOpen(true)}
-            className="fixed z-50 bottom-20 right-4 md:bottom-8 md:right-6 w-14 h-14 rounded-full bg-[var(--anna-sage)] text-white shadow-lg hover:bg-[var(--anna-sage-dark)] transition-colors flex items-center justify-center"
-            aria-label="Open Vendor AI Assistant"
+            className="fixed z-50 bottom-20 right-4 md:bottom-8 md:right-6 w-14 h-14 rounded-full bg-[var(--anna-sage-dark)] text-white shadow-lg hover:bg-[var(--anna-sage)] transition-colors flex items-center justify-center"
+            aria-label="Open Ops AI Assistant"
           >
-            <Briefcase size={22} />
+            <BarChart3 size={22} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -191,22 +202,22 @@ export function VendorAiChat() {
             transition={{ type: "spring", stiffness: 350, damping: 30 }}
             className={cn(
               "fixed z-50 bg-[var(--anna-white)] shadow-2xl flex flex-col overflow-hidden",
-              "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
+              "md:bottom-8 md:right-6 md:w-[420px] md:h-[560px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
               "inset-0 md:inset-auto rounded-none md:rounded-2xl"
             )}
           >
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--anna-border)] bg-[var(--anna-white)] flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
-                  <Briefcase size={14} className="text-white" />
+                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center">
+                  <BarChart3 size={14} className="text-white" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--anna-slate)]">
-                    Vendor Assistant
+                    Ops Assistant
                   </h3>
                   <p className="text-[10px] text-[var(--anna-sage-dark)] font-medium">
-                    Jobs, earnings & guidance
+                    Platform intelligence &amp; monitoring
                   </p>
                 </div>
               </div>
@@ -232,13 +243,13 @@ export function VendorAiChat() {
                     <MessageSquare size={22} className="text-[var(--anna-sage-dark)]" />
                   </div>
                   <p className="text-sm font-semibold text-[var(--anna-slate)] mb-1">
-                    Hi there!
+                    Ops Intelligence
                   </p>
-                  <p className="text-xs text-[var(--anna-muted)] leading-relaxed max-w-[260px] mb-5">
-                    I can help you check your schedule, earnings, job details, and performance. Ask me anything about your work on Anna.I.
+                  <p className="text-xs text-[var(--anna-muted)] leading-relaxed max-w-[280px] mb-5">
+                    Platform-wide visibility. Ask about vendors, households, bookings, escrow, anomalies, or autonomy.
                   </p>
                   {/* Quick-suggestion chips */}
-                  <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                  <div className="flex flex-col gap-2 w-full max-w-[300px]">
                     {SUGGESTION_CHIPS.map((chip) => {
                       const Icon = chip.icon;
                       return (
@@ -278,17 +289,17 @@ export function VendorAiChat() {
                       >
                         {/* Avatar */}
                         {msg.role === "assistant" && (
-                          <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Briefcase size={10} className="text-white" />
+                          <div className="w-7 h-7 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <BarChart3 size={10} className="text-white" />
                           </div>
                         )}
 
                         {/* Bubble */}
                         <div
                           className={cn(
-                            "max-w-[280px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+                            "max-w-[320px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
                             msg.role === "user"
-                              ? "bg-[var(--anna-sage)] text-white rounded-2xl rounded-tr-md"
+                              ? "bg-[var(--anna-sage-dark)] text-white rounded-2xl rounded-tr-md"
                               : "bg-[var(--anna-bg)] text-[var(--anna-slate)] rounded-2xl rounded-tl-md border border-[var(--anna-border)]"
                           )}
                         >
@@ -331,7 +342,7 @@ export function VendorAiChat() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask about jobs, earnings..."
+                  placeholder="Ask about vendors, bookings, escrow..."
                   disabled={mutation.isPending}
                   className="flex-1 h-9 text-sm border-[var(--anna-border)] bg-[var(--anna-bg)] rounded-xl px-3 focus-visible:ring-[var(--anna-sage)] focus-visible:ring-offset-0 placeholder:text-[var(--anna-muted)]"
                 />
@@ -339,7 +350,7 @@ export function VendorAiChat() {
                   type="submit"
                   size="icon"
                   disabled={!input.trim() || mutation.isPending}
-                  className="h-9 w-9 rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white disabled:opacity-40 flex-shrink-0"
+                  className="h-9 w-9 rounded-xl bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white disabled:opacity-40 flex-shrink-0"
                   aria-label="Send message"
                 >
                   <Send size={16} />

@@ -1,44 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
-import { VENDOR_AI_TOOLS, executeVendorToolCall } from "@/lib/vendor-ai-tools";
-import { getVendorSession } from "@/lib/vendor-auth";
+import { OPS_AI_TOOLS, executeOpsToolCall } from "@/lib/ops-ai-tools";
+import { getOpsSession } from "@/lib/ops-auth";
 import ZAI from "z-ai-web-dev-sdk";
 
 // ─────────────────────────────────────────────────────────────
-// System Prompt — Vendor AI
-// Per VENDOR_AI_README.md: practical, efficient, respectful.
-// Help the vendor complete the job, get verified, and get paid.
+// System Prompt — Ops AI
+// Per OPS_AI_README.md: precise, operator-register.
+// Numbers before narrative. Signal fast. Visibility ≠ authority.
 // ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are the Vendor AI assistant for Anna.I, Singapore's home services platform. You help service vendors (cleaners, handymen, electricians, etc.) manage their assigned jobs, understand verification requirements, and track their earnings.
+const SYSTEM_PROMPT = `You are the Ops AI assistant for Anna.I, Singapore's home services platform. You help ops coordinators and founders monitor platform health, investigate issues, and prepare reports.
 
 YOUR SCOPE:
-- Only this vendor's own data — their jobs, earnings, ratings, schedule
-- You do NOT have access to other vendors' data or platform-wide metrics
-- You do NOT have authority to promise future jobs, change routing, or modify contracts
+- Full cross-household and cross-vendor visibility — platform-wide data.
+- You serve Anna.I internal staff only (ops coordinators, founders, analysts).
+- If a household or vendor request reaches you, flag it as a routing error.
 
 GUIDELINES:
-- Be direct and practical. Vendors are busy — get to the point.
+- Be precise and efficient. Numbers before narrative. Ops staff want signal fast.
 - Use SGD currency format (e.g., SGD $68.00).
-- When explaining verification: be clear about what photos to capture and why.
-- When explaining payouts: be clear about timing (released after household verifies).
-- Use a professional but friendly tone — not the consumer brand voice.
-- If a vendor asks something outside your scope (e.g., "promise me more jobs"), explain that routing decisions are handled by the ops team.
-- Never suggest workarounds to verification or escrow requirements.
+- When presenting data, lead with the key metric or anomaly, then provide context.
+- When explaining routing/autonomy decisions, reference the underlying rule — never present outcomes as black-box results.
+- Use a professional, operator-register tone — not the consumer brand voice.
 
-PAYOUT PROCESS (explain when asked about money):
-1. Complete the job
-2. Upload before/after verification photos
-3. Household reviews and verifies the photos
-4. Escrow is released → payout processed
-Typical timeline: 1-3 business days after household verification.`;
+WHAT YOU CAN DO (without human sign-off):
+- Generate summaries, flags, and reports
+- Recommend actions (e.g. "recommend pausing autonomy promotion for Household X")
+- Answer factual questions about platform state
+- Explain why a rule-based decision was made
+
+WHAT REQUIRES HUMAN ESCALATION (you must say so):
+- Issuing refunds, credits, or escrow release overrides
+- Suspending or removing vendors from the routing pool
+- Overriding autonomy-level promotion/demotion
+- Making customer-facing commitments
+
+IMPORTANT:
+- Never fabricate a metric when data isn't available — say so.
+- Never share one vendor's data with another vendor, or one household's data with another household.
+- Autonomy thresholds are provisional defaults, not final locked values.
+- When unsure whether something needs escalation, escalate — an unnecessary human check costs less than an autonomous failure.`;
 
 // ─────────────────────────────────────────────────────────────
 // Request/Response Types
 // ─────────────────────────────────────────────────────────────
 
-interface VendorAiRequest {
+interface OpsAiRequest {
   message: string;
-  conversationId?: string;
 }
 
 interface ToolCall {
@@ -51,13 +59,13 @@ interface ToolCall {
 }
 
 // ─────────────────────────────────────────────────────────────
-// POST /api/vendor/ai
+// POST /api/ops/ai
 // ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate vendor
-    const session = await getVendorSession();
+    // Authenticate ops user
+    const session = await getOpsSession();
     if (!session) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -65,9 +73,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const vendorId = session.vendorId;
-
-    const body: VendorAiRequest = await request.json();
+    const body: OpsAiRequest = await request.json();
     const { message } = body;
 
     if (!message) {
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest) {
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: message },
       ],
-      tools: VENDOR_AI_TOOLS.map((tool) => ({
+      tools: OPS_AI_TOOLS.map((tool) => ({
         type: "function" as const,
         function: {
           name: tool.name,
@@ -122,7 +128,7 @@ export async function POST(request: NextRequest) {
         args = {};
       }
 
-      const result = await executeVendorToolCall(toolName, args, vendorId);
+      const result = await executeOpsToolCall(toolName, args);
 
       if (result.success && result.data) {
         results.push(JSON.stringify(result.data));
@@ -159,7 +165,7 @@ export async function POST(request: NextRequest) {
       dataUsed: toolCalls.map((tc) => tc.function.name),
     });
   } catch (error) {
-    console.error("[VendorAI] Error:", error);
+    console.error("[OpsAI] Error:", error);
     return NextResponse.json(
       { error: "Failed to process your request. Please try again." },
       { status: 500 }
