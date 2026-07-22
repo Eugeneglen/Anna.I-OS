@@ -40,9 +40,9 @@ const NAV_ITEMS = [
   { label: "Households", href: "/ops/households", icon: Home, active: true },
   { label: "Vendors", href: "/ops/vendors", icon: Users, active: true },
   { label: "Config", href: "/ops/config", icon: Settings, active: true },
-  { label: "Autonomy", href: "#", icon: Zap, active: false },
-  { label: "Notifications", href: "#", icon: Bell, active: false },
-  { label: "Anomalies", href: "#", icon: AlertTriangle, active: false },
+  { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true },
+  { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true },
+  { label: "Anomalies", href: "/ops/anomalies", icon: AlertTriangle, active: true },
 ];
 
 function RoleBadge({ role }: { role: string }) {
