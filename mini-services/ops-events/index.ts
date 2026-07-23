@@ -135,6 +135,38 @@ io.on("connection", (socket) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Predictive Lock Cron
+// Every 15 minutes, call the predictive lock endpoint
+// to transition overdue PREDICTED tasks → CREATED + auto-dispatch
+// ─────────────────────────────────────────────────────────────
+
+const PREDICTIVE_LOCK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const PREDICTIVE_LOCK_CRON_DELAY = 30 * 1000; // wait 30s after startup
+
+async function runPredictiveLock() {
+  try {
+    const res = await fetch("http://localhost:3000/api/predictive/lock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    if (res.ok && data.lockedCount > 0) {
+      console.log(`[cron] Predictive lock: ${data.lockedCount} task(s) locked and dispatched`);
+    }
+  } catch (err) {
+    // Non-critical — Next.js may not be up yet during startup
+    console.warn("[cron] Predictive lock check failed (non-critical):", err instanceof Error ? err.message : err);
+  }
+}
+
+// Schedule recurring lock check
+setTimeout(() => {
+  console.log(`[cron] Predictive lock scheduler active (every ${PREDICTIVE_LOCK_INTERVAL_MS / 60000}min)`);
+  runPredictiveLock(); // Run immediately on first schedule
+  setInterval(runPredictiveLock, PREDICTIVE_LOCK_INTERVAL_MS);
+}, PREDICTIVE_LOCK_CRON_DELAY);
+
+// ─────────────────────────────────────────────────────────────
 // Start server
 // ─────────────────────────────────────────────────────────────
 

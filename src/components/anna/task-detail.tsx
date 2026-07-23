@@ -27,8 +27,9 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle, Pencil } from "lucide-react";
 import { RaiseDisputeDialog } from "./raise-dispute-dialog";
+import { EditPredictedDialog } from "./edit-predicted-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,10 @@ const actionButtons: Record<
   TaskStatus,
   { label: string; icon: React.ElementType; variant: "default" | "outline" | "destructive"; action: string }[]
 > = {
-  PREDICTED: [{ label: "Cancel Prediction", icon: X, variant: "destructive", action: "cancel-predicted" }],
+  PREDICTED: [
+    { label: "Edit Prediction", icon: Pencil, variant: "outline", action: "edit-predicted" },
+    { label: "Cancel Prediction", icon: X, variant: "destructive", action: "cancel-predicted" },
+  ],
   CREATED: [{ label: "Dispatch to Vendor", icon: Send, variant: "default", action: "dispatch" }],
   DISPATCHED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
   IN_PROGRESS: [{ label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" }],
@@ -219,6 +223,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
   const [ratingComment, setRatingComment] = useState("");
   const [hoveredStar, setHoveredStar] = useState(0);
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [editPredictedOpen, setEditPredictedOpen] = useState(false);
 
   const analyzePhotosMutation = useMutation({
     mutationFn: async () => {
@@ -363,6 +368,9 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         break;
       case "cancel-predicted":
         cancelPredictedMutation.mutate();
+        break;
+      case "edit-predicted":
+        setEditPredictedOpen(true);
         break;
     }
   }
@@ -1020,6 +1028,20 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         taskCategory={task.category}
         vendorName={booking?.vendor?.name}
         amountCents={escrow?.amountCents || 0}
+      />
+
+      <EditPredictedDialog
+        open={editPredictedOpen}
+        onOpenChange={setEditPredictedOpen}
+        taskId={taskId}
+        category={task.category}
+        currentScheduledStart={task.scheduledStart?.toISOString()}
+        currentInstructions={task.instructions}
+        currentAmountCents={task.amountCents}
+        lockAt={task.lockAt?.toISOString()}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+        }}
       />
     </div>
   );

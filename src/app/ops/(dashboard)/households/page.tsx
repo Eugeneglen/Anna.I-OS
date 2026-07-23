@@ -23,6 +23,10 @@ import {
   Clock,
   Star,
   Zap,
+  Wallet,
+  ShieldAlert,
+  CheckCircle2,
+  ArrowDownLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AUTONOMY_LEVEL_NAMES } from "@/lib/constants";
@@ -377,6 +381,72 @@ export default function HouseholdsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Escrow Summary */}
+              {tasks.some((t: Record<string, unknown>) => {
+                const entries = t.escrowEntries as Record<string, unknown>[] | undefined;
+                return entries && entries.length > 0;
+              }) && (() => {
+                // Aggregate escrow states from all tasks
+                const escrowAgg = { held: 0, released: 0, disputed: 0, refunded: 0 };
+                for (const t of tasks) {
+                  const entries = (t.escrowEntries as Record<string, unknown>[]) || [];
+                  for (const e of entries) {
+                    const state = e.state as string;
+                    const amt = (e.amountCents as number) || 0;
+                    if (state === "HELD") escrowAgg.held += amt;
+                    else if (state === "RELEASED") escrowAgg.released += amt;
+                    else if (state === "DISPUTED") escrowAgg.disputed += amt;
+                    else if (state === "REFUNDED") escrowAgg.refunded += amt;
+                  }
+                }
+                const totalEscrow = escrowAgg.held + escrowAgg.released + escrowAgg.disputed + escrowAgg.refunded;
+                if (totalEscrow === 0) return null;
+                return (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+                      <Wallet size={12} className="inline mr-1" />Escrow Summary
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-amber-50 p-3">
+                        <div className="flex items-center gap-1 text-[10px] text-amber-600 mb-1">
+                          <ShieldAlert size={10} />
+                          Held
+                        </div>
+                        <p className="font-data text-sm font-semibold text-amber-700">{formatCents(escrowAgg.held)}</p>
+                      </div>
+                      <div className="rounded-xl bg-emerald-50 p-3">
+                        <div className="flex items-center gap-1 text-[10px] text-emerald-600 mb-1">
+                          <CheckCircle2 size={10} />
+                          Released
+                        </div>
+                        <p className="font-data text-sm font-semibold text-emerald-700">{formatCents(escrowAgg.released)}</p>
+                      </div>
+                      {escrowAgg.disputed > 0 && (
+                        <div className="rounded-xl bg-red-50 p-3">
+                          <div className="flex items-center gap-1 text-[10px] text-red-600 mb-1">
+                            <ShieldAlert size={10} />
+                            Disputed
+                          </div>
+                          <p className="font-data text-sm font-semibold text-red-700">{formatCents(escrowAgg.disputed)}</p>
+                        </div>
+                      )}
+                      {escrowAgg.refunded > 0 && (
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <div className="flex items-center gap-1 text-[10px] text-slate-600 mb-1">
+                            <ArrowDownLeft size={10} />
+                            Refunded
+                          </div>
+                          <p className="font-data text-sm font-semibold text-slate-700">{formatCents(escrowAgg.refunded)}</p>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[var(--anna-muted)] mt-2 font-data">
+                      Total processed: {formatCents(totalEscrow)}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Recent Tasks */}
               <div>

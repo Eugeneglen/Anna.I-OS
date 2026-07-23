@@ -42,6 +42,7 @@ import {
   AUTONOMY_LEVEL_NAMES,
 } from "./constants"
 import { createNotification } from "./notify"
+import { triggerAutomationOnTaskCreated } from "./automation"
 
 // ─────────────────────────────────────────────────────────────
 // Cycle Learning
@@ -399,6 +400,9 @@ export async function lockOverduePredictions(): Promise<number> {
         referenceType: "task",
         referenceId: task.id,
       })
+
+      // Trigger auto-dispatch for L3+ households (automation.ts handles level check)
+      triggerAutomationOnTaskCreated(task.id, task.householdId, task.category as ServiceCategory)
 
       lockedCount++
     } catch (err) {

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { AnomalyBanner } from "./anomaly-banner";
 import { RebookingPrompt } from "./rebooking-prompt";
+import { EditPredictedDialog } from "./edit-predicted-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSgd, STATUS_LABELS, type Task, type Household, type HouseholdCategoryAutonomy, type TaskStatus, CATEGORY_DEFAULTS } from "@/lib/types";
 import {
@@ -19,6 +20,7 @@ import {
   X,
   Clock,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -234,6 +236,7 @@ export function Dashboard() {
   const queryClient = useQueryClient();
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["household", selectedHouseholdId],
@@ -439,14 +442,28 @@ export function Dashboard() {
                         )}
                       </div>
 
-                      {/* Right column: amount + cancel */}
+                      {/* Right column: amount + edit + cancel */}
                       <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                         <span className="font-data text-xs text-[var(--anna-slate)]">{item.amount}</span>
-                        <CancelPredictedButton
-                          taskId={item.taskId}
-                          onCancel={handleCancelPredicted}
-                          isCancelling={cancellingId === item.taskId}
-                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTaskId(item.taskId);
+                            }}
+                            className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] font-medium transition-all shrink-0 border border-[var(--anna-sage)]/20 text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)]/5"
+                            title="Edit this prediction"
+                          >
+                            <Pencil size={10} />
+                            Edit
+                          </button>
+                          <CancelPredictedButton
+                            taskId={item.taskId}
+                            onCancel={handleCancelPredicted}
+                            isCancelling={cancellingId === item.taskId}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -555,6 +572,24 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Edit Predicted Dialog */}
+      {editingTaskId && (() => {
+        const editingItem = predictedItems.find((i) => i.taskId === editingTaskId);
+        const editingTask = tasks.find((t) => t.id === editingTaskId);
+        return (
+          <EditPredictedDialog
+            open={!!editingTaskId}
+            onOpenChange={(open) => !open && setEditingTaskId(null)}
+            taskId={editingTaskId}
+            category={editingItem?.category || editingTask?.category || ""}
+            currentScheduledStart={editingItem?.lockAt || editingTask?.scheduledStart?.toISOString()}
+            currentInstructions={editingTask?.instructions}
+            currentAmountCents={editingTask?.amountCents}
+            lockAt={editingTask?.lockAt?.toISOString()}
+          />
+        );
+      })()}
     </div>
   );
 }

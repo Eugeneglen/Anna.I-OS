@@ -22,6 +22,7 @@ import {
   Wallet,
   Layers,
   ListChecks,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -173,15 +174,12 @@ function AutonomyCard({
     : 0;
   const isMaxLevel = currentLevel >= 5;
 
-  // Only L3 (Auto-Dispatch) is active. L4/L5 are locked until their phases ship.
+  // L3 (Auto-Dispatch) and L4 (Predictive Pre-Booking) are live.
+  // L5 (Full Autonomous) is locked until Phase 5 (NLU/Write-Capable).
   const canAutoDispatch = currentLevel >= 3;
-  const isL4Locked = currentLevel >= 3; // L4+ segments show locked for L4/L5
+  const canPredict = currentLevel >= 4;
   const isL5Locked = currentLevel >= 4;
-
-  // L4 (Predictive Pre-Booking) and L5 (Full Autonomous) are not yet available.
-  // Per CLAUDE.md: L4 unlocked by Phase 4 (Predictive Scheduler),
-  // L5 unlocked by Phase 5 (NLU/Write-Capable).
-  const activeCapabilityLevel = 3; // Only auto-dispatch is live
+  const activeCapabilityLevel = 4; // Auto-dispatch + Predictive Pre-Booking are live
 
   const segments = Array.from({ length: 5 }, (_, i) => ({
     index: i,
@@ -190,6 +188,8 @@ function AutonomyCard({
       i === currentLevel && !isMaxLevel && currentLevel < activeCapabilityLevel,
     locked: i + 1 > activeCapabilityLevel,
   }));
+
+  const canEditPredicted = currentLevel >= 4 && !isMaxLevel;
 
   const togglePauseMutation = useMutation({
     mutationFn: (paused: boolean) =>
@@ -288,27 +288,27 @@ function AutonomyCard({
         <span>Full Auto</span>
       </div>
 
-      {/* Active automation capability (L3: Auto-Dispatch only) */}
-      {canAutoDispatch && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
+      {/* Active automation capabilities */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {canAutoDispatch && (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--anna-sage)]/10 text-[var(--anna-sage-dark)]">
             <Zap size={9} />
             Auto-Dispatch
           </span>
-        </div>
-      )}
+        )}
+        {canPredict && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
+            <Sparkles size={9} />
+            Predictive Pre-Booking
+          </span>
+        )}
+      </div>
 
       {/* Locked capabilities notice */}
-      {(isL4Locked || isL5Locked) && (
+      {isL5Locked && (
         <div className="flex items-center gap-1.5 text-[10px] text-[var(--anna-muted)] mb-3">
           <Lock size={10} />
-          <span>
-            {isL4Locked && !isL5Locked
-              ? "Predictive Pre-Booking — coming soon"
-              : isL5Locked
-                ? "Predictive Pre-Booking & Full Autonomous — coming soon"
-                : "Full Autonomous — coming soon"}
-          </span>
+          <span>Full Autonomous — coming soon</span>
         </div>
       )}
 
