@@ -144,17 +144,19 @@ enum QuotationStatus {
 // ======================== CORE TABLES ========================
 
 model Household {
-  id               String          @id @default(cuid())
-  name             String
-  email            String          @unique
-  phone            String?
-  address          String           // estate-level for batching
-  postalCode       String?
-  unitNumber       String?
-  activeCategories String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
-  preferences      Json              // flexible: language, preferred times, notes
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                    String          @id @default(cuid())
+  name                  String
+  email                 String          @unique
+  phone                 String?
+  address               String           // estate-level for batching
+  postalCode            String?
+  unitNumber            String?
+  activeCategories      String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
+  preferences           Json              // flexible: language, preferred times, notes
+  onboardingStep        Int             @default(0) // 0=not started, 1=profile, 2=address, 3=categories, 4=preferences, 5=complete
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   members          FamilyMember[]
   tasks            Task[]
@@ -174,6 +176,7 @@ model FamilyMember {
   phone       String?
   avatarUrl   String?    // relative path e.g. /avatars/xxx.jpg
   role        MemberRole @default(MEMBER)
+  passwordHash String?    // household portal login (null = ops-managed, no self-serve access)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

@@ -175,30 +175,34 @@ async function _main() {
 
   console.log('✅ 3 demo households created')
 
+  // Mark demo households as already onboarded
+  await db.household.updateMany({ data: { onboardingStep: 5, onboardingCompletedAt: new Date() } })
+
   // ============ 3. FAMILY MEMBERS ============
 
+  const MEMBER_HASH = bcrypt.hashSync('household123', 10)
   await db.familyMember.upsert({
     where: { id: IDS.members.sarah },
     update: {},
-    create: { id: IDS.members.sarah, householdId: household1.id, name: 'Sarah Tan', email: 'sarah.tan@example.com', phone: '+65 9123 4567', role: 'OWNER' },
+    create: { id: IDS.members.sarah, householdId: household1.id, name: 'Sarah Tan', email: 'sarah.tan@example.com', phone: '+65 9123 4567', role: 'OWNER', passwordHash: MEMBER_HASH },
   })
   await db.familyMember.upsert({
     where: { id: IDS.members.david },
     update: {},
-    create: { id: IDS.members.david, householdId: household1.id, name: 'David Tan', email: 'david.tan@example.com', phone: '+65 9123 4568', role: 'MEMBER' },
+    create: { id: IDS.members.david, householdId: household1.id, name: 'David Tan', email: 'david.tan@example.com', phone: '+65 9123 4568', role: 'MEMBER', passwordHash: MEMBER_HASH },
   })
   await db.familyMember.upsert({
     where: { id: IDS.members.michelle },
     update: {},
-    create: { id: IDS.members.michelle, householdId: household2.id, name: 'Michelle Lim', email: 'michelle.lim@example.com', phone: '+65 8765 4321', role: 'OWNER' },
+    create: { id: IDS.members.michelle, householdId: household2.id, name: 'Michelle Lim', email: 'michelle.lim@example.com', phone: '+65 8765 4321', role: 'OWNER', passwordHash: MEMBER_HASH },
   })
   await db.familyMember.upsert({
     where: { id: IDS.members.wei },
     update: {},
-    create: { id: IDS.members.wei, householdId: household3.id, name: 'Wei Chen', email: 'wei.chen@example.com', phone: '+65 9234 5678', role: 'OWNER' },
+    create: { id: IDS.members.wei, householdId: household3.id, name: 'Wei Chen', email: 'wei.chen@example.com', phone: '+65 9234 5678', role: 'OWNER', passwordHash: MEMBER_HASH },
   })
 
-  console.log('✅ 4 family members created')
+    console.log('✅ 4 family members created (password: household123)')
 
   // ============ 4. DEMO VENDORS ============
 

@@ -60,6 +60,7 @@ export async function GET(
         unitNumber: true,
         activeCategories: true,
         preferences: true,
+        onboardingStep: true,
         createdAt: true,
         updatedAt: true,
       },

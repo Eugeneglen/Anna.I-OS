@@ -1,17 +1,22 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, LogOut, User } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
 import { NotificationPanel } from "@/components/anna/notification-panel";
@@ -25,14 +30,23 @@ const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "escrow", label: "Escrow", icon: Landmark },
 ];
 
-async function fetchHouseholds(): Promise<Household[]> {
-  const res = await fetch("/api/households");
-  if (!res.ok) throw new Error("Failed to fetch households");
+async function fetchSession() {
+  const res = await fetch("/api/household/session");
+  if (!res.ok) throw new Error("Not authenticated");
+  return res.json();
+}
+
+async function fetchHouseholdDetail(id: string) {
+  const res = await fetch(`/api/households/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch household");
   const data = await res.json();
-  return data.households;
+  return data.household as Household;
 }
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const {
     selectedHouseholdId,
     setSelectedHouseholdId,
@@ -44,13 +58,45 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     setNotificationPanelOpen,
   } = useAnnaStore();
 
-  const { data: households, isLoading: householdsLoading } = useQuery({
-    queryKey: ["households"],
-    queryFn: fetchHouseholds,
+  // Auth check: fetch session
+  const { data: sessionData, isLoading: sessionLoading, isError: sessionError } = useQuery({
+    queryKey: ["household-session"],
+    queryFn: fetchSession,
+    retry: false,
     staleTime: 60_000,
   });
 
-  // Unread notification count (runs in background for badge)
+  const isAuthenticated = !!sessionData?.authenticated;
+  const member = sessionData?.member;
+  const householdFromSession = sessionData?.household;
+
+  // Redirect to login if not authenticated (after loading completes)
+  useEffect(() => {
+    if (!sessionLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [sessionLoading, isAuthenticated, router]);
+
+  // Auto-set household ID from session
+  useEffect(() => {
+    if (isAuthenticated && householdFromSession?.id) {
+      setSelectedHouseholdId(householdFromSession.id);
+      setHouseholdNames({ [householdFromSession.id]: householdFromSession.name });
+    }
+  }, [isAuthenticated, householdFromSession, setSelectedHouseholdId, setHouseholdNames]);
+
+  // Fetch detailed household data (for onboardingStep check, etc.)
+  const { data: householdDetail } = useQuery({
+    queryKey: ["household", selectedHouseholdId],
+    queryFn: () => fetchHouseholdDetail(selectedHouseholdId),
+    enabled: !!selectedHouseholdId,
+    staleTime: 60_000,
+  });
+
+  // Expose household detail for children via data attribute / context approach
+  // (children components can query directly)
+
+  // Unread notification count
   const { data: notifData } = useQuery({
     queryKey: ["notifications", selectedHouseholdId, "count"],
     queryFn: async () => {
@@ -66,24 +112,37 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifData?.unreadCount || 0;
 
-  const isEmptyDb = !householdsLoading && households?.length === 0;
+  const currentHouseholdName = householdNames[selectedHouseholdId] || (sessionLoading ? "Loading..." : "");
 
-  // Auto-select first household and cache names (handles stale IDs after re-seed)
-  useEffect(() => {
-    if (!households || households.length === 0) return;
-    const names: Record<string, string> = {};
-    households.forEach((h) => (names[h.id] = h.name));
-    setHouseholdNames(names);
-    // If selected household doesn't exist in the list (e.g. after re-seed), auto-select first
-    const validId = households.some((h) => h.id === selectedHouseholdId);
-    if (!validId) {
-      setSelectedHouseholdId(households[0].id);
+  async function handleLogout() {
+    try {
+      await fetch("/api/household/auth", { method: "DELETE" });
+      queryClient.clear();
+      toast.success("Logged out");
+      router.push("/login");
+    } catch {
+      toast.error("Failed to logout");
     }
-  }, [households, selectedHouseholdId, setHouseholdNames, setSelectedHouseholdId]);
+  }
 
-  const currentHouseholdName = householdNames[selectedHouseholdId] || (householdsLoading ? "Loading..." : "");
+  // Loading state while checking auth
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--anna-bg)]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-[var(--anna-sage)] flex items-center justify-center animate-pulse">
+            <Home size={20} className="text-white" />
+          </div>
+          <p className="text-sm text-[var(--anna-muted)]">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-
+  // Not authenticated — redirect handled by useEffect
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--anna-bg)]">
@@ -100,31 +159,34 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          {/* Center: Household Selector */}
+          {/* Center: User + Household name */}
           <div className="flex items-center gap-2">
-            <Select
-              value={selectedHouseholdId}
-              onValueChange={setSelectedHouseholdId}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-auto min-w-[140px] border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm font-medium"
-              >
-                <SelectValue placeholder="Select household" />
-              </SelectTrigger>
-              <SelectContent>
-                {households?.map((h) => (
-                  <SelectItem key={h.id} value={h.id}>
-                    {h.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]">
+              <div className="w-6 h-6 rounded-lg bg-[var(--anna-sage-light)] flex items-center justify-center">
+                <User size={12} className="text-[var(--anna-sage-dark)]" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-[var(--anna-slate)] leading-tight">
+                  {currentHouseholdName}
+                </span>
+                <span className="text-[10px] text-[var(--anna-muted)] leading-tight">
+                  {member?.role === "OWNER" ? "Owner" : "Member"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Right: Mobile Settings + Notification Bell */}
+          {/* Right: Logout + Mobile Settings + Notification Bell */}
           <div className="flex items-center gap-1">
-            {/* Mobile-only Settings button (top-right on mobile) */}
+            {/* Logout button */}
+            <button
+              onClick={() => setLogoutDialogOpen(true)}
+              className="p-2 rounded-xl hover:bg-red-50 hover:text-red-500 text-[var(--anna-slate-light)] transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={18} />
+            </button>
+            {/* Mobile-only Settings button */}
             <button
               onClick={() => setActiveTab("settings")}
               className={cn(
@@ -157,6 +219,29 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-56 lg:w-64 border-r border-[var(--anna-border)] bg-[var(--anna-white)] p-3 gap-1">
+          {/* User info card */}
+          <div className="flex items-center gap-3 px-3 py-3 mb-2 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]">
+            <div className="w-9 h-9 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center">
+              <User size={16} className="text-[var(--anna-sage-dark)]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
+                {member?.name || "User"}
+              </p>
+              <p className="text-[10px] text-[var(--anna-muted)] truncate">
+                {currentHouseholdName}
+              </p>
+            </div>
+            <span className={cn(
+              "text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md",
+              member?.role === "OWNER"
+                ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+                : "bg-gray-100 text-gray-500"
+            )}>
+              {member?.role === "OWNER" ? "Owner" : "Member"}
+            </span>
+          </div>
+
           <nav className="flex flex-col gap-1">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -193,36 +278,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               <Settings size={18} />
               Settings
             </button>
-            <p className="text-xs text-[var(--anna-muted)] px-3 mt-2">{currentHouseholdName}</p>
           </div>
         </aside>
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto anna-scroll">
-          {isEmptyDb ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-6 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-6">
-                <Home size={28} className="text-[var(--anna-sage-dark)]" />
-              </div>
-              <h2 className="text-xl font-semibold text-[var(--anna-slate)] mb-2">
-                Welcome to Anna.I
-              </h2>
-              <p className="text-sm text-[var(--anna-muted)] max-w-sm mb-8">
-                Your household management system is ready. Seed the database with sample data to explore the dashboard.
-              </p>
-              <div className="bg-[var(--anna-bg)] rounded-2xl border border-[var(--anna-border)] p-5 max-w-md text-left">
-                <p className="text-xs font-semibold text-[var(--anna-slate)] mb-2 uppercase tracking-wider">
-                  Railway Console
-                </p>
-                <code className="text-xs text-[var(--anna-sage-dark)] font-mono leading-relaxed block whitespace-pre-wrap">
-{`npx prisma migrate deploy
-npx prisma db seed`}
-                </code>
-              </div>
-            </div>
-          ) : (
-            children
-          )}
+          {children}
         </main>
       </div>
 
@@ -265,6 +326,27 @@ npx prisma db seed`}
           </p>
         </div>
       </footer>
+
+      {/* Logout Confirmation Dialog */}
+      <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-[var(--anna-border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will need to sign in again to access your household dashboard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleLogout}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
+            >
+              Sign out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Ask Anna Chat */}
       <AskAnna />

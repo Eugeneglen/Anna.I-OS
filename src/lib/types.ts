@@ -39,6 +39,8 @@ export interface Household {
   postalCode?: string;
   unitNumber?: string;
   activeCategories: string;
+  preferences?: Record<string, unknown> | null;
+  onboardingStep: number;
   createdAt: string;
 }
 

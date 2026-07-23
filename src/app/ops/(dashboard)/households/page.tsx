@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -27,7 +28,24 @@ import {
   ShieldAlert,
   CheckCircle2,
   ArrowDownLeft,
+  Plus,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AUTONOMY_LEVEL_NAMES } from "@/lib/constants";
 
@@ -71,8 +89,30 @@ function formatDateTime(dateStr: string) {
 }
 
 export default function HouseholdsPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  // Create household mutation
+  const createMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch("/api/ops/households", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-households"] });
+      setCreateDialogOpen(false);
+      toast.success("Household created successfully");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const { data: listData, isLoading } = useQuery({
     queryKey: ["ops-households"],
@@ -132,14 +172,24 @@ export default function HouseholdsPage() {
             <span className="font-data">{filtered.length}</span> households
           </p>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--anna-muted)]" />
-          <Input
-            placeholder="Search name, email, postal..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 w-64 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
-          />
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            size="sm"
+            className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl gap-1.5"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">New Household</span>
+          </Button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--anna-muted)]" />
+            <Input
+              placeholder="Search name, email, postal..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 w-64 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
+            />
+          </div>
         </div>
       </div>
 
@@ -493,6 +543,219 @@ export default function HouseholdsPage() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      {/* Create Household Dialog */}
+      <CreateHouseholdDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onSubmit={(data) => createMutation.mutate(data)}
+        loading={createMutation.isPending}
+      />
     </div>
+  );
+}
+
+// ─── Create Household Dialog ────────────────────────────────────────
+
+function CreateHouseholdDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  loading,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
+  loading: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
+  const [tier, setTier] = useState("HOME");
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  const [password, setPassword] = useState("");
+
+  function handleSubmit() {
+    onSubmit({
+      name,
+      email,
+      phone: phone || null,
+      address,
+      postalCode: postalCode || null,
+      unitNumber: unitNumber || null,
+      tier,
+      ownerName,
+      ownerEmail,
+      ownerPhone: ownerPhone || null,
+      password,
+    });
+  }
+
+  const isValid =
+    name && email && address && ownerName && ownerEmail && password && password.length >= 6;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border-[var(--anna-border)]">
+        <DialogHeader>
+          <DialogTitle className="text-lg text-[var(--anna-slate)]">
+            Create New Household
+          </DialogTitle>
+          <DialogDescription className="text-xs text-[var(--anna-muted)]">
+            Set up a new household and its owner account. The owner will need to complete onboarding after first login.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Household Info Section */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Household Information
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Household Name *</Label>
+                <Input
+                  placeholder="e.g. Tan Family"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Household Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="household@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Phone</Label>
+                <Input
+                  placeholder="+65 9xxx xxxx"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Subscription Tier</Label>
+                <Select value={tier} onValueChange={setTier}>
+                  <SelectTrigger className="rounded-xl border-[var(--anna-border)] h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HOME">Home ($8/mo)</SelectItem>
+                    <SelectItem value="CARE">Care ($20/mo)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Address / Estate *</Label>
+                <Input
+                  placeholder="e.g. Tampines Street 21"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Postal Code</Label>
+                <Input
+                  placeholder="e.g. 520521"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Unit Number</Label>
+                <Input
+                  placeholder="e.g. #12-345"
+                  value={unitNumber}
+                  onChange={(e) => setUnitNumber(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-[var(--anna-border)]" />
+
+          {/* Owner Info Section */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Owner Account
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Owner Name *</Label>
+                <Input
+                  placeholder="e.g. Sarah Tan"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Owner Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="owner@example.com"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Owner Phone</Label>
+                <Input
+                  placeholder="+65 9xxx xxxx"
+                  value={ownerPhone}
+                  onChange={(e) => setOwnerPhone(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Initial Password * <span className="text-[var(--anna-muted)]">(min 6 chars)</span></Label>
+                <Input
+                  type="text"
+                  placeholder="Set login password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="rounded-xl border-[var(--anna-border)] h-9 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="rounded-xl"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!isValid || loading}
+            className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl"
+          >
+            {loading ? "Creating..." : "Create Household"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
