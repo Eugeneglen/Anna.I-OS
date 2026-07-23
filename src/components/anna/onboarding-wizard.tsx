@@ -88,8 +88,10 @@ interface PainPointsData {
 }
 
 interface ServiceHabitsData {
-  frequency?: string;
-  findMethod?: string;
+  categoryFrequency?: Record<string, string>; // e.g. { CLEANING: "WEEKLY", AIRCON: "QUARTERLY" }
+  existingVendors?: Record<string, { name: string; phone?: string } | null>; // e.g. { CLEANING: { name: "ABC", phone: "1234" }, AIRCON: null }
+  vendorGaps?: string[]; // categories where user has no vendor: ["AIRCON", "REPAIRS"]
+  // DEPRECATED: frequency, findMethod — removed per user spec
 }
 
 interface PreferencesData {
@@ -166,19 +168,15 @@ const PAIN_POINT_TASKS = [
   { value: "FINDING", label: "Finding reliable providers", icon: Handshake },
 ];
 
-const FREQUENCY_OPTIONS = [
+const CATEGORY_FREQUENCY_OPTIONS = [
   { value: "WEEKLY", label: "Weekly" },
+  { value: "FORTNIGHTLY", label: "Fortnightly" },
   { value: "MONTHLY", label: "Monthly" },
-  { value: "OCCASIONAL", label: "Every few months" },
-  { value: "BREAKFIX", label: "Only when something breaks" },
+  { value: "QUARTERLY", label: "Quarterly" },
+  { value: "AD_HOC", label: "Ad hoc" },
 ];
 
-const FIND_METHOD_OPTIONS = [
-  { value: "WORDOFMOUTH", label: "Word of mouth" },
-  { value: "GOOGLE", label: "Google search" },
-  { value: "SOCIAL", label: "Social media" },
-  { value: "NONE", label: "Haven't found a good one yet" },
-];
+// FIND_METHOD_OPTIONS removed — this was marketing data, not product data (per user spec)
 
 const LANGUAGES = [
   { value: "ENGLISH", label: "English" },
@@ -870,7 +868,27 @@ function StepPainPoints({
   );
 }
 
-// ─── Step 4: Service Habits ───────────────────────────────────
+// ─── Step 4: Service Habits (Rebuilt) ───────────────────────
+
+// Helper: map pain point value to human-readable label
+const PAIN_POINT_LABELS: Record<string, string> = {
+  CLEANING: "Cleaning & tidying",
+  AIRCON: "Air-con servicing",
+  REPAIRS: "Repairs & maintenance",
+  LAUNDRY: "Laundry",
+  PLANNING: "Planning & scheduling",
+  FINDING: "Finding reliable providers",
+};
+
+// Helper: map pain point value to icon
+const PAIN_POINT_ICONS: Record<string, React.ElementType> = {
+  CLEANING: BrushCleaning,
+  AIRCON: Wind,
+  REPAIRS: Wrench,
+  LAUNDRY: Shirt,
+  PLANNING: ShoppingCart,
+  FINDING: Handshake,
+};
 
 function StepServiceHabits({
   data,
@@ -879,33 +897,206 @@ function StepServiceHabits({
   onBack,
   onSkip,
   isSaving,
+  selectedPainPoints,
 }: {
   data: ServiceHabitsData;
-  onChange: (field: string, value: string) => void;
+  onChange: (field: string, value: unknown) => void;
   onContinue: () => void;
   onBack: () => void;
   onSkip: () => void;
   isSaving: boolean;
+  selectedPainPoints: string[];
 }) {
+  // Default to pain points if no categories selected yet
+  const categories = selectedPainPoints.length > 0 ? selectedPainPoints : [];
+
+  const categoryFrequency = data.categoryFrequency || {};
+  const existingVendors = data.existingVendors || {};
+  const vendorGaps = data.vendorGaps || [];
+
+  const handleFrequencyChange = (cat: string, freq: string) => {
+    onChange("categoryFrequency", { ...categoryFrequency, [cat]: freq });
+  };
+
+  const handleHasVendor = (cat: string, has: boolean) => {
+    if (has) {
+      // Remove from vendorGaps, set existingVendors[cat] to empty object for inline editing
+      const newGaps = vendorGaps.filter((c) => c !== cat);
+      onChange("vendorGaps", newGaps);
+      onChange("existingVendors", { ...existingVendors, [cat]: { name: "", phone: "" } });
+    } else {
+      // Add to vendorGaps, remove from existingVendors
+      const newVendors = { ...existingVendors };
+      delete newVendors[cat];
+      onChange("existingVendors", newVendors);
+      if (!vendorGaps.includes(cat)) {
+        onChange("vendorGaps", [...vendorGaps, cat]);
+      }
+    }
+  };
+
+  const handleVendorName = (cat: string, name: string) => {
+    const current = existingVendors[cat] || { name: "", phone: "" };
+    onChange("existingVendors", { ...existingVendors, [cat]: { ...current, name } });
+  };
+
+  const handleVendorPhone = (cat: string, phone: string) => {
+    const current = existingVendors[cat] || { name: "", phone: "" };
+    onChange("existingVendors", { ...existingVendors, [cat]: { ...current, phone } });
+  };
+
+  // If no pain points selected in Step 3, show a message
+  if (categories.length === 0) {
+    return (
+      <div>
+        <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Your experience with home services</h2>
+        <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I set the right expectations for you.</p>
+        <div className="text-center py-6">
+          <p className="text-sm text-[var(--anna-muted)]">
+            You didn&apos;t select any pain points earlier. No worries — you can always add services later from the dashboard.
+          </p>
+        </div>
+        <StepNav onBack={onBack} onContinue={onContinue} onSkip={onSkip} continueDisabled={false} isSaving={isSaving} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Your experience with home services</h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I set the right expectations for you.</p>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">Tell us about the services you selected — frequency, and whether you already have someone.</p>
 
       <div className="space-y-5">
-        <div>
-          <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">How often do you arrange home services?</p>
-          <PillSelect options={FREQUENCY_OPTIONS} selected={data.frequency || ""} onSelect={(v) => onChange("frequency", v)} />
-        </div>
+        {categories.map((cat, idx) => {
+          const Icon = PAIN_POINT_ICONS[cat] || HelpCircle;
+          const label = PAIN_POINT_LABELS[cat] || cat;
+          const hasVendor = existingVendors[cat] !== undefined && existingVendors[cat] !== null;
+          const vendorInfo = existingVendors[cat];
 
-        <div>
-          <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">How do you usually find service providers?</p>
-          <PillSelect options={FIND_METHOD_OPTIONS} selected={data.findMethod || ""} onSelect={(v) => onChange("findMethod", v)} />
-        </div>
+          return (
+            <motion.div
+              key={cat}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] overflow-hidden"
+            >
+              {/* Category header */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-[var(--anna-bg)]">
+                <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage-light)] flex items-center justify-center">
+                  <Icon size={14} className="text-[var(--anna-sage-dark)]" />
+                </div>
+                <span className="text-xs font-semibold text-[var(--anna-slate)]">{label}</span>
+              </div>
+
+              <div className="px-3.5 py-3 space-y-3">
+                {/* Frequency row */}
+                <div>
+                  <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">How often?</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CATEGORY_FREQUENCY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleFrequencyChange(cat, opt.value)}
+                        className={cn(
+                          "px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-200 border",
+                          categoryFrequency[cat] === opt.value
+                            ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                            : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Existing vendor row */}
+                <div>
+                  <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">Do you already have someone you trust for this?</p>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => handleHasVendor(cat, true)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-200 border",
+                        hasVendor
+                          ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                          : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+                      )}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleHasVendor(cat, false)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-200 border",
+                        !hasVendor
+                          ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                          : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+                      )}
+                    >
+                      Not yet
+                    </button>
+                  </div>
+
+                  {/* Inline vendor name + phone (revealed on Yes) */}
+                  <AnimatePresence>
+                    {hasVendor && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Provider name"
+                            value={vendorInfo?.name || ""}
+                            onChange={(e) => handleVendorName(cat, e.target.value)}
+                            className="flex-1 h-8 text-[11px] rounded-lg border border-[var(--anna-border)] bg-[var(--anna-white)] px-2.5 placeholder:text-[var(--anna-muted)] focus:outline-none focus:border-[var(--anna-sage)]"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Phone (optional)"
+                            value={vendorInfo?.phone || ""}
+                            onChange={(e) => handleVendorPhone(cat, e.target.value)}
+                            className="w-32 h-8 text-[11px] rounded-lg border border-[var(--anna-border)] bg-[var(--anna-white)] px-2.5 placeholder:text-[var(--anna-muted)] focus:outline-none focus:border-[var(--anna-sage)]"
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* No vendor tag */}
+                  <AnimatePresence>
+                    {!hasVendor && vendorGaps.includes(cat) && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="pt-1"
+                      >
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--anna-warning)]/10 text-[9px] font-medium text-[var(--anna-warning)]">
+                          <Sparkles size={9} />
+                          Anna.I will help you find one
+                        </span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       <AnnaInsight>
-        📊 This helps me understand your expectations and set a great starting experience. The more I know, the better I can help.
+        🤝 This helps me match you with providers you already trust, or find great ones where you don&apos;t have one yet.
       </AnnaInsight>
 
       <StepNav
@@ -1498,6 +1689,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   onBack={goBack}
                   onSkip={skipToNext}
                   isSaving={saveMutation.isPending}
+                  selectedPainPoints={painPointsData.timeConsumingTasks || []}
                 />
               )}
               {currentStep === 5 && (
