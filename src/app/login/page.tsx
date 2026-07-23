@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Home } from "lucide-react";
+import Image from "next/image";
 
 export default function HouseholdLoginPage() {
   const router = useRouter();
@@ -47,13 +47,13 @@ export default function HouseholdLoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage)] mx-auto flex items-center justify-center mb-3">
-            <Home size={22} className="text-white" />
+            <Image src="/brain-icon.png" alt="Anna.I" width={28} height={28} className="brightness-0 invert" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--anna-sage-dark)]">
             Anna.I
           </h1>
-          <p className="text-xs font-data uppercase tracking-widest text-[var(--anna-muted)] mt-1">
-            Household Portal
+          <p className="text-[10px] font-medium text-[var(--anna-muted)] mt-1">
+            The Operating System for the Modern Household
           </p>
         </div>
 
@@ -123,18 +123,6 @@ export default function HouseholdLoginPage() {
                   sarah.tan@example.com / household123
                 </code>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--anna-slate-light)]">Lim Residence</span>
-                <code className="font-data text-[var(--anna-sage-dark)]">
-                  michelle.lim@example.com / household123
-                </code>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--anna-slate-light)]">Chen Household</span>
-                <code className="font-data text-[var(--anna-sage-dark)]">
-                  wei.chen@example.com / household123
-                </code>
-              </div>
             </div>
           </div>
         </div>
@@ -160,7 +148,7 @@ export default function HouseholdLoginPage() {
 
         {/* Footer */}
         <p className="mt-6 text-center text-[10px] text-[var(--anna-muted)]">
-          Anna.I — The Operating System for the Modern Household
+          Anna.I.sg
         </p>
       </div>
     </div>
