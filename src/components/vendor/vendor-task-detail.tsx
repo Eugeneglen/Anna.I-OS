@@ -247,20 +247,45 @@ function VendorTaskDetailContent({
           <VendorPhotoUpload
             bookingId={booking.id}
             vendorId={vendorId}
-            uploadedPhotos={{ before: [], after: [] }}
+            existingPhotos={booking.verificationPhotos}
           />
         </div>
       )}
 
-      {/* Verification photo count indicator */}
-      {booking.verificationPhotoCount > 0 && (
+      {/* Verification photo gallery — shows persisted photos from DB */}
+      {booking.verificationPhotos && booking.verificationPhotos.length > 0 && !showPhotoUpload && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             <ImageIcon size={12} className="inline mr-1" />
-            Verification Photos
+            Submitted Photos
           </h4>
-          <div className="bg-[var(--anna-bg)] rounded-2xl p-4 text-sm text-[var(--anna-muted)]">
-            {booking.verificationPhotoCount} photo{booking.verificationPhotoCount !== 1 ? "s" : ""} submitted
+          <div className="grid grid-cols-3 gap-2">
+            {booking.verificationPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)]"
+              >
+                <img
+                  src={photo.thumbnailUrl || photo.fileUrl}
+                  alt="Verification"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-1 left-1">
+                  <Badge
+                    className={cn(
+                      "text-[8px] px-1 py-0 h-4 border-0",
+                      photo.isVerified
+                        ? "bg-[var(--anna-success)] text-white"
+                        : photo.uploadedBy.includes("before")
+                          ? "bg-[var(--anna-warning)] text-white"
+                          : "bg-[var(--anna-sage)] text-white"
+                    )}
+                  >
+                    {photo.isVerified ? "Verified" : photo.uploadedBy.includes("before") ? "Before" : "After"}
+                  </Badge>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

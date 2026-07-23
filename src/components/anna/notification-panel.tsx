@@ -34,6 +34,7 @@ import {
   HourglassIcon,
   TrendingDown,
   Landmark,
+  ArrowRight,
 } from "lucide-react";
 import type { Task } from "@/lib/types";
 
@@ -169,6 +170,16 @@ export function NotificationPanel() {
       markReadMutation.mutate(n.id);
     }
 
+    // Rebooking prompt → close panel and open task detail
+    if (n.eventType === "REBOOKING_PROMPT" && n.referenceType === "task" && n.referenceId) {
+      setNotificationPanelOpen(false);
+      setActiveTab("activity");
+      setTimeout(() => {
+        openTaskDetail({ id: n.referenceId } as Task);
+      }, 100);
+      return;
+    }
+
     // Anomaly notifications with a task reference → Activity tab + task detail
     if ((n.referenceType === "task" || n.referenceType === "anomaly") && n.referenceId) {
       setNotificationPanelOpen(false);
@@ -182,6 +193,32 @@ export function NotificationPanel() {
     } else if (n.referenceType === "booking") {
       setNotificationPanelOpen(false);
       setActiveTab("activity");
+    }
+  }
+
+  function handleNotificationAction(n: AppNotification) {
+    if (n.status === "PENDING") {
+      markReadMutation.mutate(n.id);
+    }
+
+    // Rebooking prompt → navigate to services tab with rebook data
+    if (n.eventType === "REBOOKING_PROMPT" && n.referenceType === "task" && n.referenceId) {
+      setNotificationPanelOpen(false);
+      // Fetch task to get category/instructions/amount for rebook
+      fetch(`/api/tasks/${n.referenceId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const task = data.task;
+          if (task) {
+            useAnnaStore.getState().setRebookData({
+              category: task.category,
+              instructions: task.instructions ?? "",
+              amountCents: task.amountCents,
+            });
+            useAnnaStore.getState().setActiveTab("services");
+          }
+        })
+        .catch(() => {});
     }
   }
 
@@ -201,6 +238,7 @@ export function NotificationPanel() {
               unreadCount={unreadCount}
               isLoading={isLoading}
               onNotificationClick={handleNotificationClick}
+              onNotificationAction={handleNotificationAction}
               onMarkAllRead={() => markAllReadMutation.mutate()}
               isMarkingAll={markAllReadMutation.isPending}
             />
@@ -227,6 +265,7 @@ export function NotificationPanel() {
                 unreadCount={unreadCount}
                 isLoading={isLoading}
                 onNotificationClick={handleNotificationClick}
+                onNotificationAction={handleNotificationAction}
                 onMarkAllRead={() => markAllReadMutation.mutate()}
                 isMarkingAll={markAllReadMutation.isPending}
               />
@@ -243,6 +282,7 @@ function NotificationListContent({
   unreadCount,
   isLoading,
   onNotificationClick,
+  onNotificationAction,
   onMarkAllRead,
   isMarkingAll,
 }: {
@@ -250,6 +290,7 @@ function NotificationListContent({
   unreadCount: number;
   isLoading: boolean;
   onNotificationClick: (n: AppNotification) => void;
+  onNotificationAction?: (n: AppNotification) => void;
   onMarkAllRead: () => void;
   isMarkingAll: boolean;
 }) {
@@ -338,6 +379,20 @@ function NotificationListContent({
                     <p className="text-[10px] text-[var(--anna-muted)] mt-1 font-data">
                       {formatRelativeTime(n.createdAt)}
                     </p>
+                    {/* Action button for rebooking prompt */}
+                    {n.eventType === "REBOOKING_PROMPT" && onNotificationAction && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNotificationAction(n);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-[var(--anna-sage)] text-white hover:bg-[var(--anna-sage-dark)] transition-colors"
+                      >
+                        <RefreshCw size={11} />
+                        Rebook Now
+                      </button>
+                    )}
                   </div>
                 </button>
               );

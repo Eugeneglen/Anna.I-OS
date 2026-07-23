@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -26,7 +27,7 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -204,6 +205,43 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
     onError: () => {
       toast({ title: "Failed to resolve dispute", variant: "destructive" });
+    },
+  });
+
+  // AI Photo Analysis
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+
+  const analyzePhotosMutation = useMutation({
+    mutationFn: async () => {
+      if (!task?.verificationPhotos || task.verificationPhotos.length === 0) {
+        throw new Error("No photos to analyze");
+      }
+      const photos = task.verificationPhotos.map((p) => ({
+        url: p.fileUrl,
+        type: p.uploadedBy?.includes("before") ? "before" : "after",
+      }));
+      const res = await fetch("/api/analyze-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          photos,
+          category: task.category,
+          instructions: task.instructions,
+        }),
+      });
+      if (!res.ok) throw new Error("AI analysis failed");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAiAnalysis(data.analysis);
+      toast({ title: "AI Analysis Complete", description: "Photo quality assessment ready" });
+    },
+    onError: (err) => {
+      toast({
+        title: "AI Analysis Failed",
+        description: err.message || "Could not analyze photos",
+        variant: "destructive",
+      });
     },
   });
 
@@ -473,9 +511,32 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       {/* Verification Photos */}
       {task.verificationPhotos && task.verificationPhotos.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
-            Verification Photos
-          </h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Verification Photos
+            </h4>
+            {/* AI Analysis trigger — only for COMPLETED tasks with photos */}
+            {task.status === "COMPLETED" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAiAnalysis(null);
+                  analyzePhotosMutation.mutate();
+                }}
+                disabled={analyzePhotosMutation.isPending}
+                className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--anna-sage-dark)] hover:text-[var(--anna-sage)] transition-colors"
+              >
+                {analyzePhotosMutation.isPending ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <Brain size={11} />
+                )}
+                {analyzePhotosMutation.isPending ? "Analyzing..." : "AI Analysis"}
+              </button>
+            )}
+          </div>
+
+          {/* Before/After labeled photo grid */}
           <div className="grid grid-cols-3 gap-2">
             {task.verificationPhotos.map((photo) => (
               <div
@@ -487,8 +548,20 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                   alt="Verification"
                   className="w-full h-full object-cover"
                 />
+                {/* Top-left: Before/After label */}
+                <div className="absolute top-1 left-1">
+                  {photo.uploadedBy?.includes("before") ? (
+                    <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-warning)] text-white border-0">
+                      Before
+                    </Badge>
+                  ) : (
+                    <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-sage)] text-white border-0">
+                      After
+                    </Badge>
+                  )}
+                </div>
+                {/* Top-right: Verification status */}
                 <div className="absolute top-1 right-1">
-                  {/* H-3 FIX: Show three states — Verified, Pending, Rejected */}
                   {photo.isVerified ? (
                     <Badge className="bg-[var(--anna-success)] text-white text-[9px] px-1.5 py-0 h-5">
                       <CheckCircle size={10} className="mr-0.5" />
@@ -507,6 +580,110 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI Photo Analysis Results */}
+      {aiAnalysis && (
+        <div className="rounded-2xl border-2 border-[var(--anna-sage)]/30 overflow-hidden bg-gradient-to-br from-[var(--anna-sage-light)]/40 to-[var(--anna-white)] anna-fade-in">
+          {/* Header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--anna-sage)]/20">
+            <div className="w-6 h-6 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center">
+              <Brain size={12} className="text-white" />
+            </div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+              AI Verification
+            </h4>
+            <button
+              type="button"
+              onClick={() => setAiAnalysis(null)}
+              className="ml-auto text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
+            >
+              <X size={12} />
+            </button>
+          </div>
+
+          {/* Analysis content */}
+          <div className="p-4 space-y-3">
+            {/* Quality score bar */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[var(--anna-muted)]">Quality</span>
+              <div className="flex-1 h-2 rounded-full bg-[var(--anna-bg)] overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    aiAnalysis.qualityScore >= 7
+                      ? "bg-[var(--anna-success)]"
+                      : aiAnalysis.qualityScore >= 4
+                        ? "bg-[var(--anna-warning)]"
+                        : "bg-[var(--anna-error)]"
+                  )}
+                  style={{ width: `${Math.min(aiAnalysis.qualityScore * 10, 100)}%` }}
+                />
+              </div>
+              <span className={cn(
+                "font-data text-sm font-bold",
+                aiAnalysis.qualityScore >= 7
+                  ? "text-[var(--anna-success)]"
+                  : aiAnalysis.qualityScore >= 4
+                    ? "text-[var(--anna-warning)]"
+                    : "text-[var(--anna-error)]"
+              )}>
+                {aiAnalysis.qualityScore}/10
+              </span>
+            </div>
+
+            {/* Recommendation badge */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--anna-muted)]">AI Verdict:</span>
+              <Badge className={cn(
+                "text-[10px] px-2 py-0.5 font-semibold border-0",
+                aiAnalysis.recommendation === "approve"
+                  ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)]"
+                  : aiAnalysis.recommendation === "review"
+                    ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)]"
+                    : "bg-[var(--anna-error)]/15 text-[var(--anna-error)]"
+              )}>
+                {aiAnalysis.recommendation === "approve" ? (
+                  <><CheckCircle2 size={10} className="mr-1" /> Approve</>
+                ) : aiAnalysis.recommendation === "review" ? (
+                  <><Eye size={10} className="mr-1" /> Review Manually</>
+                ) : (
+                  <><AlertTriangle size={10} className="mr-1" /> Reject</>
+                )}
+              </Badge>
+            </div>
+
+            {/* Summary */}
+            {aiAnalysis.summary && (
+              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">
+                {aiAnalysis.summary}
+              </p>
+            )}
+
+            {/* Changes */}
+            {aiAnalysis.changes && aiAnalysis.changes !== "Unable to determine" && (
+              <div>
+                <p className="text-[10px] font-semibold text-[var(--anna-muted)] uppercase tracking-wider mb-1">Work Done</p>
+                <p className="text-xs text-[var(--anna-slate)]">{aiAnalysis.changes}</p>
+              </div>
+            )}
+
+            {/* Concerns */}
+            {aiAnalysis.concerns && aiAnalysis.concerns !== "none" && aiAnalysis.concerns !== "Unable to determine" && (
+              <div className="rounded-xl bg-[var(--anna-warning)]/10 border border-[var(--anna-warning)]/20 p-3">
+                <p className="text-[10px] font-semibold text-[var(--anna-warning)] uppercase tracking-wider mb-1">Concerns</p>
+                <p className="text-xs text-[var(--anna-slate)]">{aiAnalysis.concerns}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-2 border-t border-[var(--anna-sage)]/20">
+            <p className="text-[9px] text-[var(--anna-sage-dark)]/60 text-center">
+              AI-assisted verification. Final approval is always decided by the household.
+            </p>
           </div>
         </div>
       )}

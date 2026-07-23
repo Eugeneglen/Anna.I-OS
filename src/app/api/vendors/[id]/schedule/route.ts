@@ -73,7 +73,7 @@ export async function GET(
           },
         },
         verificationPhotos: {
-          select: { id: true },
+          select: { id: true, fileUrl: true, thumbnailUrl: true, uploadedBy: true, isVerified: true },
         },
         assignedStaff: {
           select: {
@@ -104,6 +104,7 @@ export async function GET(
       householdName: b.task.household.name,
       address: b.task.household.address,
       verificationPhotoCount: b.verificationPhotos.length,
+      verificationPhotos: b.verificationPhotos,
       assignedStaff: b.assignedStaff,
     }))
 

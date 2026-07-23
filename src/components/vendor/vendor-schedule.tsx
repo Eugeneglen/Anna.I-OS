@@ -41,6 +41,7 @@ export interface VendorScheduleItem {
   householdName: string;
   address: string;
   verificationPhotoCount: number;
+  verificationPhotos?: { id: string; fileUrl: string; thumbnailUrl?: string | null; uploadedBy: string; isVerified: boolean }[];
   assignedStaff?: { id: string; name: string; role: string } | null;
 }
 

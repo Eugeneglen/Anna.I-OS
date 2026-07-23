@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { AnomalyBanner } from "./anomaly-banner";
+import { RebookingPrompt } from "./rebooking-prompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatSgd, STATUS_LABELS, type Task, type Household, type HouseholdCategoryAutonomy, type TaskStatus, CATEGORY_DEFAULTS } from "@/lib/types";
 import {
@@ -462,6 +463,9 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Rebooking Prompt ── */}
+      <RebookingPrompt tasks={tasks} />
 
       {/* Upcoming (Next 7 Days) — Regular tasks only */}
       <div className="px-4 lg:px-6 pb-4 lg:pb-6">
