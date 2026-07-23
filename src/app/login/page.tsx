@@ -42,11 +42,11 @@ export default function HouseholdLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--anna-bg)] px-4">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#B8C4BE' }}>
       <div className="w-full max-w-sm anna-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Image src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="mx-auto mb-3" />
+          <Image src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="mx-auto mb-1" />
           <h1 className="text-2xl font-bold tracking-tight text-[var(--anna-sage-dark)]">
             Anna.I
           </h1>
