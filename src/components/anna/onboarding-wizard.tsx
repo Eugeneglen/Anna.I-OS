@@ -24,7 +24,6 @@ import {
   Bird,
   Fish,
   Clock,
-  Globe,
   BrushCleaning,
   Wind,
   Wrench,
@@ -80,6 +79,8 @@ interface PeopleData {
   pets?: string[];
   petTypes?: string[];
   schedule?: string;
+  homeType?: string;
+  roomCount?: string;
 }
 
 interface PainPointsData {
@@ -95,7 +96,6 @@ interface ServiceHabitsData {
 }
 
 interface PreferencesData {
-  preferredLanguage?: string;
   preferredDay?: string;
   preferredTime?: string;
   autonomyLevel?: string;
@@ -159,6 +159,19 @@ const SCHEDULE_OPTIONS = [
   { value: "OUT", label: "Usually out during the day" },
 ];
 
+// Simplified home type for Step 3 (Your People) — subset of Step 1
+const HOME_TYPE_SIMPLE = [
+  { value: "HDB", label: "HDB" },
+  { value: "CONDO", label: "Condo" },
+  { value: "LANDED", label: "Landed" },
+];
+
+const ROOM_COUNT_OPTIONS = [
+  { value: "3", label: "3 rooms" },
+  { value: "4", label: "4 rooms" },
+  { value: "5+", label: "5+ rooms" },
+];
+
 const PAIN_POINT_TASKS = [
   { value: "CLEANING", label: "Cleaning & tidying", icon: BrushCleaning },
   { value: "AIRCON", label: "Air-con servicing", icon: Wind },
@@ -177,13 +190,6 @@ const CATEGORY_FREQUENCY_OPTIONS = [
 ];
 
 // FIND_METHOD_OPTIONS removed — this was marketing data, not product data (per user spec)
-
-const LANGUAGES = [
-  { value: "ENGLISH", label: "English" },
-  { value: "MANDARIN", label: "Mandarin" },
-  { value: "MALAY", label: "Malay" },
-  { value: "TAMIL", label: "Tamil" },
-];
 
 const DAY_OPTIONS = [
   { value: "ANY", label: "Any day" },
@@ -753,8 +759,56 @@ function StepYourPeople({
         </motion.div>
       )}
 
+      {/* Home type (simplified confirmation) */}
+      {(data.members || []).length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">Home type</p>
+          <div className="flex flex-wrap gap-2">
+            {HOME_TYPE_SIMPLE.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => onChange("homeType", t.value)}
+                className={cn(
+                  "px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 border",
+                  data.homeType === t.value
+                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                    : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Room count */}
+      {data.homeType && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">How many rooms?</p>
+          <div className="flex flex-wrap gap-2">
+            {ROOM_COUNT_OPTIONS.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => onChange("roomCount", r.value)}
+                className={cn(
+                  "px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 border",
+                  data.roomCount === r.value
+                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                    : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       <AnnaInsight>
-        👨‍👩‍👧‍👦 I&apos;ll use this to time service visits safely and recommend kid-friendly or pet-conscious vendors when relevant.
+        👨‍👩‍👧‍👦 I&apos;ll use this to time service visits safely, recommend kid-friendly or pet-conscious vendors, and match the right service packages for your home size.
       </AnnaInsight>
 
       <StepNav
@@ -1180,27 +1234,20 @@ function StepPreferences({
         </p>
       </div>
 
-      {/* Language / Day / Time preferences */}
+      {/* Day / Time preferences */}
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-2.5">
-          <div>
-            <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
-              <Globe size={10} className="inline mr-1" />
-              Language
-            </p>
-            <PillSelect options={LANGUAGES} selected={data.preferredLanguage || "ENGLISH"} onSelect={(v) => onChange("preferredLanguage", v)} />
-          </div>
+        <div className="grid grid-cols-2 gap-2.5">
           <div>
             <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
               <Clock size={10} className="inline mr-1" />
-              Day
+              Preferred day
             </p>
             <PillSelect options={DAY_OPTIONS} selected={data.preferredDay || "ANY"} onSelect={(v) => onChange("preferredDay", v)} />
           </div>
           <div>
             <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
               <Clock size={10} className="inline mr-1" />
-              Time
+              Preferred time
             </p>
             <PillSelect options={TIME_OPTIONS} selected={data.preferredTime || "FLEXIBLE"} onSelect={(v) => onChange("preferredTime", v)} />
           </div>
@@ -1208,7 +1255,7 @@ function StepPreferences({
       </div>
 
       <AnnaInsight>
-        ⚙️ Your autonomy preference is Anna.I&apos;s starting point. As trust builds, you can increase or decrease automation anytime.
+        ⚙️ This is your starting point for every service — each one can move faster or slower as Anna.I earns trust in that specific category.
       </AnnaInsight>
 
       <StepNav
@@ -1223,13 +1270,50 @@ function StepPreferences({
 
 // ─── Step 6: Meet Anna.I ──────────────────────────────────────
 
+// Personalized demo messages by top pain point
+const DEMO_MESSAGES: Record<string, { before: string; after: string }> = {
+  CLEANING: {
+    before: `\u201CThe house is a mess and I have no time to clean.\u201D`,
+    after: `\u201CYour weekly cleaning is due this Friday. I've confirmed with your usual cleaner \u2014 same time, 3-room package. Want me to send a reminder?\u201D`,
+  },
+  AIRCON: {
+    before: `\u201CMy air-con is making a weird noise.\u201D`,
+    after: `\u201CI noticed your air-con service is due based on your 6-month schedule. I found 3 top-rated options nearby. Want me to book one?\u201D`,
+  },
+  REPAIRS: {
+    before: `\u201CThe kitchen tap has been leaking for weeks.\u201D`,
+    after: `\u201CI saw your tap repair request. Here are 2 plumbers available this week with 4.8+ ratings. One-tap booking?\u201D`,
+  },
+  LAUNDRY: {
+    before: `\u201CI never have time to fold all the laundry.\u201D`,
+    after: `\u201CYour laundry pickup is scheduled for tomorrow at 9 AM. I've included the bedding items you mentioned last week.\u201D`,
+  },
+  PLANNING: {
+    before: `\u201CWhen did I last service the air-con? What's due next?\u201D`,
+    after: `\u201CHere's your household status: Air-con due in 2 weeks, cleaning on Friday, pest control next month. I've already prepared booking options for the air-con.\u201D`,
+  },
+  FINDING: {
+    before: `\u201CI need someone reliable but don't know who to trust.\u201D`,
+    after: `\u201CBased on your preferences and 200+ reviews, I've shortlisted 3 highly-rated providers for you. All verified, all available this week.\u201D`,
+  },
+};
+
+const DEFAULT_DEMO = {
+  before: `\u201CMy air-con is making a weird noise.\u201D`,
+  after: `\u201CI noticed your air-con service is due based on your 6-month schedule. I found 3 top-rated options nearby. Want me to book one?\u201D`,
+};
+
 function StepMeetAnna({
   onContinue,
   onBack,
+  topPainPoint,
 }: {
   onContinue: () => void;
   onBack: () => void;
+  topPainPoint?: string;
 }) {
+  const demo = topPainPoint ? (DEMO_MESSAGES[topPainPoint] || DEFAULT_DEMO) : DEFAULT_DEMO;
+
   return (
     <div>
       <div className="text-center mb-6">
@@ -1257,7 +1341,7 @@ function StepMeetAnna({
             <p className="text-xs font-semibold text-[var(--anna-slate)]">Before Anna.I</p>
           </div>
           <div className="space-y-1.5 text-[11px] text-[var(--anna-muted)] pl-8">
-            <p className="italic">&quot;My air-con is making a weird noise.&quot;</p>
+            <p className="italic">{demo.before}</p>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
               {["Search Google", "Read reviews", "Message 3 vendors", "Compare quotes", "Schedule appointment", "Wait..."].map((s) => (
                 <span key={s} className="px-2 py-0.5 rounded-md bg-white text-[9px] text-[var(--anna-muted)] border border-[var(--anna-border)]">
@@ -1279,7 +1363,7 @@ function StepMeetAnna({
             <div className="flex items-start gap-2">
               <MessageCircle size={12} className="text-[var(--anna-sage)] shrink-0 mt-0.5" />
               <p className="text-[11px] text-[var(--anna-slate)] italic">
-                &quot;I noticed your air-con service is due based on your 6-month schedule. I found 3 top-rated options nearby. Want me to book one?&quot;
+                {demo.after}
               </p>
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -1702,7 +1786,11 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                 />
               )}
               {currentStep === 6 && (
-                <StepMeetAnna onContinue={handleStep6} onBack={goBack} />
+                <StepMeetAnna
+                  onContinue={handleStep6}
+                  onBack={goBack}
+                  topPainPoint={(painPointsData.timeConsumingTasks || [])[0]}
+                />
               )}
               {currentStep === 7 && (
                 <StepYourControl onContinue={handleStep7} onBack={goBack} />

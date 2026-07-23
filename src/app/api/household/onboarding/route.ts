@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest) {
         break;
       }
       case 5: {
-        // Step 5: Preferences & Autonomy — language, day, time, autonomy level
+        // Step 5: Preferences & Autonomy — day, time, autonomy level
         updateData.onboardingProfile = {
           ...existingProfile,
           preferences: data,
@@ -77,7 +77,6 @@ export async function PATCH(req: NextRequest) {
             ...prefs,
             preferredDay: data.preferredDay,
             preferredTime: data.preferredTime,
-            preferredLanguage: data.preferredLanguage,
             notes: data.notes,
           };
         }
