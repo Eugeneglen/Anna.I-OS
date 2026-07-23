@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
       // 14. Bookings in last 30 days (for vendor utilization chart)
       db.booking.findMany({
         where: { createdAt: { gte: thirtyDaysAgo } },
-        select: { vendorId: true, status: true, createdAt: true, category: true },
+        select: { vendorId: true, status: true, createdAt: true },
       }),
 
       // 15. Tasks previous month (for KPI comparison)
@@ -239,6 +239,71 @@ export async function GET(req: NextRequest) {
       for (const v of vendorUtilization) v.vendorName = utilNames[v.vendorId] || "Unknown";
     }
 
+    // ── CHART DATA: Category revenue breakdown (all-time completed tasks) ──
+    const categoryRevenueMap = new Map<string, { category: string; revenueCents: number; count: number }>();
+    for (const t of allTasks) {
+      if (t.status !== "COMPLETED" && t.status !== "VERIFIED" && t.status !== "ESCROW_RELEASED") continue;
+      const entry = categoryRevenueMap.get(t.category) || { category: t.category, revenueCents: 0, count: 0 };
+      entry.revenueCents += t.amountCents || 0;
+      entry.count++;
+      categoryRevenueMap.set(t.category, entry);
+    }
+    const categoryBreakdown = Array.from(categoryRevenueMap.values()).sort((a, b) => b.revenueCents - a.revenueCents);
+
+    // ── CHART DATA: Day-of-week pattern (all-time bookings) ──
+    const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const dowMap = new Map<number, { day: string; dayIndex: number; tasks: number; bookings: number; revenueCents: number }>();
+    for (let i = 0; i < 7; i++) {
+      dowMap.set(i, { day: DAYS[i], dayIndex: i, tasks: 0, bookings: 0, revenueCents: 0 });
+    }
+    for (const t of allTasks) {
+      const dow = t.createdAt.getDay();
+      const jsDow = dow === 0 ? 6 : dow - 1; // Convert Sun=0 to Mon=0 index
+      const entry = dowMap.get(jsDow)!;
+      entry.tasks++;
+      if (t.status === "COMPLETED" || t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") {
+        entry.revenueCents += t.amountCents || 0;
+      }
+    }
+    for (const b of allBookings) {
+      const dow = b.createdAt.getDay();
+      const jsDow = dow === 0 ? 6 : dow - 1;
+      dowMap.get(jsDow)!.bookings++;
+    }
+    const dayOfWeekPattern = Array.from(dowMap.values()).sort((a, b) => a.dayIndex - b.dayIndex);
+
+    // ── CHART DATA: Weekly completion trend (last 12 weeks) ──
+    const twelveWeeksAgo = new Date(now);
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+    twelveWeeksAgo.setHours(0, 0, 0, 0);
+    const weekMap = new Map<string, { week: string; created: number; completed: number }>();
+    for (let w = 11; w >= 0; w--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - w * 7);
+      const day = d.getDay();
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const key = monday.toISOString().slice(0, 10);
+      weekMap.set(key, { week: key, created: 0, completed: 0 });
+    }
+    for (const t of allTasks) {
+      if (t.createdAt < twelveWeeksAgo) continue;
+      const day = t.createdAt.getDay();
+      const monday = new Date(t.createdAt);
+      monday.setDate(t.createdAt.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const key = monday.toISOString().slice(0, 10);
+      const entry = weekMap.get(key);
+      if (entry) {
+        entry.created++;
+        if (t.status === "COMPLETED" || t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") {
+          entry.completed++;
+        }
+      }
+    }
+    const completionTrend = Array.from(weekMap.values());
+
     // ── KPI COMPARISON: previous month ──
     const revenuePrevMonth = tasksPrevMonth.reduce((s, t) => s + (t.amountCents || 0), 0);
     const tasksChange = tasksPrevMonthCount > 0 ? ((tasksThisMonth - tasksPrevMonthCount) / tasksPrevMonthCount) * 100 : null;
@@ -281,10 +346,13 @@ export async function GET(req: NextRequest) {
       charts: {
         dailyTrend,
         vendorUtilization,
+        categoryBreakdown,
+        dayOfWeekPattern,
+        completionTrend,
       },
     });
   } catch (error) {
-    console.error("[/api/ops/analytics GET]", error instanceof Error ? error.message : error);
+    console.error("[/api/ops/analytics GET]", error instanceof Error ? error.message + "\n" + error.stack : String(error));
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

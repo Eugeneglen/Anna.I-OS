@@ -252,7 +252,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Analytics Charts */}
-      <OpsAnalyticsCharts charts={data?.charts || { dailyTrend: [], vendorUtilization: [] }} />
+      <OpsAnalyticsCharts charts={data?.charts || { dailyTrend: [], vendorUtilization: [], categoryBreakdown: [], dayOfWeekPattern: [], completionTrend: [] }} />
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
