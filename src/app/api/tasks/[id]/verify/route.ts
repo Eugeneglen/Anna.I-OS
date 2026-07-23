@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { checkAndPromoteAutonomy } from "@/lib/autonomy"
 import { triggerAnomalyDetection } from "@/lib/notify"
+import { emitTaskStatusChanged } from "@/lib/events"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
@@ -103,6 +104,15 @@ export async function POST(
 
     // Phase 5: Background anomaly detection
     triggerAnomalyDetection(task.householdId);
+
+    // Fire-and-forget: push real-time event to household
+    emitTaskStatusChanged({
+      id: task.id,
+      category: task.category,
+      status: "VERIFIED",
+      previousStatus: task.status,
+      householdId: task.householdId,
+    }).catch(() => {});
 
     return NextResponse.json({
       task: verifiedTask,

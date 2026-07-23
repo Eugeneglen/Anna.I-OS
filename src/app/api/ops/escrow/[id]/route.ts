@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
+import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
 
 const escrowActionSchema = z.object({
   action: z.enum(["release", "resolve_dismiss", "resolve_refund"]),
@@ -134,6 +135,18 @@ export async function PATCH(
         return { updatedTask, updatedEscrow };
       });
 
+      // Fire-and-forget: push real-time event to household
+      emitEscrowStateChanged({
+        id,
+        state: "RELEASED",
+        previousState: "HELD",
+        amountCents: escrow.amountCents,
+        category: task.category,
+        householdId: task.householdId,
+        householdName: task.household?.name,
+        vendorPayoutCents: escrow.vendorPayoutCents,
+      }).catch(() => {});
+
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow });
     }
 
@@ -223,6 +236,26 @@ export async function PATCH(
         return { updatedTask, updatedEscrow };
       });
 
+      // Fire-and-forget: push real-time event to household
+      emitDisputeResolved({
+        taskId: task.id,
+        householdId: task.householdId,
+        householdName: task.household?.name,
+        category: task.category,
+        resolution: "dismissed",
+        escrowAmountCents: escrow.amountCents,
+      }).catch(() => {});
+      emitEscrowStateChanged({
+        id,
+        state: "HELD",
+        previousState: "DISPUTED",
+        amountCents: escrow.amountCents,
+        category: task.category,
+        householdId: task.householdId,
+        householdName: task.household?.name,
+        disputeResolution: resolution || "Dispute dismissed by ops",
+      }).catch(() => {});
+
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow });
     }
 
@@ -307,6 +340,26 @@ export async function PATCH(
 
         return { updatedEscrow };
       });
+
+      // Fire-and-forget: push real-time event to household
+      emitDisputeResolved({
+        taskId: task.id,
+        householdId: task.householdId,
+        householdName: task.household?.name,
+        category: task.category,
+        resolution: "refunded",
+        escrowAmountCents: escrow.amountCents,
+      }).catch(() => {});
+      emitEscrowStateChanged({
+        id,
+        state: "REFUNDED",
+        previousState: "DISPUTED",
+        amountCents: escrow.amountCents,
+        category: task.category,
+        householdId: task.householdId,
+        householdName: task.household?.name,
+        disputeResolution: resolution || "Dispute upheld — refund issued",
+      }).catch(() => {});
 
       return NextResponse.json({ escrow: result.updatedEscrow });
     }

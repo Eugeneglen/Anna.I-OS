@@ -15,6 +15,7 @@ import {
 import type { TabType, Household } from "@/lib/types";
 import { AskAnna } from "@/components/anna/ask-anna";
 import { NotificationPanel } from "@/components/anna/notification-panel";
+import { RealtimeToasts } from "@/components/anna/realtime-toasts";
 
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -270,6 +271,9 @@ npx prisma db seed`}
 
       {/* Notification Panel */}
       <NotificationPanel />
+
+      {/* Real-Time Toasts */}
+      <RealtimeToasts />
     </div>
   );
 }

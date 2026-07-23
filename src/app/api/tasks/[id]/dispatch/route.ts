@@ -5,6 +5,7 @@ import { TaskStatus, VendorStatus, NotificationChannel, NotificationEventType, N
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
 import { autoSelectVendor } from "@/lib/routing"
 import { triggerAnomalyDetection } from "@/lib/notify"
+import { emitTaskStatusChanged } from "@/lib/events"
 
 const dispatchSchema = z.object({
   vendorId: z.string().min(1).optional(),
@@ -192,6 +193,15 @@ export async function POST(
 
     // Phase 5: Background anomaly detection (fire-and-forget, don't await)
     triggerAnomalyDetection(task.householdId);
+
+    // Fire-and-forget: push real-time event to household
+    emitTaskStatusChanged({
+      id: task.id,
+      category: task.category,
+      status: "DISPATCHED",
+      previousStatus: task.status,
+      householdId: task.householdId,
+    }).catch(() => {});
 
     return NextResponse.json(
       { task: result.updatedTask, booking: result.booking, escrow: result.escrow, autoSelected },

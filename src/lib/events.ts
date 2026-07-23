@@ -1,7 +1,8 @@
 // ============================================================
 // Anna.I — Event Emitter (Phase 2)
 // Connects to the ops-events WebSocket service as a client
-// and emits events that get broadcast to all ops dashboards.
+// and emits events that get broadcast to all ops dashboards
+// and optionally to specific household rooms.
 // Fire-and-forget pattern — errors are logged, never thrown.
 // ============================================================
 
@@ -89,7 +90,7 @@ export async function emitOpsEvent(event: OpsEventPayload): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Convenience helpers
+// Convenience helpers — include householdId for room routing
 // ─────────────────────────────────────────────────────────────
 
 /** Anomaly detected and persisted */
@@ -116,6 +117,7 @@ export async function emitNotificationCreated(notification: {
   eventType: string;
   title: string;
   body: string;
+  householdId?: string;
   householdName?: string;
   severity?: string;
 }) {
@@ -146,6 +148,7 @@ export async function emitBookingStatusChanged(booking: {
   status: string;
   previousStatus: string;
   vendorName?: string;
+  householdId?: string;
   householdName?: string;
   category: string;
 }) {
@@ -155,14 +158,18 @@ export async function emitBookingStatusChanged(booking: {
   });
 }
 
-/** Escrow state changed */
+/** Escrow state changed — routes to specific household room */
 export async function emitEscrowStateChanged(escrow: {
   id: string;
   state: string;
   previousState: string;
   amountCents: number;
   category: string;
+  householdId: string;
   householdName?: string;
+  vendorPayoutCents?: number;
+  disputeReason?: string;
+  disputeResolution?: string;
 }) {
   return emitOpsEvent({
     type: "escrow:state_changed",
@@ -170,7 +177,7 @@ export async function emitEscrowStateChanged(escrow: {
   });
 }
 
-/** Autonomy level promoted */
+/** Autonomy level promoted — routes to specific household room */
 export async function emitAutonomyPromoted(data: {
   householdId: string;
   householdName?: string;
@@ -180,6 +187,67 @@ export async function emitAutonomyPromoted(data: {
 }) {
   return emitOpsEvent({
     type: "autonomy:promoted",
+    data,
+  });
+}
+
+/** Dispute raised — routes to specific household room */
+export async function emitDisputeRaised(data: {
+  taskId: string;
+  householdId: string;
+  householdName?: string;
+  category: string;
+  reason: string;
+  escrowAmountCents: number;
+}) {
+  return emitOpsEvent({
+    type: "dispute:raised",
+    data,
+  });
+}
+
+/** Dispute resolved — routes to specific household room */
+export async function emitDisputeResolved(data: {
+  taskId: string;
+  householdId: string;
+  householdName?: string;
+  category: string;
+  resolution: string;     // "dismissed" | "refunded"
+  escrowAmountCents?: number;
+  vendorPayoutCents?: number;
+}) {
+  return emitOpsEvent({
+    type: "dispute:resolved",
+    data,
+  });
+}
+
+/** Vendor completed work — routes to specific household room */
+export async function emitWorkCompleted(data: {
+  taskId: string;
+  bookingId: string;
+  householdId: string;
+  category: string;
+  vendorName?: string;
+  hasPhotos: boolean;
+  completionNotes?: string;
+}) {
+  return emitOpsEvent({
+    type: "work:completed",
+    data,
+  });
+}
+
+/** Photos uploaded by vendor — routes to specific household room */
+export async function emitPhotosUploaded(data: {
+  taskId: string;
+  bookingId: string;
+  householdId: string;
+  category: string;
+  photoCount: number;
+}) {
+  return emitOpsEvent({
+    type: "photos:uploaded",
     data,
   });
 }

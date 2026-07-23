@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
+import { emitEscrowStateChanged, emitDisputeRaised } from "@/lib/events"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -119,6 +120,17 @@ export async function PATCH(
 
       // Phase 4: Fire-and-forget predictive scheduling for L4+ households
       triggerPredictiveScheduling(task.householdId, task.category as any, task.id)
+
+      // Fire-and-forget: push real-time event to household
+      emitEscrowStateChanged({
+        id: escrow.id,
+        state: "RELEASED",
+        previousState: "HELD",
+        amountCents: escrow.amountCents,
+        category: task.category,
+        householdId: task.householdId,
+        vendorPayoutCents: escrow.vendorPayoutCents,
+      }).catch(() => {})
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }
@@ -243,6 +255,24 @@ export async function PATCH(
 
       // Phase 5: Background anomaly detection (dispute triggers ESCROW_DISPUTED check)
       triggerAnomalyDetection(task.householdId);
+
+      // Fire-and-forget: push real-time event to household
+      emitDisputeRaised({
+        taskId: task.id,
+        householdId: task.householdId,
+        category: task.category,
+        reason: reason ?? "No reason provided",
+        escrowAmountCents: escrow.amountCents,
+      }).catch(() => {});
+      emitEscrowStateChanged({
+        id: escrow.id,
+        state: "DISPUTED",
+        previousState: "HELD",
+        amountCents: escrow.amountCents,
+        category: task.category,
+        householdId: task.householdId,
+        disputeReason: reason ?? "No reason provided",
+      }).catch(() => {});
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }

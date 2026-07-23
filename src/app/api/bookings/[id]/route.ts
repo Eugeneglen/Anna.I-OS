@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
+import { emitWorkCompleted } from "@/lib/events"
 
 // C-7 FIX: Extend schema to accept rating and ratingComment
 // Allow standalone rating updates (no status transition required)
@@ -149,6 +150,17 @@ export async function PATCH(
         where: { id: booking.taskId },
         data: { status: TaskStatus.COMPLETED, completedAt: now },
       })
+
+      // Fire-and-forget: push real-time event to household
+      emitWorkCompleted({
+        taskId: booking.taskId,
+        bookingId: booking.id,
+        householdId: booking.task.householdId,
+        category: booking.task.category,
+        vendorName: booking.vendor?.name,
+        hasPhotos: false,
+        completionNotes: booking.completionNotes ?? undefined,
+      }).catch(() => {});
 
     // Verification and escrow release remain manual at all autonomy levels
     // per the canonical Closed-Loop brand promise (CLAUDE.md).
