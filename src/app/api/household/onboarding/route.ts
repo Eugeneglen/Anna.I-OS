@@ -13,8 +13,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { step, data } = body;
 
-    if (!step || step < 1 || step > 5) {
-      return NextResponse.json({ error: "Invalid step. Must be 1-5." }, { status: 400 });
+    if (!step || step < 1 || step > 8) {
+      return NextResponse.json({ error: "Invalid step. Must be 1-8." }, { status: 400 });
     }
 
     const household = await db.household.findUnique({
@@ -25,70 +25,75 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Household not found" }, { status: 404 });
     }
 
-    // Update based on step
+    // Build update payload based on step
     const updateData: Record<string, unknown> = { onboardingStep: step };
+
+    // Get existing profile or start fresh
+    const existingProfile = (household.onboardingProfile as Record<string, unknown>) || {};
 
     switch (step) {
       case 1: {
-        // Profile: name, phone, email
-        if (data.name) updateData.name = data.name;
-        if (data.phone !== undefined) updateData.phone = data.phone;
-        if (data.email) updateData.email = data.email;
+        // Step 1: Your Home — home type, size, occupants
+        updateData.onboardingProfile = {
+          ...existingProfile,
+          home: data,
+        };
         break;
       }
       case 2: {
-        // Address details
-        if (data.address) updateData.address = data.address;
-        if (data.postalCode !== undefined) updateData.postalCode = data.postalCode;
-        if (data.unitNumber !== undefined) updateData.unitNumber = data.unitNumber;
+        // Step 2: Your People — household members, pets, schedule
+        updateData.onboardingProfile = {
+          ...existingProfile,
+          people: data,
+        };
         break;
       }
       case 3: {
-        // Service categories
-        if (Array.isArray(data.activeCategories)) {
-          const validCategories = ["CLEANING","LAUNDRY","AIRCON","PLUMBING","ELECTRICAL","PAINTING","PEST_CONTROL","HANDYMAN","LOCKSMITH","APPLIANCE_REPAIR"];
-          const filtered = data.activeCategories.filter((c: string) => validCategories.includes(c));
-          updateData.activeCategories = JSON.stringify(filtered);
-
-          // Create autonomy records for each selected category at Level 1
-          for (const cat of filtered) {
-            await db.householdCategoryAutonomy.upsert({
-              where: {
-                householdId_category: {
-                  householdId: session.householdId,
-                  category: cat as "CLEANING" | "LAUNDRY" | "AIRCON" | "PLUMBING" | "ELECTRICAL" | "PAINTING" | "PEST_CONTROL" | "HANDYMAN" | "LOCKSMITH" | "APPLIANCE_REPAIR",
-                },
-              },
-              update: {},
-              create: {
-                householdId: session.householdId,
-                category: cat as "CLEANING" | "LAUNDRY" | "AIRCON" | "PLUMBING" | "ELECTRICAL" | "PAINTING" | "PEST_CONTROL" | "HANDYMAN" | "LOCKSMITH" | "APPLIANCE_REPAIR",
-                currentLevel: 1,
-              },
-            });
-          }
-        }
+        // Step 3: Pain Points — tasks, frustrations
+        updateData.onboardingProfile = {
+          ...existingProfile,
+          painPoints: data,
+        };
         break;
       }
       case 4: {
-        // Preferences
-        if (data.preferences) {
+        // Step 4: Service Habits — frequency, how they find providers
+        updateData.onboardingProfile = {
+          ...existingProfile,
+          serviceHabits: data,
+        };
+        break;
+      }
+      case 5: {
+        // Step 5: Preferences & Autonomy — language, day, time, autonomy level
+        updateData.onboardingProfile = {
+          ...existingProfile,
+          preferences: data,
+        };
+        // Also merge into household preferences for backward compat
+        if (data) {
+          const prefs = (household.preferences as Record<string, unknown>) || {};
           updateData.preferences = {
-            ...(household.preferences as Record<string, unknown> || {}),
-            ...data.preferences,
+            ...prefs,
+            preferredDay: data.preferredDay,
+            preferredTime: data.preferredTime,
+            preferredLanguage: data.preferredLanguage,
+            notes: data.notes,
           };
         }
         break;
       }
-      case 5: {
-        // Complete onboarding — also merge preferences if provided
-        if (data.preferences) {
-          updateData.preferences = {
-            ...(household.preferences as Record<string, unknown> || {}),
-            ...data.preferences,
-          };
-        }
-        updateData.onboardingStep = 5;
+      case 6: {
+        // Step 6: Meet Anna.I — no data to save, just advance step
+        break;
+      }
+      case 7: {
+        // Step 7: Your AI, Your Control — no data to save, just advance step
+        break;
+      }
+      case 8: {
+        // Step 8: Complete — set completedAt, set step to 8
+        updateData.onboardingStep = 8;
         updateData.onboardingCompletedAt = new Date();
         break;
       }
@@ -100,14 +105,14 @@ export async function PATCH(req: NextRequest) {
     });
 
     // Create notification on completion
-    if (step === 5) {
+    if (step === 8) {
       await db.notification.create({
         data: {
           householdId: session.householdId,
           channel: "EMAIL",
           eventType: "TASK_CREATED",
-          title: "Onboarding Complete",
-          body: `Welcome aboard! Your household "${updated.name}" is all set up. Start booking services now.`,
+          title: "Onboarding Complete — Welcome to Anna.I!",
+          body: `Your household "${updated.name}" is all set up. Anna.I is now ready to help manage your home services intelligently.`,
           recipientType: "HOUSEHOLD_MEMBER",
         },
       });
@@ -126,6 +131,7 @@ export async function PATCH(req: NextRequest) {
         unitNumber: updated.unitNumber,
         activeCategories: updated.activeCategories,
         preferences: updated.preferences,
+        onboardingProfile: updated.onboardingProfile,
         onboardingStep: updated.onboardingStep,
         onboardingCompletedAt: updated.onboardingCompletedAt,
       },

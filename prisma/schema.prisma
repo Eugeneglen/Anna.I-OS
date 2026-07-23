@@ -153,7 +153,8 @@ model Household {
   unitNumber            String?
   activeCategories      String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
   preferences           Json              // flexible: language, preferred times, notes
-  onboardingStep        Int             @default(0) // 0=not started, 1=profile, 2=address, 3=categories, 4=preferences, 5=complete
+  onboardingProfile     Json?             // Deep household intelligence: homeType, occupants, lifestyle, painPoints, serviceHabits, autonomyPreference
+  onboardingStep        Int             @default(0) // 0=not started, 1-5=get-to-know-you, 6-8=anna-intro, 8=complete
   onboardingCompletedAt DateTime?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt

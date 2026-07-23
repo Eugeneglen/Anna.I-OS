@@ -66,7 +66,7 @@ export default function Home() {
   });
 
   const household: OnboardingHousehold | undefined = householdData?.household;
-  const needsOnboarding = household && household.onboardingStep < 5;
+  const needsOnboarding = household && household.onboardingStep < 8;
 
   // When onboarding completes, refetch
   const handleOnboardingComplete = () => {

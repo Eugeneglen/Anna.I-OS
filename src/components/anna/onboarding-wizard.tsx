@@ -6,42 +6,45 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
   Sparkles,
-  Shirt,
-  Fan,
-  Droplets,
-  Zap,
-  Paintbrush,
-  Bug,
-  Wrench,
-  KeyRound,
-  Plug,
-  Home,
   ArrowRight,
   ArrowLeft,
   Loader2,
   CheckCircle2,
-  Phone,
-  Mail,
-  MapPin,
-  Hash,
+  Home,
+  Building2,
+  Trees,
+  Car,
+  HelpCircle,
+  Users,
+  Baby,
+  GraduationCap,
+  HeartPulse,
+  Dog,
+  Cat,
+  Bird,
+  Fish,
   Clock,
   Globe,
-  FileText,
+  BrushCleaning,
+  Wind,
+  Wrench,
+  Shirt,
+  ShoppingCart,
+  Handshake,
+  Bell,
+  Lightbulb,
+  Brain,
+  Rocket,
+  Shield,
+  Target,
+  Eye,
+  Zap,
+  ChevronRight,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { ServiceCategory } from "@/lib/types";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -55,6 +58,7 @@ export interface OnboardingHousehold {
   unitNumber?: string;
   activeCategories: string;
   preferences?: Record<string, string> | null;
+  onboardingProfile?: Record<string, unknown> | null;
   onboardingStep: number;
 }
 
@@ -63,46 +67,117 @@ interface OnboardingWizardProps {
   onComplete: () => void;
 }
 
+// ─── Profile Data Types ──────────────────────────────────────────
+
+interface HomeData {
+  homeType?: string;
+  homeSize?: string;
+  occupants?: string;
+}
+
+interface PeopleData {
+  members?: string[];
+  pets?: string[];
+  petTypes?: string[];
+  schedule?: string;
+}
+
+interface PainPointsData {
+  timeConsumingTasks?: string[];
+  frustrations?: string;
+}
+
+interface ServiceHabitsData {
+  frequency?: string;
+  findMethod?: string;
+}
+
+interface PreferencesData {
+  preferredLanguage?: string;
+  preferredDay?: string;
+  preferredTime?: string;
+  autonomyLevel?: string;
+}
+
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 5;
-
-const STEP_LABELS = ["Welcome", "Profile", "Address", "Services", "Preferences"];
-
-const CATEGORIES: {
-  key: ServiceCategory;
-  label: string;
-  description: string;
-  icon: React.ElementType;
-}[] = [
-  { key: "CLEANING", label: "Cleaning", description: "Regular & deep cleaning", icon: Sparkles },
-  { key: "LAUNDRY", label: "Laundry", description: "Wash, fold & dry clean", icon: Shirt },
-  { key: "AIRCON", label: "Aircon", description: "Service & gas top-up", icon: Fan },
-  { key: "PLUMBING", label: "Plumbing", description: "Unclogging & repairs", icon: Droplets },
-  { key: "ELECTRICAL", label: "Electrical", description: "Wiring & fixtures", icon: Zap },
-  { key: "PAINTING", label: "Painting", description: "Touch-up & full repaint", icon: Paintbrush },
-  { key: "PEST_CONTROL", label: "Pest Control", description: "Cockroach, mosquito & termite", icon: Bug },
-  { key: "HANDYMAN", label: "Handyman", description: "Assembly & mounting", icon: Wrench },
-  { key: "LOCKSMITH", label: "Locksmith", description: "Unlock & lock changes", icon: KeyRound },
-  { key: "APPLIANCE_REPAIR", label: "Appliance Repair", description: "Diagnosis & fix", icon: Plug },
+const TOTAL_STEPS = 8;
+const STEP_LABELS = [
+  "Welcome",
+  "Your Home",
+  "Your People",
+  "Pain Points",
+  "Service Habits",
+  "Preferences",
+  "Meet Anna.I",
+  "Your Control",
 ];
 
-const DAYS_OF_WEEK = [
-  { value: "ANY", label: "Any Day" },
-  { value: "MONDAY", label: "Monday" },
-  { value: "TUESDAY", label: "Tuesday" },
-  { value: "WEDNESDAY", label: "Wednesday" },
-  { value: "THURSDAY", label: "Thursday" },
-  { value: "FRIDAY", label: "Friday" },
-  { value: "SATURDAY", label: "Saturday" },
-  { value: "SUNDAY", label: "Sunday" },
+const HOME_TYPES = [
+  { value: "HDB", label: "HDB Flat", icon: Building2, desc: "Public housing" },
+  { value: "CONDO", label: "Condominium", icon: Building2, desc: "Private apartment" },
+  { value: "LANDED", label: "Landed Property", icon: Trees, desc: "Detached or semi-D" },
+  { value: "TERRACE", label: "Terrace House", icon: Home, desc: "Link house" },
+  { value: "OTHER", label: "Other", icon: HelpCircle, desc: "Studio, dorm, etc." },
 ];
 
-const TIME_PREFERENCES = [
-  { value: "ANY", label: "Any Time" },
-  { value: "MORNING", label: "Morning" },
-  { value: "AFTERNOON", label: "Afternoon" },
-  { value: "EVENING", label: "Evening" },
+const HDB_SIZES = [
+  { value: "2ROOM", label: "2-Room" },
+  { value: "3ROOM", label: "3-Room" },
+  { value: "4ROOM", label: "4-Room" },
+  { value: "5ROOM", label: "5-Room" },
+  { value: "EXEC", label: "Executive" },
+];
+
+const OCCUPANT_OPTIONS = [
+  { value: "1", label: "1", sub: "Solo" },
+  { value: "2", label: "2", sub: "Couple" },
+  { value: "3-4", label: "3–4", sub: "Small family" },
+  { value: "5+", label: "5+", sub: "Large family" },
+];
+
+const MEMBER_TYPES = [
+  { value: "ADULTS", label: "Working Adults", icon: Users },
+  { value: "CHILDREN", label: "Young Children", icon: Baby },
+  { value: "TEENS", label: "Teenagers", icon: GraduationCap },
+  { value: "ELDERLY", label: "Elderly", icon: HeartPulse },
+  { value: "PETS", label: "Pets", icon: Dog },
+];
+
+const PET_TYPES = [
+  { value: "DOGS", label: "Dogs", icon: Dog },
+  { value: "CATS", label: "Cats", icon: Cat },
+  { value: "SMALL", label: "Small Animals", icon: Fish },
+  { value: "OTHERS", label: "Others", icon: Bird },
+];
+
+const SCHEDULE_OPTIONS = [
+  { value: "HOME", label: "Everyone's usually home" },
+  { value: "MIXED", label: "Mixed schedule" },
+  { value: "OUT", label: "Usually out during the day" },
+];
+
+const PAIN_POINT_TASKS = [
+  { value: "CLEANING", label: "Cleaning & tidying", icon: BrushCleaning },
+  { value: "AIRCON", label: "Air-con servicing", icon: Wind },
+  { value: "REPAIRS", label: "Repairs & maintenance", icon: Wrench },
+  { value: "LAUNDRY", label: "Laundry", icon: Shirt },
+  { value: "PLANNING", label: "Planning & scheduling", icon: ShoppingCart },
+  { value: "FINDING", label: "Finding reliable providers", icon: Handshake },
+];
+
+const FREQUENCY_OPTIONS = [
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "OCCASIONAL", label: "Every few months" },
+  { value: "BREAKFIX", label: "Only when something breaks" },
+];
+
+const FIND_METHOD_OPTIONS = [
+  { value: "WORDOFMOUTH", label: "Word of mouth" },
+  { value: "GOOGLE", label: "Google search" },
+  { value: "SOCIAL", label: "Social media" },
+  { value: "NONE", label: "Haven't found a good one yet" },
 ];
 
 const LANGUAGES = [
@@ -112,19 +187,60 @@ const LANGUAGES = [
   { value: "TAMIL", label: "Tamil" },
 ];
 
+const DAY_OPTIONS = [
+  { value: "ANY", label: "Any day" },
+  { value: "WEEKDAY", label: "Weekdays" },
+  { value: "WEEKEND", label: "Weekends" },
+];
+
+const TIME_OPTIONS = [
+  { value: "MORNING", label: "Morning" },
+  { value: "AFTERNOON", label: "Afternoon" },
+  { value: "EVENING", label: "Evening" },
+  { value: "FLEXIBLE", label: "Flexible" },
+];
+
+const AUTONOMY_LEVELS = [
+  {
+    value: "1",
+    label: "Remind me",
+    desc: "Just remind me when tasks are due",
+    icon: Bell,
+    color: "text-[var(--anna-muted)]",
+  },
+  {
+    value: "2",
+    label: "Suggest",
+    desc: "Recommend what I should do",
+    icon: Lightbulb,
+    color: "text-[var(--anna-sage-dark)]",
+  },
+  {
+    value: "3",
+    label: "Prepare",
+    desc: "Get options ready for me to approve",
+    icon: Target,
+    color: "text-[var(--anna-warning)]",
+  },
+  {
+    value: "4",
+    label: "Automate",
+    desc: "Handle routine decisions (with approval)",
+    icon: Zap,
+    color: "text-[var(--anna-sage)]",
+  },
+];
+
 // ─── Animation Variants ─────────────────────────────────────────
 
 const slideVariants = {
   enter: (direction: number) => ({
-    x: direction > 0 ? 80 : -80,
+    x: direction > 0 ? 60 : -60,
     opacity: 0,
   }),
-  center: {
-    x: 0,
-    opacity: 1,
-  },
+  center: { x: 0, opacity: 1 },
   exit: (direction: number) => ({
-    x: direction < 0 ? 80 : -80,
+    x: direction < 0 ? 60 : -60,
     opacity: 0,
   }),
 };
@@ -135,551 +251,997 @@ const slideTransition = {
   damping: 30,
 };
 
-const successVariants = {
-  initial: { scale: 0, opacity: 0 },
-  animate: {
-    scale: 1,
-    opacity: 1,
-    transition: { type: "spring", stiffness: 200, damping: 15, delay: 0.1 },
-  },
-};
+// ─── Shared: Anna.I Insight Bubble ──────────────────────────────
 
-// ─── Progress Bar ───────────────────────────────────────────────
-
-function ProgressBar({ currentStep }: { currentStep: number }) {
+function AnnaInsight({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-6" role="progressbar" aria-valuenow={currentStep} aria-valuemin={0} aria-valuemax={TOTAL_STEPS} aria-label={`Step ${currentStep + 1} of ${TOTAL_STEPS}`}>
-      {/* Step dots */}
-      <div className="flex items-center justify-between mb-2">
-        {STEP_LABELS.map((label, i) => (
-          <div key={label} className="flex flex-col items-center gap-1 flex-1">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.3 }}
+      className="mt-5 flex items-start gap-2.5 bg-[var(--anna-sage-light)]/40 rounded-xl p-3"
+    >
+      <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center shrink-0 mt-0.5">
+        <Sparkles size={14} className="text-white" />
+      </div>
+      <p className="text-xs text-[var(--anna-sage-dark)] leading-relaxed">{children}</p>
+    </motion.div>
+  );
+}
+
+// ─── Shared: Progress Dots ────────────────────────────────────────
+
+function ProgressDots({ currentStep, totalSteps, labels }: { currentStep: number; totalSteps: number; labels: string[] }) {
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-1 justify-center">
+        {labels.map((_, i) => (
+          <div key={i} className="flex items-center">
             <div
               className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300",
-                i < currentStep
-                  ? "bg-[var(--anna-sage)] text-white"
-                  : i === currentStep
-                    ? "bg-[var(--anna-sage)] text-white ring-4 ring-[var(--anna-sage-light)]"
-                    : "bg-[var(--anna-border)] text-[var(--anna-muted)]"
+                "h-2 rounded-full transition-all duration-500",
+                i === currentStep
+                  ? "w-6 bg-[var(--anna-sage)]"
+                  : i < currentStep
+                    ? "w-2 bg-[var(--anna-sage)]"
+                    : "w-2 bg-[var(--anna-border)]"
               )}
-            >
-              {i < currentStep ? (
-                <CheckCircle2 size={14} />
-              ) : (
-                i + 1
-              )}
-            </div>
-            <span
-              className={cn(
-                "text-[9px] font-medium hidden sm:block transition-colors",
-                i <= currentStep ? "text-[var(--anna-sage-dark)]" : "text-[var(--anna-muted)]"
-              )}
-            >
-              {label}
-            </span>
+            />
+            {i < totalSteps - 1 && (
+              <div
+                className={cn(
+                  "w-3 h-0.5 mx-0.5 transition-colors duration-500",
+                  i < currentStep ? "bg-[var(--anna-sage)]" : "bg-[var(--anna-border)]"
+                )}
+              />
+            )}
           </div>
         ))}
       </div>
-      {/* Track bar */}
-      <div className="h-1.5 bg-[var(--anna-border)] rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-[var(--anna-sage)] rounded-full"
-          initial={false}
-          animate={{ width: `${((currentStep) / (TOTAL_STEPS - 1)) * 100}%` }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-        />
+      <p className="text-center text-[10px] text-[var(--anna-muted)] mt-2 font-medium">
+        Step {currentStep + 1} of {totalSteps} — {labels[currentStep]}
+      </p>
+    </div>
+  );
+}
+
+// ─── Shared: Option Card ────────────────────────────────────────
+
+function OptionCard({
+  selected,
+  onClick,
+  icon: Icon,
+  label,
+  sub,
+  large,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  icon?: React.ElementType;
+  label: string;
+  sub?: string;
+  large?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full text-left rounded-xl border transition-all duration-200 select-none",
+        large ? "p-4" : "p-3",
+        selected
+          ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 shadow-sm"
+          : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30 hover:bg-[var(--anna-sage-light)]/10"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {Icon && (
+          <div
+            className={cn(
+              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+              selected
+                ? "bg-[var(--anna-sage)] text-white"
+                : "bg-[var(--anna-bg)] text-[var(--anna-slate-light)]"
+            )}
+          >
+            <Icon size={18} />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className={cn("font-semibold leading-tight", large ? "text-sm" : "text-xs", "text-[var(--anna-slate)]")}>
+            {label}
+          </p>
+          {sub && <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">{sub}</p>}
+        </div>
+        {selected && (
+          <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center shrink-0">
+            <CheckCircle2 size={14} className="text-white" />
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ─── Shared: Multi-Select Card ──────────────────────────────────
+
+function MultiSelectCard({
+  selected,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  icon: React.ElementType;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full text-left rounded-xl border p-3 transition-all duration-200 select-none",
+        selected
+          ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 shadow-sm"
+          : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30 hover:bg-[var(--anna-sage-light)]/10"
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <div
+          className={cn(
+            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+            selected
+              ? "bg-[var(--anna-sage)] text-white"
+              : "bg-[var(--anna-bg)] text-[var(--anna-slate-light)]"
+          )}
+        >
+          <Icon size={16} />
+        </div>
+        <span className="text-xs font-semibold text-[var(--anna-slate)]">{label}</span>
+        {selected && <CheckCircle2 size={16} className="ml-auto text-[var(--anna-sage)]" />}
+      </div>
+    </button>
+  );
+}
+
+// ─── Shared: Pill Select ────────────────────────────────────────
+
+function PillSelect({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: { value: string; label: string }[];
+  selected: string;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onSelect(opt.value)}
+          className={cn(
+            "px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 border",
+            selected === opt.value
+              ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+              : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Shared: Navigation Footer ──────────────────────────────────
+
+function StepNav({
+  onBack,
+  onContinue,
+  onSkip,
+  continueDisabled,
+  isSaving,
+  continueLabel,
+}: {
+  onBack?: () => void;
+  onContinue: () => void;
+  onSkip?: () => void;
+  continueDisabled?: boolean;
+  isSaving?: boolean;
+  continueLabel?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between mt-7">
+      <div>
+        {onBack && (
+          <Button
+            variant="ghost"
+            onClick={onBack}
+            className="rounded-xl text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)] -ml-2"
+          >
+            <ArrowLeft size={14} />
+            Back
+          </Button>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-[10px] text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors px-2"
+          >
+            Skip
+          </button>
+        )}
+        <Button
+          onClick={onContinue}
+          disabled={continueDisabled || isSaving}
+          className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-6 h-11 text-sm font-semibold shadow-sm"
+        >
+          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+          {continueLabel || "Continue"}
+          <ArrowRight size={14} />
+        </Button>
       </div>
     </div>
   );
 }
 
-// ─── Step 1: Welcome ───────────────────────────────────────────
+// ─── Step 0: Welcome ────────────────────────────────────────────
 
-function StepWelcome({
-  householdName,
-  onContinue,
-}: {
-  householdName: string;
-  onContinue: () => void;
-}) {
+function StepWelcome({ onContinue }: { onContinue: () => void }) {
   return (
-    <div className="text-center py-8">
+    <div className="text-center py-6">
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.4, type: "spring" }}
+        transition={{ duration: 0.5, type: "spring" }}
         className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center mx-auto mb-6 shadow-lg"
       >
-        <Home size={36} className="text-white" />
+        <Sparkles size={36} className="text-white" />
       </motion.div>
 
       <h2 className="text-2xl font-bold text-[var(--anna-slate)] mb-2">
         Welcome to Anna.I
       </h2>
-      <p className="text-[var(--anna-muted)] text-sm mb-1">
-        Let&apos;s set up your household in a few quick steps.
+      <p className="text-sm text-[var(--anna-muted)] mb-1 max-w-sm mx-auto">
+        Let&apos;s get to know your home so Anna.I can start helping right away.
       </p>
-      {householdName && (
-        <p className="text-xs font-data text-[var(--anna-sage-dark)] bg-[var(--anna-sage-light)] px-3 py-1 rounded-full inline-block mt-3 mb-8">
-          {householdName}
-        </p>
-      )}
+      <p className="text-xs text-[var(--anna-muted)] max-w-xs mx-auto">
+        This quick chat helps Anna.I understand your household, preferences, and priorities — so it can provide personalised assistance from day one.
+      </p>
 
       <div className="mt-8">
         <Button
           onClick={onContinue}
           className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-8 h-11 text-sm font-semibold shadow-sm"
         >
-          Get Started
+          Let&apos;s Get Started
           <ArrowRight size={16} />
         </Button>
       </div>
 
-      <div className="mt-10 flex items-center justify-center gap-6 text-[10px] text-[var(--anna-muted)]">
-        <span className="flex items-center gap-1"><CheckCircle2 size={12} /> Quick setup</span>
-        <span className="flex items-center gap-1"><CheckCircle2 size={12} /> 5 easy steps</span>
-        <span className="flex items-center gap-1"><CheckCircle2 size={12} /> Takes 2 minutes</span>
+      <div className="mt-8 flex items-center justify-center gap-5 text-[10px] text-[var(--anna-muted)]">
+        <span className="flex items-center gap-1">
+          <Clock size={12} />
+          3-5 minutes
+        </span>
+        <span className="flex items-center gap-1">
+          <Shield size={12} />
+          Data stays private
+        </span>
+        <span className="flex items-center gap-1">
+          <Eye size={12} />
+          Skip anytime
+        </span>
       </div>
     </div>
   );
 }
 
-// ─── Step 2: Profile ────────────────────────────────────────────
+// ─── Step 1: Your Home ──────────────────────────────────────────
 
-function StepProfile({
-  formData,
+function StepYourHome({
+  data,
   onChange,
   onContinue,
   onBack,
+  onSkip,
   isSaving,
 }: {
-  formData: { name: string; phone: string; email: string };
+  data: HomeData;
   onChange: (field: string, value: string) => void;
   onContinue: () => void;
   onBack: () => void;
+  onSkip: () => void;
   isSaving: boolean;
 }) {
   return (
     <div>
-      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">
-        Your Profile
-      </h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-6">
-        Let us know how to reach your household.
-      </p>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">What type of home do you live in?</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I tailor recommendations to your home.</p>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="onb-name" className="text-xs font-medium text-[var(--anna-slate)]">
-            Household Name <span className="text-[var(--anna-error)]">*</span>
-          </Label>
-          <div className="relative">
-            <Home size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-            <Input
-              id="onb-name"
-              value={formData.name}
-              onChange={(e) => onChange("name", e.target.value)}
-              placeholder="e.g. Smith Residence"
-              className="pl-9 border-[var(--anna-border)] bg-[var(--anna-white)]"
-              required
-              aria-required="true"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="onb-phone" className="text-xs font-medium text-[var(--anna-slate)]">
-            Phone Number <span className="text-[var(--anna-muted)]">(optional)</span>
-          </Label>
-          <div className="relative">
-            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-            <Input
-              id="onb-phone"
-              value={formData.phone}
-              onChange={(e) => onChange("phone", e.target.value)}
-              placeholder="+65 9XXX XXXX"
-              className="pl-9 border-[var(--anna-border)] bg-[var(--anna-white)]"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="onb-email" className="text-xs font-medium text-[var(--anna-slate)]">
-            Household Email <span className="text-[var(--anna-muted)]">(read-only)</span>
-          </Label>
-          <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-            <Input
-              id="onb-email"
-              value={formData.email}
-              readOnly
-              className="pl-9 border-[var(--anna-border)] bg-[var(--anna-bg)] text-[var(--anna-slate-light)] cursor-not-allowed"
-            />
-          </div>
-        </div>
+      {/* Home type selection */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {HOME_TYPES.map((t) => (
+          <OptionCard
+            key={t.value}
+            selected={data.homeType === t.value}
+            onClick={() => onChange("homeType", t.value)}
+            icon={t.icon}
+            label={t.label}
+            sub={t.desc}
+          />
+        ))}
       </div>
 
-      <div className="flex justify-end mt-8 gap-3">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="rounded-xl text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
-        >
-          <ArrowLeft size={14} />
-          Back
-        </Button>
-        <Button
-          onClick={onContinue}
-          disabled={!formData.name.trim() || isSaving}
-          className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-6 text-sm font-semibold"
-        >
-          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
-          Continue
-          <ArrowRight size={14} />
-        </Button>
-      </div>
+      {/* HDB size follow-up */}
+      <AnimatePresence>
+        {data.homeType === "HDB" && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">What size is your flat?</p>
+            <PillSelect options={HDB_SIZES} selected={data.homeSize || ""} onSelect={(v) => onChange("homeSize", v)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Occupants */}
+      {data.homeType && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">How many people live in your home?</p>
+          <div className="grid grid-cols-4 gap-2">
+            {OCCUPANT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => onChange("occupants", o.value)}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 p-3 rounded-xl border transition-all duration-200",
+                  data.occupants === o.value
+                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40"
+                    : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30"
+                )}
+              >
+                <span className={cn("text-lg font-bold font-data", data.occupants === o.value ? "text-[var(--anna-sage)]" : "text-[var(--anna-slate)]")}>{o.label}</span>
+                <span className="text-[9px] text-[var(--anna-muted)]">{o.sub}</span>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      <AnnaInsight>
+        🏠 This helps me recommend the right service frequency, estimate pricing accurately, and match vendors experienced with your home type.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        onSkip={onSkip}
+        continueDisabled={!data.homeType}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
 
-// ─── Step 3: Address ────────────────────────────────────────────
+// ─── Step 2: Your People ───────────────────────────────────────
 
-function StepAddress({
-  formData,
+function StepYourPeople({
+  data,
   onChange,
   onContinue,
   onBack,
+  onSkip,
   isSaving,
 }: {
-  formData: { address: string; postalCode: string; unitNumber: string };
-  onChange: (field: string, value: string) => void;
+  data: PeopleData;
+  onChange: (field: string, value: string | string[]) => void;
   onContinue: () => void;
   onBack: () => void;
+  onSkip: () => void;
   isSaving: boolean;
 }) {
+  const toggleMember = (v: string) => {
+    const current = data.members || [];
+    if (v === "PETS") {
+      // Toggle pets — if deselecting, clear petTypes
+      if (current.includes(v)) {
+        onChange("members", current.filter((m) => m !== v));
+        onChange("petTypes", []);
+      } else {
+        onChange("members", [...current, v]);
+      }
+    } else {
+      onChange(
+        "members",
+        current.includes(v) ? current.filter((m) => m !== v) : [...current, v]
+      );
+    }
+  };
+
+  const togglePetType = (v: string) => {
+    const current = data.petTypes || [];
+    onChange(
+      "petTypes",
+      current.includes(v) ? current.filter((t) => t !== v) : [...current, v]
+    );
+  };
+
   return (
     <div>
-      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">
-        Your Address
-      </h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-6">
-        Where should our service vendors go?
-      </p>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Who lives in your home?</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">Select all that apply. This helps with service scheduling and safety.</p>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="onb-address" className="text-xs font-medium text-[var(--anna-slate)]">
-            Address / Estate Name <span className="text-[var(--anna-error)]">*</span>
-          </Label>
-          <div className="relative">
-            <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-            <Input
-              id="onb-address"
-              value={formData.address}
-              onChange={(e) => onChange("address", e.target.value)}
-              placeholder="e.g. 123 Orchard Road, The Sail"
-              className="pl-9 border-[var(--anna-border)] bg-[var(--anna-white)]"
-              required
-              aria-required="true"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="onb-postal" className="text-xs font-medium text-[var(--anna-slate)]">
-              Postal Code <span className="text-[var(--anna-muted)]">(optional)</span>
-            </Label>
-            <div className="relative">
-              <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-              <Input
-                id="onb-postal"
-                value={formData.postalCode}
-                onChange={(e) => onChange("postalCode", e.target.value)}
-                placeholder="e.g. 238888"
-                className="pl-9 border-[var(--anna-border)] bg-[var(--anna-white)]"
-                maxLength={6}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="onb-unit" className="text-xs font-medium text-[var(--anna-slate)]">
-              Unit Number <span className="text-[var(--anna-muted)]">(optional)</span>
-            </Label>
-            <div className="relative">
-              <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)]" />
-              <Input
-                id="onb-unit"
-                value={formData.unitNumber}
-                onChange={(e) => onChange("unitNumber", e.target.value)}
-                placeholder="e.g. #12-34"
-                className="pl-9 border-[var(--anna-border)] bg-[var(--anna-white)]"
-              />
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {MEMBER_TYPES.map((m) => (
+          <MultiSelectCard
+            key={m.value}
+            selected={(data.members || []).includes(m.value)}
+            onClick={() => toggleMember(m.value)}
+            icon={m.icon}
+            label={m.label}
+          />
+        ))}
       </div>
 
-      <div className="flex justify-end mt-8 gap-3">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="rounded-xl text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
-        >
-          <ArrowLeft size={14} />
-          Back
-        </Button>
-        <Button
-          onClick={onContinue}
-          disabled={!formData.address.trim() || isSaving}
-          className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-6 text-sm font-semibold"
-        >
-          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
-          Continue
-          <ArrowRight size={14} />
-        </Button>
-      </div>
+      {/* Pet types follow-up */}
+      <AnimatePresence>
+        {(data.members || []).includes("PETS") && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">What kind of pets do you have?</p>
+            <div className="grid grid-cols-4 gap-2">
+              {PET_TYPES.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => togglePetType(p.value)}
+                  className={cn(
+                    "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200",
+                    (data.petTypes || []).includes(p.value)
+                      ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40"
+                      : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center",
+                      (data.petTypes || []).includes(p.value)
+                        ? "bg-[var(--anna-sage)] text-white"
+                        : "bg-[var(--anna-bg)] text-[var(--anna-slate-light)]"
+                    )}
+                  >
+                    <p.icon size={16} />
+                  </div>
+                  <span className="text-[10px] font-medium text-[var(--anna-slate)]">{p.label}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Schedule */}
+      {(data.members || []).length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">What&apos;s your household&apos;s typical schedule?</p>
+          <div className="space-y-2">
+            {SCHEDULE_OPTIONS.map((s) => (
+              <OptionCard
+                key={s.value}
+                selected={data.schedule === s.value}
+                onClick={() => onChange("schedule", s.value)}
+                label={s.label}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      <AnnaInsight>
+        👨‍👩‍👧‍👦 I&apos;ll use this to time service visits safely and recommend kid-friendly or pet-conscious vendors when relevant.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        onSkip={onSkip}
+        continueDisabled={!data.members || data.members.length === 0}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
 
-// ─── Step 4: Services ───────────────────────────────────────────
+// ─── Step 3: Pain Points ───────────────────────────────────────
 
-function StepServices({
-  selectedCategories,
-  onToggle,
+function StepPainPoints({
+  data,
+  onChange,
   onContinue,
   onBack,
+  onSkip,
   isSaving,
 }: {
-  selectedCategories: string[];
-  onToggle: (category: string) => void;
+  data: PainPointsData;
+  onChange: (field: string, value: unknown) => void;
   onContinue: () => void;
   onBack: () => void;
+  onSkip: () => void;
   isSaving: boolean;
 }) {
-  const hasSelection = selectedCategories.length > 0;
+  const MAX_TASKS = 4;
+  const selectedTasks = data.timeConsumingTasks || [];
+
+  const toggleTask = (v: string) => {
+    if (selectedTasks.includes(v)) {
+      onChange("timeConsumingTasks", selectedTasks.filter((t) => t !== v));
+    } else if (selectedTasks.length < MAX_TASKS) {
+      onChange("timeConsumingTasks", [...selectedTasks, v]);
+    }
+  };
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">
-        Services You Need
-      </h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-6">
-        Select at least one service category. You can change this later.
-      </p>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">What takes up the most of your time?</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">Pick up to {MAX_TASKS}. This helps Anna.I focus on what matters most.</p>
 
-      <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto anna-scroll pr-1">
-        {CATEGORIES.map((cat) => {
-          const isSelected = selectedCategories.includes(cat.key);
-          const Icon = cat.icon;
+      <div className="grid grid-cols-2 gap-2.5">
+        {PAIN_POINT_TASKS.map((t) => {
+          const isSelected = selectedTasks.includes(t.value);
+          const isDisabled = !isSelected && selectedTasks.length >= MAX_TASKS;
           return (
             <button
+              key={t.value}
               type="button"
-              key={cat.key}
-              onClick={() => onToggle(cat.key)}
-              aria-pressed={isSelected}
+              onClick={() => toggleTask(t.value)}
+              disabled={isDisabled}
               className={cn(
-                "relative text-left rounded-xl border p-3 transition-all duration-200 select-none",
+                "w-full text-left rounded-xl border p-3.5 transition-all duration-200 select-none",
                 isSelected
                   ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 shadow-sm"
-                  : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 hover:bg-[var(--anna-sage-light)]/10"
+                  : isDisabled
+                    ? "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-50 cursor-not-allowed"
+                    : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30 hover:bg-[var(--anna-sage-light)]/10"
               )}
             >
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => onToggle(cat.key)}
-                className="absolute top-3 right-3"
-                aria-label={`Select ${cat.label}`}
-              />
-              <div className="flex items-start gap-2.5 pr-6">
+              <div className="flex items-center gap-2.5">
                 <div
                   className={cn(
-                    "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                     isSelected
                       ? "bg-[var(--anna-sage)] text-white"
                       : "bg-[var(--anna-bg)] text-[var(--anna-slate-light)]"
                   )}
                 >
-                  <Icon size={18} />
+                  <t.icon size={16} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[var(--anna-slate)] leading-tight">
-                    {cat.label}
-                  </p>
-                  <p className="text-[10px] text-[var(--anna-muted)] mt-0.5 leading-tight">
-                    {cat.description}
-                  </p>
-                </div>
+                <span className="text-xs font-semibold text-[var(--anna-slate)]">{t.label}</span>
+                {isSelected && <CheckCircle2 size={16} className="ml-auto text-[var(--anna-sage)]" />}
               </div>
             </button>
           );
         })}
       </div>
 
-      {!hasSelection && (
-        <p className="text-[10px] text-[var(--anna-error)] mt-2 text-center">
-          Please select at least one service category.
+      {/* Optional frustrations */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2">
+          Anything else that frustrates you? <span className="text-[var(--anna-muted)] font-normal">(optional)</span>
         </p>
-      )}
+        <Textarea
+          value={data.frustrations || ""}
+          onChange={(e) => onChange("frustrations", e.target.value)}
+          placeholder="e.g. Vendors always show up late, or I never know the real price until they arrive..."
+          className="border-[var(--anna-border)] bg-[var(--anna-white)] min-h-[60px] text-sm resize-none rounded-xl"
+          rows={2}
+        />
+      </motion.div>
 
-      <div className="flex justify-end mt-8 gap-3">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="rounded-xl text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
-        >
-          <ArrowLeft size={14} />
-          Back
-        </Button>
-        <Button
-          onClick={onContinue}
-          disabled={!hasSelection || isSaving}
-          className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-6 text-sm font-semibold"
-        >
-          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
-          Continue
-          <ArrowRight size={14} />
-        </Button>
-      </div>
+      <AnnaInsight>
+        🎯 I&apos;ll prioritise solutions for these exact pain points and proactively suggest improvements over time.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        onSkip={onSkip}
+        continueDisabled={false}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
 
-// ─── Step 5: Preferences ────────────────────────────────────────
+// ─── Step 4: Service Habits ───────────────────────────────────
+
+function StepServiceHabits({
+  data,
+  onChange,
+  onContinue,
+  onBack,
+  onSkip,
+  isSaving,
+}: {
+  data: ServiceHabitsData;
+  onChange: (field: string, value: string) => void;
+  onContinue: () => void;
+  onBack: () => void;
+  onSkip: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Your experience with home services</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I set the right expectations for you.</p>
+
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">How often do you arrange home services?</p>
+          <PillSelect options={FREQUENCY_OPTIONS} selected={data.frequency || ""} onSelect={(v) => onChange("frequency", v)} />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">How do you usually find service providers?</p>
+          <PillSelect options={FIND_METHOD_OPTIONS} selected={data.findMethod || ""} onSelect={(v) => onChange("findMethod", v)} />
+        </div>
+      </div>
+
+      <AnnaInsight>
+        📊 This helps me understand your expectations and set a great starting experience. The more I know, the better I can help.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        onSkip={onSkip}
+        continueDisabled={false}
+        isSaving={isSaving}
+      />
+    </div>
+  );
+}
+
+// ─── Step 5: Preferences & Autonomy ───────────────────────────
 
 function StepPreferences({
-  formData,
+  data,
   onChange,
-  onComplete,
+  onContinue,
   onBack,
   isSaving,
 }: {
-  formData: {
-    preferredDay: string;
-    preferredTime: string;
-    preferredLanguage: string;
-    notes: string;
-  };
+  data: PreferencesData;
   onChange: (field: string, value: string) => void;
-  onComplete: () => void;
+  onContinue: () => void;
   onBack: () => void;
   isSaving: boolean;
 }) {
   return (
     <div>
-      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">
-        Your Preferences
-      </h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-6">
-        Help us match you with the right service vendors.
-      </p>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">How would you like Anna.I to help?</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">Almost done! A few preferences, then we&apos;ll introduce you to Anna.I.</p>
 
+      {/* Autonomy level first — it's the most important */}
+      <div className="mb-6">
+        <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">How involved should Anna.I be?</p>
+        <div className="space-y-2.5">
+          {AUTONOMY_LEVELS.map((level, idx) => {
+            const isSelected = data.autonomyLevel === level.value;
+            return (
+              <motion.button
+                key={level.value}
+                type="button"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                onClick={() => onChange("autonomyLevel", level.value)}
+                className={cn(
+                  "w-full text-left rounded-xl border p-3.5 transition-all duration-200 select-none",
+                  isSelected
+                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 shadow-sm"
+                    : "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/30 hover:bg-[var(--anna-sage-light)]/10"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                      isSelected ? "bg-[var(--anna-sage)] text-white" : `bg-[var(--anna-bg)] ${level.color}`
+                    )}
+                  >
+                    <level.icon size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-[var(--anna-slate)]">{level.label}</p>
+                    <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">{level.desc}</p>
+                  </div>
+                  {isSelected && (
+                    <div className="w-6 h-6 rounded-full bg-[var(--anna-sage)] flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={14} className="text-white" />
+                    </div>
+                  )}
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-[var(--anna-muted)] mt-2 flex items-center gap-1">
+          <Shield size={10} />
+          You can always change this later in Settings.
+        </p>
+      </div>
+
+      {/* Language / Day / Time preferences */}
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
-              <Clock size={12} className="inline mr-1.5 text-[var(--anna-muted)]" />
-              Preferred Day
-            </Label>
-            <Select value={formData.preferredDay} onValueChange={(v) => onChange("preferredDay", v)}>
-              <SelectTrigger className="border-[var(--anna-border)] bg-[var(--anna-white)] text-sm">
-                <SelectValue placeholder="Select day" />
-              </SelectTrigger>
-              <SelectContent>
-                {DAYS_OF_WEEK.map((d) => (
-                  <SelectItem key={d.value} value={d.value}>
-                    {d.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="grid grid-cols-3 gap-2.5">
+          <div>
+            <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
+              <Globe size={10} className="inline mr-1" />
+              Language
+            </p>
+            <PillSelect options={LANGUAGES} selected={data.preferredLanguage || "ENGLISH"} onSelect={(v) => onChange("preferredLanguage", v)} />
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
-              <Clock size={12} className="inline mr-1.5 text-[var(--anna-muted)]" />
-              Preferred Time
-            </Label>
-            <Select value={formData.preferredTime} onValueChange={(v) => onChange("preferredTime", v)}>
-              <SelectTrigger className="border-[var(--anna-border)] bg-[var(--anna-white)] text-sm">
-                <SelectValue placeholder="Select time" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIME_PREFERENCES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div>
+            <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
+              <Clock size={10} className="inline mr-1" />
+              Day
+            </p>
+            <PillSelect options={DAY_OPTIONS} selected={data.preferredDay || "ANY"} onSelect={(v) => onChange("preferredDay", v)} />
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-[var(--anna-slate)]">
-            <Globe size={12} className="inline mr-1.5 text-[var(--anna-muted)]" />
-            Preferred Language
-          </Label>
-          <Select value={formData.preferredLanguage} onValueChange={(v) => onChange("preferredLanguage", v)}>
-            <SelectTrigger className="border-[var(--anna-border)] bg-[var(--anna-white)] text-sm">
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l.value} value={l.value}>
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="onb-notes" className="text-xs font-medium text-[var(--anna-slate)]">
-            <FileText size={12} className="inline mr-1.5 text-[var(--anna-muted)]" />
-            Special Notes / Instructions <span className="text-[var(--anna-muted)]">(optional)</span>
-          </Label>
-          <Textarea
-            id="onb-notes"
-            value={formData.notes}
-            onChange={(e) => onChange("notes", e.target.value)}
-            placeholder="e.g. Prefer vendors who can speak Mandarin, gate code is 1234, etc."
-            className="border-[var(--anna-border)] bg-[var(--anna-white)] min-h-[80px] text-sm resize-none"
-            rows={3}
-          />
+          <div>
+            <p className="text-[10px] font-medium text-[var(--anna-muted)] mb-1.5">
+              <Clock size={10} className="inline mr-1" />
+              Time
+            </p>
+            <PillSelect options={TIME_OPTIONS} selected={data.preferredTime || "FLEXIBLE"} onSelect={(v) => onChange("preferredTime", v)} />
+          </div>
         </div>
       </div>
 
-      <div className="flex justify-end mt-8 gap-3">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="rounded-xl text-sm text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
-        >
-          <ArrowLeft size={14} />
-          Back
-        </Button>
-        <Button
-          onClick={onComplete}
-          disabled={isSaving}
-          className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl px-6 text-sm font-semibold"
-        >
-          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
-          Complete Setup
-          <CheckCircle2 size={14} />
-        </Button>
-      </div>
+      <AnnaInsight>
+        ⚙️ Your autonomy preference is Anna.I&apos;s starting point. As trust builds, you can increase or decrease automation anytime.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        continueDisabled={!data.autonomyLevel}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
 
-// ─── Completion Screen ──────────────────────────────────────────
+// ─── Step 6: Meet Anna.I ──────────────────────────────────────
+
+function StepMeetAnna({
+  onContinue,
+  onBack,
+}: {
+  onContinue: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <div className="text-center mb-6">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, type: "spring" }}
+          className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center mx-auto mb-4 shadow-lg"
+        >
+          <Brain size={28} className="text-white" />
+        </motion.div>
+        <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Meet Anna.I</h2>
+        <p className="text-xs text-[var(--anna-muted)] max-w-sm mx-auto">
+          Your household AI assistant. Anna.I gets smarter by understanding your home, your routines, and your preferences.
+        </p>
+      </div>
+
+      {/* Before/After comparison */}
+      <div className="space-y-3 mb-5">
+        <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] p-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="w-6 h-6 rounded-full bg-[var(--anna-error)]/10 flex items-center justify-center">
+              <span className="text-[10px]">❌</span>
+            </div>
+            <p className="text-xs font-semibold text-[var(--anna-slate)]">Before Anna.I</p>
+          </div>
+          <div className="space-y-1.5 text-[11px] text-[var(--anna-muted)] pl-8">
+            <p className="italic">&quot;My air-con is making a weird noise.&quot;</p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {["Search Google", "Read reviews", "Message 3 vendors", "Compare quotes", "Schedule appointment", "Wait..."].map((s) => (
+                <span key={s} className="px-2 py-0.5 rounded-md bg-white text-[9px] text-[var(--anna-muted)] border border-[var(--anna-border)]">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-white)] p-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="w-6 h-6 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+              <Sparkles size={12} className="text-white" />
+            </div>
+            <p className="text-xs font-semibold text-[var(--anna-sage-dark)]">With Anna.I</p>
+          </div>
+          <div className="space-y-1.5 pl-8">
+            <div className="flex items-start gap-2">
+              <MessageCircle size={12} className="text-[var(--anna-sage)] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-[var(--anna-slate)] italic">
+                &quot;I noticed your air-con service is due based on your 6-month schedule. I found 3 top-rated options nearby. Want me to book one?&quot;
+              </p>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <Button size="sm" className="h-7 text-[10px] rounded-lg bg-[var(--anna-sage)] text-white px-3">
+                Book the best match
+                <ChevronRight size={10} />
+              </Button>
+              <span className="text-[9px] text-[var(--anna-muted)]">One tap. Done.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Trust note */}
+      <div className="flex items-start gap-2 bg-[var(--anna-sage-light)]/40 rounded-xl p-3">
+        <Shield size={14} className="text-[var(--anna-sage-dark)] shrink-0 mt-0.5" />
+        <p className="text-[10px] text-[var(--anna-sage-dark)] leading-relaxed">
+          Anna.I learns from your household patterns. All recommendations are always reviewed by you. No automatic charges, no surprises.
+        </p>
+      </div>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        continueLabel="See how it works"
+      />
+    </div>
+  );
+}
+
+// ─── Step 7: Your AI, Your Control ────────────────────────────
+
+function StepYourControl({
+  onContinue,
+  onBack,
+}: {
+  onContinue: () => void;
+  onBack: () => void;
+}) {
+  const timeline = [
+    {
+      phase: "Week 1",
+      label: "Learning",
+      desc: "Anna.I observes your preferences, booking patterns, and vendor interactions.",
+      icon: Eye,
+      color: "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]",
+      dotColor: "bg-[var(--anna-sage)]",
+    },
+    {
+      phase: "Month 1",
+      label: "Suggesting",
+      desc: "Anna.I starts recommending better routines, timing, and vendor matches.",
+      icon: Lightbulb,
+      color: "bg-[var(--anna-warning)]/10 text-[var(--anna-warning)]",
+      dotColor: "bg-[var(--anna-warning)]",
+    },
+    {
+      phase: "Month 3+",
+      label: "Assisting",
+      desc: "Anna.I proactively manages recurring tasks — always with your approval.",
+      icon: Rocket,
+      color: "bg-[var(--anna-sage)]/10 text-[var(--anna-sage)]",
+      dotColor: "bg-[var(--anna-sage)]",
+    },
+    {
+      phase: "Always",
+      label: "Your Control",
+      desc: "You approve every important decision. Adjust or pause automation anytime.",
+      icon: Shield,
+      color: "bg-[var(--anna-slate-light)]/10 text-[var(--anna-slate)]",
+      dotColor: "bg-[var(--anna-slate)]",
+    },
+  ];
+
+  return (
+    <div>
+      <div className="text-center mb-6">
+        <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Your AI, Your Control</h2>
+        <p className="text-xs text-[var(--anna-muted)] max-w-sm mx-auto">
+          Anna.I starts simple and grows with you. Automation increases gradually — and only with your trust.
+        </p>
+      </div>
+
+      {/* Timeline */}
+      <div className="space-y-0 mb-6">
+        {timeline.map((item, idx) => (
+          <motion.div
+            key={item.phase}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="flex gap-3"
+          >
+            {/* Timeline track */}
+            <div className="flex flex-col items-center">
+              <div className={cn("w-3 h-3 rounded-full shrink-0 mt-1", item.dotColor)} />
+              {idx < timeline.length - 1 && (
+                <div className="w-0.5 flex-1 bg-[var(--anna-border)] min-h-[40px]" />
+              )}
+            </div>
+
+            {/* Content */}
+            <div className={cn("rounded-xl p-3 flex-1 mb-3", item.color)}>
+              <div className="flex items-center gap-2 mb-1">
+                <item.icon size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{item.phase}</span>
+                <span className="text-xs font-bold">{item.label}</span>
+              </div>
+              <p className="text-[10px] leading-relaxed opacity-80">{item.desc}</p>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Autonomy ladder summary */}
+      <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] p-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--anna-muted)] mb-3">The Autonomy Journey</p>
+        <div className="flex items-center justify-between">
+          {AUTONOMY_LEVELS.map((level, idx) => (
+            <div key={level.value} className="flex items-center gap-1">
+              <div className="flex flex-col items-center gap-1">
+                <div className="w-8 h-8 rounded-lg bg-[var(--anna-bg)] flex items-center justify-center">
+                  <level.icon size={14} className="text-[var(--anna-slate-light)]" />
+                </div>
+                <span className="text-[8px] text-[var(--anna-muted)] font-medium">{level.label}</span>
+              </div>
+              {idx < AUTONOMY_LEVELS.length - 1 && (
+                <ChevronRight size={12} className="text-[var(--anna-border)] mx-1" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        continueLabel="Got it, let's go!"
+      />
+    </div>
+  );
+}
+
+// ─── Step 8: Completion ───────────────────────────────────────
 
 function CompletionScreen() {
   return (
     <div className="text-center py-10">
-      <motion.div {...successVariants}>
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 200, damping: 15 }}
+      >
         <div className="w-20 h-20 rounded-full bg-[var(--anna-sage)] flex items-center justify-center mx-auto mb-6 shadow-lg">
           <motion.div
             initial={{ scale: 0 }}
@@ -697,29 +1259,54 @@ function CompletionScreen() {
         transition={{ delay: 0.4 }}
         className="text-xl font-bold text-[var(--anna-slate)] mb-2"
       >
-        Your household is all set!
+        You&apos;re all set!
       </motion.h2>
       <motion.p
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className="text-sm text-[var(--anna-muted)]"
+        className="text-sm text-[var(--anna-muted)] mb-1"
       >
-        Let&apos;s get started.
+        Anna.I now understands your home and preferences.
+      </motion.p>
+      <motion.p
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+        className="text-xs text-[var(--anna-sage-dark)]"
+      >
+        The more you use Anna.I, the smarter it gets.
       </motion.p>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.7 }}
+        transition={{ delay: 0.8 }}
         className="mt-6"
       >
         <Loader2 size={16} className="text-[var(--anna-muted)] animate-spin mx-auto" />
         <p className="text-[10px] text-[var(--anna-muted)] mt-2">
-          Redirecting to dashboard...
+          Taking you to your dashboard...
         </p>
       </motion.div>
     </div>
+  );
+}
+
+// ─── Phase Divider ─────────────────────────────────────────────
+
+function PhaseDivider() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="text-center py-4"
+    >
+      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--anna-sage-light)]/40">
+        <CheckCircle2 size={14} className="text-[var(--anna-sage)]" />
+        <span className="text-xs font-semibold text-[var(--anna-sage-dark)]">Great! Now let&apos;s meet Anna.I</span>
+      </div>
+    </motion.div>
   );
 }
 
@@ -732,40 +1319,17 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   const [direction, setDirection] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Parse existing active categories
-  const initialCategories = (() => {
-    try {
-      const raw = household.activeCategories;
-      if (Array.isArray(raw)) return raw.filter(Boolean);
-      if (typeof raw === "string") {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.filter(Boolean);
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  })();
+  // Parse existing onboarding profile
+  const profile = (household.onboardingProfile as Record<string, Record<string, unknown>>) || {};
 
-  const [formData, setFormData] = useState({
-    // Step 2: Profile
-    name: household.name,
-    phone: household.phone ?? "",
-    email: household.email,
-    // Step 3: Address
-    address: household.address,
-    postalCode: household.postalCode ?? "",
-    unitNumber: household.unitNumber ?? "",
-    // Step 4: Services
-    selectedCategories: initialCategories,
-    // Step 5: Preferences
-    preferredDay: household.preferences?.preferredDay ?? "ANY",
-    preferredTime: household.preferences?.preferredTime ?? "ANY",
-    preferredLanguage: household.preferences?.preferredLanguage ?? "ENGLISH",
-    notes: household.preferences?.notes ?? "",
-  });
+  // ── Form state (initialise from existing profile) ──
+  const [homeData, setHomeData] = useState<HomeData>((profile.home as HomeData) || {});
+  const [peopleData, setPeopleData] = useState<PeopleData>((profile.people as PeopleData) || {});
+  const [painPointsData, setPainPointsData] = useState<PainPointsData>((profile.painPoints as PainPointsData) || {});
+  const [serviceHabitsData, setServiceHabitsData] = useState<ServiceHabitsData>((profile.serviceHabits as ServiceHabitsData) || {});
+  const [prefsData, setPrefsData] = useState<PreferencesData>((profile.preferences as PreferencesData) || {});
 
-  // PATCH mutation for saving each step
+  // PATCH mutation
   const saveMutation = useMutation({
     mutationFn: async ({ step, data }: { step: number; data: Record<string, unknown> }) => {
       const res = await fetch("/api/household/onboarding", {
@@ -779,17 +1343,10 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
       }
       return res.json();
     },
-    onSuccess: () => {
-      // Success is handled per-step
-    },
     onError: (err: Error) => {
       toast.error(err.message || "Something went wrong. Please try again.");
     },
   });
-
-  const handleFieldChange = useCallback((field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  }, []);
 
   const goNext = useCallback(() => {
     setDirection(1);
@@ -801,86 +1358,69 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
     setCurrentStep((s) => Math.max(s - 1, 0));
   }, []);
 
-  const toggleCategory = useCallback((category: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      selectedCategories: prev.selectedCategories.includes(category)
-        ? prev.selectedCategories.filter((c) => c !== category)
-        : [...prev.selectedCategories, category],
-    }));
-  }, []);
+  const skipToNext = useCallback(() => {
+    // Skip without saving data, just advance
+    goNext();
+  }, [goNext]);
 
-  // Save step 1 (profile) and advance
-  const handleStep2Continue = useCallback(async () => {
+  // Step handlers: save then advance
+  const handleStep1 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({
-        step: 1,
-        data: { name: formData.name, phone: formData.phone, email: formData.email },
-      });
+      await saveMutation.mutateAsync({ step: 1, data: homeData });
       goNext();
-    } catch {
-      // error handled in onError
-    }
-  }, [formData.name, formData.phone, formData.email, saveMutation, goNext]);
+    } catch { /* handled in onError */ }
+  }, [homeData, saveMutation, goNext]);
 
-  // Save step 2 (address) and advance
-  const handleStep3Continue = useCallback(async () => {
+  const handleStep2 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({
-        step: 2,
-        data: {
-          address: formData.address,
-          postalCode: formData.postalCode,
-          unitNumber: formData.unitNumber,
-        },
-      });
+      await saveMutation.mutateAsync({ step: 2, data: peopleData });
       goNext();
-    } catch {
-      // error handled in onError
-    }
-  }, [formData.address, formData.postalCode, formData.unitNumber, saveMutation, goNext]);
+    } catch { /* handled in onError */ }
+  }, [peopleData, saveMutation, goNext]);
 
-  // Save step 3 (categories) and advance
-  const handleStep4Continue = useCallback(async () => {
+  const handleStep3 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({
-        step: 3,
-        data: { activeCategories: formData.selectedCategories },
-      });
+      await saveMutation.mutateAsync({ step: 3, data: painPointsData });
       goNext();
-    } catch {
-      // error handled in onError
-    }
-  }, [formData.selectedCategories, saveMutation, goNext]);
+    } catch { /* handled in onError */ }
+  }, [painPointsData, saveMutation, goNext]);
 
-  // Complete onboarding (step 5)
-  const handleComplete = useCallback(async () => {
+  const handleStep4 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({
-        step: 5,
-        data: {
-          preferences: {
-            preferredDay: formData.preferredDay,
-            preferredTime: formData.preferredTime,
-            preferredLanguage: formData.preferredLanguage,
-            notes: formData.notes,
-          },
-        },
-      });
+      await saveMutation.mutateAsync({ step: 4, data: serviceHabitsData });
+      goNext();
+    } catch { /* handled in onError */ }
+  }, [serviceHabitsData, saveMutation, goNext]);
+
+  const handleStep5 = useCallback(async () => {
+    try {
+      await saveMutation.mutateAsync({ step: 5, data: prefsData });
+      goNext();
+    } catch { /* handled in onError */ }
+  }, [prefsData, saveMutation, goNext]);
+
+  // Steps 6 and 7 just advance (no data to save)
+  const handleStep6 = useCallback(async () => {
+    try {
+      await saveMutation.mutateAsync({ step: 6, data: {} });
+      goNext();
+    } catch { /* handled in onError */ }
+  }, [saveMutation, goNext]);
+
+  const handleStep7 = useCallback(async () => {
+    try {
+      await saveMutation.mutateAsync({ step: 7, data: {} });
+      // Complete onboarding
+      await saveMutation.mutateAsync({ step: 8, data: {} });
       setIsCompleted(true);
-      // Auto-redirect after 2 seconds
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
-    } catch {
-      // error handled in onError
-    }
-  }, [formData, saveMutation, onComplete]);
+      setTimeout(() => onComplete(), 2000);
+    } catch { /* handled in onError */ }
+  }, [saveMutation, onComplete]);
 
-  // If completed, show success screen
+  // Show completion screen
   if (isCompleted) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center p-4 bg-[var(--anna-bg)]">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--anna-bg)]">
         <div className="w-full max-w-lg">
           <CompletionScreen />
         </div>
@@ -889,13 +1429,26 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-start bg-[var(--anna-bg)] p-4 md:p-6">
+    <div className="min-h-screen flex flex-col items-center justify-start bg-[var(--anna-bg)] p-4 md:p-6">
       <div className="w-full max-w-lg pt-4 md:pt-8">
-        {/* Progress bar */}
-        <ProgressBar currentStep={currentStep} />
+        {/* Logo / Brand */}
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center">
+            <Sparkles size={14} className="text-white" />
+          </div>
+          <span className="text-sm font-bold text-[var(--anna-slate)]">Anna.I</span>
+        </div>
+
+        {/* Progress */}
+        {currentStep > 0 && <ProgressDots currentStep={currentStep} totalSteps={TOTAL_STEPS} labels={STEP_LABELS} />}
+
+        {/* Phase divider between Get to Know You and Meet Anna.I */}
+        <AnimatePresence>
+          {currentStep === 5 && <PhaseDivider />}
+        </AnimatePresence>
 
         {/* Step card */}
-        <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-6 shadow-sm overflow-hidden">
+        <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-5 md:p-6 shadow-sm overflow-hidden">
           <AnimatePresence initial={false} custom={direction} mode="wait">
             <motion.div
               key={currentStep}
@@ -906,64 +1459,69 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
               exit="exit"
               transition={slideTransition}
             >
-              {currentStep === 0 && (
-                <StepWelcome
-                  householdName={formData.name}
-                  onContinue={goNext}
-                />
-              )}
+              {currentStep === 0 && <StepWelcome onContinue={goNext} />}
               {currentStep === 1 && (
-                <StepProfile
-                  formData={{ name: formData.name, phone: formData.phone, email: formData.email }}
-                  onChange={handleFieldChange}
-                  onContinue={handleStep2Continue}
+                <StepYourHome
+                  data={homeData}
+                  onChange={(field, value) => setHomeData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep1}
                   onBack={goBack}
+                  onSkip={skipToNext}
                   isSaving={saveMutation.isPending}
                 />
               )}
               {currentStep === 2 && (
-                <StepAddress
-                  formData={{
-                    address: formData.address,
-                    postalCode: formData.postalCode,
-                    unitNumber: formData.unitNumber,
-                  }}
-                  onChange={handleFieldChange}
-                  onContinue={handleStep3Continue}
+                <StepYourPeople
+                  data={peopleData}
+                  onChange={(field, value) => setPeopleData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep2}
                   onBack={goBack}
+                  onSkip={skipToNext}
                   isSaving={saveMutation.isPending}
                 />
               )}
               {currentStep === 3 && (
-                <StepServices
-                  selectedCategories={formData.selectedCategories}
-                  onToggle={toggleCategory}
-                  onContinue={handleStep4Continue}
+                <StepPainPoints
+                  data={painPointsData}
+                  onChange={(field, value) => setPainPointsData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep3}
                   onBack={goBack}
+                  onSkip={skipToNext}
                   isSaving={saveMutation.isPending}
                 />
               )}
               {currentStep === 4 && (
+                <StepServiceHabits
+                  data={serviceHabitsData}
+                  onChange={(field, value) => setServiceHabitsData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep4}
+                  onBack={goBack}
+                  onSkip={skipToNext}
+                  isSaving={saveMutation.isPending}
+                />
+              )}
+              {currentStep === 5 && (
                 <StepPreferences
-                  formData={{
-                    preferredDay: formData.preferredDay,
-                    preferredTime: formData.preferredTime,
-                    preferredLanguage: formData.preferredLanguage,
-                    notes: formData.notes,
-                  }}
-                  onChange={handleFieldChange}
-                  onComplete={handleComplete}
+                  data={prefsData}
+                  onChange={(field, value) => setPrefsData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep5}
                   onBack={goBack}
                   isSaving={saveMutation.isPending}
                 />
+              )}
+              {currentStep === 6 && (
+                <StepMeetAnna onContinue={handleStep6} onBack={goBack} />
+              )}
+              {currentStep === 7 && (
+                <StepYourControl onContinue={handleStep7} onBack={goBack} />
               )}
             </motion.div>
           </AnimatePresence>
         </div>
 
-        {/* Footer branding */}
+        {/* Footer */}
         <p className="text-center text-[10px] text-[var(--anna-muted)] mt-6">
-          Anna.I &mdash; The Operating System for the Modern Household
+          Anna.I — The Operating System for the Modern Household
         </p>
       </div>
     </div>
