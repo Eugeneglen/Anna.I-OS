@@ -23,6 +23,7 @@ import type { QuoteResult } from "@/lib/quote-calculator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Calendar, Clock, ChevronRight } from "lucide-react";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 const RECURRENCE_OPTIONS: {
   value: RecurrencePattern;
@@ -52,8 +53,9 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
 
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(initialJobType ?? null);
   const [instructions, setInstructions] = useState(initialInstructions ?? "");
+  const { getPrice } = useDynamicPricing();
   const [amountCents, setAmountCents] = useState(
-    initialAmountCents ?? (initialJobType ? initialJobType.basePriceCents : CATEGORY_DEFAULTS[category].amount)
+    initialAmountCents ?? (initialJobType ? initialJobType.basePriceCents : getPrice(category))
   );
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
@@ -74,7 +76,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
     if (selectedJobType?.id === jt.id) {
       setSelectedJobType(null);
       setQuoteResult(null);
-      setAmountCents(CATEGORY_DEFAULTS[category].amount);
+      setAmountCents(getPrice(category));
     } else {
       setSelectedJobType(jt);
       setQuoteResult(null);
@@ -200,7 +202,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
             onClick={() => {
               setSelectedJobType(null);
               setQuoteResult(null);
-              setAmountCents(CATEGORY_DEFAULTS[category].amount);
+              setAmountCents(getPrice(category));
             }}
             className="ml-auto text-[10px] text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors"
           >

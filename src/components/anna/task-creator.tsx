@@ -23,6 +23,7 @@ import type { QuoteResult } from "@/lib/quote-calculator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 const CATEGORIES: ServiceCategory[] = [
   "CLEANING",
@@ -67,6 +68,7 @@ export function TaskCreator() {
   const todayISO = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
 
   const [initialState] = useState(getInitialCategoryState);
+  const { getPrice } = useDynamicPricing();
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(initialState.category);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
@@ -89,7 +91,7 @@ export function TaskCreator() {
     setQuoteResult(null);
     setQuoteFieldValues({});
     setQuoteSelectedAddOns([]);
-    setAmountCents(CATEGORY_DEFAULTS[cat].amount);
+    setAmountCents(getPrice(cat));
   }
 
   function selectJobType(jt: ServiceJobType) {
@@ -98,7 +100,7 @@ export function TaskCreator() {
       setSelectedJobType(null);
       setQuoteResult(null);
       if (selectedCategory) {
-        setAmountCents(CATEGORY_DEFAULTS[selectedCategory].amount);
+        setAmountCents(getPrice(selectedCategory));
       }
     } else {
       setSelectedJobType(jt);
@@ -224,7 +226,7 @@ export function TaskCreator() {
                 {getCategoryLabel(cat)}
               </span>
               <span className="font-data text-xs text-[var(--anna-muted)]">
-                from {formatSgd(CATEGORY_DEFAULTS[cat].amount)}
+                from {formatSgd(getPrice(cat))}
               </span>
             </button>
           ))}

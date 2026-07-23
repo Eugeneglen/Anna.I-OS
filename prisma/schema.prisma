@@ -619,3 +619,14 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+// ======================== PLATFORM CONFIG ========================
+
+model PlatformConfig {
+  key       String   @id // e.g. "commission_rate", "category_price_CLEANING"
+  value     String   // JSON or numeric string
+  label     String   // human-readable description
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_config")
+}
