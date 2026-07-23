@@ -69,3 +69,4 @@ worklog.md
 tool-results/
 upload/
 *.png
+!public/brain-icon.png
