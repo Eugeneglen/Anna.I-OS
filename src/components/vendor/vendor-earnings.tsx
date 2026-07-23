@@ -13,6 +13,7 @@ import {
   TrendingUp,
   ArrowDownCircle,
 } from "lucide-react";
+import { EarningsCharts } from "./vendor-earnings-charts";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -36,6 +37,11 @@ interface EarningsResponse {
     payoutCents: number;
     payoutState: string;
   }[];
+  charts: {
+    byCategory: { category: string; earned: number; commission: number; count: number }[];
+    weeklyTrend: { week: string; earned: number; jobs: number }[];
+    payoutDistribution: { state: string; payoutCents: number; commissionCents: number; count: number }[];
+  };
 }
 
 interface VendorEarningsProps {
@@ -227,6 +233,17 @@ export function VendorEarnings({ vendorId }: VendorEarningsProps) {
 
   return (
     <div className="space-y-6 p-4 lg:p-6">
+      {/* Charts section */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={14} className="text-[var(--anna-sage-dark)]" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-slate)]">
+            Insights & Charts
+          </h3>
+        </div>
+        <EarningsCharts charts={data.charts} totalEarned={data.totalEarned} />
+      </div>
+
       {/* Overall summary */}
       <EarningsSummaryGrid
         totalEarned={data.totalEarned}

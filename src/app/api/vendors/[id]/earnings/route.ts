@@ -160,6 +160,119 @@ export async function GET(
       }
     })
 
+    // ── CHART DATA: Category breakdown (all-time) ──
+    const categoryBookings = await db.booking.findMany({
+      where: { vendorId: id, status: "completed" },
+      include: {
+        task: { select: { category: true } },
+        escrowEntries: {
+          select: { vendorPayoutCents: true, state: true, commissionCents: true },
+        },
+      },
+    })
+
+    const categoryMap = new Map<string, { earned: number; commission: number; count: number }>()
+
+    for (const booking of categoryBookings) {
+      const category = booking.task.category
+      const existing = categoryMap.get(category) || { earned: 0, commission: 0, count: 0 }
+
+      for (const entry of booking.escrowEntries) {
+        if (entry.state === EscrowState.RELEASED) {
+          existing.earned += entry.vendorPayoutCents
+          existing.commission += entry.commissionCents
+        }
+      }
+      existing.count += 1
+      categoryMap.set(category, existing)
+    }
+
+    const byCategory = Array.from(categoryMap.entries()).map(([category, data]) => ({
+      category,
+      earned: data.earned,
+      commission: data.commission,
+      count: data.count,
+    })).sort((a, b) => b.earned - a.earned)
+
+    // ── CHART DATA: Weekly earnings trend (last 12 weeks) ──
+    const twelveWeeksAgo = new Date(now)
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84)
+    twelveWeeksAgo.setHours(0, 0, 0, 0)
+
+    const weeklyCompletedBookings = await db.booking.findMany({
+      where: {
+        vendorId: id,
+        status: "completed",
+        completedAt: { gte: twelveWeeksAgo },
+      },
+      include: {
+        escrowEntries: {
+          select: { vendorPayoutCents: true, state: true },
+        },
+      },
+      orderBy: { completedAt: "asc" },
+    })
+
+    // Group by ISO week
+    const weekMap = new Map<string, { earned: number; jobs: number; weekStart: string }>()
+
+    // Initialize empty weeks
+    for (let w = 11; w >= 0; w--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - w * 7)
+      // Find Monday of that week
+      const day = d.getDay()
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - ((day + 6) % 7))
+      monday.setHours(0, 0, 0, 0)
+      const key = monday.toISOString().slice(0, 10)
+      weekMap.set(key, { earned: 0, jobs: 0, weekStart: key })
+    }
+
+    for (const booking of weeklyCompletedBookings) {
+      if (!booking.completedAt) continue
+      const completed = new Date(booking.completedAt)
+      const day = completed.getDay()
+      const monday = new Date(completed)
+      monday.setDate(completed.getDate() - ((day + 6) % 7))
+      monday.setHours(0, 0, 0, 0)
+      const key = monday.toISOString().slice(0, 10)
+
+      const existing = weekMap.get(key) || { earned: 0, jobs: 0, weekStart: key }
+      for (const entry of booking.escrowEntries) {
+        if (entry.state === EscrowState.RELEASED) {
+          existing.earned += entry.vendorPayoutCents
+        }
+      }
+      existing.jobs += 1
+      weekMap.set(key, existing)
+    }
+
+    const weeklyTrend = Array.from(weekMap.values()).map((w) => ({
+      week: w.weekStart,
+      earned: w.earned,
+      jobs: w.jobs,
+    }))
+
+    // ── CHART DATA: Payout state distribution ──
+    const allEscrowEntries = await db.escrowLedger.findMany({
+      where: { bookingId: { in: bookingIds } },
+      select: { state: true, vendorPayoutCents: true, commissionCents: true, amountCents: true },
+    })
+
+    const payoutDistribution: { state: string; payoutCents: number; commissionCents: number; count: number }[] = []
+    const payoutStates: EscrowState[] = [EscrowState.HELD, EscrowState.RELEASED, EscrowState.DISPUTED, EscrowState.REFUNDED]
+    for (const state of payoutStates) {
+      const entries = allEscrowEntries.filter((e) => e.state === state)
+      if (entries.length === 0) continue
+      payoutDistribution.push({
+        state,
+        payoutCents: entries.reduce((s, e) => s + e.vendorPayoutCents, 0),
+        commissionCents: entries.reduce((s, e) => s + e.commissionCents, 0),
+        count: entries.length,
+      })
+    }
+
     return NextResponse.json({
       totalEarned,
       pendingPayout,
@@ -171,9 +284,14 @@ export async function GET(
         pending: thisMonthPending,
       },
       recent,
+      charts: {
+        byCategory,
+        weeklyTrend,
+        payoutDistribution,
+      },
     })
   } catch (error) {
-    console.error("GET /api/vendors/[id]/earnings error:", error)
+    console.error("[earnings] Error:", error instanceof Error ? error.message + "\n" + error.stack : error)
     return NextResponse.json(
       { error: "Failed to fetch vendor earnings" },
       { status: 500 }
