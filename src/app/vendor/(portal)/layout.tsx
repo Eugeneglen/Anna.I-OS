@@ -17,9 +17,11 @@ import {
   LogOut,
   Briefcase,
   ArrowLeft,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VendorAiChat } from "@/components/vendor/vendor-ai-chat";
+import { VendorNotificationPanel } from "@/components/vendor/vendor-notification-panel";
 
 interface VendorUser {
   id: string;
@@ -41,7 +43,43 @@ const NAV_ITEMS = [
   { label: "Settings", href: "/vendor/settings", icon: Settings },
 ];
 
-function SidebarNav() {
+// Simple notification indicator for the sidebar (no Sheet/Popover to avoid portal issues)
+function NotificationIndicator({ vendorId }: { vendorId: string }) {
+  const { data } = useQuery({
+    queryKey: ["vendor-notifications-count", vendorId],
+    queryFn: async () => {
+      const res = await fetch(`/api/vendors/${vendorId}/notifications?unread=true`);
+      if (!res.ok) return { unreadCount: 0, notifications: [] };
+      return res.json();
+    },
+    enabled: !!vendorId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    select: (d) => d.unreadCount,
+  });
+
+  const unread = data ?? 0;
+
+  return (
+    <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
+      <Bell size={14} className="text-[var(--anna-muted)]" />
+      <span className="text-xs font-medium">
+        {unread > 0 ? (
+          <span className="flex items-center gap-1.5">
+            Notifications
+            <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-[var(--anna-error)] text-white text-[9px] font-bold">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          </span>
+        ) : (
+          "No new notifications"
+        )}
+      </span>
+    </div>
+  );
+}
+
+function SidebarNav({ vendorId }: { vendorId: string }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -108,6 +146,12 @@ function SidebarNav() {
         </button>
       </div>
 
+      <Separator className="bg-[var(--anna-border)]" />
+
+      {/* Notifications indicator */}
+      <div className="px-3 pt-2">
+        <NotificationIndicator vendorId={vendorId} />
+      </div>
       <Separator className="bg-[var(--anna-border)]" />
 
       {/* User section */}
@@ -235,7 +279,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
       <div className="min-h-screen flex bg-[var(--anna-bg)]">
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">
-          <SidebarNav />
+          <SidebarNav vendorId={user.id} />
         </aside>
 
         {/* Main Content */}
@@ -254,7 +298,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-60 p-0 bg-[var(--anna-white)]">
-                  <SidebarNav />
+                  <SidebarNav vendorId={user.id} />
                 </SheetContent>
               </Sheet>
               <div className="flex items-center gap-2">
@@ -264,12 +308,15 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
                 </h1>
               </div>
             </div>
-            <Badge
-              variant="secondary"
-              className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
-            >
-              {user.vendorType}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <VendorNotificationPanel vendorId={user.id} />
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+              >
+                {user.vendorType}
+              </Badge>
+            </div>
           </div>
 
           {/* Page Content */}

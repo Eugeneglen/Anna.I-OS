@@ -27,6 +27,9 @@ import {
   CalendarDays,
   ImageIcon,
   FileText,
+  AlertTriangle,
+  ShieldCheck,
+  Wallet,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -123,6 +126,7 @@ function VendorTaskDetailContent({
 }) {
   const action = getActionConfig(booking.status);
   const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
+  const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
 
   return (
     <div className="p-6 space-y-6 anna-fade-in">
@@ -143,6 +147,83 @@ function VendorTaskDetailContent({
           {STATUS_LABELS[booking.status] ?? booking.status}
         </Badge>
       </div>
+
+      {/* ── Dispute Alert Section ── */}
+      {isDisputed && (
+        <div className="rounded-2xl border-2 border-[var(--anna-error)]/30 bg-gradient-to-br from-[var(--anna-error)]/5 to-[var(--anna-white)] p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-error)]/15 flex items-center justify-center">
+              <AlertTriangle size={16} className="text-[var(--anna-error)]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--anna-error)]">Dispute Raised</p>
+              <p className="text-[10px] text-[var(--anna-error)]/60">
+                Ops team is reviewing this matter
+              </p>
+            </div>
+          </div>
+          {booking.escrow?.disputeReason && (
+            <div className="bg-[var(--anna-error)]/5 rounded-xl p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-error)]/70 mb-1">Household&apos;s Reason</p>
+              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{booking.escrow.disputeReason}</p>
+            </div>
+          )}
+          {booking.escrow?.disputeResolution && (
+            <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]/70 mb-1">Resolution</p>
+              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{booking.escrow.disputeResolution}</p>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-[10px] text-[var(--anna-muted)]">
+            <span>Escrow: {formatSgd(booking.escrow?.amountCents ?? 0)} — <span className="text-[var(--anna-error)] font-medium">Frozen</span></span>
+            {booking.taskDisputedAt && (
+              <span>Disputed {formatDate(booking.taskDisputedAt)}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Escrow Status Section (non-disputed) ── */}
+      {!isDisputed && booking.escrow && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            <Wallet size={12} className="inline mr-1" />
+            Escrow
+          </h4>
+          <div className="bg-[var(--anna-bg)] rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[var(--anna-muted)]">Status</span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-2 py-0.5 font-medium",
+                  booking.escrow.state === "RELEASED"
+                    ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20"
+                    : booking.escrow.state === "REFUNDED"
+                      ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20"
+                      : "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20"
+                )}
+              >
+                {booking.escrow.state === "RELEASED" ? (
+                  <><ShieldCheck size={10} className="mr-1" />Released</>
+                ) : booking.escrow.state === "HELD" ? (
+                  <><Clock size={10} className="mr-1" />Held</>
+                ) : booking.escrow.state === "REFUNDED" ? (
+                  <><Wallet size={10} className="mr-1" />Refunded</>
+                ) : (
+                  booking.escrow.state
+                )}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--anna-muted)]">Your Payout</span>
+              <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+                {formatSgd(booking.escrow.vendorPayoutCents)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Amount */}
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 flex items-center justify-between">

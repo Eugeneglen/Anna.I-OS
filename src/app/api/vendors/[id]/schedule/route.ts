@@ -63,12 +63,27 @@ export async function GET(
             category: true,
             instructions: true,
             amountCents: true,
+            status: true,
+            disputedAt: true,
             household: {
               select: {
                 id: true,
                 name: true,
                 address: true,
               },
+            },
+            escrowEntries: {
+              select: {
+                id: true,
+                state: true,
+                amountCents: true,
+                commissionCents: true,
+                vendorPayoutCents: true,
+                disputeReason: true,
+                disputeResolution: true,
+                disputeResolvedAt: true,
+              },
+              take: 1,
             },
           },
         },
@@ -85,7 +100,7 @@ export async function GET(
       },
     })
 
-    // Shape response with photo count
+    // Shape response with photo count, task status, and escrow info
     const schedule = bookings.map((b) => ({
       id: b.id,
       status: b.status,
@@ -107,6 +122,10 @@ export async function GET(
       verificationPhotoCount: b.verificationPhotos.length,
       verificationPhotos: b.verificationPhotos,
       assignedStaff: b.assignedStaff,
+      // Task-level status and escrow info for dispute awareness
+      taskStatus: b.task.status,
+      taskDisputedAt: b.task.disputedAt,
+      escrow: b.task.escrowEntries[0] ?? null,
     }))
 
     return NextResponse.json({

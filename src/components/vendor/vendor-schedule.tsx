@@ -19,6 +19,9 @@ import {
   ThumbsUp,
   User,
   CalendarX,
+  AlertTriangle,
+  ShieldCheck,
+  Wallet,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────
@@ -44,6 +47,19 @@ export interface VendorScheduleItem {
   verificationPhotoCount: number;
   verificationPhotos?: { id: string; fileUrl: string; thumbnailUrl?: string | null; uploadedBy: string; isVerified: boolean }[];
   assignedStaff?: { id: string; name: string; role: string } | null;
+  // Task-level status and escrow for dispute awareness
+  taskStatus?: string | null;
+  taskDisputedAt?: string | null;
+  escrow?: {
+    id: string;
+    state: string;
+    amountCents: number;
+    commissionCents: number;
+    vendorPayoutCents: number;
+    disputeReason?: string | null;
+    disputeResolution?: string | null;
+    disputeResolvedAt?: string | null;
+  } | null;
 }
 
 interface VendorInfo {
@@ -132,15 +148,55 @@ function BookingCard({
   isPending: boolean;
 }) {
   const action = getActionForStatus(item.status);
+  const isDisputed = item.taskStatus === "DISPUTED" || item.escrow?.state === "DISPUTED";
 
   return (
     <div
       onClick={onSelect}
       className={cn(
-        "bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4",
-        "hover:shadow-sm transition-shadow cursor-pointer"
+        "bg-[var(--anna-white)] rounded-2xl border p-4",
+        "hover:shadow-sm transition-shadow cursor-pointer",
+        isDisputed
+          ? "border-[var(--anna-error)]/40 ring-1 ring-[var(--anna-error)]/15"
+          : "border-[var(--anna-border)]"
       )}
     >
+      {/* Dispute alert banner */}
+      {isDisputed && (
+        <div className="mb-3 rounded-xl bg-gradient-to-r from-[var(--anna-error)]/8 to-[var(--anna-error)]/3 border border-[var(--anna-error)]/15 px-3 py-2 flex items-center gap-2">
+          <AlertTriangle size={14} className="text-[var(--anna-error)] shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-[var(--anna-error)]">Dispute Raised</p>
+            <p className="text-[10px] text-[var(--anna-error)]/70 truncate">
+              {item.escrow?.disputeReason || "The household has raised a dispute. Ops team is reviewing."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Escrow resolution info (when dispute is resolved) */}
+      {item.escrow?.state === "REFUNDED" && (
+        <div className="mb-3 rounded-xl bg-gradient-to-r from-[var(--anna-warning)]/8 to-[var(--anna-warning)]/3 border border-[var(--anna-warning)]/15 px-3 py-2 flex items-center gap-2">
+          <Wallet size={14} className="text-[var(--anna-warning)] shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-[var(--anna-warning)]">Refund Issued</p>
+            <p className="text-[10px] text-[var(--anna-warning)]/70 truncate">
+              {item.escrow?.disputeResolution || "Escrow has been refunded to the household."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Escrow released info */}
+      {item.escrow?.state === "RELEASED" && item.status === "completed" && (
+        <div className="mb-3 rounded-xl bg-gradient-to-r from-[var(--anna-sage)]/8 to-[var(--anna-sage)]/3 border border-[var(--anna-sage)]/15 px-3 py-2 flex items-center gap-2">
+          <ShieldCheck size={14} className="text-[var(--anna-sage-dark)] shrink-0" />
+          <p className="text-[11px] font-medium text-[var(--anna-sage-dark)]">
+            Payment released — {formatSgd(item.escrow.vendorPayoutCents)} payout
+          </p>
+        </div>
+      )}
+
       {/* Top row: category + status */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -153,10 +209,12 @@ function BookingCard({
           variant="outline"
           className={cn(
             "text-[10px] px-2 py-0.5 font-medium",
-            BOOKING_STATUS_STYLES[item.status]
+            isDisputed
+              ? "bg-[var(--anna-error)]/15 text-[var(--anna-error)] border-[var(--anna-error)]/20"
+              : BOOKING_STATUS_STYLES[item.status]
           )}
         >
-          {BOOKING_STATUS_LABELS[item.status] ?? item.status}
+          {isDisputed ? "Disputed" : BOOKING_STATUS_LABELS[item.status] ?? item.status}
         </Badge>
       </div>
 
