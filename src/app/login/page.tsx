@@ -46,9 +46,7 @@ export default function HouseholdLoginPage() {
       <div className="w-full max-w-sm anna-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage)] mx-auto flex items-center justify-center mb-3">
-            <Image src="/brain-icon.png" alt="Anna.I" width={28} height={28} className="brightness-0 invert" />
-          </div>
+          <Image src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="mx-auto mb-3" />
           <h1 className="text-2xl font-bold tracking-tight text-[var(--anna-sage-dark)]">
             Anna.I
           </h1>
