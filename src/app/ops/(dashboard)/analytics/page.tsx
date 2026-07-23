@@ -254,7 +254,7 @@ export default function AnalyticsPage() {
       {/* Analytics Charts */}
       <OpsAnalyticsCharts charts={data?.charts || { dailyTrend: [], vendorUtilization: [] }} />
 
-      {/* Two Column Layout */
+      {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Task Status Distribution */}
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-5">
