@@ -28,6 +28,7 @@ import {
   type VendorSuggestion,
 } from "@/lib/types";
 import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle } from "lucide-react";
+import { RaiseDisputeDialog } from "./raise-dispute-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -163,8 +164,10 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       if (!res.ok) throw new Error("Escrow action failed");
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Escrow updated" });
+    onSuccess: (data, variables) => {
+      if (variables?.action !== "dispute") {
+        toast({ title: "Escrow updated" });
+      }
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
     },
@@ -215,6 +218,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
   const [selectedRating, setSelectedRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [hoveredStar, setHoveredStar] = useState(0);
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
 
   const analyzePhotosMutation = useMutation({
     mutationFn: async () => {
@@ -320,6 +324,12 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       toast({ title: "Failed to submit rating", variant: "destructive" });
     },
   });
+
+  const handleDisputeSubmit = async (reason: string) => {
+    await escrowMutation.mutateAsync({ action: "dispute", reason });
+    setDisputeDialogOpen(false);
+    toast({ title: "Dispute raised", description: "Our ops team will review this matter." });
+  };
 
   function handleAction(action: string, payload?: string) {
     switch (action) {
@@ -901,6 +911,23 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
               vendorPayoutCents={escrow.vendorPayoutCents}
               showBreakdown
             />
+            {escrow.state === "HELD" &&
+              ["COMPLETED", "IN_PROGRESS", "VERIFIED"].includes(task.status) && (
+                <div className="mt-3 pt-3 border-t border-[var(--anna-border)]">
+                  <button
+                    type="button"
+                    onClick={() => setDisputeDialogOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium transition-colors"
+                  >
+                    <AlertTriangle size={14} />
+                    Raise a Dispute
+                  </button>
+                  <p className="text-[9px] text-[var(--anna-muted)] text-center mt-1.5">
+                    Pauses escrow and cancels booking. Ops team will review.
+                  </p>
+                </div>
+              )
+            }
           </div>
         </div>
       )}
@@ -954,6 +981,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         <div className="flex flex-col sm:flex-row gap-2">
           {actions
             .filter((a) => task.status !== "CREATED" || a.action !== "dispatch")
+            .filter((a) => a.action !== "dispute")
             .map((a) => {
               const Icon = a.icon;
               return (
@@ -983,6 +1011,16 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             })}
         </div>
       )}
+
+      <RaiseDisputeDialog
+        open={disputeDialogOpen}
+        onOpenChange={setDisputeDialogOpen}
+        onSubmit={handleDisputeSubmit}
+        isSubmitting={escrowMutation.isPending}
+        taskCategory={task.category}
+        vendorName={booking?.vendor?.name}
+        amountCents={escrow?.amountCents || 0}
+      />
     </div>
   );
 }

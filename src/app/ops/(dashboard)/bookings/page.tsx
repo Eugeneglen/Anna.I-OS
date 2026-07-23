@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { BookingDetailSheet } from "@/components/ops/booking-detail-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,7 @@ export default function BookingsPage() {
   const [toDate, setToDate] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -254,12 +256,21 @@ export default function BookingsPage() {
                   const household = task?.household as Record<string, unknown>;
                   const vendor = b.vendor as Record<string, unknown>;
                   const staff = b.assignedStaff as Record<string, unknown> | null;
-                  const escrow = (b.escrowLedger as Record<string, unknown>[])?.[0];
+                  const escrow = (b.escrowEntries as Record<string, unknown>[])?.[0];
                   return (
-                    <tr key={b.id as string} className="border-b border-[var(--anna-border)] last:border-0 hover:bg-[var(--anna-sage-light)]/20 transition-colors">
+                    <tr
+                      key={b.id as string}
+                      className="border-b border-[var(--anna-border)] last:border-0 hover:bg-[var(--anna-sage-light)]/20 transition-colors cursor-pointer"
+                      onClick={() => setDetailTaskId(task?.id as string)}
+                    >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-[var(--anna-slate)]">{(household?.name as string) || "—"}</p>
-                        <p className="text-[10px] text-[var(--anna-muted)] font-data">{household?.postalCode || ""}</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-[var(--anna-slate)]">{(household?.name as string) || "—"}</p>
+                            <p className="text-[10px] text-[var(--anna-muted)] font-data">{household?.postalCode || ""}</p>
+                          </div>
+                          <ChevronRight size={14} className="text-[var(--anna-muted)] shrink-0" />
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
@@ -320,9 +331,13 @@ export default function BookingsPage() {
               const household = task?.household as Record<string, unknown>;
               const vendor = b.vendor as Record<string, unknown>;
               const staff = b.assignedStaff as Record<string, unknown> | null;
-              const escrow = (b.escrowLedger as Record<string, unknown>[])?.[0];
+              const escrow = (b.escrowEntries as Record<string, unknown>[])?.[0];
               return (
-                <div key={b.id as string} className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4">
+                <div
+                      key={b.id as string}
+                      className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4 cursor-pointer hover:bg-[var(--anna-sage-light)]/20 transition-colors active:scale-[0.99]"
+                      onClick={() => setDetailTaskId(task?.id as string)}
+                    >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-[var(--anna-slate)] truncate">
@@ -333,9 +348,12 @@ export default function BookingsPage() {
                         {staff?.name ? ` · ${staff.name as string}` : ""}
                       </p>
                     </div>
-                    <Badge variant="outline" className={cn("text-[10px] font-medium shrink-0 ml-2", BOOKING_STATUS_STYLES[b.status as string] || "")}>
-                      {(b.status as string)?.replace(/_/g, " ")}
-                    </Badge>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <Badge variant="outline" className={cn("text-[10px] font-medium", BOOKING_STATUS_STYLES[b.status as string] || "")}>
+                        {(b.status as string)?.replace(/_/g, " ")}
+                      </Badge>
+                      <ChevronRight size={14} className="text-[var(--anna-muted)]" />
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
@@ -380,6 +398,13 @@ export default function BookingsPage() {
           )}
         </>
       )}
+
+      {/* Booking Detail Sheet */}
+      <BookingDetailSheet
+        open={!!detailTaskId}
+        onOpenChange={(open) => !open && setDetailTaskId(null)}
+        taskId={detailTaskId || ""}
+      />
     </div>
   );
 }

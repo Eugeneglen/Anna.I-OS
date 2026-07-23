@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
         assignedStaff: {
           select: { id: true, name: true, role: true },
         },
-        escrowLedger: {
+        escrowEntries: {
           select: { id: true, state: true, amountCents: true },
           take: 1,
         },

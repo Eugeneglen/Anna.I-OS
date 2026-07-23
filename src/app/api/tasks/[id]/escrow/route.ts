@@ -213,6 +213,31 @@ export async function PATCH(
           })
         }
 
+        // Notify vendor about the dispute
+        const bookingVendor = activeBooking
+          ? await tx.booking.findUnique({
+              where: { id: activeBooking.id },
+              select: { vendorId: true },
+            })
+          : null;
+
+        if (bookingVendor?.vendorId) {
+          await tx.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.VENDOR,
+              vendorId: bookingVendor.vendorId,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.DISPUTE_RAISED,
+              title: "Dispute Raised on Booking",
+              body: `A dispute has been raised on your ${task.category.toLowerCase()} task.${reason ? ` Reason: ${reason}` : ""} The booking has been cancelled. Ops will review shortly.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          });
+        }
+
         return { updatedTask, updatedEscrow }
       })
 

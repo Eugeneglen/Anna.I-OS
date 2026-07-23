@@ -11,6 +11,9 @@ export async function GET(
     const task = await db.task.findUnique({
       where: { id },
       include: {
+        household: {
+          select: { id: true, name: true, address: true, postalCode: true, unitNumber: true },
+        },
         bookings: {
           include: {
             vendor: {
