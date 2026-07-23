@@ -6,18 +6,34 @@ import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AUTONOMY_LEVELS,
+  formatSgd,
   type ServiceCategory,
   type HouseholdCategoryAutonomy,
   type AutonomyLevelThreshold,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Lock, ArrowRight, Zap, Pause, Play } from "lucide-react";
-import { useState } from "react";
+import {
+  Lock,
+  ArrowRight,
+  Zap,
+  Pause,
+  Play,
+  Shield,
+  Wallet,
+  Layers,
+  ListChecks,
+} from "lucide-react";
 import { toast } from "sonner";
 
 async function fetchAutonomy(householdId: string) {
   const res = await fetch(`/api/autonomy/${householdId}`);
   if (!res.ok) throw new Error("Failed to fetch autonomy");
+  return res.json();
+}
+
+async function fetchHouseholdGraph(householdId: string) {
+  const res = await fetch(`/api/household-graph/${householdId}`);
+  if (!res.ok) throw new Error("Failed to fetch household graph");
   return res.json();
 }
 
@@ -34,6 +50,66 @@ async function patchAutonomy(
   if (!res.ok) throw new Error("Failed to update autonomy");
   return res.json();
 }
+
+/* ------------------------------------------------------------------ */
+/*  Types for Household Graph data                                     */
+/* ------------------------------------------------------------------ */
+
+interface VendorAffinityEntry {
+  vendorId: string;
+  vendorName: string;
+  bookingCount: number;
+  completedCount: number;
+  avgRating: number;
+  disputeCount: number;
+}
+
+interface BookingStats {
+  total: number;
+  completed: number;
+  verified: number;
+  disputed: number;
+  avgCycleDays: number;
+  totalSpendCents: number;
+}
+
+interface GraphCategoryData {
+  category: string;
+  autonomy: {
+    currentLevel: number;
+    currentLevelName: string;
+    verifiedCyclesAtLevel: number;
+    totalVerifiedCycles: number;
+    nextLevel: number;
+    nextLevelName: string;
+    cyclesRemaining: number;
+    promotionPaused: boolean;
+    lastPromotedAt: string | null;
+  };
+  vendorAffinity: VendorAffinityEntry[];
+  bookingStats: BookingStats;
+  recentTasks: {
+    id: string;
+    status: string;
+    amountCents: number;
+    verifiedAt: string;
+    scheduledStart: string;
+  }[];
+}
+
+interface HouseholdGraphData {
+  summary: {
+    totalVerifiedCycles: number;
+    totalSpendCents: number;
+    activeCategories: number;
+    totalBookings: number;
+  };
+  categories: GraphCategoryData[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Autonomy Segment                                                   */
+/* ------------------------------------------------------------------ */
 
 function AutonomySegment({
   index,
@@ -58,19 +134,29 @@ function AutonomySegment({
               ? "bg-[var(--anna-sage)]/30 border border-dashed border-[var(--anna-sage)]/50"
               : "bg-[var(--anna-border)]"
       )}
-      title={locked ? `${AUTONOMY_LEVELS[index]} (Coming Soon)` : AUTONOMY_LEVELS[index]}
+      title={
+        locked
+          ? `${AUTONOMY_LEVELS[index]} (Coming Soon)`
+          : AUTONOMY_LEVELS[index]
+      }
     />
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Autonomy Card                                                      */
+/* ------------------------------------------------------------------ */
 
 function AutonomyCard({
   autonomy,
   thresholds,
   householdId,
+  graphCategory,
 }: {
   autonomy: HouseholdCategoryAutonomy;
   thresholds: AutonomyLevelThreshold[];
   householdId: string;
+  graphCategory?: GraphCategoryData;
 }) {
   const queryClient = useQueryClient();
 
@@ -100,7 +186,8 @@ function AutonomyCard({
   const segments = Array.from({ length: 5 }, (_, i) => ({
     index: i,
     filled: i < currentLevel,
-    highlighted: i === currentLevel && !isMaxLevel && currentLevel < activeCapabilityLevel,
+    highlighted:
+      i === currentLevel && !isMaxLevel && currentLevel < activeCapabilityLevel,
     locked: i + 1 > activeCapabilityLevel,
   }));
 
@@ -111,6 +198,9 @@ function AutonomyCard({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["autonomy", householdId] });
+      queryClient.invalidateQueries({
+        queryKey: ["household-graph", householdId],
+      });
       toast.success(
         autonomy.promotionPaused
           ? "Promotion resumed"
@@ -121,6 +211,15 @@ function AutonomyCard({
       toast.error("Failed to update setting");
     },
   });
+
+  // Graph data helpers
+  const topVendor = graphCategory?.vendorAffinity?.[0];
+  const bookingStats = graphCategory?.bookingStats;
+  const totalDisputes =
+    graphCategory?.vendorAffinity?.reduce(
+      (sum, v) => sum + (v.disputeCount || 0),
+      0
+    ) ?? 0;
 
   return (
     <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] hover:shadow-sm transition-shadow">
@@ -161,7 +260,11 @@ function AutonomyCard({
                 ? "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-950"
                 : "border-[var(--anna-border)] text-[var(--anna-muted)] hover:bg-[var(--anna-border)]/50 hover:text-[var(--anna-slate)]"
             )}
-            title={autonomy.promotionPaused ? "Resume promotion" : "Pause promotion"}
+            title={
+              autonomy.promotionPaused
+                ? "Resume promotion"
+                : "Pause promotion"
+            }
           >
             {autonomy.promotionPaused ? (
               <Play size={13} />
@@ -224,9 +327,76 @@ function AutonomyCard({
           Maximum autonomy achieved
         </div>
       )}
+
+      {/* ---- Household Graph: Vendor Affinity Badge ---- */}
+      {topVendor && (
+        <div className="mt-3">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-full bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
+            ★ {topVendor.avgRating.toFixed(1)} · {topVendor.vendorName} · {topVendor.bookingCount} booking{topVendor.bookingCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
+
+      {/* ---- Household Graph: Booking Stats Row ---- */}
+      {bookingStats && (
+        <p className="text-[10px] text-[var(--anna-muted)] mt-2">
+          {bookingStats.total} booking{bookingStats.total !== 1 ? "s" : ""} · {bookingStats.verified} verified · {bookingStats.avgCycleDays} avg cycle
+        </p>
+      )}
+
+      {/* ---- Household Graph: Trust Score / Dispute Indicator ---- */}
+      {graphCategory && (
+        <div className="flex items-center gap-1.5 mt-2">
+          <span
+            className={cn(
+              "inline-block w-1.5 h-1.5 rounded-full",
+              totalDisputes === 0
+                ? "bg-emerald-500"
+                : "bg-amber-500"
+            )}
+          />
+          <span className="text-[10px] text-[var(--anna-muted)]">
+            {totalDisputes === 0
+              ? "No disputes"
+              : `${totalDisputes} dispute${totalDisputes !== 1 ? "s" : ""}`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Summary KPI Card                                                   */
+/* ------------------------------------------------------------------ */
+
+function KpiCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon size={16} className="text-[var(--anna-sage-dark)]" />
+        <span className="text-[10px] font-medium text-[var(--anna-muted)] uppercase tracking-wide">
+          {label}
+        </span>
+      </div>
+      <p className="font-data text-lg font-semibold text-[var(--anna-slate)]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Autonomy Panel (main export)                                       */
+/* ------------------------------------------------------------------ */
 
 export function AutonomyPanel() {
   const { selectedHouseholdId } = useAnnaStore();
@@ -237,12 +407,30 @@ export function AutonomyPanel() {
     enabled: !!selectedHouseholdId,
   });
 
+  const { data: graphData } = useQuery({
+    queryKey: ["household-graph", selectedHouseholdId],
+    queryFn: () => fetchHouseholdGraph(selectedHouseholdId),
+    enabled: !!selectedHouseholdId,
+    staleTime: 60_000,
+  });
+
   if (isLoading) {
     return (
       <div className="p-4 lg:p-6 space-y-4">
         <Skeleton className="h-8 w-48 rounded-xl bg-[var(--anna-border)]" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton
+              key={i}
+              className="h-20 rounded-2xl bg-[var(--anna-border)]"
+            />
+          ))}
+        </div>
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-32 w-full rounded-2xl bg-[var(--anna-border)]" />
+          <Skeleton
+            key={i}
+            className="h-32 w-full rounded-2xl bg-[var(--anna-border)]"
+          />
         ))}
       </div>
     );
@@ -250,6 +438,17 @@ export function AutonomyPanel() {
 
   const autonomyData: HouseholdCategoryAutonomy[] = data?.autonomy || [];
   const thresholds: AutonomyLevelThreshold[] = data?.thresholds || [];
+  const summary = (graphData as HouseholdGraphData | undefined)?.summary;
+  const graphCategories = (graphData as HouseholdGraphData | undefined)
+    ?.categories;
+
+  // Build a lookup map from category name to graph data
+  const graphCategoryMap = new Map<string, GraphCategoryData>();
+  if (graphCategories) {
+    for (const gc of graphCategories) {
+      graphCategoryMap.set(gc.category, gc);
+    }
+  }
 
   return (
     <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
@@ -262,10 +461,38 @@ export function AutonomyPanel() {
         remain manual at every level — that protection is constant.
       </p>
 
+      {/* Summary KPI Cards */}
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <KpiCard
+            icon={Shield}
+            label="Total Verified Cycles"
+            value={String(summary.totalVerifiedCycles)}
+          />
+          <KpiCard
+            icon={Wallet}
+            label="Total Spend"
+            value={formatSgd(summary.totalSpendCents)}
+          />
+          <KpiCard
+            icon={Layers}
+            label="Active Categories"
+            value={String(summary.activeCategories)}
+          />
+          <KpiCard
+            icon={ListChecks}
+            label="Total Bookings"
+            value={String(summary.totalBookings)}
+          />
+        </div>
+      )}
+
       {autonomyData.length === 0 ? (
         <div className="text-center py-16 text-[var(--anna-muted)]">
           <p className="text-sm">No autonomy data yet</p>
-          <p className="text-xs mt-1">Complete tasks to start building trust</p>
+          <p className="text-xs mt-1">
+            Complete tasks to start building trust
+          </p>
         </div>
       ) : (
         <div className="space-y-3 max-h-[calc(100vh-240px)] overflow-y-auto anna-scroll pr-1">
@@ -275,6 +502,7 @@ export function AutonomyPanel() {
               autonomy={a}
               thresholds={thresholds}
               householdId={selectedHouseholdId}
+              graphCategory={graphCategoryMap.get(a.category)}
             />
           ))}
         </div>

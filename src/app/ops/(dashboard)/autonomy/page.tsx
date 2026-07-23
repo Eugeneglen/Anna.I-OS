@@ -65,6 +65,18 @@ function LevelBar({
   );
 }
 
+interface PromotionCandidate {
+  householdId: string;
+  householdName: string;
+  category: string;
+  currentLevel: number;
+  currentLevelName: string;
+  newLevel: number;
+  newLevelName: string;
+  verifiedCyclesAtLevel: number;
+  cyclesRequired: number;
+}
+
 interface HouseholdRow {
   id: string;
   name: string;
@@ -89,6 +101,7 @@ export default function AutonomyPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [scanResults, setScanResults] = useState<PromotionCandidate[]>([]);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -110,6 +123,41 @@ export default function AutonomyPage() {
 
   const households: HouseholdRow[] = data?.households || [];
   const summary = data?.summary || {};
+
+  const scanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ops/promotions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "scan" }),
+      });
+      if (!res.ok) throw new Error("Scan failed");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setScanResults(data.candidates || []);
+      toast.success(`Found ${data.candidates?.length || 0} eligible promotions`);
+    },
+    onError: () => toast.error("Promotion scan failed"),
+  });
+
+  const executeMutation = useMutation({
+    mutationFn: async (candidates: PromotionCandidate[]) => {
+      const res = await fetch("/api/ops/promotions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "execute", candidates }),
+      });
+      if (!res.ok) throw new Error("Execute failed");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.promoted} promoted, ${data.failed} failed`);
+      setScanResults([]);
+      qc.invalidateQueries({ queryKey: ["ops-autonomy"] });
+    },
+    onError: () => toast.error("Promotion execution failed"),
+  });
 
   const toggleMutation = useMutation({
     mutationFn: async ({
@@ -243,6 +291,93 @@ export default function AutonomyPage() {
                 Ready to Promote
               </p>
             </div>
+          </div>
+
+          {/* Promotion Engine */}
+          <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--anna-slate)]">Promotion Engine</h3>
+                <p className="text-[10px] text-[var(--anna-muted)]">Rule-based batch promotion scan</p>
+              </div>
+              <Button
+                onClick={() => scanMutation.mutate()}
+                disabled={scanMutation.isPending}
+                size="sm"
+                className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl text-xs font-medium"
+              >
+                {scanMutation.isPending ? (
+                  <><Loader2 size={14} className="animate-spin mr-1.5" /> Scanning...</>
+                ) : (
+                  <><Zap size={14} className="mr-1.5" /> Scan for Promotions</>
+                )}
+              </Button>
+            </div>
+
+            {/* Scan results */}
+            {scanResults.length === 0 && !scanMutation.isPending && (
+              <p className="text-xs text-[var(--anna-muted)] text-center py-6">
+                Click "Scan" to check for households eligible for autonomy promotion
+              </p>
+            )}
+
+            {scanResults.length > 0 && (
+              <>
+                <div className="overflow-x-auto mb-4">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--anna-border)] bg-[var(--anna-bg)]">
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Household</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Category</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Level</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Cycles</th>
+                        <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scanResults.map((c, i) => (
+                        <tr key={`${c.householdId}-${c.category}-${i}`} className="border-b border-[var(--anna-border)] last:border-0">
+                          <td className="px-3 py-2.5 text-xs font-medium text-[var(--anna-slate)]">{c.householdName}</td>
+                          <td className="px-3 py-2.5 text-[10px] text-[var(--anna-muted)]">{c.category.replace(/_/g, " ")}</td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1 text-[10px]">
+                              <span className="font-data text-[var(--anna-slate)]">{c.currentLevelName}</span>
+                              <ChevronRight size={12} className="text-[var(--anna-sage-dark)]" />
+                              <span className="font-data font-semibold text-[var(--anna-sage-dark)]">{c.newLevelName}</span>
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 font-data text-[10px] text-[var(--anna-muted)]">{c.verifiedCyclesAtLevel}/{c.cyclesRequired}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px] rounded-lg bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              disabled={executeMutation.isPending}
+                              onClick={() => executeMutation.mutate([c])}
+                            >
+                              Promote
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => executeMutation.mutate(scanResults)}
+                    disabled={executeMutation.isPending}
+                    className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl text-xs font-medium"
+                  >
+                    {executeMutation.isPending ? (
+                      <><Loader2 size={14} className="animate-spin mr-1.5" /> Promoting...</>
+                    ) : (
+                      <><TrendingUp size={14} className="mr-1.5" /> Promote All ({scanResults.length})</>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Two Column: Level Distribution + Promotion Pipeline */}
