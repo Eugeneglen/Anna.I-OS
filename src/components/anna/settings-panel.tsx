@@ -46,6 +46,9 @@ import {
   X,
   Camera,
   Moon,
+  ArrowUpCircle,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -361,6 +364,30 @@ export function SettingsPanel() {
     phone: "",
   });
   const [deleteTarget, setDeleteTarget] = useState<FamilyMember | null>(null);
+  const [cancelSubDialog, setCancelSubDialog] = useState(false);
+
+  // ── Subscription mutation (cancel) ──
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!sub) throw new Error("No subscription");
+      // Household-initiated cancellation sends a request to ops
+      const res = await fetch(`/api/households/${householdId}/subscription`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request_cancel" }),
+      });
+      if (!res.ok) throw new Error("Failed to request cancellation");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("Cancellation request submitted. Ops will process it shortly.");
+      setCancelSubDialog(false);
+      queryClient.invalidateQueries({ queryKey: ["household-detail", householdId] });
+    },
+    onError: () => {
+      toast.error("Failed to submit cancellation request");
+    },
+  });
 
   // ── Derived ──
 
@@ -473,28 +500,31 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {/* ── Subscription (read-only) ── */}
+      {/* ── Subscription ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
           Subscription
         </h3>
         {sub ? (
           <div className="space-y-3">
+            {/* Status and tier */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Crown size={16} className="text-[var(--anna-warning)]" />
                 <span className="text-sm font-semibold text-[var(--anna-slate)]">
-                  {sub.tier} Tier
+                  {sub.tier === "HOME" ? "Home" : "Care"} Tier
                 </span>
               </div>
               <span
                 className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
                   sub.status === "ACTIVE"
                     ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)]"
+                    : sub.status === "PAST_DUE"
+                    ? "bg-amber-50 text-amber-700"
                     : "bg-[var(--anna-error)]/15 text-[var(--anna-error)]"
                 }`}
               >
-                {sub.status}
+                {sub.status.replace(/_/g, " ")}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -518,6 +548,85 @@ export function SettingsPanel() {
                 </span>
               </div>
             )}
+
+            {/* Upgrade prompt for HOME tier */}
+            {sub.tier === "HOME" && sub.status === "ACTIVE" && (
+              <div className="bg-gradient-to-r from-purple-50 to-[var(--anna-sage-light)] rounded-xl p-3 mt-2">
+                <div className="flex items-start gap-2">
+                  <ArrowUpCircle size={18} className="text-purple-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-purple-700">Upgrade to Anna.I Care</p>
+                    <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">
+                      Premium eldercare companion bundles, priority support, and dedicated coordinator access.
+                    </p>
+                    <p className="text-xs font-data font-semibold text-purple-700 mt-1">
+                      SGD $68/mo
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-[var(--anna-muted)] mt-2 flex items-center gap-1">
+                  <Info size={10} />
+                  Contact Ops to upgrade your plan
+                </p>
+              </div>
+            )}
+
+            {/* CARE tier badge */}
+            {sub.tier === "CARE" && sub.status === "ACTIVE" && (
+              <div className="bg-purple-50 rounded-xl p-3 mt-2">
+                <div className="flex items-center gap-2">
+                  <Crown size={16} className="text-purple-600" />
+                  <div>
+                    <p className="text-xs font-semibold text-purple-700">Care Tier Active</p>
+                    <p className="text-[10px] text-[var(--anna-muted)]">
+                      Eldercare companion bundles + priority support
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CANCELLED / PAST_DUE states */}
+            {sub.status === "CANCELLED" && (
+              <div className="bg-red-50 rounded-xl p-3 mt-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-500" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-700">Subscription Cancelled</p>
+                    <p className="text-[10px] text-[var(--anna-muted)]">
+                      Your subscription has been cancelled. Contact Ops to reactivate.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {sub.status === "PAST_DUE" && (
+              <div className="bg-amber-50 rounded-xl p-3 mt-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-amber-600" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">Payment Overdue</p>
+                    <p className="text-[10px] text-[var(--anna-muted)]">
+                      Please update your payment method to continue using Anna.I services.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Cancel button for ACTIVE */}
+            {sub.status === "ACTIVE" && (
+              <div className="pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  onClick={() => setCancelSubDialog(true)}
+                >
+                  Cancel Subscription
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-[var(--anna-muted)]">
@@ -525,6 +634,32 @@ export function SettingsPanel() {
           </p>
         )}
       </div>
+
+      {/* Cancel Subscription Confirmation */}
+      <AlertDialog open={cancelSubDialog} onOpenChange={setCancelSubDialog}>
+        <AlertDialogContent className="rounded-2xl border-[var(--anna-border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[var(--anna-slate)] flex items-center gap-2">
+              <AlertTriangle size={18} className="text-red-500" />
+              Cancel Subscription
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--anna-muted)]">
+              Are you sure you want to cancel your Anna.I {sub?.tier === "HOME" ? "Home" : "Care"} subscription?
+              Your service will remain active until the end of the current billing period. You can reactivate at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+              className="rounded-xl bg-red-600 hover:bg-red-700"
+            >
+              {cancelMutation.isPending ? "Submitting..." : "Yes, Cancel"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Members ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)]">

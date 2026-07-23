@@ -25,6 +25,7 @@ import {
   X,
   ArrowRight,
   Wallet,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OpsAiChat } from "@/components/ops/ops-ai-chat";
@@ -69,6 +70,7 @@ const NAV_ITEMS = [
   { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true },
   { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true },
   { label: "Anomalies", href: "/ops/anomalies", icon: AlertTriangle, active: true },
+  { label: "Subscriptions", href: "/ops/subscriptions", icon: CreditCard, active: true },
 ];
 
 function RoleBadge({ role }: { role: string }) {
