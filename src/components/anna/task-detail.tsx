@@ -27,7 +27,7 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -211,6 +211,11 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
   // AI Photo Analysis
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
 
+  // Rating form state
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [hoveredStar, setHoveredStar] = useState(0);
+
   const analyzePhotosMutation = useMutation({
     mutationFn: async () => {
       if (!task?.verificationPhotos || task.verificationPhotos.length === 0) {
@@ -268,6 +273,51 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
     onError: (err) => {
       toast({ title: err.message || "Failed to cancel", variant: "destructive" });
+    },
+  });
+
+  // Per-photo approve/reject mutation
+  const photoActionMutation = useMutation({
+    mutationFn: async ({ photoId, action, reason }: { photoId: string; action: "approve" | "reject"; reason?: string }) => {
+      const body: Record<string, string> = { action };
+      if (reason) body.rejectionReason = reason;
+      const res = await fetch(`/api/verification-photos/${photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Photo action failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Photo updated" });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update photo", variant: "destructive" });
+    },
+  });
+
+  // Rating mutation (standalone — no status transition)
+  const ratingMutation = useMutation({
+    mutationFn: async ({ bookingId, rating, comment }: { bookingId: string; rating: number; comment?: string }) => {
+      const body: Record<string, unknown> = { rating };
+      if (comment) body.ratingComment = comment;
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Rating failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Rating submitted — thank you!" });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to submit rating", variant: "destructive" });
     },
   });
 
@@ -538,6 +588,96 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         </div>
       )}
 
+      {/* Rating Form — for VERIFIED / ESCROW_RELEASED tasks without a rating */}
+      {booking && !booking.rating && (task.status === "VERIFIED" || task.status === "ESCROW_RELEASED") && (
+        <div className="rounded-2xl border border-[var(--anna-warning)]/20 bg-gradient-to-br from-[var(--anna-warning)]/5 to-[var(--anna-bg)] p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-warning)]/15 flex items-center justify-center">
+              <Star size={16} className="text-[var(--anna-warning)]" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--anna-slate)]">Rate this service</h4>
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                {booking.vendor ? `How was ${booking.vendor.name}'s work?` : "How was this service?"}
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive star picker */}
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => {
+              const starValue = i + 1;
+              const isFilled = starValue <= (hoveredStar || selectedRating);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedRating(starValue)}
+                  onMouseEnter={() => setHoveredStar(starValue)}
+                  onMouseLeave={() => setHoveredStar(0)}
+                  className="p-0.5 transition-transform hover:scale-110 active:scale-95"
+                  aria-label={`Rate ${starValue} star${starValue > 1 ? "s" : ""}`}
+                >
+                  <Star
+                    size={28}
+                    className={cn(
+                      "transition-colors",
+                      isFilled
+                        ? "text-[var(--anna-warning)]"
+                        : "text-[var(--anna-border)]"
+                    )}
+                    fill={isFilled ? "currentColor" : "none"}
+                    strokeWidth={isFilled ? 0 : 1.5}
+                  />
+                </button>
+              );
+            })}
+            {selectedRating > 0 && (
+              <span className="text-xs font-medium text-[var(--anna-muted)] ml-2">
+                {selectedRating === 1 ? "Poor" : selectedRating === 2 ? "Fair" : selectedRating === 3 ? "Good" : selectedRating === 4 ? "Very Good" : "Excellent"}
+              </span>
+            )}
+          </div>
+
+          {/* Optional comment */}
+          <textarea
+            value={ratingComment}
+            onChange={(e) => setRatingComment(e.target.value.slice(0, 500))}
+            placeholder="Add a comment about the service (optional)..."
+            className="w-full min-h-[72px] text-sm bg-[var(--anna-white)] border border-[var(--anna-border)] rounded-xl px-3 py-2 text-[var(--anna-slate)] placeholder:text-[var(--anna-muted)]/50 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--anna-warning)]/30 focus:border-[var(--anna-warning)]/50"
+            maxLength={500}
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[var(--anna-muted)]">
+              {ratingComment.length}/500
+            </span>
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!booking.id || selectedRating === 0) return;
+                ratingMutation.mutate(
+                  { bookingId: booking.id, rating: selectedRating, comment: ratingComment || undefined },
+                  {
+                    onSuccess: () => {
+                      setSelectedRating(0);
+                      setRatingComment("");
+                    },
+                  }
+                );
+              }}
+              disabled={selectedRating === 0 || ratingMutation.isPending}
+              className="bg-[var(--anna-warning)] hover:bg-[var(--anna-warning)]/90 text-white rounded-xl h-9 text-xs font-semibold px-4"
+            >
+              {ratingMutation.isPending ? (
+                <><Loader2 size={12} className="mr-1.5 animate-spin" />Submitting...</>
+              ) : (
+                <><Star size={12} className="mr-1.5" />Submit Rating</>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Verification Photos */}
       {task.verificationPhotos && task.verificationPhotos.length > 0 && (
         <div>
@@ -566,50 +706,79 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             )}
           </div>
 
-          {/* Before/After labeled photo grid */}
+          {/* Before/After labeled photo grid with per-photo actions */}
           <div className="grid grid-cols-3 gap-2">
-            {task.verificationPhotos.map((photo) => (
-              <div
-                key={photo.id}
-                className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)]"
-              >
-                <img
-                  src={photo.thumbnailUrl || photo.fileUrl}
-                  alt="Verification"
-                  className="w-full h-full object-cover"
-                />
-                {/* Top-left: Before/After label */}
-                <div className="absolute top-1 left-1">
-                  {photo.uploadedBy?.includes("before") ? (
-                    <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-warning)] text-white border-0">
-                      Before
-                    </Badge>
-                  ) : (
-                    <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-sage)] text-white border-0">
-                      After
-                    </Badge>
+            {task.verificationPhotos.map((photo) => {
+              const canAct = task.status === "COMPLETED" && !photo.isVerified && !photo.rejectionReason;
+              return (
+                <div
+                  key={photo.id}
+                  className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] group"
+                >
+                  <img
+                    src={photo.thumbnailUrl || photo.fileUrl}
+                    alt="Verification"
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Top-left: Before/After label */}
+                  <div className="absolute top-1 left-1">
+                    {photo.uploadedBy?.includes("before") ? (
+                      <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-warning)] text-white border-0">
+                        Before
+                      </Badge>
+                    ) : (
+                      <Badge className="text-[8px] px-1 py-0 h-4 bg-[var(--anna-sage)] text-white border-0">
+                        After
+                      </Badge>
+                    )}
+                  </div>
+                  {/* Top-right: Verification status */}
+                  <div className="absolute top-1 right-1">
+                    {photo.isVerified ? (
+                      <Badge className="bg-[var(--anna-success)] text-white text-[9px] px-1.5 py-0 h-5">
+                        <CheckCircle size={10} className="mr-0.5" />
+                        Verified
+                      </Badge>
+                    ) : photo.rejectionReason ? (
+                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-5">
+                        <XCircle size={10} className="mr-0.5" />
+                        Rejected
+                      </Badge>
+                    ) : canAct ? null : (
+                      <Badge className="bg-[var(--anna-warning)] text-white text-[9px] px-1.5 py-0 h-5">
+                        <Clock size={10} className="mr-0.5" />
+                        Pending
+                      </Badge>
+                    )}
+                  </div>
+                  {/* Bottom: Per-photo approve/reject buttons — COMPLETED tasks only */}
+                  {canAct && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => photoActionMutation.mutate({ photoId: photo.id, action: "reject" })}
+                        disabled={photoActionMutation.isPending}
+                        className="w-6 h-6 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center transition-colors"
+                        aria-label="Reject photo"
+                        title="Reject"
+                      >
+                        <XCircle size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => photoActionMutation.mutate({ photoId: photo.id, action: "approve" })}
+                        disabled={photoActionMutation.isPending}
+                        className="w-6 h-6 rounded-full bg-green-500/90 hover:bg-green-600 text-white flex items-center justify-center transition-colors"
+                        aria-label="Approve photo"
+                        title="Approve"
+                      >
+                        <CheckCircle size={12} />
+                      </button>
+                    </div>
                   )}
                 </div>
-                {/* Top-right: Verification status */}
-                <div className="absolute top-1 right-1">
-                  {photo.isVerified ? (
-                    <Badge className="bg-[var(--anna-success)] text-white text-[9px] px-1.5 py-0 h-5">
-                      <CheckCircle size={10} className="mr-0.5" />
-                      Verified
-                    </Badge>
-                  ) : photo.rejectionReason ? (
-                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-5">
-                      Rejected
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-[var(--anna-warning)] text-white text-[9px] px-1.5 py-0 h-5">
-                      <Clock size={10} className="mr-0.5" />
-                      Pending
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

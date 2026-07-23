@@ -5,10 +5,13 @@ import { TaskStatus, NotificationChannel, NotificationEventType, NotificationSta
 import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
 
 // C-7 FIX: Extend schema to accept rating and ratingComment
+// Allow standalone rating updates (no status transition required)
 const patchBookingSchema = z.object({
-  status: z.string().min(1),
+  status: z.string().min(1).optional(),
   rating: z.number().int().min(1).max(5).optional(),
   ratingComment: z.string().max(500).optional(),
+}).refine(data => data.status || data.rating, {
+  message: "Either status or rating must be provided",
 })
 
 export async function PATCH(
@@ -37,6 +40,31 @@ export async function PATCH(
 
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    }
+
+    // Standalone rating update — no status transition
+    if (!newStatus && rating !== undefined) {
+      const updatedBooking = await db.booking.update({
+        where: { id },
+        data: {
+          rating,
+          ratingComment: ratingComment ?? null,
+        },
+        include: {
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              categories: true,
+              status: true,
+            },
+          },
+        },
+      })
+
+      return NextResponse.json({ booking: updatedBooking })
     }
 
     // Validate state machine transition
