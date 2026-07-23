@@ -24,6 +24,7 @@ import {
   WifiOff,
   X,
   ArrowRight,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OpsAiChat } from "@/components/ops/ops-ai-chat";
@@ -63,6 +64,7 @@ const NAV_ITEMS = [
   { label: "Bookings", href: "/ops/bookings", icon: Calendar, active: true },
   { label: "Households", href: "/ops/households", icon: Home, active: true },
   { label: "Vendors", href: "/ops/vendors", icon: Users, active: true },
+  { label: "Escrow", href: "/ops/escrow", icon: Wallet, active: true },
   { label: "Config", href: "/ops/config", icon: Settings, active: true },
   { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true },
   { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true },
