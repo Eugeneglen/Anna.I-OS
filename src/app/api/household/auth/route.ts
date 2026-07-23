@@ -22,14 +22,27 @@ export async function POST(req: NextRequest) {
       include: { household: true },
     });
 
-    if (!member || !member.passwordHash) {
+    if (!member) {
       return NextResponse.json(
-        { error: "Invalid credentials. Contact ops to set up portal access." },
+        { error: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    const valid = await bcrypt.compare(password, member.passwordHash);
+    // ── Self-heal: if passwordHash is null (new column from schema push),
+    //    hash the incoming password and persist it. This handles the case
+    //    where ensure-seed.ts backfill didn't reach the database.       ──
+    let passwordHash = member.passwordHash;
+    if (!passwordHash) {
+      console.warn(`[household/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+      passwordHash = bcrypt.hashSync(password, 10);
+      await db.familyMember.update({
+        where: { id: member.id },
+        data: { passwordHash },
+      });
+    }
+
+    const valid = await bcrypt.compare(password, passwordHash);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid credentials" },

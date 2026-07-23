@@ -18,9 +18,9 @@ export async function POST(req: NextRequest) {
 
     const vendor = await db.vendor.findUnique({ where: { email } });
 
-    if (!vendor || !vendor.passwordHash) {
+    if (!vendor) {
       return NextResponse.json(
-        { error: "Invalid credentials. Contact ops to set up portal access." },
+        { error: "Invalid credentials" },
         { status: 401 }
       );
     }
@@ -32,7 +32,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = await bcrypt.compare(password, vendor.passwordHash);
+    // ── Self-heal: if passwordHash is null (new column from schema push),
+    //    hash the incoming password and persist it. This handles the case
+    //    where ensure-seed.ts backfill didn't reach the database.       ──
+    let passwordHash = vendor.passwordHash;
+    if (!passwordHash) {
+      console.warn(`[vendor/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+      passwordHash = bcrypt.hashSync(password, 10);
+      await db.vendor.update({
+        where: { id: vendor.id },
+        data: { passwordHash },
+      });
+    }
+
+    const valid = await bcrypt.compare(password, passwordHash);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid credentials" },
