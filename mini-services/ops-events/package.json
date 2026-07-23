@@ -1,0 +1,11 @@
+{
+  "name": "ops-events",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.3"
+  }
+}

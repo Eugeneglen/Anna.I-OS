@@ -11,6 +11,7 @@ import {
   RATING_DROP_THRESHOLD,
 } from "@/lib/constants";
 import { createAnomalyNotification } from "@/lib/notify";
+import { emitAnomalyDetected, emitNotificationCreated } from "@/lib/events";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -386,7 +387,7 @@ export async function runAnomalyDetection(
   // Persist new anomalies (skip duplicates — checked per-rule above)
   let created = 0;
   for (const a of filtered) {
-    await db.anomaly.create({
+    const anomaly = await db.anomaly.create({
       data: {
         householdId: a.householdId,
         taskId: a.taskId,
@@ -408,6 +409,37 @@ export async function runAnomalyDetection(
       message: a.message,
       taskId: a.taskId,
       bookingId: a.bookingId,
+    });
+
+    // Phase 2: Event-driven — push real-time event to ops dashboard via WebSocket
+    await emitAnomalyDetected({
+      id: anomaly.id,
+      type: a.type,
+      severity: a.severity,
+      message: a.message,
+      householdId: a.householdId,
+      vendorId: a.vendorId,
+      taskId: a.taskId,
+      bookingId: a.bookingId,
+      metadata: a.metadata,
+    });
+
+    // Also emit a notification event for the ops notification feed
+    const mapping = {
+      VENDOR_LATE: "ANOMALY_VENDOR_LATE",
+      TASK_OVERDUE: "ANOMALY_TASK_OVERDUE",
+      VERIFICATION_MISSING: "ANOMALY_VERIFICATION_MISSING",
+      RATING_DROP: "ANOMALY_RATING_DROP",
+      ESCROW_DISPUTED: "ANOMALY_ESCROW_DISPUTED",
+    } as const;
+    const severityEmoji = { CRITICAL: "🔴", HIGH: "🟠", MEDIUM: "🟡", LOW: "🔵" }[a.severity] || "";
+    const typeLabel = a.type.replace(/_/g, " ");
+    await emitNotificationCreated({
+      id: anomaly.id,
+      eventType: mapping[a.type] || "SYSTEM_ALERT",
+      title: `${severityEmoji} Anomaly: ${typeLabel}`,
+      body: a.message,
+      severity: a.severity,
     });
   }
 
