@@ -121,8 +121,22 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             </Select>
           </div>
 
-          {/* Right: Notification Bell */}
+          {/* Right: Mobile Settings + Notification Bell */}
           <div className="flex items-center gap-1">
+            {/* Mobile-only Settings button (top-right on mobile) */}
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={cn(
+                "md:hidden p-2 rounded-xl transition-colors",
+                activeTab === "settings"
+                  ? "bg-[var(--anna-sage)] text-white"
+                  : "hover:bg-[var(--anna-sage-light)]"
+              )}
+            >
+              <Settings size={18} className={cn(
+                activeTab === "settings" ? "text-white" : "text-[var(--anna-slate-light)]"
+              )} />
+            </button>
             <button
               onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
               className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
