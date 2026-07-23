@@ -47,10 +47,10 @@ export default function HouseholdLoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Image src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="mx-auto mb-1" />
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--anna-sage-dark)]">
+          <h1 className="text-2xl font-bold tracking-tight text-white">
             Anna.I
           </h1>
-          <p className="text-[10px] font-medium text-[var(--anna-muted)] mt-1">
+          <p className="text-[10px] font-medium text-white/80 mt-1">
             The Operating System for the Modern Household
           </p>
         </div>
@@ -130,22 +130,22 @@ export default function HouseholdLoginPage() {
           <button
             type="button"
             onClick={() => router.push("/ops/login")}
-            className="text-xs text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] underline underline-offset-2 transition-colors cursor-pointer"
+            className="text-xs text-white/70 hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
           >
             &larr; Ops Portal
           </button>
-          <span className="text-[var(--anna-border)]">|</span>
+          <span className="text-white/40">|</span>
           <button
             type="button"
             onClick={() => router.push("/vendor/login")}
-            className="text-xs text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] underline underline-offset-2 transition-colors cursor-pointer"
+            className="text-xs text-white/70 hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
           >
             Vendor Portal &rarr;
           </button>
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-[10px] text-[var(--anna-muted)]">
+        <p className="mt-6 text-center text-[10px] text-white/70">
           Anna.I.sg
         </p>
       </div>
