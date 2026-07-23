@@ -27,7 +27,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    // ── Self-heal: if passwordHash is null (new column from schema push),
+    //    hash the incoming password and persist it.                       ──
+    let passwordHash = user.passwordHash;
+    if (!passwordHash) {
+      console.warn(`[ops/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+      passwordHash = bcrypt.hashSync(password, 10);
+      await db.opsUser.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+    }
+
+    const valid = await bcrypt.compare(password, passwordHash);
     if (!valid) {
       console.warn(`[/api/ops/auth] Wrong password for: ${email}`);
       return NextResponse.json(
