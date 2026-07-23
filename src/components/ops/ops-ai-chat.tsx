@@ -13,7 +13,6 @@ import {
   Zap,
   AlertTriangle,
   Wallet,
-  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,8 +40,8 @@ interface OpsAiResponse {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5 px-4">
-      <div className="w-7 h-7 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center flex-shrink-0 mt-0.5">
-        <BarChart3 size={12} className="text-white" />
+      <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
+        <span className="text-[8px] font-bold text-white tracking-tight">A.O</span>
       </div>
       <div className="bg-[var(--anna-white)] border border-[var(--anna-border)] rounded-2xl rounded-tl-md px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -175,7 +174,7 @@ export function OpsAiChat() {
 
   return (
     <>
-      {/* ── Floating Action Button ── */}
+      {/* ── Floating Action Button (Speech Bubble) ── */}
       <AnimatePresence>
         {!open && (
           <motion.button
@@ -184,10 +183,34 @@ export function OpsAiChat() {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             onClick={() => setOpen(true)}
-            className="fixed z-50 bottom-20 right-4 md:bottom-8 md:right-6 w-14 h-14 rounded-full bg-[var(--anna-sage-dark)] text-white shadow-lg hover:bg-[var(--anna-sage)] transition-colors flex items-center justify-center"
+            className={cn(
+              "fixed z-50 anna-fab-pulse",
+              "bottom-20 right-4",
+              "md:bottom-8 md:right-6"
+            )}
             aria-label="Open Ops AI Assistant"
           >
-            <BarChart3 size={22} />
+            <svg
+              viewBox="0 0 64 72"
+              width="56"
+              height="63"
+              className="drop-shadow-lg"
+            >
+              <path
+                d="M32 4a28 28 0 0 1 28 28a28 28 0 0 1-28 28c-3.2 0-6.3-.5-9.2-1.5L14 68l2.8-12.3A27.9 27.9 0 0 1 4 32A28 28 0 0 1 32 4z"
+                className="fill-[var(--anna-sage)] transition-colors group-hover:fill-[var(--anna-sage-dark)]"
+              />
+              <text
+                x="32"
+                y="36"
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="fill-white"
+                style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-manrope), system-ui, sans-serif", letterSpacing: "-0.02em" }}
+              >
+                A.O
+              </text>
+            </svg>
           </motion.button>
         )}
       </AnimatePresence>
@@ -202,15 +225,15 @@ export function OpsAiChat() {
             transition={{ type: "spring", stiffness: 350, damping: 30 }}
             className={cn(
               "fixed z-50 bg-[var(--anna-white)] shadow-2xl flex flex-col overflow-hidden",
-              "md:bottom-8 md:right-6 md:w-[420px] md:h-[560px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
+              "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
               "inset-0 md:inset-auto rounded-none md:rounded-2xl"
             )}
           >
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--anna-border)] bg-[var(--anna-white)] flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center">
-                  <BarChart3 size={14} className="text-white" />
+                <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-white tracking-tight">A.O</span>
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--anna-slate)]">
@@ -240,7 +263,12 @@ export function OpsAiChat() {
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full px-6 text-center">
                   <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage-light)] flex items-center justify-center mb-4">
-                    <MessageSquare size={22} className="text-[var(--anna-sage-dark)]" />
+                    <svg viewBox="0 0 64 72" width="28" height="32">
+                      <path
+                        d="M32 4a28 28 0 0 1 28 28a28 28 0 0 1-28 28c-3.2 0-6.3-.5-9.2-1.5L14 68l2.8-12.3A27.9 27.9 0 0 1 4 32A28 28 0 0 1 32 4z"
+                        className="fill-[var(--anna-sage-dark)]"
+                      />
+                    </svg>
                   </div>
                   <p className="text-sm font-semibold text-[var(--anna-slate)] mb-1">
                     Ops Intelligence
@@ -256,11 +284,8 @@ export function OpsAiChat() {
                         <button
                           key={chip.label}
                           onClick={() => {
-                            setMessages((prev) => [
-                              ...prev,
-                              { role: "user", content: chip.prompt, timestamp: Date.now() },
-                            ]);
-                            mutation.mutate(chip.prompt);
+                            setInput(chip.prompt);
+                            setTimeout(() => inputRef.current?.focus(), 50);
                           }}
                           className="text-left px-3.5 py-2.5 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] hover:bg-[var(--anna-sage-light)] hover:border-[var(--anna-sage)] transition-all duration-150 group flex items-center gap-2.5"
                         >
@@ -289,17 +314,19 @@ export function OpsAiChat() {
                       >
                         {/* Avatar */}
                         {msg.role === "assistant" && (
-                          <div className="w-7 h-7 rounded-full bg-[var(--anna-sage-dark)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <BarChart3 size={10} className="text-white" />
+                          <div className="w-7 h-7 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-[8px] font-bold text-white tracking-tight">
+                              A.O
+                            </span>
                           </div>
                         )}
 
                         {/* Bubble */}
                         <div
                           className={cn(
-                            "max-w-[320px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+                            "max-w-[280px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
                             msg.role === "user"
-                              ? "bg-[var(--anna-sage-dark)] text-white rounded-2xl rounded-tr-md"
+                              ? "bg-[var(--anna-sage)] text-white rounded-2xl rounded-tr-md"
                               : "bg-[var(--anna-bg)] text-[var(--anna-slate)] rounded-2xl rounded-tl-md border border-[var(--anna-border)]"
                           )}
                         >
@@ -316,10 +343,13 @@ export function OpsAiChat() {
                   {mutation.isError &&
                     messages[messages.length - 1]?.role !== "assistant" && (
                       <div className="flex items-start gap-2.5 px-4">
-                        <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <AlertCircle size={14} className="text-red-500" />
+                        <div className="w-7 h-7 rounded-full bg-[var(--anna-error)]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <AlertCircle
+                            size={14}
+                            className="text-[var(--anna-error)]"
+                          />
                         </div>
-                        <div className="bg-red-50 border border-red-200 rounded-2xl rounded-tl-md px-4 py-2.5 text-sm text-red-600">
+                        <div className="bg-[var(--anna-error)]/5 border border-[var(--anna-error)]/20 rounded-2xl rounded-tl-md px-4 py-2.5 text-sm text-[var(--anna-error)]">
                           Something went wrong. Please try again.
                         </div>
                       </div>
@@ -350,7 +380,7 @@ export function OpsAiChat() {
                   type="submit"
                   size="icon"
                   disabled={!input.trim() || mutation.isPending}
-                  className="h-9 w-9 rounded-xl bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white disabled:opacity-40 flex-shrink-0"
+                  className="h-9 w-9 rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white disabled:opacity-40 flex-shrink-0"
                   aria-label="Send message"
                 >
                   <Send size={16} />
