@@ -296,6 +296,7 @@ model Booking {
   actualEnd        DateTime?
   rating           Int?      // 1–5
   ratingComment    String?
+  completionNotes  String?   // Vendor's work summary, recommendations, feedback (e.g. "Recommend chemical wash next time")
   status           String   @default("assigned") // assigned|accepted|in_progress|completed|cancelled
   dispatchedAt     DateTime @default(now())
   acceptedAt       DateTime?

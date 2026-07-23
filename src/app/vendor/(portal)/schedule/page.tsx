@@ -6,6 +6,7 @@ import { useVendorUser } from "@/app/vendor/(portal)/layout";
 import { VendorSchedule, type VendorScheduleItem, type VendorInfo } from "@/components/vendor/vendor-schedule";
 import { VendorEarnings } from "@/components/vendor/vendor-earnings";
 import { VendorTaskDetail } from "@/components/vendor/vendor-task-detail";
+import { CompleteWorkDialog } from "@/components/vendor/complete-work-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -192,6 +193,12 @@ export default function VendorSchedulePage() {
   const [selectedVendor, setSelectedVendor] = useState<VendorInfo | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
+  // Complete Work dialog state
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completeBookingId, setCompleteBookingId] = useState("");
+  const [completePhotoCount, setCompletePhotoCount] = useState(0);
+  const [completeCategory, setCompleteCategory] = useState("");
+
   // Fetch dashboard stats
   const { data: dashData, isLoading: dashLoading } = useQuery<DashboardResponse>({
     queryKey: ["vendor-dashboard", vendorId],
@@ -205,11 +212,13 @@ export default function VendorSchedulePage() {
 
   // Handle booking action
   const actionMutation = useMutation({
-    mutationFn: async ({ bookingId, action }: { bookingId: string; action: string }) => {
+    mutationFn: async ({ bookingId, action, completionNotes }: { bookingId: string; action: string; completionNotes?: string }) => {
+      const body: Record<string, string> = { action };
+      if (completionNotes) body.completionNotes = completionNotes;
       const res = await fetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Action failed");
       return res.json();
@@ -254,6 +263,32 @@ export default function VendorSchedulePage() {
   const handleCloseDetail = useCallback(() => {
     setDetailOpen(false);
   }, []);
+
+  // Open complete dialog
+  const openCompleteDialog = useCallback(
+    (bookingId: string, photoCount: number, category: string) => {
+      setCompleteBookingId(bookingId);
+      setCompletePhotoCount(photoCount);
+      setCompleteCategory(category);
+      setCompleteDialogOpen(true);
+    },
+    []
+  );
+
+  // Handle complete work submission
+  const handleCompleteSubmit = useCallback(
+    (bookingId: string, completionNotes: string) => {
+      actionMutation.mutate(
+        { bookingId, action: "complete", completionNotes: completionNotes || undefined },
+        {
+          onSuccess: () => {
+            setCompleteDialogOpen(false);
+          },
+        }
+      );
+    },
+    [actionMutation]
+  );
 
   if (!vendorId) return null;
 
@@ -435,6 +470,7 @@ export default function VendorSchedulePage() {
           <VendorSchedule
             vendorId={vendorId}
             onSelectBooking={handleSelectBooking}
+            onRequestComplete={openCompleteDialog}
           />
         </TabsContent>
 
@@ -450,9 +486,28 @@ export default function VendorSchedulePage() {
         vendor={selectedVendor}
         open={detailOpen}
         onClose={handleCloseDetail}
-        onAction={(bookingId, action) => actionMutation.mutate({ bookingId, action })}
+        onAction={(bookingId, action, payload) => {
+          if (action === "complete") {
+            const photoCount = selectedBooking?.verificationPhotos?.length ?? selectedBooking?.verificationPhotoCount ?? 0;
+            openCompleteDialog(bookingId, photoCount, selectedBooking?.category ?? "");
+          } else {
+            actionMutation.mutate({ bookingId, action });
+          }
+        }}
         isActionPending={actionMutation.isPending}
         vendorId={vendorId}
+      />
+
+      {/* Complete Work Dialog */}
+      <CompleteWorkDialog
+        open={completeDialogOpen}
+        onOpenChange={setCompleteDialogOpen}
+        bookingId={completeBookingId}
+        vendorId={vendorId}
+        taskCategory={completeCategory}
+        photoCount={completePhotoCount}
+        onSubmit={handleCompleteSubmit}
+        isSubmitting={actionMutation.isPending}
       />
     </div>
   );

@@ -35,6 +35,7 @@ export interface VendorScheduleItem {
   cancelledAt?: string | null;
   rating?: number | null;
   ratingComment?: string | null;
+  completionNotes?: string | null;
   category: ServiceCategory;
   instructions?: string | null;
   amountCents: number;
@@ -61,6 +62,7 @@ interface VendorScheduleResponse {
 interface VendorScheduleProps {
   vendorId: string;
   onSelectBooking: (booking: VendorScheduleItem, vendor: VendorInfo) => void;
+  onRequestComplete?: (bookingId: string, photoCount: number, category: string) => void;
 }
 
 // ─── Fetcher ─────────────────────────────────────────────
@@ -255,7 +257,7 @@ function ScheduleSkeleton() {
 
 // ─── Main Component ──────────────────────────────────────
 
-export function VendorSchedule({ vendorId, onSelectBooking }: VendorScheduleProps) {
+export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }: VendorScheduleProps) {
   const [activeTab, setActiveTab] = useState<BookingTab>("upcoming");
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -270,14 +272,18 @@ export function VendorSchedule({ vendorId, onSelectBooking }: VendorScheduleProp
     mutationFn: async ({
       bookingId,
       action,
+      completionNotes,
     }: {
       bookingId: string;
       action: string;
+      completionNotes?: string;
     }) => {
+      const body: Record<string, string> = { action };
+      if (completionNotes) body.completionNotes = completionNotes;
       const res = await fetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Status update failed");
       return res.json();
@@ -371,7 +377,13 @@ export function VendorSchedule({ vendorId, onSelectBooking }: VendorScheduleProp
                   key={item.id}
                   item={item}
                   vendor={vendor!}
-                  onAction={(bid, a) => updateMutation.mutate({ bookingId: bid, action: a })}
+                  onAction={(bid, a) => {
+                    if (a === "complete" && onRequestComplete) {
+                      onRequestComplete(bid, item.verificationPhotoCount, item.category);
+                    } else {
+                      updateMutation.mutate({ bookingId: bid, action: a });
+                    }
+                  }}
                   onSelect={() => onSelectBooking(item, vendor!)}
                   isPending={updateMutation.isPending}
                 />
@@ -390,7 +402,13 @@ export function VendorSchedule({ vendorId, onSelectBooking }: VendorScheduleProp
                   key={item.id}
                   item={item}
                   vendor={vendor!}
-                  onAction={(bid, a) => updateMutation.mutate({ bookingId: bid, action: a })}
+                  onAction={(bid, a) => {
+                    if (a === "complete" && onRequestComplete) {
+                      onRequestComplete(bid, item.verificationPhotoCount, item.category);
+                    } else {
+                      updateMutation.mutate({ bookingId: bid, action: a });
+                    }
+                  }}
                   onSelect={() => onSelectBooking(item, vendor!)}
                   isPending={updateMutation.isPending}
                 />

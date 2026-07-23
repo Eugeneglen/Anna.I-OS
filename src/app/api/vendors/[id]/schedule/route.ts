@@ -98,6 +98,7 @@ export async function GET(
       cancelledAt: b.cancelledAt,
       rating: b.rating,
       ratingComment: b.ratingComment,
+      completionNotes: b.completionNotes,
       category: b.task.category,
       instructions: b.task.instructions,
       amountCents: b.task.amountCents,

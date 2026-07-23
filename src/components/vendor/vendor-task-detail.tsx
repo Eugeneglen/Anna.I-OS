@@ -26,6 +26,7 @@ import {
   ThumbsUp,
   CalendarDays,
   ImageIcon,
+  FileText,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -35,7 +36,7 @@ interface VendorTaskDetailProps {
   vendor: VendorInfo | null;
   open: boolean;
   onClose: () => void;
-  onAction: (bookingId: string, action: string) => void;
+  onAction: (bookingId: string, action: string, payload?: string) => void;
   isActionPending?: boolean;
   vendorId: string;
 }
@@ -286,6 +287,21 @@ function VendorTaskDetailContent({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Completion Notes (shown for completed bookings) */}
+      {booking.completionNotes && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            <FileText size={12} className="inline mr-1" />
+            Work Summary
+          </h4>
+          <div className="bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-bg)] rounded-2xl p-4 border border-[var(--anna-sage)]/15">
+            <p className="text-sm text-[var(--anna-slate)] leading-relaxed whitespace-pre-wrap">
+              {booking.completionNotes}
+            </p>
           </div>
         </div>
       )}

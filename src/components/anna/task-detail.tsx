@@ -27,7 +27,7 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2 } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -504,6 +504,36 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Completion Notes — shown for COMPLETED, VERIFIED, ESCROW_RELEASED */}
+      {booking?.completionNotes && (
+        task.status === "COMPLETED" || task.status === "VERIFIED" || task.status === "ESCROW_RELEASED"
+      ) && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            <FileText size={12} className="inline mr-1" />
+            Vendor Work Notes
+          </h4>
+          <div className="rounded-2xl border border-[var(--anna-sage)]/15 bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-bg)] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              {booking.vendor && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)]/15 flex items-center justify-center">
+                    <User size={10} className="text-[var(--anna-sage-dark)]" />
+                  </div>
+                  <span className="text-[10px] font-medium text-[var(--anna-slate)]">{booking.vendor.name}</span>
+                </div>
+              )}
+              <span className="text-[10px] text-[var(--anna-muted)]">
+                {booking.completedAt ? formatDate(booking.completedAt) : ""}
+              </span>
+            </div>
+            <p className="text-sm text-[var(--anna-slate)] leading-relaxed whitespace-pre-wrap">
+              {booking.completionNotes}
+            </p>
           </div>
         </div>
       )}

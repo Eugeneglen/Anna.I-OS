@@ -104,6 +104,7 @@ export interface Booking {
   actualEnd?: string | null;
   rating?: number | null;
   ratingComment?: string | null;
+  completionNotes?: string | null;
   status: string;
   dispatchedAt: string;
   acceptedAt?: string | null;

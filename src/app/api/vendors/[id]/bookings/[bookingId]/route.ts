@@ -14,6 +14,7 @@ const ACTION_STATUS_MAP: Record<string, string> = {
 
 const patchVendorBookingSchema = z.object({
   action: z.enum(["accept", "start", "complete", "reject"]),
+  completionNotes: z.string().max(1000).optional(),
 })
 
 export async function PATCH(
@@ -33,7 +34,7 @@ export async function PATCH(
       )
     }
 
-    const { action } = parsed.data
+    const { action, completionNotes } = parsed.data
     const newStatus = ACTION_STATUS_MAP[action]
 
     // Fetch booking with task
@@ -78,6 +79,9 @@ export async function PATCH(
     if (action === "complete") {
       updateData.actualEnd = now
       updateData.completedAt = now
+      if (completionNotes) {
+        updateData.completionNotes = completionNotes
+      }
     }
 
     if (action === "reject") {
