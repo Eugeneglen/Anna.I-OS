@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
-import { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,6 +11,11 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(monthStart.getTime() - 1);
 
     // Run all independent queries in parallel
     const [
@@ -27,6 +31,10 @@ export async function GET(req: NextRequest) {
       vendorPerformance,
       recentTasks,
       subscriptionsByTier,
+      tasksLast30Days,
+      bookingsLast30Days,
+      tasksPrevMonthCount,
+      tasksPrevMonth,
     ] = await Promise.all([
       // 1. Total households
       db.household.count(),
@@ -105,6 +113,32 @@ export async function GET(req: NextRequest) {
         where: { status: "ACTIVE" },
         _count: { tier: true },
       }),
+
+      // 13. Tasks created in last 30 days (for daily chart)
+      db.task.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { createdAt: true, status: true, amountCents: true, category: true },
+      }),
+
+      // 14. Bookings in last 30 days (for vendor utilization chart)
+      db.booking.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { vendorId: true, status: true, createdAt: true, category: true },
+      }),
+
+      // 15. Tasks previous month (for KPI comparison)
+      db.task.count({
+        where: { createdAt: { gte: prevMonthStart, lt: monthStart } },
+      }),
+
+      // 16. Revenue previous month
+      db.task.findMany({
+        where: {
+          createdAt: { gte: prevMonthStart, lt: monthStart },
+          status: { in: ["COMPLETED", "VERIFIED", "ESCROW_RELEASED"] },
+        },
+        select: { amountCents: true },
+      }),
     ]);
 
     // Derive metrics
@@ -163,15 +197,64 @@ export async function GET(req: NextRequest) {
           )
       : {};
 
+    // ── CHART DATA: Daily trend (last 30 days) ──
+    const dailyMap = new Map<string, { date: string; tasksCreated: number; revenueCents: number; tasksCompleted: number }>();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const key = d.toISOString().slice(0, 10);
+      dailyMap.set(key, { date: key, tasksCreated: 0, revenueCents: 0, tasksCompleted: 0 });
+    }
+    for (const t of tasksLast30Days) {
+      const key = t.createdAt.toISOString().slice(0, 10);
+      const entry = dailyMap.get(key);
+      if (entry) {
+        entry.tasksCreated++;
+        if (t.status === "COMPLETED" || t.status === "VERIFIED" || t.status === "ESCROW_RELEASED") {
+          entry.revenueCents += t.amountCents || 0;
+          entry.tasksCompleted++;
+        }
+      }
+    }
+    const dailyTrend = Array.from(dailyMap.values());
+
+    // ── CHART DATA: Vendor utilization (last 30 days) ──
+    const vendorUtilMap = new Map<string, { vendorId: string; vendorName: string; total: number; completed: number; inProgress: number; cancelled: number }>();
+    for (const b of bookingsLast30Days) {
+      const entry = vendorUtilMap.get(b.vendorId) || { vendorId: b.vendorId, vendorName: "", total: 0, completed: 0, inProgress: 0, cancelled: 0 };
+      entry.total++;
+      if (b.status === "completed") entry.completed++;
+      else if (b.status === "in_progress") entry.inProgress++;
+      else if (b.status === "cancelled") entry.cancelled++;
+      vendorUtilMap.set(b.vendorId, entry);
+    }
+    const vendorUtilization = Array.from(vendorUtilMap.values()).sort((a, b) => b.total - a.total);
+    const utilVendorIds = vendorUtilization.map((v) => v.vendorId);
+    if (utilVendorIds.length) {
+      const utilNames = Object.fromEntries(
+        (await db.vendor.findMany({ where: { id: { in: utilVendorIds } }, select: { id: true, name: true } }))
+          .map((v) => [v.id, v.name])
+      );
+      for (const v of vendorUtilization) v.vendorName = utilNames[v.vendorId] || "Unknown";
+    }
+
+    // ── KPI COMPARISON: previous month ──
+    const revenuePrevMonth = tasksPrevMonth.reduce((s, t) => s + (t.amountCents || 0), 0);
+    const tasksChange = tasksPrevMonthCount > 0 ? ((tasksThisMonth - tasksPrevMonthCount) / tasksPrevMonthCount) * 100 : null;
+    const revenueChange = revenuePrevMonth > 0 ? ((revenueThisMonth - revenuePrevMonth) / revenuePrevMonth) * 100 : null;
+
     return NextResponse.json({
       kpis: {
         householdCount,
         activeVendorCount,
         tasksThisMonth,
+        tasksThisMonthChange: tasksChange !== null ? parseFloat(tasksChange.toFixed(1)) : null,
         completionRate: parseFloat(completionRate),
         avgRating: parseFloat(avgRating),
         escrowHeldCents: escrowHeld._sum.amountCents || 0,
         revenueThisMonthCents: revenueThisMonth,
+        revenueThisMonthChange: revenueChange !== null ? parseFloat(revenueChange.toFixed(1)) : null,
         activeAnomalyCount: activeAnomalies.length,
       },
       tasksByStatus: tasksByStatus.map((s) => ({
@@ -195,9 +278,13 @@ export async function GET(req: NextRequest) {
       recentTasks,
       anomalies: activeAnomalies,
       anomalySeverityCounts,
+      charts: {
+        dailyTrend,
+        vendorUtilization,
+      },
     });
   } catch (error) {
-    console.error("[/api/ops/analytics GET]", error);
+    console.error("[/api/ops/analytics GET]", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

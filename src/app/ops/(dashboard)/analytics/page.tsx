@@ -12,11 +12,13 @@ import {
   Shield,
   DollarSign,
   AlertTriangle,
-  ArrowUpRight,
-  Activity,
-  Trophy,
+ ArrowUpRight,
+ Activity,
+ Trophy,
+ ArrowDownRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OpsAnalyticsCharts } from "@/components/ops/ops-analytics-charts";
 
 function formatCents(cents: number) {
   return `$${(cents / 100).toLocaleString("en-SG", { minimumFractionDigits: 2 })}`;
@@ -52,10 +54,12 @@ interface KpiData {
   householdCount: number;
   activeVendorCount: number;
   tasksThisMonth: number;
+  tasksThisMonthChange: number | null;
   completionRate: number;
   avgRating: number;
   escrowHeldCents: number;
   revenueThisMonthCents: number;
+  revenueThisMonthChange: number | null;
   activeAnomalyCount: number;
 }
 
@@ -105,10 +109,13 @@ function KpiCard({
                   : "text-[var(--anna-muted)]"
             )}
           >
-            <ArrowUpRight
-              size={10}
-              className={trend === "down" ? "rotate-90" : ""}
-            />
+            {trend === "up" ? (
+              <ArrowUpRight size={10} />
+            ) : trend === "down" ? (
+              <ArrowDownRight size={10} />
+            ) : (
+              <Activity size={10} className="opacity-50" />
+            )}
           </span>
         )}
       </div>
@@ -199,6 +206,14 @@ export default function AnalyticsPage() {
           label="Tasks This Month"
           value={kpis.tasksThisMonth || 0}
           sub={`${formatCents(kpis.revenueThisMonthCents || 0)} GMV`}
+          trend={kpis.tasksThisMonthChange !== null ? (kpis.tasksThisMonthChange >= 0 ? "up" : "down") : undefined}
+        />
+        <KpiCard
+          icon={DollarSign}
+          label="Revenue (Month)"
+          value={formatCents(kpis.revenueThisMonthCents || 0)}
+          sub={kpis.revenueThisMonthChange !== null ? `${kpis.revenueThisMonthChange >= 0 ? "+" : ""}${Math.abs(kpis.revenueThisMonthChange).toFixed(1)}% vs last month` : "completed tasks"}
+          trend={kpis.revenueThisMonthChange !== null ? (kpis.revenueThisMonthChange >= 0 ? "up" : "down") : undefined}
         />
         <KpiCard
           icon={TrendingUp}
@@ -215,12 +230,6 @@ export default function AnalyticsPage() {
           icon={Shield}
           label="Escrow Held"
           value={formatCents(kpis.escrowHeldCents || 0)}
-        />
-        <KpiCard
-          icon={DollarSign}
-          label="Revenue (Month)"
-          value={formatCents(kpis.revenueThisMonthCents || 0)}
-          sub="completed tasks"
         />
         <KpiCard
           icon={AlertTriangle}
@@ -242,7 +251,10 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      {/* Two Column Layout */}
+      {/* Analytics Charts */}
+      <OpsAnalyticsCharts charts={data?.charts || { dailyTrend: [], vendorUtilization: [] }} />
+
+      {/* Two Column Layout */
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Task Status Distribution */}
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-5">
