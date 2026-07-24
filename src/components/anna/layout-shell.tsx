@@ -179,7 +179,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             {/* Logout button — hidden on mobile (moved to Settings page) */}
             <button
               onClick={() => setLogoutDialogOpen(true)}
-              className="hidden md:flex p-2 rounded-xl hover:bg-red-50 hover:text-red-500 text-[var(--anna-slate-light)] transition-colors"
+              className="hidden md:flex p-2 rounded-xl hover:bg-[var(--anna-error)]/10 hover:text-[var(--anna-error)] text-[var(--anna-slate-light)] transition-colors"
               title="Sign out"
             >
               <LogOut size={18} />

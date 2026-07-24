@@ -529,7 +529,7 @@ export function SettingsPanel() {
                   sub.status === "ACTIVE"
                     ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)]"
                     : sub.status === "PAST_DUE"
-                    ? "bg-amber-50 text-amber-700"
+                    ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)]"
                     : "bg-[var(--anna-error)]/15 text-[var(--anna-error)]"
                 }`}
               >
@@ -560,15 +560,15 @@ export function SettingsPanel() {
 
             {/* Upgrade prompt for HOME tier */}
             {sub.tier === "HOME" && sub.status === "ACTIVE" && (
-              <div className="bg-gradient-to-r from-purple-50 to-[var(--anna-sage-light)] rounded-xl p-3 mt-2">
+              <div className="bg-[var(--anna-sage-light)] rounded-xl p-3 mt-2 border border-[var(--anna-sage)]/20">
                 <div className="flex items-start gap-2">
-                  <ArrowUpCircle size={18} className="text-purple-600 shrink-0 mt-0.5" />
+                  <ArrowUpCircle size={18} className="text-[var(--anna-sage-dark)] shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-purple-700">Upgrade to Anna.I Care</p>
+                    <p className="text-xs font-semibold text-[var(--anna-slate)]">Upgrade to Anna.I Care</p>
                     <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">
                       Premium eldercare companion bundles, priority support, and dedicated coordinator access.
                     </p>
-                    <p className="text-xs font-data font-semibold text-purple-700 mt-1">
+                    <p className="text-xs font-data font-semibold text-[var(--anna-slate)] mt-1">
                       SGD $68/mo
                     </p>
                   </div>
@@ -582,11 +582,11 @@ export function SettingsPanel() {
 
             {/* CARE tier badge */}
             {sub.tier === "CARE" && sub.status === "ACTIVE" && (
-              <div className="bg-purple-50 rounded-xl p-3 mt-2">
+              <div className="bg-[var(--anna-sage-light)] rounded-xl p-3 mt-2 border border-[var(--anna-sage)]/20">
                 <div className="flex items-center gap-2">
-                  <Crown size={16} className="text-purple-600" />
+                  <Crown size={16} className="text-[var(--anna-sage-dark)]" />
                   <div>
-                    <p className="text-xs font-semibold text-purple-700">Care Tier Active</p>
+                    <p className="text-xs font-semibold text-[var(--anna-slate)]">Care Tier Active</p>
                     <p className="text-[10px] text-[var(--anna-muted)]">
                       Eldercare companion bundles + priority support
                     </p>
@@ -597,11 +597,11 @@ export function SettingsPanel() {
 
             {/* CANCELLED / PAST_DUE states */}
             {sub.status === "CANCELLED" && (
-              <div className="bg-red-50 rounded-xl p-3 mt-2">
+              <div className="bg-[var(--anna-error)]/10 rounded-xl p-3 mt-2 border border-[var(--anna-error)]/20">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-red-500" />
+                  <AlertTriangle size={16} className="text-[var(--anna-error)]" />
                   <div>
-                    <p className="text-xs font-semibold text-red-700">Subscription Cancelled</p>
+                    <p className="text-xs font-semibold text-[var(--anna-error)]">Subscription Cancelled</p>
                     <p className="text-[10px] text-[var(--anna-muted)]">
                       Your subscription has been cancelled. Contact Ops to reactivate.
                     </p>
@@ -610,11 +610,11 @@ export function SettingsPanel() {
               </div>
             )}
             {sub.status === "PAST_DUE" && (
-              <div className="bg-amber-50 rounded-xl p-3 mt-2">
+              <div className="bg-[var(--anna-warning)]/10 rounded-xl p-3 mt-2 border border-[var(--anna-warning)]/20">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-amber-600" />
+                  <AlertTriangle size={16} className="text-[var(--anna-warning)]" />
                   <div>
-                    <p className="text-xs font-semibold text-amber-700">Payment Overdue</p>
+                    <p className="text-xs font-semibold text-[var(--anna-warning)]">Payment Overdue</p>
                     <p className="text-[10px] text-[var(--anna-muted)]">
                       Please update your payment method to continue using Anna.I services.
                     </p>
@@ -629,7 +629,7 @@ export function SettingsPanel() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs rounded-lg border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  className="h-8 text-xs rounded-lg border-[var(--anna-error)]/30 text-[var(--anna-error)] hover:bg-[var(--anna-error)]/10"
                   onClick={() => setCancelSubDialog(true)}
                 >
                   Cancel Subscription
@@ -816,7 +816,7 @@ export function SettingsPanel() {
       {/* ── Sign Out (mobile) ── */}
       <button
         onClick={() => setLogoutDialogOpen(true)}
-        className="w-full mt-6 flex items-center justify-center gap-2 py-3 rounded-2xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 hover:border-red-300 transition-colors md:hidden"
+        className="w-full mt-6 flex items-center justify-center gap-2 py-3 rounded-2xl border border-[var(--anna-error)]/30 text-[var(--anna-error)] text-sm font-medium hover:bg-[var(--anna-error)]/10 transition-colors md:hidden"
       >
         <LogOut size={16} />
         Sign out
