@@ -223,6 +223,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
         <QuoteBuilder
           jobType={selectedJobType}
           onQuoteChange={handleQuoteChange}
+          quotationId={quotationId}
         />
       )}
 

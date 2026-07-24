@@ -268,6 +268,7 @@ export function TaskCreator() {
             <QuoteBuilder
               jobType={selectedJobType}
               onQuoteChange={handleQuoteChange}
+              quotationId={quotationId}
             />
           )}
 

@@ -16,11 +16,14 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface QuoteBuilderProps {
   jobType: ServiceJobType;
   onQuoteChange: (result: QuoteResult | null, fieldValues: Record<string, number>, selectedAddOns: string[]) => void;
+  quotationId?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -101,7 +104,7 @@ function DynamicField({
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
-export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
+export function QuoteBuilder({ jobType, onQuoteChange, quotationId }: QuoteBuilderProps) {
   // Initialize field values from defaults
   const [fieldValues, setFieldValues] = useState<Record<string, number>>(() => {
     const defaults: Record<string, number> = {};
@@ -119,6 +122,14 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [customCents, setCustomCents] = useState(0);
+
+  // AI Explanation state
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState(false);
+
+  // Debounce timer for auto-explain
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   // Update field value
   const handleFieldChange = useCallback((key: string, value: number) => {
@@ -147,7 +158,6 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
   // Notify parent of quote changes (include custom amount when active)
   useEffect(() => {
     if (useCustomAmount) {
-      // When custom amount is active, override totalCents with the custom value
       const customResult: QuoteResult = {
         ...quoteResult,
         totalCents: customCents,
@@ -157,6 +167,71 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
       onQuoteChange(quoteResult, fieldValues, selectedAddOns);
     }
   }, [quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents, onQuoteChange]);
+
+  // Auto-explain with debounce when quote changes
+  useEffect(() => {
+    // Only auto-explain once the user has interacted (not on initial render)
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    const timer = setTimeout(() => {
+      generateExplanation();
+    }, 1500); // 1.5s debounce
+
+    setDebounceTimer(timer);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [quoteResult.totalCents, selectedAddOns.length, fieldValues, jobType, quotationId]);
+
+  // Generate AI explanation
+  async function generateExplanation() {
+    if (explanationLoading) return;
+
+    setExplanationLoading(true);
+    setExplanationError(false);
+
+    try {
+      const payload: Record<string, unknown> = {
+        jobTypeName: jobType.name,
+        category: jobType.category,
+        totalCents: quoteResult.totalCents,
+        breakdown: quoteResult.breakdown,
+        fieldValues,
+        selectedAddOns,
+        addOns: jobType.addOns.map((a) => ({
+          key: a.key,
+          label: a.label,
+          priceCents: a.priceCents,
+        })),
+      };
+
+      // Include quotationId if we have one (for caching)
+      if (quotationId) {
+        payload.quotationId = quotationId;
+      }
+
+      const res = await fetch("/api/quote/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.explanation) {
+        setExplanation(data.explanation);
+      } else {
+        setExplanationError(true);
+      }
+    } catch {
+      setExplanationError(true);
+    } finally {
+      setExplanationLoading(false);
+    }
+  }
 
   const displayCents = useCustomAmount ? customCents : quoteResult.totalCents;
 
@@ -344,6 +419,77 @@ export function QuoteBuilder({ jobType, onQuoteChange }: QuoteBuilderProps) {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* ── AI Explanation Section ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+            <Sparkles size={12} className="inline mr-1" />
+            Anna.I Says
+          </h4>
+          {!explanationLoading && (
+            <button
+              onClick={generateExplanation}
+              className="text-[10px] text-[var(--anna-sage-dark)] hover:underline transition-colors"
+            >
+              Refresh
+            </button>
+          )}
+        </div>
+        <div className="bg-[var(--anna-white)] rounded-2xl p-4 border border-[var(--anna-border)]">
+          {explanationLoading ? (
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center shrink-0 mt-0.5">
+                <Loader2 size={12} className="text-[var(--anna-sage-dark)] animate-spin" />
+              </div>
+              <div className="space-y-2 flex-1">
+                <div className="h-3 bg-[var(--anna-bg)] rounded-full w-full animate-pulse" />
+                <div className="h-3 bg-[var(--anna-bg)] rounded-full w-4/5 animate-pulse" />
+                <div className="h-3 bg-[var(--anna-bg)] rounded-full w-3/5 animate-pulse" />
+              </div>
+            </div>
+          ) : explanationError && !explanation ? (
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-red-50 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-[10px] font-bold text-red-400">!</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-[var(--anna-muted)]">
+                  Could not generate explanation right now.
+                </p>
+                <button
+                  onClick={generateExplanation}
+                  className="text-[10px] text-[var(--anna-sage-dark)] hover:underline mt-1"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          ) : explanation ? (
+            <div className="flex items-start gap-3">
+              <img
+                src="/brain-icon.png"
+                alt="Anna"
+                className="w-6 h-6 rounded-full shrink-0 mt-0.5"
+              />
+              <div className="text-sm text-[var(--anna-slate)] leading-relaxed whitespace-pre-line">
+                {explanation}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3">
+              <img
+                src="/brain-icon.png"
+                alt="Anna"
+                className="w-6 h-6 rounded-full shrink-0 mt-0.5 opacity-40"
+              />
+              <p className="text-xs text-[var(--anna-muted)] italic">
+                Anna.I will explain your quotation once you adjust the details above...
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -89,6 +89,17 @@ export async function POST(request: Request) {
       },
     });
 
+    // Fire-and-forget: generate AI explanation (Phase 4B)
+    generateExplanationInBackground(
+      quotation.id,
+      jobType.name,
+      jobType.category,
+      result.totalCents,
+      result.breakdown,
+      addOns,
+      selectedAddOns
+    ).catch(() => {});
+
     return NextResponse.json(
       {
         quotation: {
@@ -104,5 +115,58 @@ export async function POST(request: Request) {
       { error: "Failed to create quotation" },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Fire-and-forget AI explanation generation.
+ * Runs in the background after quotation creation.
+ */
+async function generateExplanationInBackground(
+  quotationId: string,
+  jobTypeName: string,
+  category: string,
+  totalCents: number,
+  breakdown: Array<{ label: string; amountCents: number }>,
+  addOns: unknown[],
+  selectedAddOns: string[]
+) {
+  try {
+    const ZAI = (await import("z-ai-web-dev-sdk")).default;
+    const zai = await ZAI.create();
+
+    const breakdownText = breakdown
+      .map((item) => `${item.label}: SGD ${(item.amountCents / 100).toFixed(2)}`)
+      .join("\n");
+
+    const parsedAddOns = addOns as Array<{ key: string; label: string; priceCents: number }>;
+    const addOnText = parsedAddOns
+      .filter((a) => selectedAddOns.includes(a.key))
+      .map((a) => `+ ${a.label}: SGD ${(a.priceCents / 100).toFixed(2)}`)
+      .join("\n");
+
+    const completion = await zai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `You are Anna.I, Singapore's home services AI. Explain this quotation to a homeowner in 2-3 concise sentences. Be specific about what's included and why it costs what it does. Use SGD format. Warm, knowledgeable tone. No upselling.`,
+        },
+        {
+          role: "user",
+          content: `Service: ${jobTypeName} (${category})\nTotal: SGD ${(totalCents / 100).toFixed(2)}\n\nBreakdown:\n${breakdownText}${addOnText ? `\n\nAdd-ons:\n${addOnText}` : ""}`,
+        },
+      ],
+      thinking: { type: "disabled" },
+    });
+
+    const explanation = completion.choices[0]?.message?.content;
+    if (explanation) {
+      await db.quotation.update({
+        where: { id: quotationId },
+        data: { aiExplanation: explanation },
+      });
+    }
+  } catch (err) {
+    console.warn("[POST /api/quote] Background explanation failed:", err);
   }
 }
