@@ -9,6 +9,8 @@ import { getOpsSession } from "@/lib/ops-auth";
 // socket.io client and relays events to connected dashboards.
 // ============================================================
 
+const OPS_EVENTS_URL = process.env.OPS_EVENTS_URL || "http://localhost:3004";
+
 let opsEventsSocket: any = null;
 let socketConnecting = false;
 
@@ -20,7 +22,7 @@ async function getOpsEventsSocket() {
   socketConnecting = true;
   try {
     const { io } = await import("socket.io-client");
-    opsEventsSocket = io("http://localhost:3004", {
+    opsEventsSocket = io(OPS_EVENTS_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
