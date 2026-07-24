@@ -38,16 +38,12 @@ const stateConfig: Record<
 interface EscrowBadgeProps {
   state: EscrowState;
   amountCents?: number;
-  commissionCents?: number;
-  vendorPayoutCents?: number;
   showBreakdown?: boolean;
 }
 
 export function EscrowBadge({
   state,
   amountCents,
-  commissionCents,
-  vendorPayoutCents,
   showBreakdown = false,
 }: EscrowBadgeProps) {
   const config = stateConfig[state];
@@ -70,24 +66,6 @@ export function EscrowBadge({
               {formatSgd(amountCents)}
             </span>
           </div>
-          {commissionCents !== undefined && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[var(--anna-muted)]">Commission (10%)</span>
-              <span className="font-data font-medium text-[var(--anna-muted)]">
-                -{formatSgd(commissionCents)}
-              </span>
-            </div>
-          )}
-          {vendorPayoutCents !== undefined && (
-            <div className="flex items-center justify-between text-xs border-t border-[var(--anna-border)] pt-1">
-              <span className="text-[var(--anna-slate)] font-medium">
-                Vendor Payout
-              </span>
-              <span className="font-data font-semibold text-[var(--anna-success)]">
-                {formatSgd(vendorPayoutCents)}
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>

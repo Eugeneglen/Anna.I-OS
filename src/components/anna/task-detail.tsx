@@ -915,8 +915,6 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             <EscrowBadge
               state={escrow.state}
               amountCents={escrow.amountCents}
-              commissionCents={escrow.commissionCents}
-              vendorPayoutCents={escrow.vendorPayoutCents}
               showBreakdown
             />
             {escrow.state === "HELD" &&

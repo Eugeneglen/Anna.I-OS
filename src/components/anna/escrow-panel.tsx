@@ -101,28 +101,11 @@ function EscrowCard({ item }: { item: EscrowItem }) {
         </p>
       )}
 
-      {/* Amount breakdown */}
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-[10px] text-[var(--anna-muted)] mb-0.5">Amount</p>
-          <p className="font-data text-sm font-bold text-[var(--anna-slate)]">
-            {formatSgd(escrow.amountCents)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[var(--anna-muted)] mb-0.5">
-            Commission ({escrow.commissionRate}%)
-          </p>
-          <p className="font-data text-sm font-medium text-[var(--anna-muted)]">
-            {formatSgd(escrow.commissionCents)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[var(--anna-muted)] mb-0.5">Vendor Payout</p>
-          <p className="font-data text-sm font-medium text-[var(--anna-sage-dark)]">
-            {formatSgd(escrow.vendorPayoutCents)}
-          </p>
-        </div>
+      {/* Amount */}
+      <div>
+        <p className="font-data text-sm font-bold text-[var(--anna-slate)]">
+          {formatSgd(escrow.amountCents)}
+        </p>
       </div>
 
       {/* Footer: dates + state badge */}
@@ -232,8 +215,9 @@ export function EscrowPanel() {
   // Summary stats
   const totalHeld = groups.HELD.reduce((s, i) => s + i.escrow.amountCents, 0);
   const totalReleased = groups.RELEASED.reduce((s, i) => s + i.escrow.amountCents, 0);
-  const totalCommission = [...groups.RELEASED, ...groups.HELD].reduce(
-    (s, i) => s + i.escrow.commissionCents,
+  // Total amount spent by household (sum of all escrow amounts = what they paid)
+  const totalSpent = [...groups.RELEASED, ...groups.HELD, ...groups.REFUNDED].reduce(
+    (s, i) => s + i.escrow.amountCents,
     0
   );
   const disputedCount = groups.DISPUTED.length;
@@ -273,11 +257,11 @@ export function EscrowPanel() {
           sub={`${groups.RELEASED.length} transaction${groups.RELEASED.length !== 1 ? "s" : ""}`}
         />
         <SummaryStat
-          icon={Landmark}
-          iconColor="text-[var(--anna-sage-dark)]"
-          label="Total Commission"
-          value={formatSgd(totalCommission)}
-          sub="Platform earnings"
+          icon={ArrowUpCircle}
+          iconColor="text-[var(--anna-slate-light)]"
+          label="Total Spent"
+          value={formatSgd(totalSpent)}
+          sub="All-time household spending"
         />
         <SummaryStat
           icon={AlertTriangle}
