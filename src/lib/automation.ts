@@ -20,7 +20,7 @@ import {
   NotificationStatus,
   RecipientType,
 } from "@prisma/client"
-import { AUTONOMY_LEVEL_NAMES } from "./constants"
+import { AUTONOMY_LEVEL_NAMES, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES } from "./constants"
 import { autoSelectVendor } from "./routing"
 import { triggerAnomalyDetection } from "./notify"
 
@@ -105,11 +105,13 @@ export async function checkAutoMatch(
       })
 
       // Update task status → MATCHING (NOT DISPATCHED)
+      const acceptTimeout = new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000)
       const updatedTask = await tx.task.update({
         where: { id: taskId },
         data: {
           status: TaskStatus.MATCHING,
           dispatchedAt: now,
+          acceptTimeoutAt: acceptTimeout,
           metadata: {
             autoMatched: true,
             matchAttempts: 1,

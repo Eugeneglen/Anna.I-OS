@@ -352,10 +352,12 @@ export async function PATCH(
               },
             })
 
-            // Update task metadata
+            // Update task metadata + reset acceptance timeout
+            const newAcceptTimeout = new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000)
             await db.task.update({
               where: { id: task.id },
               data: {
+                acceptTimeoutAt: newAcceptTimeout,
                 metadata: {
                   ...meta,
                   matchAttempts: matchAttempts + 1,
@@ -387,6 +389,7 @@ export async function PATCH(
             await db.task.update({
               where: { id: task.id },
               data: {
+                acceptTimeoutAt: null,
                 metadata: {
                   ...meta,
                   matchAttempts: matchAttempts + 1,
@@ -418,6 +421,7 @@ export async function PATCH(
         await db.task.update({
           where: { id: task.id },
           data: {
+            acceptTimeoutAt: null,
             metadata: {
               ...meta,
               matchAttempts,

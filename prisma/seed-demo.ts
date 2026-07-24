@@ -442,11 +442,12 @@ async function _main() {
     update: {},
     create: {
       id: IDS.tasks.dispatchedLaundry,
-      householdId: household2.id, category: 'LAUNDRY', status: 'MATCHING',
+      householdId: household2.id, category: 'LAUNDRY', status: 'ACCEPTED',
       instructions: 'Wash and fold. Separate whites and colours.',
       instructionsSource: 'new', amountCents: 4500,
       createdAt: new Date(Date.now() - 2*60*60*1000),
       dispatchedAt: new Date(Date.now() - 1.5*60*60*1000),
+      acceptedAt: new Date(Date.now() - 1*60*60*1000),
     },
   })
 
@@ -468,7 +469,7 @@ async function _main() {
     where: { id: 'demo-escrow-2' },
     update: {},
     create: {
-      id: 'demo-escrow-2', taskId: dispatchedTask.id,
+      id: 'demo-escrow-2', taskId: dispatchedTask.id, bookingId: IDS.bookings.dispatchedLaundry,
       amountCents: 4500, state: 'HELD', commissionRate: 10.0, commissionCents: 450, vendorPayoutCents: 4050,
     },
   })
@@ -535,7 +536,7 @@ async function _main() {
   console.log('')
   console.log('=== SEED COMPLETE ===')
   console.log(`Households: 3 | Members: 4 | Vendors: 5`)
-  console.log(`Tasks: 9 (1 verified, 1 dispatched, 7 created)`)
+  console.log(`Tasks: 9 (1 verified, 1 accepted, 7 created)`)
   console.log(`Autonomy thresholds: ${Object.keys(cyclesByCategory).length * 5} (${Object.keys(cyclesByCategory).length} categories × 5 levels)`)
   console.log(`Subscriptions: 3 (all Home tier)`)
 }

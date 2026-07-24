@@ -5,7 +5,7 @@ import { TaskStatus, VendorStatus, NotificationChannel, NotificationEventType, N
 import { autoSelectVendor } from "@/lib/routing"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged } from "@/lib/events"
-import { MAX_MATCH_ATTEMPTS } from "@/lib/constants"
+import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 
 const matchSchema = z.object({
   vendorId: z.string().min(1).optional(),
@@ -175,11 +175,13 @@ export async function POST(
 
       // Update task status → MATCHING
       const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+      const acceptTimeout = new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000)
       const updatedTask = await tx.task.update({
         where: { id },
         data: {
           status: TaskStatus.MATCHING,
           dispatchedAt: now,
+          acceptTimeoutAt: acceptTimeout,
           metadata: {
             ...meta,
             matchAttempts,
