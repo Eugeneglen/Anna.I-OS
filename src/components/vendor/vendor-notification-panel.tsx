@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCheck, AlertTriangle, Wallet, Clock, ShieldCheck, XCircle, Sparkles, RotateCcw } from "lucide-react";
+import { Bell, CheckCheck, CheckCircle2, AlertTriangle, Wallet, Clock, ShieldCheck, XCircle, Sparkles, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
