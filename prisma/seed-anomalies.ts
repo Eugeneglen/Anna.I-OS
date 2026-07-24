@@ -22,7 +22,7 @@ async function _main() {
     include: { bookings: { take: 1 } },
   })
 
-  const referenceTask = tasks.find(t => t.status === 'DISPATCHED') || tasks[0]
+  const referenceTask = tasks.find(t => t.status === 'MATCHING') || tasks[0]
   const referenceBooking = referenceTask?.bookings[0]
 
   // Find all household members for notification creation

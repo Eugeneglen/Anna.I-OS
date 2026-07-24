@@ -474,7 +474,7 @@ function PayoutDonutChart({ data }: { data: PayoutData[] }) {
           <div className="flex items-center justify-between text-xs">
             <span className="text-[var(--anna-muted)] flex items-center gap-1">
               <DollarSign size={11} />
-              Platform Commission
+              Total Amount Spent
             </span>
             <span className="font-data font-medium text-[var(--anna-muted)]">{formatSgd(totalCommission)}</span>
           </div>

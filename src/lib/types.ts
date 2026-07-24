@@ -22,7 +22,8 @@ export type TaskStatus =
   | "COMPLETED"
   | "VERIFIED"
   | "ESCROW_RELEASED"
-  | "DISPUTED";
+  | "DISPUTED"
+  | "CANCELLED";
 
 export type EscrowState = "HELD" | "RELEASED" | "DISPUTED" | "REFUNDED";
 
@@ -249,12 +250,13 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   CREATED: "Task Created",
   MATCHING: "Searching for Provider",
   ACCEPTED: "Provider Accepted",
-  SCHEDULED: "Awaiting Dispatch",
+  SCHEDULED: "Scheduled",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Pending Verification",
   VERIFIED: "Completed",
   ESCROW_RELEASED: "Payment Released",
   DISPUTED: "Disputed",
+  CANCELLED: "Cancelled",
 };
 
 export function formatSgd(cents: number): string {

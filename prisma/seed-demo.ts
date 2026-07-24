@@ -442,7 +442,7 @@ async function _main() {
     update: {},
     create: {
       id: IDS.tasks.dispatchedLaundry,
-      householdId: household2.id, category: 'LAUNDRY', status: 'DISPATCHED',
+      householdId: household2.id, category: 'LAUNDRY', status: 'MATCHING',
       instructions: 'Wash and fold. Separate whites and colours.',
       instructionsSource: 'new', amountCents: 4500,
       createdAt: new Date(Date.now() - 2*60*60*1000),

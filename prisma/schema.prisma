@@ -38,6 +38,7 @@ enum TaskStatus {
   VERIFIED
   ESCROW_RELEASED
   DISPUTED
+  CANCELLED
 }
 
 enum EscrowState {
@@ -269,6 +270,7 @@ model Task {
   disputedAt        DateTime?
   scheduledStart    DateTime?
   metadata          Json?             // { autoDispatched, autoMatched, autoVerified, autoEscrowReleased, matchAttempts, currentMatchVendorId }
+  acceptTimeoutAt   DateTime?         // Phase 8: vendor acceptance deadline — auto-cancel if not accepted by this time
   lockAt            DateTime?          // Phase 4: Predictive — deadline before which household can cancel/edit
   cancelledAt       DateTime?          // Phase 4: Predictive — when household cancelled this prediction
   cancelReason      String?            // Phase 4: Predictive — household's cancel reason
