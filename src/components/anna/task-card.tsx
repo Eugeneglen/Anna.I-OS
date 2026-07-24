@@ -5,12 +5,14 @@ import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { formatSgd, formatDate, STATUS_LABELS, type Task, type TaskStatus } from "@/lib/types";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Star, Clock, RotateCcw, Zap } from "lucide-react";
+import { Star, Clock, RotateCcw, Zap, Search, CheckCircle2 } from "lucide-react";
 
 const statusStyles: Record<TaskStatus, string> = {
   PREDICTED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
-  DISPATCHED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  MATCHING: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  ACCEPTED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
+  SCHEDULED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   IN_PROGRESS: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   COMPLETED: "bg-[var(--anna-slate-light)]/15 text-[var(--anna-slate-light)] border-[var(--anna-slate-light)]/20",
   VERIFIED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
@@ -85,6 +87,33 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
             </p>
           )}
 
+          {/* MATCHING: pulsing dot animation */}
+          {task.status === "MATCHING" && (
+            <div className="flex items-center gap-1.5 text-[11px] mt-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--anna-sage)] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--anna-sage-dark)]" />
+              </span>
+              <span className="text-[var(--anna-sage-dark)]">Searching for Provider</span>
+            </div>
+          )}
+          {/* ACCEPTED: provider accepted indicator */}
+          {task.status === "ACCEPTED" && (
+            <div className="flex items-center gap-1.5 text-[11px] mt-1.5">
+              <CheckCircle2 size={12} className="text-[var(--anna-success)]" />
+              <span className="text-[var(--anna-success)]">Provider Accepted</span>
+            </div>
+          )}
+          {/* SCHEDULED: awaiting dispatch with date/time */}
+          {task.status === "SCHEDULED" && (
+            <div className="flex items-center gap-1.5 text-[11px] mt-1.5">
+              <Clock size={12} className="text-[var(--anna-sage-dark)]" />
+              <span className="text-[var(--anna-sage-dark)]">Awaiting Dispatch</span>
+              {task.scheduledAt && (
+                <span className="text-[var(--anna-muted)]">&middot; {formatDate(task.scheduledAt)}</span>
+              )}
+            </div>
+          )}
           {/* Meta row */}
           <div className="flex items-center gap-3 text-[11px]">
             <span className="font-data font-semibold text-[var(--anna-slate)]">
@@ -95,7 +124,8 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
               <Clock size={10} />
               {formatDate(task.scheduledStart ?? booking?.scheduledStart ?? task.createdAt)}
             </span>
-            {booking?.vendor?.name && (
+            {/* Hide vendor name during MATCHING (anonymous matching) */}
+            {task.status !== "MATCHING" && booking?.vendor?.name && (
               <>
                 <span className="text-[var(--anna-border)]">|</span>
                 <span className="text-[var(--anna-slate-light)]">

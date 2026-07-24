@@ -52,7 +52,10 @@ interface AppNotification {
 
 const EVENT_ICONS: Record<string, React.ElementType> = {
   TASK_CREATED: Layers,
-  TASK_DISPATCHED: Send,
+  VENDOR_MATCHED: Send,
+  VENDOR_ACCEPTED: CheckCheck,
+  VENDOR_SCHEDULED: Clock,
+  VENDOR_REJECTED: AlertTriangle,
   VENDOR_EN_ROUTE: Clock,
   VERIFICATION_REQUESTED: Camera,
   VERIFICATION_APPROVED: ShieldCheck,
@@ -73,7 +76,10 @@ const EVENT_ICONS: Record<string, React.ElementType> = {
 
 const EVENT_COLORS: Record<string, string> = {
   TASK_CREATED: "text-[var(--anna-sage-dark)]",
-  TASK_DISPATCHED: "text-[var(--anna-sage-dark)]",
+  VENDOR_MATCHED: "text-[var(--anna-sage-dark)]",
+  VENDOR_ACCEPTED: "text-emerald-600",
+  VENDOR_SCHEDULED: "text-[var(--anna-sage-dark)]",
+  VENDOR_REJECTED: "text-[var(--anna-error)]",
   VENDOR_EN_ROUTE: "text-amber-600 dark:text-amber-400",
   VERIFICATION_REQUESTED: "text-blue-600 dark:text-blue-400",
   VERIFICATION_APPROVED: "text-emerald-600 dark:text-emerald-400",

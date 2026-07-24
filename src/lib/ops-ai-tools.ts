@@ -1026,7 +1026,7 @@ async function executeRecentActivity(): Promise<OpsToolCallResult> {
       },
     }),
     db.task.findMany({
-      where: { status: { in: ["COMPLETED", "DISPATCHED", "IN_PROGRESS"] } },
+      where: { status: { in: ["COMPLETED", "MATCHING", "ACCEPTED", "SCHEDULED", "IN_PROGRESS"] } },
       orderBy: { updatedAt: "desc" },
       take: 5,
       select: {

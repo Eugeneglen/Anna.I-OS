@@ -137,7 +137,7 @@ export async function PATCH(
 
     if (action === "dispute") {
       // C-2 FIX: Validate task is in a disputable state (COMPLETED or VERIFIED)
-      const disputableStatuses = [TaskStatus.COMPLETED, TaskStatus.VERIFIED, TaskStatus.IN_PROGRESS]
+      const disputableStatuses = [TaskStatus.COMPLETED, TaskStatus.VERIFIED, TaskStatus.IN_PROGRESS, TaskStatus.ACCEPTED, TaskStatus.SCHEDULED]
       if (!disputableStatuses.includes(task.status)) {
         return NextResponse.json(
           { error: `Task cannot be disputed — current status is ${task.status}. Only COMPLETED, VERIFIED, or IN_PROGRESS tasks can be disputed.` },

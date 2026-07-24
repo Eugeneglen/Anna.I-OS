@@ -45,10 +45,25 @@ const EVENT_STYLES: Record<string, { icon: React.ElementType; color: string; bg:
     color: "text-[var(--anna-sage-dark)]",
     bg: "bg-[var(--anna-sage-light)]/30 border-[var(--anna-sage)]/15",
   },
-  TASK_DISPATCHED: {
+  VENDOR_MATCHED: {
     icon: Clock,
     color: "text-[var(--anna-slate)]",
     bg: "bg-[var(--anna-bg)] border-[var(--anna-border)]",
+  },
+  VENDOR_ACCEPTED: {
+    icon: CheckCircle2,
+    color: "text-[var(--anna-success)]",
+    bg: "bg-[var(--anna-success)]/10 border-[var(--anna-success)]/15",
+  },
+  VENDOR_SCHEDULED: {
+    icon: Clock,
+    color: "text-[var(--anna-slate)]",
+    bg: "bg-[var(--anna-bg)] border-[var(--anna-border)]",
+  },
+  VENDOR_REJECTED: {
+    icon: AlertTriangle,
+    color: "text-[var(--anna-error)]",
+    bg: "bg-[var(--anna-error)]/10 border-[var(--anna-error)]/15",
   },
   VERIFICATION_APPROVED: {
     icon: ShieldCheck,

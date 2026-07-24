@@ -4,17 +4,19 @@ import { Check, AlertTriangle } from "lucide-react";
 import type { TaskStatus } from "@/lib/types";
 
 const STEPS: { key: TaskStatus; label: string }[] = [
-  { key: "PREDICTED", label: "AI Predicted" },
+  { key: "PREDICTED", label: "AI Suggested" },
   { key: "CREATED", label: "Created" },
-  { key: "DISPATCHED", label: "Dispatched" },
+  { key: "MATCHING", label: "Matching" },
+  { key: "ACCEPTED", label: "Accepted" },
+  { key: "SCHEDULED", label: "Scheduled" },
   { key: "IN_PROGRESS", label: "In Progress" },
   { key: "COMPLETED", label: "Completed" },
   { key: "VERIFIED", label: "Verified" },
-  { key: "ESCROW_RELEASED", label: "Escrow Released" },
+  { key: "ESCROW_RELEASED", label: "Paid" },
 ];
 
 function getStepIndex(status: TaskStatus): number {
-  if (status === "DISPUTED") return 3; // disputed happens around completed
+  if (status === "DISPUTED") return 5; // between SCHEDULED and IN_PROGRESS — mid-flow
   return STEPS.findIndex((s) => s.key === status);
 }
 
@@ -32,7 +34,7 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
         {STEPS.map((step, i) => {
           const isCompleted = i < currentIndex;
           const isCurrent = i === currentIndex && !isDisputed;
-          const isDisputedStep = isDisputed && i === 3;
+          const isDisputedStep = isDisputed && i === 5;
 
           return (
             <div
@@ -75,7 +77,7 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
           );
         })}
       </div>
-      {/* M-11 FIX: Connector line turns red when disputed */}
+      {/* Connector line — turns red when disputed */}
       <div className="absolute top-3 left-3 right-3 h-0.5 bg-[var(--anna-border)] -z-0">
         <div
           className={`h-full transition-all duration-500 ${

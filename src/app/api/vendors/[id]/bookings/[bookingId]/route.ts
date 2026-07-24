@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { TaskStatus } from "@prisma/client"
-import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
+import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { BOOKING_STATUS_TRANSITIONS, PLATFORM_COMMISSION_RATE, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { triggerAnomalyDetection } from "@/lib/notify"
+import { emitTaskStatusChanged, emitBookingStatusChanged } from "@/lib/events"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
@@ -97,6 +98,8 @@ export async function PATCH(
             id: true,
             category: true,
             householdId: true,
+            amountCents: true,
+            scheduledStart: true,
           },
         },
         assignedStaff: {
@@ -105,44 +108,328 @@ export async function PATCH(
       },
     })
 
-    // Update parent task status
+    // ────────────────────────────────────────────────
+    // ACCEPT: Hold escrow, transition task → ACCEPTED/SCHEDULED
+    // ────────────────────────────────────────────────
+    if (action === "accept") {
+      const task = booking.task
+      const amountCents = task.amountCents
+      const commissionCents = Math.round((amountCents * PLATFORM_COMMISSION_RATE) / 100)
+      const vendorPayoutCents = amountCents - commissionCents
+
+      // Hold escrow (this is the ONLY place escrow is created)
+      await db.escrowLedger.create({
+        data: {
+          taskId: task.id,
+          bookingId,
+          amountCents,
+          state: "HELD",
+          commissionRate: PLATFORM_COMMISSION_RATE,
+          commissionCents,
+          vendorPayoutCents,
+          heldAt: now,
+        },
+      })
+
+      // Determine if task should go to SCHEDULED directly (if it has a scheduledStart)
+      const hasSchedule = task.scheduledStart != null
+      const newTaskStatus = hasSchedule ? TaskStatus.SCHEDULED : TaskStatus.ACCEPTED
+      const taskUpdateData: Record<string, unknown> = {
+        status: newTaskStatus,
+        acceptedAt: now,
+      }
+      if (hasSchedule) {
+        taskUpdateData.scheduledAt = now
+      }
+
+      await db.task.update({
+        where: { id: task.id },
+        data: taskUpdateData,
+      })
+
+      // Notify household: vendor accepted (NOW reveal vendor name)
+      const members = await db.familyMember.findMany({
+        where: { householdId: task.householdId },
+        select: { id: true },
+      })
+
+      for (const member of members) {
+        await db.notification.create({
+          data: {
+            householdId: task.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.VENDOR_ACCEPTED,
+            title: "Provider Accepted",
+            body: `A service provider has accepted your ${task.category.toLowerCase()} task. Escrow of SGD $${(amountCents / 100).toFixed(2)} has been secured.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "task",
+            referenceId: task.id,
+          },
+        })
+
+        // If scheduled, also send schedule notification
+        if (hasSchedule) {
+          const schedDate = new Date(task.scheduledStart!)
+          const dateStr = schedDate.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" })
+          const timeStr = schedDate.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })
+
+          await db.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.VENDOR_SCHEDULED,
+              title: "Task Scheduled",
+              body: `Your ${task.category.toLowerCase()} task is scheduled for ${dateStr} at ${timeStr}.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          })
+        }
+      }
+
+      // Real-time events
+      emitTaskStatusChanged({
+        id: task.id,
+        category: task.category,
+        status: newTaskStatus,
+        previousStatus: task.status,
+        householdId: task.householdId,
+      }).catch(() => {})
+
+      emitBookingStatusChanged({
+        id: bookingId,
+        status: "accepted",
+        previousStatus: booking.status,
+        vendorName: undefined, // don't reveal in event
+        householdId: task.householdId,
+        category: task.category,
+      }).catch(() => {})
+
+      return NextResponse.json({ booking: updatedBooking, taskStatus: newTaskStatus })
+    }
+
+    // ────────────────────────────────────────────────
+    // START: Vendor begins work → IN_PROGRESS
+    // ────────────────────────────────────────────────
     if (action === "start") {
       await db.task.update({
         where: { id: booking.taskId },
         data: { status: TaskStatus.IN_PROGRESS, inProgressAt: now },
       })
+
+      // Notify household: vendor en route
+      const members = await db.familyMember.findMany({
+        where: { householdId: booking.task.householdId },
+        select: { id: true },
+      })
+
+      for (const member of members) {
+        await db.notification.create({
+          data: {
+            householdId: booking.task.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.VENDOR_EN_ROUTE,
+            title: "Vendor En Route",
+            body: `Your service provider has started working on your ${booking.task.category.toLowerCase()} task.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "booking",
+            referenceId: booking.id,
+          },
+        })
+      }
+
+      triggerAnomalyDetection(booking.task.householdId)
+
+      return NextResponse.json({ booking: updatedBooking })
     }
 
+    // ────────────────────────────────────────────────
+    // COMPLETE: Vendor finishes → COMPLETED
+    // ────────────────────────────────────────────────
     if (action === "complete") {
       await db.task.update({
         where: { id: booking.taskId },
         data: { status: TaskStatus.COMPLETED, completedAt: now },
       })
 
-      // Trigger anomaly detection (fire-and-forget)
       triggerAnomalyDetection(booking.task.householdId)
+
+      return NextResponse.json({ booking: updatedBooking })
     }
 
+    // ────────────────────────────────────────────────
+    // REJECT: Vendor declined → AUTO-RE-ROUTE
+    // ────────────────────────────────────────────────
     if (action === "reject") {
-      // Check if the task has any other non-cancelled bookings
-      const otherActiveBookings = await db.booking.count({
-        where: {
-          taskId: booking.taskId,
-          id: { not: bookingId },
-          status: { notIn: ["cancelled"] },
-        },
+      const task = booking.task
+      const meta = (task.metadata as Record<string, unknown> | null) ?? {}
+      const matchAttempts = (meta.matchAttempts as number) ?? 1
+
+      // Notify household: vendor declined (anonymous)
+      const members = await db.familyMember.findMany({
+        where: { householdId: task.householdId },
+        select: { id: true },
       })
 
-      if (otherActiveBookings === 0) {
-        await db.task.update({
-          where: { id: booking.taskId },
+      for (const member of members) {
+        await db.notification.create({
           data: {
-            status: TaskStatus.CREATED,
-            dispatchedAt: null,
-            inProgressAt: null,
+            householdId: task.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.VENDOR_REJECTED,
+            title: "Searching Again",
+            body: `The service provider could not accept your ${task.category.toLowerCase()} task. We're matching you with another provider.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "task",
+            referenceId: task.id,
           },
         })
       }
+
+      // Auto-re-route: try next vendor
+      if (matchAttempts < MAX_MATCH_ATTEMPTS) {
+        try {
+          const { getSuggestedVendors } = await import("@/lib/routing")
+          const suggestions = await getSuggestedVendors(task.id)
+
+          // Get already-tried vendor IDs
+          const cancelledBookings = await db.booking.findMany({
+            where: { taskId: task.id, status: "cancelled" },
+            select: { vendorId: true },
+          })
+          const triedIds = new Set([
+            ...cancelledBookings.map((b) => b.vendorId),
+            vendorId, // the rejecting vendor
+          ])
+
+          const nextVendor = suggestions.find((s) => !triedIds.has(s.vendor.id))
+
+          if (nextVendor) {
+            // Create new booking with next vendor
+            const newBooking = await db.booking.create({
+              data: {
+                taskId: task.id,
+                vendorId: nextVendor.vendor.id,
+                scheduledStart: task.scheduledStart ?? (function () {
+                  const d = new Date()
+                  d.setDate(d.getDate() + 1)
+                  d.setHours(10, 0, 0, 0)
+                  return d
+                })(),
+                status: "assigned",
+                dispatchedAt: now,
+              },
+            })
+
+            // Update affinity for new vendor
+            await db.vendorHouseholdAffinity.upsert({
+              where: {
+                householdId_vendorId_category: {
+                  householdId: task.householdId,
+                  vendorId: nextVendor.vendor.id,
+                  category: task.category,
+                },
+              },
+              create: {
+                householdId: task.householdId,
+                vendorId: nextVendor.vendor.id,
+                category: task.category,
+                bookingCount: 1,
+                lastAssignedAt: now,
+              },
+              update: {
+                bookingCount: { increment: 1 },
+                lastAssignedAt: now,
+              },
+            })
+
+            // Update task metadata
+            await db.task.update({
+              where: { id: task.id },
+              data: {
+                metadata: {
+                  ...meta,
+                  matchAttempts: matchAttempts + 1,
+                  currentMatchVendorId: nextVendor.vendor.id,
+                },
+              },
+            })
+
+            // Notify new vendor
+            await db.notification.create({
+              data: {
+                householdId: task.householdId,
+                recipientType: RecipientType.VENDOR,
+                vendorId: nextVendor.vendor.id,
+                channel: NotificationChannel.WHATSAPP,
+                eventType: NotificationEventType.TASK_DISPATCHED,
+                title: "New Booking Request",
+                body: `You have a new ${task.category.toLowerCase()} booking request. Please accept within ${VENDOR_ACCEPTANCE_TIMEOUT_MINUTES} minutes.`,
+                status: NotificationStatus.PENDING,
+                referenceType: "task",
+                referenceId: task.id,
+              },
+            })
+
+            // Keep task in MATCHING (it was already MATCHING)
+            console.log(`[match] Auto-routed task ${task.id} to next vendor ${nextVendor.vendor.name} (attempt ${matchAttempts + 1})`)
+          } else {
+            // No more vendors available
+            await db.task.update({
+              where: { id: task.id },
+              data: {
+                metadata: {
+                  ...meta,
+                  matchAttempts: matchAttempts + 1,
+                  currentMatchVendorId: null,
+                },
+              },
+            })
+            // Notify ops for manual intervention
+            await db.notification.create({
+              data: {
+                householdId: task.householdId,
+                recipientType: RecipientType.HOUSEHOLD_MEMBER,
+                memberId: members[0]?.id,
+                channel: NotificationChannel.WHATSAPP,
+                eventType: NotificationEventType.SYSTEM_ALERT,
+                title: "Matching In Progress",
+                body: "We're working on finding a service provider for your task.",
+                status: NotificationStatus.PENDING,
+                referenceType: "task",
+                referenceId: task.id,
+              },
+            })
+          }
+        } catch (err) {
+          console.error(`[match] Auto-re-route failed for task ${task.id}:`, err)
+        }
+      } else {
+        // Max attempts reached — escalate to ops
+        await db.task.update({
+          where: { id: task.id },
+          data: {
+            metadata: {
+              ...meta,
+              matchAttempts,
+              currentMatchVendorId: null,
+              needsOpsIntervention: true,
+            },
+          },
+        })
+      }
+
+      // Task stays in MATCHING
+      return NextResponse.json({ booking: updatedBooking, autoRouted: true })
     }
 
     return NextResponse.json({ booking: updatedBooking })

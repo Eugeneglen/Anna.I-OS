@@ -55,8 +55,10 @@ const actionButtons: Record<
     { label: "Edit Prediction", icon: Pencil, variant: "outline", action: "edit-predicted" },
     { label: "Cancel Prediction", icon: X, variant: "destructive", action: "cancel-predicted" },
   ],
-  CREATED: [{ label: "Dispatch to Vendor", icon: Send, variant: "default", action: "dispatch" }],
-  DISPATCHED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
+  CREATED: [{ label: "Start Matching", icon: Send, variant: "default", action: "dispatch" }],
+  MATCHING: [],
+  ACCEPTED: [{ label: "View Schedule", icon: Eye, variant: "outline", action: "view-schedule" }],
+  SCHEDULED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
   IN_PROGRESS: [{ label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" }],
   COMPLETED: [
     { label: "Verify Photo", icon: ThumbsUp, variant: "default", action: "verify" },
@@ -70,7 +72,9 @@ const actionButtons: Record<
 const statusBadgeStyles: Record<TaskStatus, string> = {
   PREDICTED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
-  DISPATCHED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  MATCHING: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  ACCEPTED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
+  SCHEDULED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   IN_PROGRESS: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   COMPLETED: "bg-[var(--anna-slate-light)]/15 text-[var(--anna-slate-light)] border-[var(--anna-slate-light)]/20",
   VERIFIED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
@@ -522,19 +526,47 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         </div>
       </div>
 
-      {/* Booking Info */}
-      {booking && (
+      {/* MATCHING: Anonymous matching view — DO NOT show vendor */}
+      {task.status === "MATCHING" && (
+        <div className="rounded-2xl border border-[var(--anna-sage)]/20 bg-gradient-to-br from-[var(--anna-sage-light)]/40 to-[var(--anna-bg)] p-5">
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage)]/15 flex items-center justify-center">
+              <Loader2 size={24} className="text-[var(--anna-sage-dark)] animate-spin" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                Finding the Best Provider
+              </p>
+              <p className="text-xs text-[var(--anna-muted)] mt-1 max-w-[240px]">
+                We&apos;re searching for the best service provider for you. You&apos;ll be notified once a provider is matched.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--anna-sage)] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--anna-sage-dark)]" />
+              </span>
+              <span className="text-[11px] text-[var(--anna-sage-dark)]">Searching...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Info — only show when status >= ACCEPTED (vendor name visible) */}
+      {booking && task.status !== "MATCHING" && task.status !== "CREATED" && task.status !== "PREDICTED" && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Booking Details
           </h4>
           <div className="bg-[var(--anna-bg)] rounded-2xl p-4 space-y-3">
+            {/* Vendor name — only visible at ACCEPTED and beyond */}
             {booking.vendor && (
               <div className="flex items-center gap-2">
                 <User size={14} className="text-[var(--anna-muted)]" />
                 <span className="text-sm font-medium">{booking.vendor.name}</span>
               </div>
             )}
+            {/* Scheduled time */}
             <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
               <Clock size={12} />
               <span>
@@ -542,6 +574,15 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
                 {formatTime(booking.scheduledStart)}
               </span>
             </div>
+            {/* Escrow info for ACCEPTED/SCHEDULED */}
+            {(task.status === "ACCEPTED" || task.status === "SCHEDULED") && (
+              <div className="flex items-center gap-2 text-xs">
+                <ShieldCheck size={12} className="text-[var(--anna-sage-dark)]" />
+                <span className="text-[var(--anna-sage-dark)]">
+                  Escrow: {formatSgd(task.amountCents)} held securely
+                </span>
+              </div>
+            )}
             {booking.actualStart && (
               <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
                 <Clock size={12} />

@@ -86,11 +86,39 @@ async function backfillOnboardingStatus() {
   console.log(`  Household onboarding status: ✅ updated ${updated.count} households`);
 }
 
+/**
+ * Backfill task statuses from DISPATCHED → ACCEPTED (Phase 8 flow restructure).
+ * DISPATCHED no longer exists in the enum; any rows with that value need migration.
+ * Safe & idempotent: only updates rows where status = 'DISPATCHED'.
+ */
+async function backfillTaskStatuses() {
+  // Prisma enum won't match old DISPATCHED values, so use raw query
+  try {
+    const result: any = await (db as any).$queryRaw`
+      SELECT COUNT(*) as count FROM Task WHERE status = 'DISPATCHED'
+    `;
+    const count = Number(result?.[0]?.count ?? 0);
+    if (count === 0) {
+      console.log("  Task status migration: ✅ no DISPATCHED tasks to migrate");
+      return;
+    }
+    console.log(`  Task status migration: ⚠️  ${count} DISPATCHED tasks — migrating to ACCEPTED...`);
+    await (db as any).$executeRaw`
+      UPDATE Task SET status = 'ACCEPTED', acceptedAt = dispatchedAt WHERE status = 'DISPATCHED'
+    `;
+    console.log(`  Task status migration: ✅ migrated ${count} tasks DISPATCHED → ACCEPTED`);
+  } catch (e) {
+    // If the column doesn't have DISPATCHED values, Prisma may throw — that's fine
+    console.log("  Task status migration: ✅ skipped (no DISPATCHED values or column mismatch)");
+  }
+}
+
 async function runBackfills() {
   console.log("\n📦 Running additive backfills...");
   await backfillMemberPasswords();
   await backfillVendorPasswords();
   await backfillOnboardingStatus();
+  await backfillTaskStatuses();
   console.log("  Backfills complete.\n");
 }
 

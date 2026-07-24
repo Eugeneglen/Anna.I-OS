@@ -105,10 +105,12 @@ function getEventBody(event: HouseholdEvent): string {
     }
     case "task:status_changed": {
       const status = (data.status as string) || "";
-      if (status === "DISPATCHED") return `Your ${category} task has been dispatched to a vendor.`;
+      if (status === "MATCHING") return `Your ${category} task is being matched with a provider.`;
+      if (status === "ACCEPTED") return `A provider has accepted your ${category} task.`;
+      if (status === "SCHEDULED") return `Your ${category} task has been scheduled. Awaiting dispatch.`;
       if (status === "VERIFIED") return `Your ${category} task has been verified. Escrow is ready for release.`;
       if (status === "COMPLETED") return `Your ${category} task has been marked as completed. Please verify the work.`;
-      return `Your ${category} task status has been updated to ${status}.`;
+      return `Your ${category} task status has been updated.`;
     }
     case "work:completed": {
       const vendorName = (data.vendorName as string) || "Vendor";

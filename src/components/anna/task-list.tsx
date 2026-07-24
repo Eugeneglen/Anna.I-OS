@@ -17,12 +17,17 @@ const STATUS_GROUPS: { statuses: TaskStatus[]; title: string; emptyText: string;
     isPredicted: true,
   },
   {
-    statuses: ["CREATED"],
-    title: "Awaiting Dispatch",
+    statuses: ["CREATED", "MATCHING"],
+    title: "Pending",
     emptyText: "No pending tasks",
   },
   {
-    statuses: ["DISPATCHED", "IN_PROGRESS"],
+    statuses: ["ACCEPTED", "SCHEDULED"],
+    title: "Confirmed",
+    emptyText: "No confirmed bookings",
+  },
+  {
+    statuses: ["IN_PROGRESS"],
     title: "In Progress",
     emptyText: "No active jobs",
   },

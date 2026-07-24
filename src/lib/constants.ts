@@ -78,6 +78,16 @@ export const BOOKING_STATUS_TRANSITIONS: Record<string, string[]> = {
 }
 
 // ============================================================
+// Vendor Acceptance Timeout (Phase 8)
+// ============================================================
+
+/** Minutes a vendor has to accept a booking before it auto-expires */
+export const VENDOR_ACCEPTANCE_TIMEOUT_MINUTES = 15
+
+/** Maximum number of vendors to try before escalating to ops */
+export const MAX_MATCH_ATTEMPTS = 5
+
+// ============================================================
 // Anomaly Detection SLA Thresholds (Phase 3)
 // ============================================================
 

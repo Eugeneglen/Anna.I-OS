@@ -61,7 +61,10 @@ function formatDateTime(dateStr: string | null) {
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   TASK_CREATED: "Task Created",
-  TASK_DISPATCHED: "Task Dispatched",
+  VENDOR_MATCHED: "Vendor Matched",
+  VENDOR_ACCEPTED: "Vendor Accepted",
+  VENDOR_SCHEDULED: "Vendor Scheduled",
+  VENDOR_REJECTED: "Vendor Rejected",
   VENDOR_EN_ROUTE: "Vendor En Route",
   VERIFICATION_REQUESTED: "Verification Req",
   VERIFICATION_APPROVED: "Verification OK",

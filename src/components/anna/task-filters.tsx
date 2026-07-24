@@ -132,14 +132,22 @@ export function countActiveFilters(filters: TaskFilters): number {
 
 // ─── Status filter options ──────────────────────────────────
 
-// Group DISPATCHED + IN_PROGRESS under one "In Progress" label
-const STATUS_OPTIONS: { value: TaskStatus[]; label: string; color: string }[] = [
-  { value: ["CREATED"], label: STATUS_LABELS.CREATED, color: "bg-[var(--anna-warning)]" },
-  { value: ["DISPATCHED", "IN_PROGRESS"], label: STATUS_LABELS.IN_PROGRESS, color: "bg-[var(--anna-sage)]" },
-  { value: ["COMPLETED"], label: STATUS_LABELS.COMPLETED, color: "bg-[var(--anna-slate-light)]" },
-  { value: ["VERIFIED"], label: STATUS_LABELS.VERIFIED, color: "bg-[var(--anna-success)]" },
-  { value: ["ESCROW_RELEASED"], label: STATUS_LABELS.ESCROW_RELEASED, color: "bg-[var(--anna-muted)]" },
-  { value: ["DISPUTED"], label: STATUS_LABELS.DISPUTED, color: "bg-[var(--anna-error)]" },
+// Grouped status filter options
+const STATUS_OPTIONS: { value: TaskStatus[]; label: string; color: string; group?: string }[] = [
+  // Active
+  { value: ["CREATED"], label: STATUS_LABELS.CREATED, color: "bg-[var(--anna-warning)]", group: "Active" },
+  { value: ["MATCHING"], label: STATUS_LABELS.MATCHING, color: "bg-[var(--anna-sage)]", group: "Active" },
+  { value: ["ACCEPTED"], label: STATUS_LABELS.ACCEPTED, color: "bg-emerald-500", group: "Active" },
+  { value: ["SCHEDULED"], label: STATUS_LABELS.SCHEDULED, color: "bg-[var(--anna-sage)]", group: "Active" },
+  { value: ["IN_PROGRESS"], label: STATUS_LABELS.IN_PROGRESS, color: "bg-[var(--anna-sage)]", group: "Active" },
+  // Post-service
+  { value: ["COMPLETED"], label: STATUS_LABELS.COMPLETED, color: "bg-[var(--anna-slate-light)]", group: "Post-service" },
+  { value: ["VERIFIED"], label: STATUS_LABELS.VERIFIED, color: "bg-[var(--anna-success)]", group: "Post-service" },
+  { value: ["ESCROW_RELEASED"], label: STATUS_LABELS.ESCROW_RELEASED, color: "bg-[var(--anna-muted)]", group: "Post-service" },
+  // Issues
+  { value: ["DISPUTED"], label: STATUS_LABELS.DISPUTED, color: "bg-[var(--anna-error)]", group: "Issues" },
+  // AI
+  { value: ["PREDICTED"], label: STATUS_LABELS.PREDICTED, color: "bg-violet-400", group: "AI" },
 ];
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as TaskStatus[];
@@ -277,26 +285,35 @@ export function TaskFiltersBar({ filters, onChange, resultCount, totalCount }: T
                 </button>
               )}
             </div>
-            <div className="space-y-1">
-              {STATUS_OPTIONS.map((opt) => {
+            <div className="space-y-0.5">
+              {STATUS_OPTIONS.map((opt, idx) => {
                 const checked = opt.value.every((s) => filters.statuses.includes(s));
                 const indeterminate = !checked && opt.value.some((s) => filters.statuses.includes(s));
+                // Show group label if this is the first item in a new group
+                const prevGroup = idx > 0 ? STATUS_OPTIONS[idx - 1].group : undefined;
+                const showGroupHeader = opt.group && opt.group !== prevGroup;
                 return (
-                  <label
-                    key={opt.label}
-                    className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-[var(--anna-sage-light)]/40 cursor-pointer transition-colors"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={() => toggleStatus(opt.value)}
-                      className={cn(
-                        "border-[var(--anna-border)]",
-                        indeterminate && "opacity-60"
-                      )}
-                    />
-                    <span className={cn("w-2 h-2 rounded-full shrink-0", opt.color)} />
-                    <span className="text-xs text-[var(--anna-slate)]">{opt.label}</span>
-                  </label>
+                  <div key={opt.label}>
+                    {showGroupHeader && (
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] px-2 pt-2 pb-1">
+                        {opt.group}
+                      </p>
+                    )}
+                    <label
+                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-[var(--anna-sage-light)]/40 cursor-pointer transition-colors"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleStatus(opt.value)}
+                        className={cn(
+                          "border-[var(--anna-border)]",
+                          indeterminate && "opacity-60"
+                        )}
+                      />
+                      <span className={cn("w-2 h-2 rounded-full shrink-0", opt.color)} />
+                      <span className="text-xs text-[var(--anna-slate)]">{opt.label}</span>
+                    </label>
+                  </div>
                 );
               })}
             </div>

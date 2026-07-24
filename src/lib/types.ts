@@ -15,7 +15,9 @@ export type ServiceCategory =
 export type TaskStatus =
   | "CREATED"
   | "PREDICTED"
-  | "DISPATCHED"
+  | "MATCHING"
+  | "ACCEPTED"
+  | "SCHEDULED"
   | "IN_PROGRESS"
   | "COMPLETED"
   | "VERIFIED"
@@ -79,6 +81,8 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   dispatchedAt?: string | null;
+  acceptedAt?: string | null;
+  scheduledAt?: string | null;
   inProgressAt?: string | null;
   completedAt?: string | null;
   verifiedAt?: string | null;
@@ -241,13 +245,15 @@ export interface Anomaly {
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  PREDICTED: "AI Predicted",
-  CREATED: "Awaiting Dispatch",
-  DISPATCHED: "In Progress",
+  PREDICTED: "AI Suggested",
+  CREATED: "Task Created",
+  MATCHING: "Searching for Provider",
+  ACCEPTED: "Provider Accepted",
+  SCHEDULED: "Awaiting Dispatch",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Pending Verification",
   VERIFIED: "Completed",
-  ESCROW_RELEASED: "Escrow Released",
+  ESCROW_RELEASED: "Payment Released",
   DISPUTED: "Disputed",
 };
 

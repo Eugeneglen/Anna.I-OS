@@ -179,14 +179,16 @@ export async function PATCH(
         },
       })
 
-      // If no other active bookings, reset task to CREATED so it can be re-dispatched
+      // If no other active bookings, reset task to MATCHING for re-matching
       if (otherActiveBookings === 0) {
         await db.task.update({
           where: { id: booking.taskId },
           data: {
-            status: TaskStatus.CREATED,
-            dispatchedAt: null,
+            status: TaskStatus.MATCHING,
+            dispatchedAt: booking.task.dispatchedAt ?? null,
             inProgressAt: null,
+            acceptedAt: null,
+            scheduledAt: null,
           },
         })
       }

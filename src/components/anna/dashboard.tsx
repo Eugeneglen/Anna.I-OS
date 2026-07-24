@@ -100,7 +100,9 @@ function computeUpcoming(tasks: Task[]): UpcomingItem[] {
   const statusColors: Record<string, string> = {
     PREDICTED: "text-[var(--anna-sage-dark)]",
     CREATED: "text-[var(--anna-warning)]",
-    DISPATCHED: "text-[var(--anna-sage-dark)]",
+    MATCHING: "text-[var(--anna-sage-dark)]",
+    ACCEPTED: "text-emerald-600",
+    SCHEDULED: "text-[var(--anna-sage-dark)]",
     IN_PROGRESS: "text-[var(--anna-sage-dark)]",
     COMPLETED: "text-[var(--anna-slate-light)]",
     DISPUTED: "text-[var(--anna-error)]",
@@ -296,7 +298,7 @@ export function Dashboard() {
 
   // Compute summary stats
   const activeTasks = tasks.filter(
-    (t) => t.status === "CREATED" || t.status === "DISPATCHED" || t.status === "IN_PROGRESS"
+    (t) => t.status === "CREATED" || t.status === "MATCHING" || t.status === "ACCEPTED" || t.status === "SCHEDULED" || t.status === "IN_PROGRESS"
   );
   const predictedTasks = tasks.filter((t) => t.status === "PREDICTED");
   const completedTasks = tasks.filter(
@@ -348,7 +350,7 @@ export function Dashboard() {
           label="Active Tasks"
           value={String(activeTasks.length)}
           sub="In progress now"
-          onClick={() => navigateToActivity({ statuses: ["CREATED", "DISPATCHED", "IN_PROGRESS"] as TaskStatus[] })}
+          onClick={() => navigateToActivity({ statuses: ["CREATED", "MATCHING", "ACCEPTED", "SCHEDULED", "IN_PROGRESS"] as TaskStatus[] })}
         />
         <SummaryCard
           icon={CheckCircle2}

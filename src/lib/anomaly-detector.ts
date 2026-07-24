@@ -129,7 +129,7 @@ async function detectTaskOverdue(): Promise<DetectedAnomaly[]> {
 
   const tasks = await db.task.findMany({
     where: {
-      status: { in: ["DISPATCHED", "IN_PROGRESS"] },
+      status: { in: ["MATCHING", "ACCEPTED", "SCHEDULED", "IN_PROGRESS"] },
       dispatchedAt: { lt: slaCutoff },
       completedAt: null,
     },

@@ -62,7 +62,9 @@ function formatDateTime(dateStr: string | null) {
 const TASK_STATUS_STYLES: Record<string, string> = {
   CREATED: "bg-gray-100 text-gray-600 border-gray-200",
   PREDICTED: "bg-violet-50 text-violet-700 border-violet-200",
-  DISPATCHED: "bg-sky-50 text-sky-700 border-sky-200",
+  MATCHING: "bg-sky-50 text-sky-700 border-sky-200",
+  ACCEPTED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  SCHEDULED: "bg-amber-50 text-amber-700 border-amber-200",
   IN_PROGRESS: "bg-purple-50 text-purple-700 border-purple-200",
   COMPLETED: "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   VERIFIED: "bg-emerald-50 text-emerald-700 border-emerald-200",

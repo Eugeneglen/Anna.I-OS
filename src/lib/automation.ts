@@ -1,30 +1,31 @@
 // ============================================================
 // Anna.I — Autonomy Automation Engine
-// Event-driven automation: auto-dispatch (Level 3)
+// Event-driven automation: auto-match (Level 3)
 // ============================================================
 //
 // CANONICAL REMAP (per CLAUDE.md):
-//   L3 = Auto-Dispatch          → ACTIVE (this file)
-//   L4 = Predictive Pre-Booking → LOCKED (requires Phase 4 — Predictive Scheduler)
-//   L5 = Full Autonomous         → LOCKED (requires Phase 5 — NLU/Write-Capable)
+//   L3 = Auto-Match             → ACTIVE (this file)
+//   L4 = Predictive Pre-Booking → LOCKED (requires Phase 4)
+//   L5 = Full Autonomous         → LOCKED (requires Phase 5)
 //
 // Photo verification and escrow release remain MANUAL at all levels.
-// This is the core Closed-Loop brand promise — it does not soften
-// as a household earns more autonomy. (CLAUDE.md, Autonomy Ladder)
 // ============================================================
 
 import { db } from "@/lib/db"
 import {
   ServiceCategory,
   TaskStatus,
+  NotificationChannel,
   NotificationEventType,
+  NotificationStatus,
+  RecipientType,
 } from "@prisma/client"
-import { PLATFORM_COMMISSION_RATE, AUTONOMY_LEVEL_NAMES } from "./constants"
+import { AUTONOMY_LEVEL_NAMES } from "./constants"
 import { autoSelectVendor } from "./routing"
-import { createNotification, triggerAnomalyDetection } from "./notify"
+import { triggerAnomalyDetection } from "./notify"
 
-/** Minimum autonomy level required for auto-dispatch */
-const AUTO_DISPATCH_LEVEL = 3
+/** Minimum autonomy level required for auto-match */
+const AUTO_MATCH_LEVEL = 3
 
 /** Helper: get current autonomy level for a household+category */
 async function getAutonomyLevel(
@@ -54,19 +55,21 @@ async function setAutomationFlag(
 }
 
 // ─────────────────────────────────────────────────────────────
-// AUTO-DISPATCH (Level 3+)
-// Triggered after task creation. Dispatches the task to the
+// AUTO-MATCH (Level 3+)
+// Triggered after task creation. Matches the task to the
 // top-scored vendor automatically if autonomy level >= 3.
+// Task goes to MATCHING (not dispatched). Escrow is NOT held
+// until the vendor accepts.
 // ─────────────────────────────────────────────────────────────
 
-export async function checkAutoDispatch(
+export async function checkAutoMatch(
   taskId: string,
   householdId: string,
   category: ServiceCategory
 ) {
   try {
     const level = await getAutonomyLevel(householdId, category)
-    if (level < AUTO_DISPATCH_LEVEL) return null
+    if (level < AUTO_MATCH_LEVEL) return null
 
     // Re-fetch task to confirm it's still CREATED
     const task = await db.task.findUnique({ where: { id: taskId } })
@@ -86,13 +89,8 @@ export async function checkAutoDispatch(
         return d
       })()
 
-    const amountCents = task.amountCents
-    const commissionCents = Math.round(
-      (amountCents * PLATFORM_COMMISSION_RATE) / 100
-    )
-    const vendorPayoutCents = amountCents - commissionCents
-
     const result = await db.$transaction(async (tx) => {
+      // Create tentative Booking (escrow NOT held)
       const booking = await tx.booking.create({
         data: {
           taskId,
@@ -106,24 +104,21 @@ export async function checkAutoDispatch(
         },
       })
 
-      const escrow = await tx.escrowLedger.create({
+      // Update task status → MATCHING (NOT DISPATCHED)
+      const updatedTask = await tx.task.update({
+        where: { id: taskId },
         data: {
-          taskId,
-          bookingId: booking.id,
-          amountCents,
-          state: "HELD",
-          commissionRate: PLATFORM_COMMISSION_RATE,
-          commissionCents,
-          vendorPayoutCents,
-          heldAt: now,
+          status: TaskStatus.MATCHING,
+          dispatchedAt: now,
+          metadata: {
+            autoMatched: true,
+            matchAttempts: 1,
+            currentMatchVendorId: vendorId,
+          },
         },
       })
 
-      const updatedTask = await tx.task.update({
-        where: { id: taskId },
-        data: { status: TaskStatus.DISPATCHED, dispatchedAt: now },
-      })
-
+      // Update VendorHouseholdAffinity
       await tx.vendorHouseholdAffinity.upsert({
         where: {
           householdId_vendorId_category: {
@@ -145,30 +140,60 @@ export async function checkAutoDispatch(
         },
       })
 
-      return { booking, escrow, updatedTask }
+      // ANONYMOUS notification for household
+      const members = await tx.familyMember.findMany({
+        where: { householdId },
+        select: { id: true },
+      })
+
+      for (const member of members) {
+        await tx.notification.create({
+          data: {
+            householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.VENDOR_MATCHED,
+            title: "Searching for Provider",
+            body: `We're automatically finding the best service provider for your ${category.toLowerCase()} task.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "task",
+            referenceId: taskId,
+          },
+        })
+      }
+
+      // Notify the matched vendor
+      await tx.notification.create({
+        data: {
+          householdId,
+          recipientType: RecipientType.VENDOR,
+          vendorId,
+          channel: NotificationChannel.WHATSAPP,
+          eventType: NotificationEventType.TASK_DISPATCHED,
+          title: "New Booking Request",
+          body: `You have a new ${category.toLowerCase()} booking request. Please accept within 15 minutes.`,
+          status: NotificationStatus.PENDING,
+          referenceType: "task",
+          referenceId: taskId,
+        },
+      })
+
+      return { booking, updatedTask }
     })
 
-    // Mark automation flag on task
-    await setAutomationFlag(taskId, "autoDispatched")
+    // Mark automation flag
+    await setAutomationFlag(taskId, "autoMatched")
 
-    // Notify household
-    await createNotification({
-      householdId,
-      eventType: NotificationEventType.TASK_DISPATCHED,
-      title: "Auto-Dispatched",
-      body: `Your ${category.toLowerCase()} task was automatically dispatched to ${result.booking.vendor.name}.`,
-      referenceType: "task",
-      referenceId: taskId,
-    })
-
+    // Background anomaly detection
     triggerAnomalyDetection(householdId)
 
     console.log(
-      `[automation] Auto-dispatched task ${taskId} to ${result.booking.vendor.name} (Level ${AUTONOMY_LEVEL_NAMES[level - 1]})`
+      `[automation] Auto-matched task ${taskId} to ${result.booking.vendor.name} (Level ${AUTONOMY_LEVEL_NAMES[level - 1]})`
     )
     return result
   } catch (err) {
-    console.error(`[automation] Auto-dispatch failed for task ${taskId}:`, err)
+    console.error(`[automation] Auto-match failed for task ${taskId}:`, err)
     return null
   }
 }
@@ -186,5 +211,5 @@ export function triggerAutomationOnTaskCreated(
   householdId: string,
   category: ServiceCategory
 ) {
-  checkAutoDispatch(taskId, householdId, category).catch(() => {})
+  checkAutoMatch(taskId, householdId, category).catch(() => {})
 }

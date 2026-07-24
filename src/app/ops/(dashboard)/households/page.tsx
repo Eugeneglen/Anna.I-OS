@@ -58,7 +58,10 @@ const SUBSCRIPTION_STYLES: Record<string, string> = {
 
 const TASK_STATUS_STYLES: Record<string, string> = {
   CREATED: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)]",
-  DISPATCHED: "bg-blue-50 text-blue-700",
+  PREDICTED: "bg-violet-50 text-violet-700",
+  MATCHING: "bg-sky-50 text-sky-700",
+  ACCEPTED: "bg-emerald-50 text-emerald-700",
+  SCHEDULED: "bg-amber-50 text-amber-700",
   IN_PROGRESS: "bg-purple-50 text-purple-700",
   COMPLETED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)]",
   VERIFIED: "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]",

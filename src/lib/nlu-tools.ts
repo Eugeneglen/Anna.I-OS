@@ -352,8 +352,8 @@ async function executeCancelTask(
     return { success: false, toolName: "cancel_task", error: "This task belongs to a different household" };
   }
 
-  // Can only cancel CREATED, PREDICTED, or DISPATCHED tasks
-  if (!["CREATED", "PREDICTED", "DISPATCHED"].includes(task.status)) {
+  // Can only cancel CREATED, PREDICTED, or MATCHING tasks
+  if (!["CREATED", "PREDICTED", "MATCHING", "ACCEPTED", "SCHEDULED"].includes(task.status)) {
     return { success: false, toolName: "cancel_task", error: `Cannot cancel a task that is already ${task.status}` };
   }
 
@@ -408,10 +408,10 @@ async function executeGetStatus(
 
   switch (filter) {
     case "active":
-      where.status = { in: ["CREATED", "DISPATCHED", "IN_PROGRESS"] };
+      where.status = { in: ["CREATED", "MATCHING", "ACCEPTED", "SCHEDULED", "IN_PROGRESS"] };
       break;
     case "upcoming":
-      where.status = { in: ["CREATED", "PREDICTED", "DISPATCHED"] };
+      where.status = { in: ["CREATED", "PREDICTED", "MATCHING", "ACCEPTED", "SCHEDULED"] };
       break;
     case "completed":
       where.status = { in: ["VERIFIED", "ESCROW_RELEASED"] };
