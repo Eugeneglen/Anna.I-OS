@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVendorUser } from "@/app/vendor/(portal)/layout";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   MapPin,
   Clock,
   Briefcase,
+  Camera,
   Shield,
   Calendar,
   Users,
@@ -45,6 +46,7 @@ interface VendorProfile {
   availability: unknown;
   zones: string;
   status: string;
+  avatarUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +60,92 @@ interface AvailabilityData {
 }
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// ─── Vendor Avatar with Upload ──────────────────────────
+
+function VendorAvatarWithUpload({
+  name,
+  avatarUrl,
+  onUploaded,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  onUploaded: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/vendor/upload-avatar", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Upload failed");
+      }
+      toast({ title: "Photo updated" });
+      setImgError(false);
+      onUploaded();
+    } catch (err: unknown) {
+      toast({ title: err instanceof Error ? err.message : "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const showImage = avatarUrl && !imgError;
+
+  return (
+    <div className="relative group/avatar flex-shrink-0">
+      {showImage ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-12 h-12 rounded-2xl object-cover"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage)] flex items-center justify-center text-sm font-semibold text-white">
+          {initials}
+        </div>
+      )}
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity disabled:opacity-0"
+        aria-label="Change photo"
+      >
+        {uploading ? (
+          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : (
+          <Camera size={14} className="text-white" />
+        )}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={handleUpload}
+      />
+    </div>
+  );
+}
 
 // ─── Loading Skeleton ──────────────────────────────────
 
@@ -349,9 +437,11 @@ export default function VendorSettingsPage() {
         {/* ── Profile Card ── */}
         <SectionCard title="Profile" subtitle="Basic vendor information" icon={Briefcase}>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--anna-sage)] flex items-center justify-center">
-              <Briefcase size={20} className="text-white" />
-            </div>
+            <VendorAvatarWithUpload
+              name={profile.name}
+              avatarUrl={profile.avatarUrl}
+              onUploaded={() => queryClient.invalidateQueries({ queryKey: ["vendorProfile"] })}
+            />
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-[var(--anna-slate)]">{profile.name}</h2>
               <p className="text-xs text-[var(--anna-muted)]">{profile.email}</p>

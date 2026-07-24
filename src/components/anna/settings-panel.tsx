@@ -75,6 +75,7 @@ function MemberAvatar({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,6 +93,7 @@ function MemberAvatar({
         throw new Error(err.error || "Upload failed");
       }
       toast.success("Photo updated");
+      setImgError(false);
       onUploaded();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -108,13 +110,16 @@ function MemberAvatar({
     .join("")
     .toUpperCase();
 
+  const showImage = member.avatarUrl && !imgError;
+
   return (
     <div className="relative group/avatar flex-shrink-0">
-      {member.avatarUrl ? (
+      {showImage ? (
         <img
           src={member.avatarUrl}
           alt={member.name}
           className="w-10 h-10 rounded-full object-cover"
+          onError={() => setImgError(true)}
         />
       ) : (
         <div className="w-10 h-10 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center text-sm font-semibold text-[var(--anna-sage-dark)]">

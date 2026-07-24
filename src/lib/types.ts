@@ -50,6 +50,7 @@ export interface FamilyMember {
   name: string;
   email: string;
   phone?: string;
+  avatarUrl?: string | null;
   role: "OWNER" | "MEMBER";
 }
 
