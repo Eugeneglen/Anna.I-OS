@@ -588,6 +588,17 @@ model Anomaly {
   @@index([severity])
 }
 
+// ======================== PASSWORD RESET ========================
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
 // ======================== OPS AUTH & AUDIT ========================
 
 enum OpsRole {
