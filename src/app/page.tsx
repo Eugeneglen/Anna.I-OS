@@ -13,7 +13,6 @@ import { SettingsPanel } from "@/components/anna/settings-panel";
 import { OnboardingWizard, type OnboardingHousehold } from "@/components/anna/onboarding-wizard";
 import { useAnnaStore } from "@/lib/store";
 import { AnimatePresence, motion } from "framer-motion";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const VIEWS: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
@@ -80,7 +79,7 @@ export default function Home() {
       <LayoutShell>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
-            <Skeleton className="h-8 w-8 rounded-2xl bg-[var(--anna-border)]" />
+            <img src="/brain-icon.png" alt="Anna.I" className="w-8 h-8 animate-pulse" />
             <p className="text-sm text-[var(--anna-muted)]">Loading your household...</p>
           </div>
         </div>

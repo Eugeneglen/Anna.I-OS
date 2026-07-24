@@ -130,9 +130,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--anna-bg)]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-[var(--anna-sage)] flex items-center justify-center animate-pulse">
-            <Home size={20} className="text-white" />
-          </div>
+          <img src="/brain-icon.png" alt="Anna.I" className="w-10 h-10 animate-pulse" />
           <p className="text-sm text-[var(--anna-muted)]">Loading...</p>
         </div>
       </div>
