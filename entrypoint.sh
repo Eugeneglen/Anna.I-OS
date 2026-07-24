@@ -31,19 +31,26 @@ else
   fi
 fi
 
-# 1. Push schema (idempotent — safe to re-run)
+# 1. Ensure upload directory exists and is writable
+UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
 echo ""
-echo "▶ Step 1: Syncing schema (prisma db push)..."
+echo "▶ Step 1: Preparing upload directory ($UPLOAD_DIR)..."
+mkdir -p "$UPLOAD_DIR/attachments/verification" "$UPLOAD_DIR/attachments/photos" "$UPLOAD_DIR/attachments/videos" "$UPLOAD_DIR/avatars/vendors"
+echo "  ✅ Upload directories ready"
+
+# 2. Push schema (idempotent — safe to re-run)
+echo ""
+echo "▶ Step 2: Syncing schema (prisma db push)..."
 npx prisma db push --accept-data-loss --skip-generate 2>&1
 echo "  ✅ Schema synced"
 
-# 2. Seed if database is empty (ensure-seed checks before seeding)
+# 3. Seed if database is empty (ensure-seed checks before seeding)
 echo ""
-echo "▶ Step 2: Checking seed status..."
+echo "▶ Step 3: Checking seed status..."
 npx tsx scripts/ensure-seed.ts 2>&1
 echo "  ✅ Seed check complete"
 
-# 3. Start the Next.js server
+# 4. Start the Next.js server
 echo ""
-echo "▶ Step 3: Starting server on port ${PORT:-8080}..."
+echo "▶ Step 4: Starting server on port ${PORT:-8080}..."
 exec bun server.js

@@ -5,6 +5,11 @@ import crypto from "crypto"
 import { db } from "@/lib/db"
 import { getVendorSession } from "@/lib/vendor-auth"
 
+// UPLOAD_DIR: writable root for file storage.
+// - Local dev: defaults to public/ (backward compatible)
+// - Railway: set UPLOAD_DIR env var to a persistent directory (e.g. /data/uploads)
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "public")
+
 // 2 MB max
 const MAX_SIZE = 2 * 1024 * 1024
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
@@ -45,13 +50,13 @@ export async function POST(request: Request) {
       : "gif"
 
     const filename = `vendor-${session.vendorId}-${crypto.randomBytes(8).toString("hex")}.${ext}`
-    const publicDir = join(process.cwd(), "public", "avatars", "vendors")
+    const publicDir = join(UPLOAD_DIR, "avatars", "vendors")
     await mkdir(publicDir, { recursive: true })
 
     const bytes = await file.arrayBuffer()
     await writeFile(join(publicDir, filename), Buffer.from(bytes))
 
-    const avatarUrl = `/avatars/vendors/${filename}`
+    const avatarUrl = `/api/serve/avatars/vendors/${filename}`
 
     // Update vendor record
     await db.vendor.update({

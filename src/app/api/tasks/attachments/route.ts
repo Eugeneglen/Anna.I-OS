@@ -3,6 +3,11 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import crypto from "crypto";
 
+// UPLOAD_DIR: writable root for file storage.
+// - Local dev: defaults to public/ (backward compatible)
+// - Railway: set UPLOAD_DIR env var to a persistent directory (e.g. /data/uploads)
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "public");
+
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_PHOTO_COUNT = 5;
@@ -96,13 +101,13 @@ export async function POST(request: Request) {
     const ext = extMap[file.type] || "bin";
     const subdir = isPhoto ? "photos" : "videos";
     const filename = `${crypto.randomBytes(12).toString("hex")}.${ext}`;
-    const dirPath = join(process.cwd(), "public", "attachments", subdir);
+    const dirPath = join(UPLOAD_DIR, "attachments", subdir);
     await mkdir(dirPath, { recursive: true });
 
     const bytes = await file.arrayBuffer();
     await writeFile(join(dirPath, filename), Buffer.from(bytes));
 
-    const fileUrl = `/attachments/${subdir}/${filename}`;
+    const fileUrl = `/api/serve/attachments/${subdir}/${filename}`;
 
     return NextResponse.json({
       fileUrl,

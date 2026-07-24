@@ -5,6 +5,11 @@ import crypto from "crypto"
 import { db } from "@/lib/db"
 import { getVendorSession } from "@/lib/vendor-auth"
 
+// UPLOAD_DIR: writable root for file storage.
+// - Local dev: defaults to public/ (backward compatible)
+// - Railway: set UPLOAD_DIR env var to a persistent directory (e.g. /data/uploads)
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "public")
+
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 const MAX_PHOTOS = 10
@@ -71,7 +76,7 @@ export async function POST(
 
     // Validate and save each file
     const savedPhotos: { fileUrl: string; uploadedBy: string }[] = []
-    const uploadDir = join(process.cwd(), "public", "attachments", "verification")
+    const uploadDir = join(UPLOAD_DIR, "attachments", "verification")
     await mkdir(uploadDir, { recursive: true })
 
     for (const file of files) {
@@ -99,7 +104,7 @@ export async function POST(
       await writeFile(join(uploadDir, filename), Buffer.from(bytes))
 
       savedPhotos.push({
-        fileUrl: `/attachments/verification/${filename}`,
+        fileUrl: `/api/serve/attachments/verification/${filename}`,
         uploadedBy: `vendor:${type}`,
       })
     }

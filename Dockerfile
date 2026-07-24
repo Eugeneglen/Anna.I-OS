@@ -59,6 +59,13 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh
 
+# Writable upload directory for user-uploaded files (avatars, verification photos, etc.)
+# Railway provides an ephemeral filesystem; use a Railway Volume mounted at /data
+# for persistent storage across restarts. Set UPLOAD_DIR=/data/uploads in Railway env.
+# If UPLOAD_DIR is not set, uploads default to the public/ directory.
+RUN mkdir -p /data/uploads
+ENV UPLOAD_DIR=/data/uploads
+
 # Next.js standalone output
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/package.json ./
