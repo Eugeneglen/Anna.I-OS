@@ -593,10 +593,13 @@ model Anomaly {
 model PasswordResetToken {
   id        String   @id @default(cuid())
   email     String
+  userType  String   @default("household") // "household" | "vendor" | "ops"
   token     String   @unique
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
+
+  @@index([email, userType])
 }
 
 // ======================== OPS AUTH & AUDIT ========================

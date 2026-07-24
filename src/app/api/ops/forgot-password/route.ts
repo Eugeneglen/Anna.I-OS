@@ -13,24 +13,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find the family member by email
-    const member = await db.familyMember.findUnique({
+    // Find the ops user by email
+    const user = await db.opsUser.findUnique({
       where: { email },
     });
 
-    // Always return success to prevent email enumeration attacks
-    if (!member) {
+    // Always return success to prevent email enumeration
+    if (!user) {
       return NextResponse.json({
         success: true,
-        message: "If an account with that email exists, a reset link has been generated.",
+        message: "If an account with that email exists, a reset token has been generated.",
       });
     }
 
-    // Invalidate any existing unused tokens for this email
+    // Invalidate existing unused tokens
     await db.passwordResetToken.updateMany({
       where: {
         email,
-        userType: "household",
+        userType: "ops",
         usedAt: null,
         expiresAt: { gt: new Date() },
       },
@@ -44,23 +44,21 @@ export async function POST(req: NextRequest) {
     await db.passwordResetToken.create({
       data: {
         email,
-        userType: "household",
+        userType: "ops",
         token,
         expiresAt,
       },
     });
 
-    // In development, return the token so the user can test
-    // In production, this would send an email
     const isDev = process.env.NODE_ENV !== "production";
 
     return NextResponse.json({
       success: true,
-      message: "If an account with that email exists, a reset link has been generated.",
+      message: "If an account with that email exists, a reset token has been generated.",
       ...(isDev && { devToken: token }),
     });
   } catch (error) {
-    console.error("[/api/household/forgot-password POST]", error);
+    console.error("[/api/ops/forgot-password POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
