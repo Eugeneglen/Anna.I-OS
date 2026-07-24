@@ -5,13 +5,41 @@ echo "════════════════════════�
 echo "  Anna.I — Production Entrypoint"
 echo "══════════════════════════════════════════════════"
 
-# 0. Generate z-ai-web-dev-sdk config if env vars are set
-#    The SDK reads from /etc/.z-ai-config (or $CWD/.z-ai-config).
-#    On Railway we inject credentials via env vars and write the file.
+# ─────────────────────────────────────────────────────
+# 0. Validate DATABASE_URL
+# ─────────────────────────────────────────────────────
+echo ""
+echo "▶ Step 0: Validating DATABASE_URL..."
+if [ -z "$DATABASE_URL" ]; then
+  echo "  ❌ FATAL: DATABASE_URL is not set!"
+  echo "     On Railway: Create a PostgreSQL service and attach it to this service."
+  echo "     Railway will auto-inject DATABASE_URL."
+  echo ""
+  echo "     CRASHING — container will restart. Fix DATABASE_URL to proceed."
+  exit 1
+fi
+
+# Determine database type from DATABASE_URL
+if echo "$DATABASE_URL" | grep -qi "^postgres"; then
+  echo "  ✅ DATABASE_URL points to PostgreSQL"
+  DB_TYPE="postgresql"
+elif echo "$DATABASE_URL" | grep -qi "^file:"; then
+  echo "  ✅ DATABASE_URL points to SQLite (local/development mode)"
+  DB_TYPE="sqlite"
+else
+  echo "  ⚠️  DATABASE_URL format unrecognized: ${DATABASE_URL:0:30}..."
+  echo "     Attempting to proceed anyway..."
+  DB_TYPE="unknown"
+fi
+
+# ─────────────────────────────────────────────────────
+# 1. Generate z-ai-web-dev-sdk config if env vars are set
+# ─────────────────────────────────────────────────────
+echo ""
+echo "▶ Step 1: Preparing AI SDK config..."
 if [ -n "$Z_AI_BASE_URL" ] && [ -n "$Z_AI_API_KEY" ]; then
   CONFIG_FILE="/etc/.z-ai-config"
 
-  # Build JSON config (only include fields that are set)
   CONFIG="{\"baseUrl\":\"$Z_AI_BASE_URL\",\"apiKey\":\"$Z_AI_API_KEY\"}"
   [ -n "$Z_AI_CHAT_ID" ]  && CONFIG=$(echo "$CONFIG" | sed "s/}/,\"chatId\":\"$Z_AI_CHAT_ID\"}/")
   [ -n "$Z_AI_USER_ID" ]  && CONFIG=$(echo "$CONFIG" | sed "s/}/,\"userId\":\"$Z_AI_USER_ID\"}/")
@@ -19,38 +47,38 @@ if [ -n "$Z_AI_BASE_URL" ] && [ -n "$Z_AI_API_KEY" ]; then
 
   echo "$CONFIG" > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
-
   echo "  ✅ Z-AI SDK config written to $CONFIG_FILE"
 else
-  # If no env vars, check if a config file already exists (local dev / mounted volume)
   if [ ! -f "/etc/.z-ai-config" ] && [ ! -f "$PWD/.z-ai-config" ]; then
-    echo "  ⚠️  Z-AI SDK config not found — AI features (Ask Anna, Quote Explain, Photo Analysis) will be disabled."
+    echo "  ⚠️  Z-AI SDK config not found — AI features will be disabled."
     echo "      Set Z_AI_BASE_URL and Z_AI_API_KEY env vars to enable."
   else
     echo "  ✅ Z-AI SDK config found (pre-existing)"
   fi
 fi
 
-# 1. Ensure upload directory exists and is writable
+# ─────────────────────────────────────────────────────
+# 2. Ensure upload directory exists and is writable
+# ─────────────────────────────────────────────────────
 UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
 echo ""
-echo "▶ Step 1: Preparing upload directory ($UPLOAD_DIR)..."
+echo "▶ Step 2: Preparing upload directory ($UPLOAD_DIR)..."
 mkdir -p "$UPLOAD_DIR/attachments/verification" "$UPLOAD_DIR/attachments/photos" "$UPLOAD_DIR/attachments/videos" "$UPLOAD_DIR/avatars/vendors"
 echo "  ✅ Upload directories ready"
 
-# 2. Push schema (idempotent — safe to re-run)
+# ─────────────────────────────────────────────────────
+# 3. Database auto-init (schema sync + seed)
+#    This is the CRITICAL step that prevents login errors.
+#    It ensures tables exist and demo data is present.
+# ─────────────────────────────────────────────────────
 echo ""
-echo "▶ Step 2: Syncing schema (prisma db push)..."
-npx prisma db push --accept-data-loss --skip-generate 2>&1
-echo "  ✅ Schema synced"
+echo "▶ Step 3: Database auto-init..."
+npx tsx scripts/ensure-db.ts 2>&1
+echo "  ✅ Database ready"
 
-# 3. Seed if database is empty (ensure-seed checks before seeding)
-echo ""
-echo "▶ Step 3: Checking seed status..."
-npx tsx scripts/ensure-seed.ts 2>&1
-echo "  ✅ Seed check complete"
-
+# ─────────────────────────────────────────────────────
 # 4. Start the Next.js server
+# ─────────────────────────────────────────────────────
 echo ""
 echo "▶ Step 4: Starting server on port ${PORT:-8080}..."
 exec bun server.js
