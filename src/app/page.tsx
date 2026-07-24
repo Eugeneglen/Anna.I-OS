@@ -79,7 +79,7 @@ export default function Home() {
       <LayoutShell>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
-            <img src="/brain-icon.png" alt="Anna.I" className="w-8 h-8 animate-pulse" />
+            <img src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="animate-pulse" />
             <p className="text-sm text-[var(--anna-muted)]">Loading your household...</p>
           </div>
         </div>

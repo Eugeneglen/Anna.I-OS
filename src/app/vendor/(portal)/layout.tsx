@@ -265,7 +265,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
             </>
           ) : (
             <>
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto border-[var(--anna-sage-dark)]" />
+              <img src="/brain-icon.png" alt="Anna.I" width={80} height={80} className="mx-auto animate-pulse" />
               <p className="mt-3 text-sm text-[var(--anna-muted)]">Loading...</p>
             </>
           )}
