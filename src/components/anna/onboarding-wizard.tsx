@@ -79,7 +79,6 @@ interface PeopleData {
   pets?: string[];
   petTypes?: string[];
   schedule?: string;
-  homeType?: string;
   roomCount?: string;
 }
 
@@ -159,12 +158,7 @@ const SCHEDULE_OPTIONS = [
   { value: "OUT", label: "Usually out during the day" },
 ];
 
-// Simplified home type for Step 3 (Your People) — subset of Step 1
-const HOME_TYPE_SIMPLE = [
-  { value: "HDB", label: "HDB" },
-  { value: "CONDO", label: "Condo" },
-  { value: "LANDED", label: "Landed" },
-];
+// Simplified home type for Step 3 (Your People) — subset of Step 1 — REMOVED per user choice B (only room count)
 
 const ROOM_COUNT_OPTIONS = [
   { value: "3", label: "3 rooms" },
@@ -759,32 +753,8 @@ function StepYourPeople({
         </motion.div>
       )}
 
-      {/* Home type (simplified confirmation) */}
-      {(data.members || []).length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">Home type</p>
-          <div className="flex flex-wrap gap-2">
-            {HOME_TYPE_SIMPLE.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => onChange("homeType", t.value)}
-                className={cn(
-                  "px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 border",
-                  data.homeType === t.value
-                    ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
-                    : "border-[var(--anna-border)] bg-[var(--anna-white)] text-[var(--anna-slate)] hover:border-[var(--anna-sage)]/30"
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
       {/* Room count */}
-      {data.homeType && (
+      {(data.members || []).length > 0 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <p className="text-xs font-medium text-[var(--anna-slate)] mt-5 mb-2.5">How many rooms?</p>
           <div className="flex flex-wrap gap-2">
