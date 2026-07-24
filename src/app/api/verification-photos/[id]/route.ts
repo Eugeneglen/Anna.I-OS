@@ -93,6 +93,17 @@ export async function PATCH(
               lastCompletedAt: now,
             },
           })
+        } else {
+          await db.vendorHouseholdAffinity.create({
+            data: {
+              ...affinityKey,
+              completedCount: newCompletedCount,
+              totalRating: newTotalRating,
+              avgRating: newAvgRating,
+              jobOutcomes,
+              lastCompletedAt: now,
+            },
+          })
         }
       }
 

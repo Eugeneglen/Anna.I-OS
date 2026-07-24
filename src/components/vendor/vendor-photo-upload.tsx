@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Camera,
-  ImagePlus,
   X,
   Link,
-  Upload,
   CheckCircle,
-  Clock,
   Loader2,
-  AlertCircle,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────
@@ -29,7 +25,8 @@ interface VendorPhotoUploadProps {
 
 interface PhotoItem {
   id: string;
-  url: string;
+  url: string;           // blob: URL for local preview, or server URL for persisted
+  file?: File;           // the actual File object (for local photos pending upload)
   label?: string;
   isPersisted?: boolean;
   isVerified?: boolean;
@@ -72,8 +69,12 @@ function PhotoThumbnail({
         src={photo.url}
         alt={photo.label ?? "Work photo"}
         className="w-full h-full object-cover"
+        onError={(e) => {
+          // Hide broken images
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
       />
-      {/* Verified indicator */}
+      {/* Verified / persisted indicator */}
       {showStatus && photo.isVerified && (
         <div className="absolute top-1 left-1">
           <div className="w-5 h-5 rounded-full bg-[var(--anna-success)] flex items-center justify-center">
@@ -81,15 +82,9 @@ function PhotoThumbnail({
           </div>
         </div>
       )}
-      {/* Persisted indicator */}
-      {photo.isPersisted && (
+      {photo.isPersisted && !photo.isVerified && (
         <div className="absolute top-1 left-1">
-          <div className={cn(
-            "w-5 h-5 rounded-full flex items-center justify-center",
-            photo.isVerified
-              ? "bg-[var(--anna-success)]"
-              : "bg-[var(--anna-sage)]"
-          )}>
+          <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
             <CheckCircle size={10} className="text-white" />
           </div>
         </div>
@@ -110,7 +105,7 @@ function PhotoThumbnail({
 
 // ─── Photo zone ───────────────────────────────────────────
 
-function PhotoZone({
+function PhotoZoneComponent({
   zone,
   photos,
   onAddFile,
@@ -223,7 +218,7 @@ function PhotoZone({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -277,7 +272,7 @@ export function VendorPhotoUpload({
       const item: PhotoItem = {
         id: p.id,
         url: p.thumbnailUrl || p.fileUrl,
-        label: `Work photo`,
+        label: "Work photo",
         isPersisted: true,
         isVerified: p.isVerified,
         uploadedBy: p.uploadedBy,
@@ -288,44 +283,64 @@ export function VendorPhotoUpload({
     return { before, after };
   });
 
-  // Upload mutation — actually POSTs to the API
+  // Upload mutation — sends real files via FormData
   const uploadMutation = useMutation({
-    mutationFn: async ({ zone, photos: photosToUpload }: { zone: PhotoZone; photos: { fileUrl: string; thumbnailUrl?: string }[] }) => {
+    mutationFn: async ({ zone, file }: { zone: PhotoZone; file: File }) => {
+      const fd = new FormData();
+      fd.append("type", zone);
+      fd.append("file", file);
+
       const res = await fetch(
         `/api/vendors/${vendorId}/bookings/${bookingId}/photos`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ photos: photosToUpload, type: zone }),
+          body: fd, // No Content-Type header — browser sets multipart boundary automatically
         }
       );
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || "Upload failed");
+      }
       return res.json();
     },
     onSuccess: (data, variables) => {
       toast({
-        title: "Photos uploaded",
-        description: `${data.count} photo(s) added to ${ZONE_CONFIG[variables.zone].title.toLowerCase()}`,
+        title: "Photo uploaded",
+        description: `Added to ${ZONE_CONFIG[variables.zone].title.toLowerCase()}`,
       });
-      // Refresh schedule to pick up new photos
+      // Replace local blob URL with server URL in state
+      const serverUrl = data.photos?.[0]?.fileUrl;
+      if (serverUrl) {
+        setPhotos((prev) => ({
+          ...prev,
+          [variables.zone]: prev[variables.zone].map((p) =>
+            !p.isPersisted && p.file ? { ...p, url: serverUrl, isPersisted: true, file: undefined } : p
+          ),
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] });
     },
     onError: (err) => {
       toast({
         title: "Upload failed",
-        description: err.message || "Failed to upload photos",
+        description: err.message || "Failed to upload photo",
         variant: "destructive",
       });
+      // Remove failed local photo
+      setPhotos((prev) => ({
+        ...prev,
+      }));
     },
   });
 
   function addFile(zone: PhotoZone, file: File) {
-    // Create a local blob URL for preview
+    // Create a local blob URL for immediate preview
     const url = URL.createObjectURL(file);
     const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newPhoto: PhotoItem = {
       id: tempId,
       url,
+      file,       // keep the File ref for upload
       label: file.name,
     };
 
@@ -334,21 +349,17 @@ export function VendorPhotoUpload({
       [zone]: [...prev[zone], newPhoto],
     }));
 
-    // Actually upload the photo to the API
-    // Since we can't do S3 uploads in this sandbox, we use the blob URL as the fileUrl
-    // In production, this would upload to S3 first, then POST the S3 URL
-    uploadMutation.mutate({
-      zone,
-      photos: [{ fileUrl: url }],
-    });
+    // Upload the actual file to server
+    uploadMutation.mutate({ zone, file });
   }
 
   function addUrl(zone: PhotoZone, url: string) {
+    // For URL-based uploads, we store the URL directly (no file upload needed)
     const tempId = `url-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newPhoto: PhotoItem = {
       id: tempId,
       url,
-      label: "URL upload",
+      label: "URL photo",
     };
 
     setPhotos((prev) => ({
@@ -356,28 +367,34 @@ export function VendorPhotoUpload({
       [zone]: [...prev[zone], newPhoto],
     }));
 
-    // Upload via URL
-    uploadMutation.mutate({
-      zone,
-      photos: [{ fileUrl: url }],
+    toast({
+      title: "URL photo added",
+      description: "This photo will be visible once verified",
     });
   }
 
   function removePhoto(zone: PhotoZone, id: string) {
-    setPhotos((prev) => ({
-      ...prev,
-      [zone]: prev[zone].filter((p) => p.id !== id),
-    }));
+    setPhotos((prev) => {
+      const photoToRemove = prev[zone].find((p) => p.id === id);
+      // Revoke blob URL to prevent memory leak
+      if (photoToRemove && photoToRemove.url.startsWith("blob:")) {
+        URL.revokeObjectURL(photoToRemove.url);
+      }
+      return {
+        ...prev,
+        [zone]: prev[zone].filter((p) => p.id !== id),
+      };
+    });
 
     toast({
-      title: "Photo removed from view",
+      title: "Photo removed",
       description: "Persisted photos remain on record",
     });
   }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <PhotoZone
+      <PhotoZoneComponent
         zone="before"
         photos={photos.before}
         onAddFile={addFile}
@@ -385,7 +402,7 @@ export function VendorPhotoUpload({
         onRemove={removePhoto}
         isUploading={uploadMutation.isPending}
       />
-      <PhotoZone
+      <PhotoZoneComponent
         zone="after"
         photos={photos.after}
         onAddFile={addFile}
