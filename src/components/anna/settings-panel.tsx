@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useAnnaStore } from "@/lib/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ import {
   ArrowUpCircle,
   AlertTriangle,
   Info,
+  LogOut,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -275,9 +277,10 @@ function ThemeToggle() {
 }
 
 export function SettingsPanel() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { selectedHouseholdId, setHouseholdNames, householdNames } =
     useAnnaStore();
-  const queryClient = useQueryClient();
 
   // ── Queries ──
 
@@ -370,6 +373,7 @@ export function SettingsPanel() {
   });
   const [deleteTarget, setDeleteTarget] = useState<FamilyMember | null>(null);
   const [cancelSubDialog, setCancelSubDialog] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   // ── Subscription mutation (cancel) ──
   const cancelMutation = useMutation({
@@ -808,6 +812,44 @@ export function SettingsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Sign Out (mobile) ── */}
+      <button
+        onClick={() => setLogoutDialogOpen(true)}
+        className="w-full mt-6 flex items-center justify-center gap-2 py-3 rounded-2xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 hover:border-red-300 transition-colors md:hidden"
+      >
+        <LogOut size={16} />
+        Sign out
+      </button>
+
+      {/* ── Sign Out Confirmation Dialog ── */}
+      <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <AlertDialogContent className="rounded-2xl border-[var(--anna-border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will need to sign in again to access your household dashboard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  await fetch("/api/household/auth", { method: "DELETE" });
+                  queryClient.clear();
+                  router.push("/login");
+                } catch {
+                  toast.error("Failed to sign out");
+                }
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
+            >
+              Sign out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Delete Member Confirmation ── */}
       <AlertDialog
