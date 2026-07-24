@@ -266,7 +266,7 @@ export function AskAnna() {
         ...prev,
         {
           role: "assistant",
-          content: `Sorry, something went wrong — ${error.message}. Please try again.`,
+          content: `Sorry, something went wrong — ${error.message}`,
           timestamp: Date.now(),
         },
       ]);
@@ -347,7 +347,7 @@ export function AskAnna() {
         }
         updated.push({
           role: "assistant",
-          content: `Sorry, the action failed — ${error.message}. Please try again.`,
+          content: `Sorry, the action failed — ${error.message}`,
           timestamp: Date.now(),
         });
         return updated;

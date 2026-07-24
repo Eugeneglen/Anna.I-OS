@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZAI } from "@/lib/zai";
 
 const EXPLAIN_SYSTEM_PROMPT = `You are Anna.I, the AI operating system for modern households in Singapore. You are explaining a service quotation to a homeowner.
 
@@ -110,7 +110,7 @@ ${addOnText ? `\nSelected Add-ons:\n${addOnText}` : ""}
 
 Explain what this covers and why it costs what it does. Be specific and helpful.`;
 
-    const zai = await ZAI.create();
+    const zai = await getZAI();
     const completion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: EXPLAIN_SYSTEM_PROMPT },

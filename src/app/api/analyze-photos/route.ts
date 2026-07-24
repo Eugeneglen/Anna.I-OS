@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZAI } from "@/lib/zai";
 
 const analyzePhotosSchema = z.object({
   photos: z.array(
@@ -90,7 +90,7 @@ Respond in JSON format only:
     }));
 
     // Call VLM
-    const zai = await ZAI.create();
+    const zai = await getZAI();
 
     const response = await zai.chat.completions.createVision({
       messages: [

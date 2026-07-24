@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OPS_AI_TOOLS, executeOpsToolCall } from "@/lib/ops-ai-tools";
 import { getOpsSession } from "@/lib/ops-auth";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZAI } from "@/lib/zai";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ops AI
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const zai = await ZAI.create();
+    const zai = await getZAI();
 
     // ── LLM call with tools ──
     const completion = await zai.chat.completions.create({
@@ -166,8 +166,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[OpsAI] Error:", error);
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to process your request. Please try again." },
+      { error: `Failed to process your request: ${msg}` },
       { status: 500 }
     );
   }

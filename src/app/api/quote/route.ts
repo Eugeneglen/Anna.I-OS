@@ -132,8 +132,8 @@ async function generateExplanationInBackground(
   selectedAddOns: string[]
 ) {
   try {
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
+    const { getZAI } = await import("@/lib/zai");
+    const zai = await getZAI();
 
     const breakdownText = breakdown
       .map((item) => `${item.label}: SGD ${(item.amountCents / 100).toFixed(2)}`)

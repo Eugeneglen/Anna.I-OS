@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ANNA_TOOLS, executeToolCall } from "@/lib/nlu-tools";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZAI } from "@/lib/zai";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — NLU Write-Capable
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         true // executeWrites = true
       );
 
-      const zai = await ZAI.create();
+      const zai = await getZAI();
       const completion = await zai.chat.completions.create({
         messages: [
           {
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Normal flow: LLM with tools ──
-    const zai = await ZAI.create();
+    const zai = await getZAI();
 
     const completion = await zai.chat.completions.create({
       messages: [
@@ -214,8 +214,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[AskAnna NLU] Error:", error);
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to process your request. Please try again." },
+      { error: `Failed to process your request: ${msg}` },
       { status: 500 }
     );
   }

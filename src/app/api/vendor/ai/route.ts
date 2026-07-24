@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { VENDOR_AI_TOOLS, executeVendorToolCall } from "@/lib/vendor-ai-tools";
 import { getVendorSession } from "@/lib/vendor-auth";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZAI } from "@/lib/zai";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Vendor AI
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const zai = await ZAI.create();
+    const zai = await getZAI();
 
     // ── LLM call with tools ──
     const completion = await zai.chat.completions.create({
@@ -160,8 +160,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[VendorAI] Error:", error);
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to process your request. Please try again." },
+      { error: `Failed to process your request: ${msg}` },
       { status: 500 }
     );
   }
