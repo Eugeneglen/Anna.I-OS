@@ -59,6 +59,7 @@ import {
   Briefcase,
   HelpCircle,
   Loader2,
+  CircleCheck,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -246,7 +247,7 @@ function PhoneEditableField({
         )}
         <button
           onClick={startEditing}
-          className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
           aria-label="Edit phone"
         >
           <Pencil size={12} />
@@ -509,7 +510,7 @@ function EditableField({
               setDraft(value);
               setEditing(true);
             }}
-            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
             aria-label={`Edit ${label}`}
           >
             <Pencil size={12} />
@@ -804,7 +805,7 @@ export function SettingsPanel() {
       </p>
 
       {/* ── Profile Completeness Banner ── */}
-      {missingContactInfo && (
+      {missingContactInfo ? (
         <div className="rounded-2xl p-4 mb-4 border bg-[var(--anna-warning)]/8 border-[var(--anna-warning)]/25">
           <div className="flex items-start gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[var(--anna-warning)]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -822,7 +823,21 @@ export function SettingsPanel() {
             </div>
           </div>
         </div>
-      )}
+      ) : hasFullName && hasPhone ? (
+        <div className="rounded-2xl p-4 mb-4 border bg-[var(--anna-success)]/8 border-[var(--anna-success)]/25">
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[var(--anna-success)]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <CircleCheck size={16} className="text-[var(--anna-success)]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[var(--anna-slate)]">Profile complete</p>
+              <p className="text-xs text-[var(--anna-muted)] mt-0.5 leading-relaxed">
+                Your contact details are all set. Service providers can now identify and reach you easily.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Household Info ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
@@ -833,7 +848,7 @@ export function SettingsPanel() {
         <p className="text-[11px] text-[var(--anna-muted)] mb-4">
           Your name and phone help service providers identify and reach you.
         </p>
-        <div className="space-y-3.5 group/contact">
+        <div className="space-y-3.5 group">
           {/* Avatar with household name */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center flex-shrink-0">
