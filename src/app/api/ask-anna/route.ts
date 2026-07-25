@@ -59,6 +59,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Check if AI is available ──
+    const zai = await getZAI();
+    if (!zai) {
+      return NextResponse.json({
+        response: "I'm currently offline — my AI engine isn't configured on this server. Please ask your administrator to set up the AI environment variables (Z_AI_BASE_URL, Z_AI_API_KEY).",
+        dataUsed: [],
+        aiUnavailable: true,
+      });
+    }
+
     // ── Handle confirmation flow ──
     if (confirmAction) {
       const result = await executeToolCall(
@@ -68,7 +78,6 @@ export async function POST(request: NextRequest) {
         true // executeWrites = true
       );
 
-      const zai = await getZAI();
       const completion = await zai.chat.completions.create({
         messages: [
           {
@@ -93,8 +102,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Normal flow: LLM with tools ──
-    const zai = await getZAI();
-
     const completion = await zai.chat.completions.create({
       messages: [
         {

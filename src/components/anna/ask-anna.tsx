@@ -219,8 +219,19 @@ export function AskAnna() {
     useAnnaStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [aiUnavailable, setAiUnavailable] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Check AI availability when panel opens
+  useEffect(() => {
+    if (askAnnaOpen) {
+      fetch("/api/ai-status")
+        .then((r) => r.json())
+        .then((data) => setAiUnavailable(!data.available))
+        .catch(() => setAiUnavailable(false)); // Assume available if check fails
+    }
+  }, [askAnnaOpen]);
 
   // Mutation for sending messages
   const mutation = useMutation({
@@ -250,6 +261,10 @@ export function AskAnna() {
       return res.json();
     },
     onSuccess: (data, variables) => {
+      // If AI is unavailable, mark it for future display
+      if (data.aiUnavailable) {
+        setAiUnavailable(true);
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -555,6 +570,20 @@ export function AskAnna() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 py-4">
+                  {/* AI unavailable banner */}
+                  {aiUnavailable && (
+                    <div className="mx-4 mt-1 mb-2 bg-[var(--anna-warning)]/10 border border-[var(--anna-warning)]/20 rounded-xl p-3 flex items-start gap-2">
+                      <AlertCircle size={14} className="text-[var(--anna-warning)] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-medium text-[var(--anna-warning)]">
+                          AI Assistant Offline
+                        </p>
+                        <p className="text-[10px] text-[var(--anna-muted)] mt-0.5 leading-relaxed">
+                          The AI engine isn't configured on this server. Ask your administrator to set up AI environment variables.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {messages.map((msg, i) => (
                     <div key={i}>
                       {/* Message bubble */}

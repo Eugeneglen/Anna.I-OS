@@ -134,6 +134,7 @@ async function generateExplanationInBackground(
   try {
     const { getZAI } = await import("@/lib/zai");
     const zai = await getZAI();
+    if (!zai) return "AI quote generation is currently unavailable.";
 
     const breakdownText = breakdown
       .map((item) => `${item.label}: SGD ${(item.amountCents / 100).toFixed(2)}`)

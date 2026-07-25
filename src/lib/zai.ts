@@ -7,39 +7,49 @@
 //   Z_AI_BASE_URL, Z_AI_API_KEY (required)
 //   Z_AI_CHAT_ID, Z_AI_USER_ID, Z_AI_TOKEN (optional)
 //
-// If the config is missing, AI features should gracefully degrade
-// rather than crash with a cryptic error.
+// If the config is missing, AI features gracefully degrade —
+// getZAI() returns null instead of throwing.
 // ============================================================
 
 import ZAI from "z-ai-web-dev-sdk";
 
 let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+let _initAttempted = false;
 let _initError: string | null = null;
 
 /**
  * Get or create the ZAI SDK instance.
+ * Returns null if the SDK is not configured (graceful degradation).
  * Caches the instance after first successful creation.
- * If initialization fails, throws a clear, descriptive error.
  */
 export async function getZAI() {
   if (_zai) return _zai;
-  if (_initError) throw new Error(_initError);
+  if (_initError) return null;
 
   try {
     _zai = await ZAI.create();
+    _initAttempted = true;
     return _zai;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    _initError = `AI SDK not configured: ${msg}. Please set Z_AI_BASE_URL and Z_AI_API_KEY env vars on the deployment platform.`;
-    throw new Error(_initError);
+    _initAttempted = true;
+    _initError = msg;
+    console.warn("[zai] SDK not configured — AI features disabled:", msg);
+    return null;
   }
 }
 
 /**
  * Check if AI features are available (SDK configured).
- * Returns true if the SDK is ready or potentially ready,
- * false if a previous initialization attempt failed.
+ * Returns true if the SDK is ready, false if not configured.
  */
 export function isAIReady(): boolean {
-  return _initError === null;
+  return _zai !== null;
+}
+
+/**
+ * Check if AI was attempted but failed (config missing).
+ */
+export function isAIDisabled(): boolean {
+  return _initAttempted && _zai === null;
 }

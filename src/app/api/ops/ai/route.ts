@@ -84,6 +84,12 @@ export async function POST(request: NextRequest) {
     }
 
     const zai = await getZAI();
+    if (!zai) {
+      return NextResponse.json(
+        { error: "AI features are not configured on this server. Set Z_AI_BASE_URL and Z_AI_API_KEY." },
+        { status: 503 }
+      );
+    }
 
     // ── LLM call with tools ──
     const completion = await zai.chat.completions.create({

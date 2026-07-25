@@ -91,6 +91,12 @@ Respond in JSON format only:
 
     // Call VLM
     const zai = await getZAI();
+    if (!zai) {
+      return NextResponse.json(
+        { error: "AI vision features are not configured on this server. Set Z_AI_BASE_URL and Z_AI_API_KEY." },
+        { status: 503 }
+      );
+    }
 
     const response = await zai.chat.completions.createVision({
       messages: [

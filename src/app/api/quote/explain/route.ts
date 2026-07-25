@@ -111,6 +111,13 @@ ${addOnText ? `\nSelected Add-ons:\n${addOnText}` : ""}
 Explain what this covers and why it costs what it does. Be specific and helpful.`;
 
     const zai = await getZAI();
+    if (!zai) {
+      return NextResponse.json(
+        { explanation: "AI-powered quote explanation is not available on this server. Please contact support." },
+        { status: 503 }
+      );
+    }
+
     const completion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: EXPLAIN_SYSTEM_PROMPT },
