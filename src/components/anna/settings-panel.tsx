@@ -64,6 +64,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { PhoneInput } from "@/components/shared/phone-input";
 import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
+import { HouseholdProfileSection, type HouseholdProfile } from "@/components/anna/household-profile-section";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────
@@ -946,6 +947,12 @@ export function SettingsPanel() {
           </div>
         )}
       </div>
+
+      {/* ── Household Profile ── */}
+      <HouseholdProfileSection
+        profile={(household?.onboardingProfile as HouseholdProfile) || {}}
+        householdId={selectedHouseholdId}
+      />
 
       {/* ── Appearance ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
