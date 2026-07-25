@@ -45,9 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PhoneInput } from "@/components/shared/phone-input";
-import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
-import { validateSgPhone } from "@/lib/phone-validation";
+// Contact info moved to Settings — no longer part of onboarding
 import { cn } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -108,10 +106,9 @@ interface PreferencesData {
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 const STEP_LABELS = [
   "Welcome",
-  "Contact & Address",
   "Your Home",
   "Your People",
   "Pain Points",
@@ -549,146 +546,8 @@ function StepWelcome({ onContinue }: { onContinue: () => void }) {
   );
 }
 
-// ─── Step 1: Contact & Address ──────────────────────────────
-
-function StepContactAddress({
-  initialFullName,
-  initialHouseholdName,
-  initialPhone,
-  initialAddressData,
-  onContinue,
-  onBack,
-  isSaving,
-}: {
-  initialFullName?: string;
-  initialHouseholdName?: string;
-  initialPhone?: string;
-  initialAddressData?: Partial<AddressFormData>;
-  onContinue: (fullName: string, householdName: string, phone: string, addressData: AddressFormData) => void;
-  onBack: () => void;
-  isSaving: boolean;
-}) {
-  const [fullName, setFullName] = useState(initialFullName || initialHouseholdName || "");
-  const [householdName, setHouseholdName] = useState(initialHouseholdName || "");
-  const [nameError, setNameError] = useState("");
-  const [phone, setPhone] = useState(initialPhone || "");
-  const [phoneValid, setPhoneValid] = useState(() => {
-    if (!initialPhone) return false;
-    return validateSgPhone(initialPhone).valid;
-  });
-
-  const addressFormRef = useRef<HTMLDivElement>(null);
-  const addressDataRef = useRef<AddressFormData | null>(null);
-
-  const handlePhoneChange = useCallback((normalized: string, _raw: string) => {
-    setPhone(normalized);
-    const result = validateSgPhone(normalized);
-    setPhoneValid(result.valid);
-  }, []);
-
-  const handleAddressSubmit = useCallback((data: AddressFormData) => {
-    addressDataRef.current = data;
-  }, []);
-
-  const canContinue = fullName.trim() !== "" && phoneValid;
-
-  const handleNext = useCallback(() => {
-    if (!fullName.trim()) {
-      setNameError("Please enter your full name");
-      return;
-    }
-    if (!phoneValid) return;
-
-    const form = addressFormRef.current?.querySelector("form") as HTMLFormElement | null;
-    if (!form) return;
-
-    addressDataRef.current = null;
-    form.requestSubmit();
-
-    if (addressDataRef.current) {
-      const hhName = householdName.trim() || `${fullName.trim()}'s Home`;
-      onContinue(fullName.trim(), hhName, phone, addressDataRef.current);
-    }
-  }, [fullName, householdName, phone, phoneValid, onContinue]);
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Contact &amp; Address</h2>
-      <p className="text-xs text-[var(--anna-muted)] mb-5">
-        Let&apos;s start with the essentials — how we reach you and where you are.
-      </p>
-
-      {/* Full Name */}
-      <div className="space-y-1.5 mb-4">
-        <Label className="text-sm font-medium">
-          Full Name <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          value={fullName}
-          onChange={(e) => { setFullName(e.target.value); setNameError(""); }}
-          placeholder="e.g. Alex Tan"
-          className={cn(
-            "h-10 text-sm",
-            nameError && "border-red-400"
-          )}
-        />
-        <p className="text-[10px] text-[var(--anna-muted)]">This is your personal name — your service providers will see this.</p>
-        {nameError && <p className="text-xs text-red-500">{nameError}</p>}
-      </div>
-
-      {/* Household Name (optional — pre-filled from existing) */}
-      {householdName && (
-        <div className="space-y-1.5 mb-4">
-          <Label className="text-sm font-medium">Household Name</Label>
-          <Input
-            value={householdName}
-            onChange={(e) => setHouseholdName(e.target.value)}
-            placeholder="e.g. Tan Family"
-            className="h-10 text-sm"
-          />
-          <p className="text-[10px] text-[var(--anna-muted)]">What your household is called — shown in your dashboard.</p>
-        </div>
-      )}
-
-      {/* Mobile Number */}
-      <div className="mb-4">
-        <PhoneInput
-          value={initialPhone}
-          onChange={handlePhoneChange}
-          label="Mobile Number"
-          required
-        />
-      </div>
-
-      {/* Service Address */}
-      <div ref={addressFormRef}>
-        <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">Service Address</p>
-        <AddressForm
-          onSubmit={handleAddressSubmit}
-          initialData={initialAddressData}
-          showPropertyTypeSelector={true}
-          showLabel={false}
-          hideSubmit={true}
-          compact={true}
-        />
-      </div>
-
-      <AnnaInsight>
-        Your contact info helps our service providers reach you on the day. We only collect Singapore-registered numbers.
-      </AnnaInsight>
-
-      <StepNav
-        onBack={onBack}
-        onContinue={handleNext}
-        continueDisabled={!canContinue}
-        isSaving={isSaving}
-      />
-    </div>
-  );
-}
-
-
-// ─── Step 2: Your Home ──────────────────────────────────────────
+// ─── Step 1: Your Home ──────────────────────────────────────────
+// (Contact & Address removed from onboarding — moved to Settings)
 
 function StepYourHome({
   data,
@@ -1704,9 +1563,14 @@ function PhaseDivider() {
 // ─── Main Onboarding Wizard ────────────────────────────────────
 
 export function OnboardingWizard({ household, onComplete }: OnboardingWizardProps) {
-  const [currentStep, setCurrentStep] = useState(() =>
-    Math.max(0, Math.min(household.onboardingStep, TOTAL_STEPS - 1))
-  );
+  // ── API→Display step mapping (Contact step removed) ──
+  // Old API steps: 0=Welcome, 1=Contact(removed), 2=YourHome, 3=YourPeople, ...
+  // New display steps: 0=Welcome, 1=YourHome, 2=YourPeople, ...
+  const [currentStep, setCurrentStep] = useState(() => {
+    const apiStep = household.onboardingStep;
+    let displayStep = apiStep <= 0 ? 0 : apiStep === 1 ? 1 : apiStep - 1;
+    return Math.max(0, Math.min(displayStep, TOTAL_STEPS - 1));
+  });
   const [direction, setDirection] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -1719,12 +1583,6 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   const [painPointsData, setPainPointsData] = useState<PainPointsData>((profile.painPoints as PainPointsData) || {});
   const [serviceHabitsData, setServiceHabitsData] = useState<ServiceHabitsData>((profile.serviceHabits as ServiceHabitsData) || {});
   const [prefsData, setPrefsData] = useState<PreferencesData>((profile.preferences as PreferencesData) || {});
-  // ── Contact step state ──
-  const [contactName, setContactName] = useState(household.fullName || household.name);
-  const [contactPhone, setContactPhone] = useState(household.phone || "");
-  const [savedContactAddress, setSavedContactAddress] = useState<Partial<AddressFormData>>({});
-
-
   // PATCH mutation
   const saveMutation = useMutation({
     mutationFn: async ({ step, data }: { step: number; data: Record<string, unknown> }) => {
@@ -1759,61 +1617,8 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
     goNext();
   }, [goNext]);
 
-  // Contact step mutation (separate from profile mutation)
-  const contactMutation = useMutation({
-    mutationFn: async (params: { fullName: string; householdName: string; phone: string; addressData: AddressFormData }) => {
-      const householdId = household.id;
-
-      // 1. Update household fullName, name, and phone
-      const hhRes = await fetch(`/api/households/${householdId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: params.fullName, name: params.householdName, phone: params.phone }),
-      });
-      if (!hhRes.ok) {
-        const err = await hhRes.json().catch(() => ({ error: "Failed to save contact" }));
-        throw new Error(err.error || "Failed to save contact info");
-      }
-
-      // 2. Create address
-      const addrRes = await fetch(`/api/households/${householdId}/addresses`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...params.addressData,
-          label: "Home",
-          isDefault: true,
-        }),
-      });
-      if (!addrRes.ok) {
-        const err = await addrRes.json().catch(() => ({ error: "Failed to save address" }));
-        throw new Error(err.error || "Failed to save address");
-      }
-
-      // 3. Advance onboarding step
-      const onbRes = await fetch("/api/household/onboarding", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step: 1, data: {} }),
-      });
-      if (!onbRes.ok) throw new Error("Failed to advance step");
-
-      return onbRes.json();
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Something went wrong. Please try again.");
-    },
-  });
-
   // Step handlers: save then advance
-  const handleStepContact = useCallback(async (fullName: string, householdName: string, phone: string, addressData: AddressFormData) => {
-    setSavedContactAddress(addressData);
-    try {
-      await contactMutation.mutateAsync({ fullName, householdName, phone, addressData });
-      goNext();
-    } catch { /* handled in onError */ }
-  }, [contactMutation, goNext]);
-
+  // Note: handlers reference API step numbers (2-9), not display step numbers
   const handleStep2 = useCallback(async () => {
     try {
       await saveMutation.mutateAsync({ step: 2, data: homeData });
@@ -1912,17 +1717,6 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
             >
               {currentStep === 0 && <StepWelcome onContinue={goNext} />}
               {currentStep === 1 && (
-                <StepContactAddress
-                  initialFullName={household.fullName}
-                  initialHouseholdName={household.name}
-                  initialPhone={contactPhone}
-                  initialAddressData={savedContactAddress}
-                  onContinue={handleStepContact}
-                  onBack={goBack}
-                  isSaving={contactMutation.isPending}
-                />
-              )}
-              {currentStep === 2 && (
                 <StepYourHome
                   data={homeData}
                   onChange={(field, value) => setHomeData((p) => ({ ...p, [field]: value }))}
@@ -1932,7 +1726,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   isSaving={saveMutation.isPending}
                 />
               )}
-              {currentStep === 3 && (
+              {currentStep === 2 && (
                 <StepYourPeople
                   data={peopleData}
                   onChange={(field, value) => setPeopleData((p) => ({ ...p, [field]: value }))}
@@ -1942,7 +1736,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   isSaving={saveMutation.isPending}
                 />
               )}
-              {currentStep === 4 && (
+              {currentStep === 3 && (
                 <StepPainPoints
                   data={painPointsData}
                   onChange={(field, value) => setPainPointsData((p) => ({ ...p, [field]: value }))}
@@ -1952,7 +1746,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   isSaving={saveMutation.isPending}
                 />
               )}
-              {currentStep === 5 && (
+              {currentStep === 4 && (
                 <StepServiceHabits
                   data={serviceHabitsData}
                   onChange={(field, value) => setServiceHabitsData((p) => ({ ...p, [field]: value }))}
@@ -1963,7 +1757,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   selectedPainPoints={painPointsData.timeConsumingTasks || []}
                 />
               )}
-              {currentStep === 6 && (
+              {currentStep === 5 && (
                 <StepPreferences
                   data={prefsData}
                   onChange={(field, value) => setPrefsData((p) => ({ ...p, [field]: value }))}
@@ -1972,14 +1766,14 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                   isSaving={saveMutation.isPending}
                 />
               )}
-              {currentStep === 7 && (
+              {currentStep === 6 && (
                 <StepMeetAnna
                   onContinue={handleStep7}
                   onBack={goBack}
                   topPainPoint={(painPointsData.timeConsumingTasks || [])[0]}
                 />
               )}
-              {currentStep === 8 && (
+              {currentStep === 7 && (
                 <StepYourControl onContinue={handleStep8} onBack={goBack} />
               )}
             </motion.div>

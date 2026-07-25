@@ -773,6 +773,13 @@ export function SettingsPanel() {
   const subscriptions: Subscription[] = data?.subscriptions || [];
   const sub = subscriptions[0];
 
+  // Contact completeness check
+  const hasFullName = !!household?.fullName?.trim();
+  const hasPhone = !!household?.phone?.trim();
+  const hasAddress = addresses && addresses.length > 0;
+  const missingContactInfo = !hasFullName || !hasPhone;
+  const profileComplete = hasFullName && hasPhone && hasAddress;
+
   // ── Render ──
 
   if (isLoading) {
@@ -795,12 +802,36 @@ export function SettingsPanel() {
         Household configuration and subscription
       </p>
 
+      {/* ── Profile Completeness Banner ── */}
+      {missingContactInfo && (
+        <div className="rounded-2xl p-4 mb-4 border bg-[var(--anna-warning)]/8 border-[var(--anna-warning)]/25">
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[var(--anna-warning)]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertTriangle size={16} className="text-[var(--anna-warning)]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[var(--anna-slate)]">Complete your profile</p>
+              <p className="text-xs text-[var(--anna-muted)] mt-0.5 leading-relaxed">
+                {!hasFullName && !hasPhone
+                  ? "Add your name and phone number so service providers can reach you."
+                  : !hasFullName
+                    ? "Add your full name to personalise your service experience."
+                    : "Add your phone number so service providers can contact you on the day."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Household Info ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
         {/* Contact subsection */}
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-1">
           Contact Information
         </h3>
+        <p className="text-[11px] text-[var(--anna-muted)] mb-4">
+          Your name and phone help service providers identify and reach you.
+        </p>
         <div className="space-y-3.5 group/contact">
           {/* Avatar with household name */}
           <div className="flex items-center gap-3">

@@ -23,45 +23,35 @@ import { PROPERTY_TYPE_LABELS } from "@/lib/types";
 import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code";
 import { buildFullAddress, getRequiredFields } from "@/lib/address";
 
-// ─── Property type selector ───────────────────────────────
+// ─── Property type groups (simplified selector) ────────────
 
-const PROPERTY_TYPES: {
-  value: PropertyType;
-  label: string;
-  icon: React.ElementType;
-  desc: string;
-}[] = [
+const PRIMARY_GROUPS = [
   {
-    value: "HDB",
-    label: "HDB Flat",
+    id: "apartment" as const,
+    label: "HDB / Condo / Office",
     icon: Building2,
-    desc: "Public housing",
+    desc: "Apartment or office building",
+    types: ["HDB", "CONDOMINIUM", "OFFICE"] as PropertyType[],
+    defaultType: "HDB" as PropertyType,
   },
   {
-    value: "CONDOMINIUM",
-    label: "Condominium",
-    icon: Building2,
-    desc: "Private apartment",
-  },
-  {
-    value: "LANDED",
+    id: "landed" as const,
     label: "Landed Property",
     icon: Trees,
-    desc: "Detached / Semi-D",
-  },
-  {
-    value: "OFFICE",
-    label: "Office",
-    icon: Briefcase,
-    desc: "Private office building",
-  },
-  {
-    value: "OTHER",
-    label: "Other",
-    icon: HelpCircle,
-    desc: "Studio, dorm, etc.",
+    desc: "Detached, semi-D, terrace",
+    types: ["LANDED"] as PropertyType[],
+    defaultType: "LANDED" as PropertyType,
   },
 ];
+
+const SUB_TYPE_OPTIONS: { value: PropertyType; label: string }[] = [
+  { value: "HDB", label: "HDB" },
+  { value: "CONDOMINIUM", label: "Condominium" },
+  { value: "OFFICE", label: "Office" },
+];
+
+// Full list for backward compat (e.g., when editing existing OTHER addresses)
+const ALL_PROPERTY_TYPES: PropertyType[] = ["HDB", "CONDOMINIUM", "LANDED", "OFFICE"];
 
 // ─── Lookup result type ────────────────────────────────────
 
@@ -159,9 +149,12 @@ export function AddressForm({
   // ── Derived ──
   const propertyType = form.propertyType;
   const requiredFields = getRequiredFields(propertyType);
-  const types = allowedTypes
-    ? PROPERTY_TYPES.filter((t) => allowedTypes.includes(t.value))
-    : PROPERTY_TYPES;
+  // Determine which primary group is selected based on propertyType
+  const selectedGroupId = (() => {
+    if (propertyType === "LANDED") return "landed";
+    return "apartment"; // HDB, CONDOMINIUM, OFFICE, or legacy OTHER
+  })();
+  const selectedGroup = PRIMARY_GROUPS.find((g) => g.id === selectedGroupId);
 
   // ── Apply lookup result ──
   const applyLookupResult = useCallback((result: PostalLookupResult) => {
@@ -291,55 +284,92 @@ export function AddressForm({
 
   return (
     <form onSubmit={handleSubmit} className={cn("space-y-4", className)}>
-      {/* Property Type Selector */}
+      {/* Property Type Selector — 2-button grouped layout */}
       {showPropertyTypeSelector && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <Label className="text-sm font-medium">
             Property Type <span className="text-red-500">*</span>
           </Label>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {types.map((type) => {
-              const Icon = type.icon;
-              const isSelected = form.propertyType === type.value;
+          <div className="grid grid-cols-2 gap-2">
+            {PRIMARY_GROUPS.map((group) => {
+              const Icon = group.icon;
+              const isSelected = selectedGroupId === group.id;
               return (
                 <button
-                  key={type.value}
+                  key={group.id}
                   type="button"
                   onClick={() => {
-                    updateField("propertyType", type.value);
+                    // Set to the default type for this group
+                    const newType = initialData?.propertyType && group.types.includes(initialData.propertyType)
+                      ? initialData.propertyType
+                      : group.defaultType;
+                    updateField("propertyType", newType);
                     setLookupResults([]);
                     setSelectedLookupIdx(null);
                     setLookupStatus("idle");
                   }}
                   className={cn(
-                    "flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all",
+                    "flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all text-left",
                     isSelected
                       ? "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/20"
                       : "border-[var(--anna-border)] hover:border-[var(--anna-sage)]/40 bg-white"
                   )}
                 >
-                  <Icon
-                    size={compact ? 16 : 20}
+                  <div
                     className={cn(
+                      "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                       isSelected
-                        ? "text-[var(--anna-sage-dark)]"
-                        : "text-[var(--anna-muted)]"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-[10px] sm:text-xs font-medium leading-tight text-center",
-                      isSelected
-                        ? "text-[var(--anna-sage-dark)]"
-                        : "text-[var(--anna-slate-light)]"
+                        ? "bg-[var(--anna-sage)] text-white"
+                        : "bg-[var(--anna-bg)] text-[var(--anna-slate-light)]"
                     )}
                   >
-                    {type.label}
-                  </span>
+                    <Icon size={compact ? 16 : 18} />
+                  </div>
+                  <div className="min-w-0">
+                    <span
+                      className={cn(
+                        "text-xs font-semibold leading-tight block",
+                        isSelected
+                          ? "text-[var(--anna-sage-dark)]"
+                          : "text-[var(--anna-slate-light)]"
+                      )}
+                    >
+                      {group.label}
+                    </span>
+                    <span className="text-[10px] text-[var(--anna-muted)] block truncate">
+                      {group.desc}
+                    </span>
+                  </div>
                 </button>
               );
             })}
           </div>
+
+          {/* Sub-type pills for apartment group */}
+          {selectedGroupId === "apartment" && (
+            <div className="flex gap-1.5">
+              {SUB_TYPE_OPTIONS.map((sub) => (
+                <button
+                  key={sub.value}
+                  type="button"
+                  onClick={() => {
+                    updateField("propertyType", sub.value);
+                    setLookupResults([]);
+                    setSelectedLookupIdx(null);
+                    setLookupStatus("idle");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all border",
+                    propertyType === sub.value
+                      ? "border-[var(--anna-sage)] bg-[var(--anna-sage)] text-white"
+                      : "border-[var(--anna-border)] bg-white text-[var(--anna-muted)] hover:border-[var(--anna-sage)]/40 hover:text-[var(--anna-slate-light)]"
+                  )}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -683,28 +713,6 @@ export function AddressForm({
             </div>
           </div>
         </>
-      )}
-
-      {propertyType === "OTHER" && (
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">
-            Street Address <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            value={form.streetAddress}
-            onChange={(e) => updateField("streetAddress", e.target.value)}
-            placeholder="e.g. Full address"
-            className={cn(
-              "h-10 text-sm",
-              fieldErrors.streetAddress && "border-red-400"
-            )}
-          />
-          {fieldErrors.streetAddress && (
-            <p className="text-xs text-red-500">
-              {fieldErrors.streetAddress}
-            </p>
-          )}
-        </div>
       )}
 
       {/* ─── Address Preview ────────────────────────────── */}
