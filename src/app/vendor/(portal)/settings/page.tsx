@@ -9,6 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { formatDate } from "@/lib/types";
 import {
@@ -27,8 +34,17 @@ import {
   Pencil,
   AlertCircle,
   Save,
+  User,
+  Plus,
+  Trash2,
+  Loader2,
+  Building2,
+  Trees,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/shared/phone-input";
+import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
+import { PROPERTY_TYPE_LABELS, type Address } from "@/lib/types";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -37,6 +53,7 @@ interface VendorProfile {
   name: string;
   email: string;
   phone: string;
+  contactPerson?: string | null;
   categories: string;
   vendorType: string;
   staffCount: number;
@@ -51,7 +68,7 @@ interface VendorProfile {
   updatedAt: string;
 }
 
-type EditSection = "phone" | "email" | "availability" | null;
+type EditSection = "phone" | "email" | "availability" | "contactPerson" | null;
 
 interface AvailabilityData {
   workingDays: string[];
@@ -300,12 +317,18 @@ export default function VendorSettingsPage() {
   const [editWorkingDays, setEditWorkingDays] = useState<string[]>([]);
   const [editWorkingHours, setEditWorkingHours] = useState("");
   const [editHoursNotes, setEditHoursNotes] = useState("");
+  const [editContactPerson, setEditContactPerson] = useState("");
+
+  // Address dialog state
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
 
   // Sync edit state when editing starts
   const startEdit = (section: EditSection) => {
     if (!profile) return;
     if (section === "phone") setEditPhone(profile.phone || "");
     if (section === "email") setEditEmail(profile.email || "");
+    if (section === "contactPerson") setEditContactPerson((profile as Record<string, unknown>).contactPerson as string || "");
     if (section === "availability") {
       try {
         const avail = (profile.availability as AvailabilityData) || {};
@@ -393,6 +416,82 @@ export default function VendorSettingsPage() {
     },
     onError: (err) => {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Contact Person mutation
+  const saveContactPersonMutation = useMutation({
+    mutationFn: async (contactPerson: string) => {
+      const res = await fetch("/api/vendor/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactPerson }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Update failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Contact person updated" });
+      queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      setEditSection(null);
+    },
+    onError: (err) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // ── Vendor Addresses ──
+  const { data: addressesData } = useQuery<{ addresses: Address[] }>({
+    queryKey: ["vendor-addresses"],
+    queryFn: async () => {
+      const res = await fetch("/api/vendor/addresses");
+      if (!res.ok) throw new Error("Failed to fetch addresses");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const addresses = addressesData?.addresses || [];
+
+  const createAddressMutation = useMutation({
+    mutationFn: async (data: AddressFormData) => {
+      const res = await fetch("/api/vendor/addresses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to save address" }));
+        throw new Error(err.error || "Failed to save address");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Address added" });
+      queryClient.invalidateQueries({ queryKey: ["vendor-addresses"] });
+      setAddressDialogOpen(false);
+      setEditingAddress(null);
+    },
+    onError: (err) => {
+      toast({ title: "Failed to add address", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (addressId: string) => {
+      const res = await fetch(`/api/vendor/addresses/${addressId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete address");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Address removed" });
+      queryClient.invalidateQueries({ queryKey: ["vendor-addresses"] });
+    },
+    onError: (err) => {
+      toast({ title: "Failed to remove address", description: err.message, variant: "destructive" });
     },
   });
 
@@ -529,12 +628,123 @@ export default function VendorSettingsPage() {
             }
           />
 
+          {/* Contact Person */}
+          <EditableRow
+            icon={User}
+            label="Contact Person"
+            value={profile.contactPerson || "Not set"}
+            isEditing={editSection === "contactPerson"}
+            onEdit={() => startEdit("contactPerson")}
+            editContent={
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editContactPerson}
+                  onChange={(e) => setEditContactPerson(e.target.value)}
+                  placeholder="e.g. John Lim"
+                  className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => saveContactPersonMutation.mutate(editContactPerson)}
+                  disabled={saveContactPersonMutation.isPending}
+                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+                >
+                  <Save size={12} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={cancelEdit}
+                  className="h-7 px-1 rounded-lg"
+                >
+                  <X size={12} />
+                </Button>
+              </div>
+            }
+          />
           <div className="mt-3 flex items-start gap-2 px-1">
             <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
             <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
               Phone must be a valid Singapore (+65) or Malaysia (+60) number. Email must be unique.
             </p>
           </div>
+        </SectionCard>
+
+        {/* ── Registered Address ── */}
+        <SectionCard title="Registered Address" subtitle="Your business and operating addresses" icon={MapPin}>
+          {addresses.length > 0 ? (
+            <div className="space-y-2">
+              {addresses.map((addr) => (
+                <div
+                  key={addr.id}
+                  className="group flex items-start justify-between p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)] hover:border-[var(--anna-sage)]/30 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
+                        {PROPERTY_TYPE_LABELS[addr.propertyType as keyof typeof PROPERTY_TYPE_LABELS] || addr.propertyType}
+                      </span>
+                      {addr.isDefault && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-success)]/15 text-[var(--anna-success)]">
+                          Default
+                        </span>
+                      )}
+                      {addr.label && (
+                        <span className="text-[10px] text-[var(--anna-muted)]">{addr.label}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{addr.fullAddress}</p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                    <button
+                      onClick={() => {
+                        setEditingAddress(addr);
+                        setAddressDialogOpen(true);
+                      }}
+                      className="p-1 rounded-lg hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)]"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    {addresses.length > 1 && (
+                      <button
+                        onClick={() => deleteAddressMutation.mutate(addr.id)}
+                        className="p-1 rounded-lg hover:bg-red-50 text-[var(--anna-muted)] hover:text-red-500"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditingAddress(null);
+                  setAddressDialogOpen(true);
+                }}
+                className="mt-2 rounded-xl h-8 text-xs w-full"
+              >
+                <Plus size={12} className="mr-1.5" />
+                Add Address
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <MapPin size={24} className="text-[var(--anna-muted)] mx-auto mb-2" />
+              <p className="text-xs text-[var(--anna-muted)] mb-3">No addresses added yet</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditingAddress(null);
+                  setAddressDialogOpen(true);
+                }}
+                className="rounded-xl h-8 text-xs"
+              >
+                <Plus size={12} className="mr-1.5" />
+                Add Address
+              </Button>
+            </div>
+          )}
         </SectionCard>
 
         {/* ── Working Hours & Availability ── */}
@@ -716,6 +926,46 @@ export default function VendorSettingsPage() {
           </div>
         </SectionCard>
       </div>
+
+      {/* ── Address Dialog ── */}
+      <Dialog open={addressDialogOpen} onOpenChange={(open) => {
+        setAddressDialogOpen(open);
+        if (!open) setEditingAddress(null);
+      }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAddress ? "Edit Address" : "Add Address"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingAddress ? "Update your address details" : "Add a registered or operating address"}
+            </DialogDescription>
+          </DialogHeader>
+          <AddressForm
+            key={editingAddress?.id || "new"}
+            initialData={editingAddress ? {
+              propertyType: editingAddress.propertyType,
+              postalCode: editingAddress.postalCode,
+              blockNumber: editingAddress.blockNumber || undefined,
+              streetName: editingAddress.streetName || undefined,
+              buildingName: editingAddress.buildingName || undefined,
+              level: editingAddress.level || undefined,
+              unitNumber: editingAddress.unitNumber || undefined,
+              houseNumber: editingAddress.houseNumber || undefined,
+              streetAddress: editingAddress.streetAddress || undefined,
+              label: editingAddress.label || undefined,
+            } : {
+              propertyType: "OFFICE",
+              isDefault: addresses.length === 0,
+            }}
+            onSubmit={createAddressMutation.mutate}
+            submitLabel={editingAddress ? "Update Address" : "Add Address"}
+            loading={createAddressMutation.isPending}
+            showPropertyTypeSelector={true}
+            showLabel={true}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

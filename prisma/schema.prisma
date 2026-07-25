@@ -76,6 +76,19 @@ enum MemberRole {
   MEMBER
 }
 
+enum PropertyType {
+  HDB
+  CONDOMINIUM
+  LANDED
+  OFFICE
+  OTHER
+}
+
+enum AddressOwner {
+  HOUSEHOLD
+  VENDOR
+}
+
 enum NotificationChannel {
   WHATSAPP
   WEB_PUSH
@@ -155,7 +168,7 @@ model Household {
   name                  String
   email                 String          @unique
   phone                 String?
-  address               String           // estate-level for batching
+  address               String           // estate-level for batching (denormalised from default Address)
   postalCode            String?
   unitNumber            String?
   activeCategories      String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
@@ -174,6 +187,7 @@ model Household {
   notifications    Notification[]
   anomalies        Anomaly[]
   quotations       Quotation[]
+  addresses         Address[]
 }
 
 model FamilyMember {
@@ -197,6 +211,7 @@ model Vendor {
   name            String
   email           String       @unique
   phone           String
+  contactPerson   String?      // Name of primary contact person
   categories      String // JSON array of ServiceCategory
   status          VendorStatus @default(PENDING)
   vendorType      VendorType  @default(MICRO)
@@ -218,6 +233,42 @@ model Vendor {
   vendorPlan     VendorPlan?
   featureOverrides VendorFeatureOverride[]
   notifications  Notification[]
+  addresses       Address[]
+}
+
+// ======================== ADDRESSES ========================
+
+model Address {
+  id            String       @id @default(cuid())
+  ownerType     AddressOwner
+  ownerId       String       // Denormalised owner reference for polymorphic queries
+  householdId   String?      // FK → Household.id (populated when ownerType = HOUSEHOLD)
+  vendorId      String?      // FK → Vendor.id (populated when ownerType = VENDOR)
+  label         String?      // "Home", "Office", "Parents' House" etc.
+  propertyType  PropertyType @default(HDB)
+  postalCode    String       // Singapore 6-digit postal code
+  blockNumber   String?      // HDB / Condominium
+  streetName    String?      // auto-populated from postal lookup or manual
+  buildingName  String?      // Condominium / Office (e.g. "Marina Bay Sands")
+  level         String?      // HDB / Condominium / Office
+  unitNumber    String?      // HDB / Condominium / Office
+  houseNumber   String?      // Landed Property
+  streetAddress String?      // Landed / Office: full street line (e.g. "Orchard Road")
+  fullAddress   String       // Computed human-readable address string
+  isDefault     Boolean      @default(false)
+  latitude      Float?       // Future: GPS coordinates
+  longitude     Float?       // Future: GPS coordinates
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  household     Household?  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vendor        Vendor?     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([ownerType, ownerId])
+  @@index([ownerType, ownerId, isDefault])
+  @@index([postalCode])
+  @@index([householdId])
+  @@index([vendorId])
 }
 
 // ======================== MEMORY ========================

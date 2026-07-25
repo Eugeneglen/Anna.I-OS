@@ -6,6 +6,7 @@ import { getVendorSession } from "@/lib/vendor-auth";
 const ALLOWED_PATCH_FIELDS = [
   "phone",
   "email",
+  "contactPerson",
   "availability",    // JSON: { workingDays, workingHours, notes }
 ] as const;
 
@@ -37,6 +38,7 @@ export async function GET() {
         name: true,
         email: true,
         phone: true,
+        contactPerson: true,
         categories: true,
         vendorType: true,
         staffCount: true,
@@ -144,6 +146,7 @@ export async function PATCH(req: NextRequest) {
         name: true,
         email: true,
         phone: true,
+        contactPerson: true,
         categories: true,
         vendorType: true,
         staffCount: true,

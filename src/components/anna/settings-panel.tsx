@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAnnaStore } from "@/lib/store";
@@ -29,9 +29,12 @@ import {
 import { toast } from "sonner";
 import {
   formatSgd,
+  PROPERTY_TYPE_LABELS,
   type Household,
   type FamilyMember,
   type Subscription,
+  type Address,
+  type PropertyType,
 } from "@/lib/types";
 import { useTheme } from "next-themes";
 import {
@@ -51,8 +54,17 @@ import {
   AlertTriangle,
   Info,
   LogOut,
+  Building2,
+  Trees,
+  Briefcase,
+  HelpCircle,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { PhoneInput } from "@/components/shared/phone-input";
+import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
+import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────
 // Data fetching
@@ -62,6 +74,242 @@ async function fetchHouseholdDetail(id: string) {
   const res = await fetch(`/api/households/${id}`);
   if (!res.ok) throw new Error("Failed to fetch household");
   return res.json();
+}
+
+async function fetchAddresses(householdId: string) {
+  const res = await fetch(`/api/households/${householdId}/addresses`);
+  if (!res.ok) throw new Error("Failed to fetch addresses");
+  const data = await res.json();
+  return data.addresses as Address[];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Property type icon helper
+// ─────────────────────────────────────────────────────────────
+
+const PROPERTY_TYPE_ICONS: Record<PropertyType, React.ElementType> = {
+  HDB: Building2,
+  CONDOMINIUM: Building2,
+  LANDED: Trees,
+  OFFICE: Briefcase,
+  OTHER: HelpCircle,
+};
+
+function PropertyTypeBadge({ type }: { type: PropertyType }) {
+  const Icon = PROPERTY_TYPE_ICONS[type] || HelpCircle;
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
+      <Icon size={10} />
+      {PROPERTY_TYPE_LABELS[type]}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phone editable field (inline editing with PhoneInput)
+// ─────────────────────────────────────────────────────────────
+
+function PhoneEditableField({
+  value,
+  isMutating,
+  onSave,
+}: {
+  value: string;
+  isMutating: boolean;
+  onSave: (normalized: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [phoneValue, setPhoneValue] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && phoneInputRef.current) {
+      // Focus the actual input inside PhoneInput
+      const input = phoneInputRef.current.querySelector("input");
+      input?.focus();
+    }
+  }, [editing]);
+
+  const startEditing = () => {
+    setPhoneValue(value || "");
+    setPhoneError("");
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setPhoneError("");
+  };
+
+  const handlePhoneChange = useCallback((normalized: string, _raw: string) => {
+    setPhoneValue(normalized);
+    setPhoneError("");
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (phoneError) return;
+
+    if (!phoneValue || phoneValue.replace(/^\+65/, "").replace(/\D/g, "").length < 8) {
+      setPhoneError("Please enter a valid 8-digit phone number");
+      return;
+    }
+
+    if (phoneValue === value) {
+      cancelEditing();
+      return;
+    }
+
+    onSave(phoneValue);
+    setEditing(false);
+  }, [phoneValue, value, phoneError, onSave]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+    if (e.key === "Escape") {
+      cancelEditing();
+    }
+  };
+
+  // Display formatted phone
+  const displayPhone = (() => {
+    if (!value) return "—";
+    const digits = value.replace(/^\+65/, "").replace(/\D/g, "");
+    if (digits.length === 8) return `+65 ${digits.slice(0, 4)} ${digits.slice(4)}`;
+    return value;
+  })();
+
+  const isEmpty = !value;
+
+  if (editing) {
+    return (
+      <div className="flex items-start gap-3" onKeyDown={handleKeyDown}>
+        <Phone size={14} className="text-[var(--anna-muted)] flex-shrink-0 mt-2.5" />
+        <div className="flex-1 space-y-1" ref={phoneInputRef as React.RefObject<HTMLDivElement>}>
+          <PhoneInput
+            value={phoneValue}
+            onChange={handlePhoneChange}
+            label=""
+            required
+            error={phoneError}
+            showStatus
+            disabled={isMutating}
+          />
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-[var(--anna-success)] hover:bg-[var(--anna-success)]/10 px-2"
+              onClick={handleSave}
+              disabled={isMutating}
+            >
+              <Check size={12} className="mr-1" />
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-[var(--anna-muted)] hover:bg-[var(--anna-bg)] px-2"
+              onClick={cancelEditing}
+              disabled={isMutating}
+            >
+              <X size={12} className="mr-1" />
+              Cancel
+            </Button>
+            {isMutating && (
+              <Loader2 size={12} className="animate-spin text-[var(--anna-muted)] ml-1" />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <Phone size={14} className="text-[var(--anna-muted)] flex-shrink-0" />
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className={cn(
+          "text-sm truncate",
+          isEmpty ? "text-[var(--anna-muted)] italic" : "text-[var(--anna-slate-light)]"
+        )}>
+          {isEmpty ? "No phone" : displayPhone}
+        </span>
+        {isEmpty && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-[var(--anna-warning)]/40 text-[var(--anna-warning)] flex-shrink-0">
+            Required
+          </Badge>
+        )}
+        <button
+          onClick={startEditing}
+          className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label="Edit phone"
+        >
+          <Pencil size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Address card
+// ─────────────────────────────────────────────────────────────
+
+function AddressCard({
+  address,
+  onEdit,
+  onDelete,
+}: {
+  address: Address;
+  onEdit: (address: Address) => void;
+  onDelete: (address: Address) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)]/50 p-3.5 space-y-2 group/card">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PropertyTypeBadge type={address.propertyType} />
+          {address.isDefault && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-[var(--anna-success)]/15 text-[var(--anna-success)]">
+              Default
+            </span>
+          )}
+          {address.label && (
+            <span className="text-[10px] font-medium text-[var(--anna-muted)]">
+              {address.label}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <button
+            onClick={() => onEdit(address)}
+            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
+            aria-label="Edit address"
+          >
+            <Pencil size={12} />
+          </button>
+          <button
+            onClick={() => onDelete(address)}
+            className="p-1 rounded-md hover:bg-[var(--anna-error)]/10 text-[var(--anna-muted)] hover:text-[var(--anna-error)] transition-colors"
+            aria-label="Delete address"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+      <div className="flex items-start gap-1.5">
+        <MapPin size={12} className="text-[var(--anna-muted)] flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-[var(--anna-slate)] leading-snug">{address.fullAddress}</p>
+      </div>
+      <p className="text-[11px] text-[var(--anna-muted)]">
+        Singapore {address.postalCode}
+      </p>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -290,6 +538,15 @@ export function SettingsPanel() {
     enabled: !!selectedHouseholdId,
   });
 
+  const {
+    data: addresses,
+    isLoading: addressesLoading,
+  } = useQuery({
+    queryKey: ["addresses", selectedHouseholdId],
+    queryFn: () => fetchAddresses(selectedHouseholdId),
+    enabled: !!selectedHouseholdId,
+  });
+
   // ── Mutations ──
 
   const updateHousehold = useMutation({
@@ -374,6 +631,9 @@ export function SettingsPanel() {
   const [deleteTarget, setDeleteTarget] = useState<FamilyMember | null>(null);
   const [cancelSubDialog, setCancelSubDialog] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [deleteAddressTarget, setDeleteAddressTarget] = useState<Address | null>(null);
 
   // ── Subscription mutation (cancel) ──
   const cancelMutation = useMutation({
@@ -396,6 +656,78 @@ export function SettingsPanel() {
     onError: () => {
       toast.error("Failed to submit cancellation request");
     },
+  });
+
+  // ── Address mutations ──
+
+  const createAddress = useMutation({
+    mutationFn: async (data: AddressFormData) => {
+      const res = await fetch(`/api/households/${selectedHouseholdId}/addresses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create address");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses", selectedHouseholdId] });
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Address added");
+      setAddressDialogOpen(false);
+      setEditingAddress(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateAddress = useMutation({
+    mutationFn: async ({ addressId, data }: { addressId: string; data: AddressFormData }) => {
+      const res = await fetch(
+        `/api/households/${selectedHouseholdId}/addresses/${addressId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update address");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses", selectedHouseholdId] });
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Address updated");
+      setAddressDialogOpen(false);
+      setEditingAddress(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteAddress = useMutation({
+    mutationFn: async (addressId: string) => {
+      const res = await fetch(
+        `/api/households/${selectedHouseholdId}/addresses/${addressId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to delete address");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses", selectedHouseholdId] });
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Address deleted");
+      setDeleteAddressTarget(null);
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   // ── Derived ──
@@ -428,12 +760,13 @@ export function SettingsPanel() {
       </p>
 
       {/* ── Household Info ── */}
-      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4 group">
+      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
+        {/* Contact subsection */}
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-4">
           Household
         </h3>
-        <div className="space-y-3.5">
-          {/* Name (uses a dedicated inline row, not EditableField) */}
+        <div className="space-y-3.5 group/contact">
+          {/* Name (non-editable display) */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center flex-shrink-0">
               <span className="text-sm font-bold text-[var(--anna-sage-dark)]">
@@ -450,6 +783,7 @@ export function SettingsPanel() {
             </div>
           </div>
 
+          {/* Email — keep existing EditableField */}
           <EditableField
             label="Email"
             value={household?.email || ""}
@@ -460,36 +794,74 @@ export function SettingsPanel() {
             mutate={updateHousehold.mutate}
           />
 
-          <EditableField
-            label="Phone"
+          {/* Phone — inline PhoneInput editing */}
+          <PhoneEditableField
             value={household?.phone || ""}
-            icon={Phone}
-            fieldKey="phone"
-            householdId={selectedHouseholdId}
             isMutating={updateHousehold.isPending}
-            mutate={updateHousehold.mutate}
-          />
-
-          <EditableField
-            label="Address"
-            value={household?.address || ""}
-            icon={MapPin}
-            fieldKey="address"
-            householdId={selectedHouseholdId}
-            isMutating={updateHousehold.isPending}
-            mutate={updateHousehold.mutate}
-          />
-
-          <EditableField
-            label="Unit / Postal"
-            value={[household?.unitNumber, household?.postalCode].filter(Boolean).join(" · ") || ""}
-            icon={MapPin}
-            fieldKey="unitNumber"
-            householdId={selectedHouseholdId}
-            isMutating={updateHousehold.isPending}
-            mutate={updateHousehold.mutate}
+            onSave={(normalized) => {
+              updateHousehold.mutate(
+                { phone: normalized },
+                {
+                  onSuccess: () => toast.success("Phone updated"),
+                  onError: () => toast.error("Failed to update phone"),
+                }
+              );
+            }}
           />
         </div>
+      </div>
+
+      {/* ── Addresses ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+            <MapPin size={14} />
+            Addresses
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-[var(--anna-border)] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)] hover:border-[var(--anna-sage)]"
+            onClick={() => {
+              setEditingAddress(null);
+              setAddressDialogOpen(true);
+            }}
+          >
+            <Plus size={12} className="mr-1" />
+            Add Address
+          </Button>
+        </div>
+
+        {addressesLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full rounded-xl bg-[var(--anna-border)]" />
+            <Skeleton className="h-20 w-full rounded-xl bg-[var(--anna-border)]" />
+          </div>
+        ) : addresses && addresses.length > 0 ? (
+          <div className="space-y-3">
+            {addresses.map((addr) => (
+              <AddressCard
+                key={addr.id}
+                address={addr}
+                onEdit={(a) => {
+                  setEditingAddress(a);
+                  setAddressDialogOpen(true);
+                }}
+                onDelete={(a) => setDeleteAddressTarget(a)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="w-12 h-12 rounded-xl bg-[var(--anna-bg)] flex items-center justify-center mx-auto mb-3">
+              <MapPin size={20} className="text-[var(--anna-muted)]" />
+            </div>
+            <p className="text-sm font-medium text-[var(--anna-slate)]">No addresses yet</p>
+            <p className="text-xs text-[var(--anna-muted)] mt-1">
+              Add your service address to get started
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Appearance ── */}
@@ -829,6 +1201,97 @@ export function SettingsPanel() {
         <LogOut size={16} />
         Sign out
       </button>
+
+      {/* ── Address Dialog (Add / Edit) ── */}
+      <Dialog
+        open={addressDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAddressDialogOpen(false);
+            setEditingAddress(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAddress ? "Edit Address" : "Add Address"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingAddress
+                ? "Update the details for this address."
+                : "Add a new service address for your household."}
+            </DialogDescription>
+          </DialogHeader>
+          <AddressForm
+            key={editingAddress?.id || "new"}
+            initialData={editingAddress
+              ? {
+                  propertyType: editingAddress.propertyType,
+                  postalCode: editingAddress.postalCode,
+                  blockNumber: editingAddress.blockNumber || "",
+                  streetName: editingAddress.streetName || "",
+                  buildingName: editingAddress.buildingName || "",
+                  level: editingAddress.level || "",
+                  unitNumber: editingAddress.unitNumber || "",
+                  houseNumber: editingAddress.houseNumber || "",
+                  streetAddress: editingAddress.streetAddress || "",
+                  label: editingAddress.label || "",
+                  isDefault: editingAddress.isDefault,
+                }
+              : undefined}
+            onSubmit={(formData) => {
+              if (editingAddress) {
+                updateAddress.mutate({
+                  addressId: editingAddress.id,
+                  data: formData,
+                });
+              } else {
+                createAddress.mutate(formData);
+              }
+            }}
+            submitLabel={editingAddress ? "Update Address" : "Add Address"}
+            loading={createAddress.isPending || updateAddress.isPending}
+            showPropertyTypeSelector
+            showLabel
+            hideSubmit={false}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Address Confirmation ── */}
+      <AlertDialog
+        open={!!deleteAddressTarget}
+        onOpenChange={(open) => !open && setDeleteAddressTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl border-[var(--anna-border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this address?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteAddressTarget?.fullAddress}
+              {deleteAddressTarget?.isDefault && (
+                <span className="block mt-1 text-[var(--anna-warning)]">
+                  This is your default address. It will be reassigned automatically.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[var(--anna-border)]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                deleteAddressTarget && deleteAddress.mutate(deleteAddressTarget.id)
+              }
+              disabled={deleteAddress.isPending}
+              className="bg-[var(--anna-error)] hover:bg-[var(--anna-error)]/90 text-white"
+            >
+              {deleteAddress.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Sign Out Confirmation Dialog ── */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>

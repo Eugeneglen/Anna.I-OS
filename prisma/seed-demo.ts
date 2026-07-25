@@ -40,6 +40,11 @@ const IDS = {
     verifiedClean:  'demo-booking-verified-clean',
     dispatchedLaundry: 'demo-booking-dispatched-laundry',
   },
+  addresses: {
+    tan:  'demo-addr-tan-hdb',
+    lim:  'demo-addr-lim-condo',
+    chen: 'demo-addr-chen-landed',
+  },
 } as const
 
 async function _main() {
@@ -77,7 +82,10 @@ async function _main() {
   // Level 4: Tasks
   await db.task.deleteMany()
 
-  // Level 5: Parent tables
+  // Level 5: Addresses (cascade from household/vendor, but delete explicitly for clarity)
+  await db.address.deleteMany()
+
+  // Level 6: Parent tables
   await db.household.deleteMany()
   await db.vendor.deleteMany()
 
@@ -118,9 +126,9 @@ async function _main() {
       name: 'Tan Family',
       email: 'tan.family@example.com',
       phone: '+65 9123 4567',
-      address: 'Tampines Street 21, Block 123',
+      address: 'Block 123A Tampines Street 11',
       postalCode: '521123',
-      unitNumber: '#05-23',
+      unitNumber: '#5-42',
       activeCategories: JSON.stringify(['CLEANING', 'LAUNDRY', 'AIRCON']),
       preferences: JSON.stringify({
         language: 'English',
@@ -139,9 +147,9 @@ async function _main() {
       name: 'Lim Residence',
       email: 'lim.residence@example.com',
       phone: '+65 8765 4321',
-      address: 'Bedok North Avenue 3, Block 456',
+      address: 'Bedok Residences, New Upper Changi Road',
       postalCode: '460456',
-      unitNumber: '#12-01',
+      unitNumber: '#12-08',
       activeCategories: JSON.stringify(['CLEANING', 'LAUNDRY', 'HANDYMAN']),
       preferences: JSON.stringify({
         language: 'English',
@@ -160,9 +168,9 @@ async function _main() {
       name: 'Chen Household',
       email: 'chen.household@example.com',
       phone: '+65 9234 5678',
-      address: 'Bishan Street 13, Block 789',
+      address: '23 Serangoon Garden Way',
       postalCode: '570789',
-      unitNumber: '#08-15',
+      unitNumber: null,
       activeCategories: JSON.stringify(['CLEANING', 'LAUNDRY', 'AIRCON', 'HANDYMAN']),
       preferences: JSON.stringify({
         language: 'Mandarin',
@@ -175,8 +183,73 @@ async function _main() {
 
   console.log('✅ 3 demo households created')
 
+  // ============ 2b. DEMO HOUSEHOLD ADDRESSES ============
+
+  // Tan Family — HDB at Tampines
+  await db.address.upsert({
+    where: { id: IDS.addresses.tan },
+    update: {},
+    create: {
+      id: IDS.addresses.tan,
+      ownerType: 'HOUSEHOLD',
+      ownerId: household1.id,
+      householdId: household1.id,
+      label: 'Home',
+      propertyType: 'HDB',
+      postalCode: '521123',
+      blockNumber: '123A',
+      streetName: 'Tampines Street 11',
+      level: '5',
+      unitNumber: '42',
+      fullAddress: 'Block 123A Tampines Street 11, #5-42, Singapore 521123',
+      isDefault: true,
+    },
+  })
+
+  // Lim Residence — Condominium at Bedok
+  await db.address.upsert({
+    where: { id: IDS.addresses.lim },
+    update: {},
+    create: {
+      id: IDS.addresses.lim,
+      ownerType: 'HOUSEHOLD',
+      ownerId: household2.id,
+      householdId: household2.id,
+      label: 'Home',
+      propertyType: 'CONDOMINIUM',
+      postalCode: '460456',
+      buildingName: 'Bedok Residences',
+      streetName: 'New Upper Changi Road',
+      level: '12',
+      unitNumber: '08',
+      fullAddress: 'Bedok Residences, New Upper Changi Road, #12-08, Singapore 460456',
+      isDefault: true,
+    },
+  })
+
+  // Chen Household — Landed at Serangoon
+  await db.address.upsert({
+    where: { id: IDS.addresses.chen },
+    update: {},
+    create: {
+      id: IDS.addresses.chen,
+      ownerType: 'HOUSEHOLD',
+      ownerId: household3.id,
+      householdId: household3.id,
+      label: 'Home',
+      propertyType: 'LANDED',
+      postalCode: '570789',
+      houseNumber: '23',
+      streetAddress: 'Serangoon Garden Way',
+      fullAddress: '23 Serangoon Garden Way, Singapore 570789',
+      isDefault: true,
+    },
+  })
+
+  console.log('✅ 3 demo household addresses created')
+
   // Mark demo households as already onboarded
-  await db.household.updateMany({ data: { onboardingStep: 5, onboardingCompletedAt: new Date() } })
+  await db.household.updateMany({ data: { onboardingStep: 9, onboardingCompletedAt: new Date() } })
 
   // ============ 3. FAMILY MEMBERS ============
 
@@ -535,7 +608,7 @@ async function _main() {
   console.log('✅ Demo tasks, bookings, verification, escrow, and affinity data created')
   console.log('')
   console.log('=== SEED COMPLETE ===')
-  console.log(`Households: 3 | Members: 4 | Vendors: 5`)
+  console.log(`Households: 3 | Members: 4 | Vendors: 5 | Addresses: 3`)
   console.log(`Tasks: 9 (1 verified, 1 accepted, 7 created)`)
   console.log(`Autonomy thresholds: ${Object.keys(cyclesByCategory).length * 5} (${Object.keys(cyclesByCategory).length} categories × 5 levels)`)
   console.log(`Subscriptions: 3 (all Home tier)`)

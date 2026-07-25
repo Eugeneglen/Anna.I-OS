@@ -13,8 +13,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { step, data } = body;
 
-    if (!step || step < 1 || step > 8) {
-      return NextResponse.json({ error: "Invalid step. Must be 1-8." }, { status: 400 });
+    if (!step || step < 1 || step > 9) {
+      return NextResponse.json({ error: "Invalid step. Must be 1-9." }, { status: 400 });
     }
 
     const household = await db.household.findUnique({
@@ -33,39 +33,44 @@ export async function PATCH(req: NextRequest) {
 
     switch (step) {
       case 1: {
-        // Step 1: Your Home — home type, size, occupants
+        // Step 1: Contact & Address — saved separately via household PATCH + addresses API
+        // Only advance the step number here
+        break;
+      }
+      case 2: {
+        // Step 2: Your Home — home type, size, occupants
         updateData.onboardingProfile = {
           ...existingProfile,
           home: data,
         };
         break;
       }
-      case 2: {
-        // Step 2: Your People — household members, pets, schedule
+      case 3: {
+        // Step 3: Your People — household members, pets, schedule
         updateData.onboardingProfile = {
           ...existingProfile,
           people: data,
         };
         break;
       }
-      case 3: {
-        // Step 3: Pain Points — tasks, frustrations
+      case 4: {
+        // Step 4: Pain Points — tasks, frustrations
         updateData.onboardingProfile = {
           ...existingProfile,
           painPoints: data,
         };
         break;
       }
-      case 4: {
-        // Step 4: Service Habits — frequency, how they find providers
+      case 5: {
+        // Step 5: Service Habits — frequency, how they find providers
         updateData.onboardingProfile = {
           ...existingProfile,
           serviceHabits: data,
         };
         break;
       }
-      case 5: {
-        // Step 5: Preferences & Autonomy — day, time, autonomy level
+      case 6: {
+        // Step 6: Preferences & Autonomy — day, time, autonomy level
         updateData.onboardingProfile = {
           ...existingProfile,
           preferences: data,
@@ -82,17 +87,17 @@ export async function PATCH(req: NextRequest) {
         }
         break;
       }
-      case 6: {
-        // Step 6: Meet Anna.I — no data to save, just advance step
-        break;
-      }
       case 7: {
-        // Step 7: Your AI, Your Control — no data to save, just advance step
+        // Step 7: Meet Anna.I — no data to save, just advance step
         break;
       }
       case 8: {
-        // Step 8: Complete — set completedAt, set step to 8
-        updateData.onboardingStep = 8;
+        // Step 8: Your AI, Your Control — no data to save, just advance step
+        break;
+      }
+      case 9: {
+        // Step 9: Complete — set completedAt, set step to 9
+        updateData.onboardingStep = 9;
         updateData.onboardingCompletedAt = new Date();
         break;
       }
@@ -104,7 +109,7 @@ export async function PATCH(req: NextRequest) {
     });
 
     // Create notification on completion
-    if (step === 8) {
+    if (step === 9) {
       await db.notification.create({
         data: {
           householdId: session.householdId,

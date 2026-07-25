@@ -61,7 +61,8 @@ export interface Vendor {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
+  contactPerson?: string;
   categories: string;
   status: "PENDING" | "ACTIVE" | "SUSPENDED" | "OFFBOARDED";
   vendorType?: "MICRO" | "SME";
@@ -364,7 +365,7 @@ export interface VendorSuggestion {
     id: string;
     name: string;
     email: string;
-    phone: string;
+    phone?: string;
     categories: string;
     status: string;
     maxTasksPerDay: number;
@@ -374,4 +375,95 @@ export interface VendorSuggestion {
   score: number;
   scoreBreakdown: ScoreBreakdown;
   reason: string;
+}
+
+// ============================================================
+// Address Types
+// ============================================================
+
+export type PropertyType = "HDB" | "CONDOMINIUM" | "LANDED" | "OFFICE" | "OTHER";
+
+export type AddressOwner = "HOUSEHOLD" | "VENDOR";
+
+export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
+  HDB: "HDB Flat",
+  CONDOMINIUM: "Condominium",
+  LANDED: "Landed Property",
+  OFFICE: "Office",
+  OTHER: "Other",
+};
+
+export interface Address {
+  id: string;
+  ownerType: AddressOwner;
+  ownerId: string;
+  householdId?: string | null;
+  vendorId?: string | null;
+  label?: string | null;
+  propertyType: PropertyType;
+  postalCode: string;
+  blockNumber?: string | null;
+  streetName?: string | null;
+  buildingName?: string | null;
+  level?: string | null;
+  unitNumber?: string | null;
+  houseNumber?: string | null;
+  streetAddress?: string | null;
+  fullAddress: string;
+  isDefault: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Formats a full address from an Address-like partial object.
+ * Useful for display in UI components.
+ */
+export function formatFullAddress(address: Partial<Address>): string {
+  if (address.fullAddress) return address.fullAddress;
+
+  const { propertyType, postalCode } = address;
+  if (!postalCode) return "";
+
+  const parts: string[] = [];
+
+  switch (propertyType) {
+    case "HDB": {
+      const block = [address.blockNumber, address.streetName].filter(Boolean).join(" ");
+      if (block) parts.push(block);
+      const unit = [address.level, address.unitNumber].filter(Boolean).join("-");
+      if (unit) parts.push(`#${unit}`);
+      break;
+    }
+    case "CONDOMINIUM": {
+      if (address.buildingName) parts.push(address.buildingName);
+      if (address.streetName) parts.push(address.streetName);
+      const unit = [address.level, address.unitNumber].filter(Boolean).join("-");
+      if (unit) parts.push(`#${unit}`);
+      break;
+    }
+    case "LANDED": {
+      const landed = [address.houseNumber, address.streetAddress].filter(Boolean).join(" ");
+      if (landed) parts.push(landed);
+      break;
+    }
+    case "OFFICE": {
+      if (address.buildingName) parts.push(address.buildingName);
+      if (address.streetAddress) parts.push(address.streetAddress);
+      const unit = [address.level, address.unitNumber].filter(Boolean).join("-");
+      if (unit) parts.push(`#${unit}`);
+      break;
+    }
+    case "OTHER":
+    default: {
+      const fallback = [address.streetAddress, address.streetName].filter(Boolean).join(" ");
+      if (fallback) parts.push(fallback);
+      break;
+    }
+  }
+
+  parts.push(`Singapore ${postalCode}`);
+  return parts.filter(Boolean).join(", ");
 }

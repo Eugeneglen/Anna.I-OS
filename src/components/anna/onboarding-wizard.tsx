@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -42,7 +42,12 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PhoneInput } from "@/components/shared/phone-input";
+import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
+import { validateSgPhone } from "@/lib/phone-validation";
 import { cn } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -102,9 +107,10 @@ interface PreferencesData {
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 const STEP_LABELS = [
   "Welcome",
+  "Contact & Address",
   "Your Home",
   "Your People",
   "Pain Points",
@@ -542,7 +548,127 @@ function StepWelcome({ onContinue }: { onContinue: () => void }) {
   );
 }
 
-// ─── Step 1: Your Home ──────────────────────────────────────────
+// ─── Step 1: Contact & Address ──────────────────────────────
+
+function StepContactAddress({
+  initialName,
+  initialPhone,
+  initialAddressData,
+  onContinue,
+  onBack,
+  isSaving,
+}: {
+  initialName: string;
+  initialPhone?: string;
+  initialAddressData?: Partial<AddressFormData>;
+  onContinue: (name: string, phone: string, addressData: AddressFormData) => void;
+  onBack: () => void;
+  isSaving: boolean;
+}) {
+  const [name, setName] = useState(initialName);
+  const [nameError, setNameError] = useState("");
+  const [phone, setPhone] = useState(initialPhone || "");
+  const [phoneValid, setPhoneValid] = useState(() => {
+    if (!initialPhone) return false;
+    return validateSgPhone(initialPhone).valid;
+  });
+
+  const addressFormRef = useRef<HTMLDivElement>(null);
+  const addressDataRef = useRef<AddressFormData | null>(null);
+
+  const handlePhoneChange = useCallback((normalized: string, _raw: string) => {
+    setPhone(normalized);
+    const result = validateSgPhone(normalized);
+    setPhoneValid(result.valid);
+  }, []);
+
+  const handleAddressSubmit = useCallback((data: AddressFormData) => {
+    addressDataRef.current = data;
+  }, []);
+
+  const canContinue = name.trim() !== "" && phoneValid;
+
+  const handleNext = useCallback(() => {
+    if (!name.trim()) {
+      setNameError("Please enter your name");
+      return;
+    }
+    if (!phoneValid) return;
+
+    const form = addressFormRef.current?.querySelector("form") as HTMLFormElement | null;
+    if (!form) return;
+
+    addressDataRef.current = null;
+    form.requestSubmit();
+
+    if (addressDataRef.current) {
+      onContinue(name.trim(), phone, addressDataRef.current);
+    }
+  }, [name, phone, phoneValid, onContinue]);
+
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Contact &amp; Address</h2>
+      <p className="text-xs text-[var(--anna-muted)] mb-5">
+        Let&apos;s start with the essentials — how we reach you and where you are.
+      </p>
+
+      {/* Full Name */}
+      <div className="space-y-1.5 mb-4">
+        <Label className="text-sm font-medium">
+          Full Name <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          value={name}
+          onChange={(e) => { setName(e.target.value); setNameError(""); }}
+          placeholder="e.g. Alex Tan"
+          className={cn(
+            "h-10 text-sm",
+            nameError && "border-red-400"
+          )}
+        />
+        {nameError && <p className="text-xs text-red-500">{nameError}</p>}
+      </div>
+
+      {/* Mobile Number */}
+      <div className="mb-4">
+        <PhoneInput
+          value={initialPhone}
+          onChange={handlePhoneChange}
+          label="Mobile Number"
+          required
+        />
+      </div>
+
+      {/* Service Address */}
+      <div ref={addressFormRef}>
+        <p className="text-xs font-medium text-[var(--anna-slate)] mb-2.5">Service Address</p>
+        <AddressForm
+          onSubmit={handleAddressSubmit}
+          initialData={initialAddressData}
+          showPropertyTypeSelector={true}
+          showLabel={false}
+          hideSubmit={true}
+          compact={true}
+        />
+      </div>
+
+      <AnnaInsight>
+        Your contact info helps our service providers reach you on the day. We only collect Singapore-registered numbers.
+      </AnnaInsight>
+
+      <StepNav
+        onBack={onBack}
+        onContinue={handleNext}
+        continueDisabled={!canContinue}
+        isSaving={isSaving}
+      />
+    </div>
+  );
+}
+
+
+// ─── Step 2: Your Home ──────────────────────────────────────────
 
 function StepYourHome({
   data,
@@ -634,7 +760,7 @@ function StepYourHome({
   );
 }
 
-// ─── Step 2: Your People ───────────────────────────────────────
+// ─── Step 3: Your People ───────────────────────────────────────
 
 function StepYourPeople({
   data,
@@ -792,7 +918,7 @@ function StepYourPeople({
   );
 }
 
-// ─── Step 3: Pain Points ───────────────────────────────────────
+// ─── Step 4: Pain Points ───────────────────────────────────────
 
 function StepPainPoints({
   data,
@@ -892,7 +1018,7 @@ function StepPainPoints({
   );
 }
 
-// ─── Step 4: Service Habits (Rebuilt) ───────────────────────
+// ─── Step 5: Service Habits (Rebuilt) ───────────────────────
 
 // Helper: map pain point value to human-readable label
 const PAIN_POINT_LABELS: Record<string, string> = {
@@ -1134,7 +1260,7 @@ function StepServiceHabits({
   );
 }
 
-// ─── Step 5: Preferences & Autonomy ───────────────────────────
+// ─── Step 6: Preferences & Autonomy ───────────────────────────
 
 function StepPreferences({
   data,
@@ -1238,7 +1364,7 @@ function StepPreferences({
   );
 }
 
-// ─── Step 6: Meet Anna.I ──────────────────────────────────────
+// ─── Step 7: Meet Anna.I ──────────────────────────────────────
 
 // Personalized demo messages by top pain point
 const DEMO_MESSAGES: Record<string, { before: string; after: string }> = {
@@ -1364,7 +1490,7 @@ function StepMeetAnna({
   );
 }
 
-// ─── Step 7: Your AI, Your Control ────────────────────────────
+// ─── Step 8: Your AI, Your Control ────────────────────────────
 
 function StepYourControl({
   onContinue,
@@ -1477,7 +1603,7 @@ function StepYourControl({
   );
 }
 
-// ─── Step 8: Completion ───────────────────────────────────────
+// ─── Step 9: Completion ───────────────────────────────────────
 
 function CompletionScreen() {
   return (
@@ -1573,6 +1699,11 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   const [painPointsData, setPainPointsData] = useState<PainPointsData>((profile.painPoints as PainPointsData) || {});
   const [serviceHabitsData, setServiceHabitsData] = useState<ServiceHabitsData>((profile.serviceHabits as ServiceHabitsData) || {});
   const [prefsData, setPrefsData] = useState<PreferencesData>((profile.preferences as PreferencesData) || {});
+  // ── Contact step state ──
+  const [contactName, setContactName] = useState(household.name);
+  const [contactPhone, setContactPhone] = useState(household.phone || "");
+  const [savedContactAddress, setSavedContactAddress] = useState<Partial<AddressFormData>>({});
+
 
   // PATCH mutation
   const saveMutation = useMutation({
@@ -1608,55 +1739,110 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
     goNext();
   }, [goNext]);
 
+  // Contact step mutation (separate from profile mutation)
+  const contactMutation = useMutation({
+    mutationFn: async (params: { name: string; phone: string; addressData: AddressFormData }) => {
+      const householdId = household.id;
+
+      // 1. Update household name and phone
+      const hhRes = await fetch(`/api/households/${householdId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: params.name, phone: params.phone }),
+      });
+      if (!hhRes.ok) {
+        const err = await hhRes.json().catch(() => ({ error: "Failed to save contact" }));
+        throw new Error(err.error || "Failed to save contact info");
+      }
+
+      // 2. Create address
+      const addrRes = await fetch(`/api/households/${householdId}/addresses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...params.addressData,
+          label: "Home",
+          isDefault: true,
+        }),
+      });
+      if (!addrRes.ok) {
+        const err = await addrRes.json().catch(() => ({ error: "Failed to save address" }));
+        throw new Error(err.error || "Failed to save address");
+      }
+
+      // 3. Advance onboarding step
+      const onbRes = await fetch("/api/household/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: 1, data: {} }),
+      });
+      if (!onbRes.ok) throw new Error("Failed to advance step");
+
+      return onbRes.json();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Something went wrong. Please try again.");
+    },
+  });
+
   // Step handlers: save then advance
-  const handleStep1 = useCallback(async () => {
+  const handleStepContact = useCallback(async (name: string, phone: string, addressData: AddressFormData) => {
+    setSavedContactAddress(addressData);
     try {
-      await saveMutation.mutateAsync({ step: 1, data: homeData });
+      await contactMutation.mutateAsync({ name, phone, addressData });
+      goNext();
+    } catch { /* handled in onError */ }
+  }, [contactMutation, goNext]);
+
+  const handleStep2 = useCallback(async () => {
+    try {
+      await saveMutation.mutateAsync({ step: 2, data: homeData });
       goNext();
     } catch { /* handled in onError */ }
   }, [homeData, saveMutation, goNext]);
 
-  const handleStep2 = useCallback(async () => {
+  const handleStep3 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 2, data: peopleData });
+      await saveMutation.mutateAsync({ step: 3, data: peopleData });
       goNext();
     } catch { /* handled in onError */ }
   }, [peopleData, saveMutation, goNext]);
 
-  const handleStep3 = useCallback(async () => {
+  const handleStep4 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 3, data: painPointsData });
+      await saveMutation.mutateAsync({ step: 4, data: painPointsData });
       goNext();
     } catch { /* handled in onError */ }
   }, [painPointsData, saveMutation, goNext]);
 
-  const handleStep4 = useCallback(async () => {
+  const handleStep5 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 4, data: serviceHabitsData });
+      await saveMutation.mutateAsync({ step: 5, data: serviceHabitsData });
       goNext();
     } catch { /* handled in onError */ }
   }, [serviceHabitsData, saveMutation, goNext]);
 
-  const handleStep5 = useCallback(async () => {
+  const handleStep6 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 5, data: prefsData });
+      await saveMutation.mutateAsync({ step: 6, data: prefsData });
       goNext();
     } catch { /* handled in onError */ }
   }, [prefsData, saveMutation, goNext]);
 
-  // Steps 6 and 7 just advance (no data to save)
-  const handleStep6 = useCallback(async () => {
+  // Step 7 (Meet Anna.I) — just advance, no data to save
+  const handleStep7 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 6, data: {} });
+      await saveMutation.mutateAsync({ step: 7, data: {} });
       goNext();
     } catch { /* handled in onError */ }
   }, [saveMutation, goNext]);
 
-  const handleStep7 = useCallback(async () => {
+  // Step 8 (Your Control) — complete onboarding
+  const handleStep8 = useCallback(async () => {
     try {
-      await saveMutation.mutateAsync({ step: 7, data: {} });
-      // Complete onboarding
       await saveMutation.mutateAsync({ step: 8, data: {} });
+      // Complete onboarding
+      await saveMutation.mutateAsync({ step: 9, data: {} });
       setIsCompleted(true);
       setTimeout(() => onComplete(), 2000);
     } catch { /* handled in onError */ }
@@ -1689,7 +1875,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
 
         {/* Phase divider between Get to Know You and Meet Anna.I */}
         <AnimatePresence>
-          {currentStep === 5 && <PhaseDivider />}
+          {currentStep === 6 && <PhaseDivider />}
         </AnimatePresence>
 
         {/* Step card */}
@@ -1706,19 +1892,19 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
             >
               {currentStep === 0 && <StepWelcome onContinue={goNext} />}
               {currentStep === 1 && (
-                <StepYourHome
-                  data={homeData}
-                  onChange={(field, value) => setHomeData((p) => ({ ...p, [field]: value }))}
-                  onContinue={handleStep1}
+                <StepContactAddress
+                  initialName={contactName}
+                  initialPhone={contactPhone}
+                  initialAddressData={savedContactAddress}
+                  onContinue={handleStepContact}
                   onBack={goBack}
-                  onSkip={skipToNext}
-                  isSaving={saveMutation.isPending}
+                  isSaving={contactMutation.isPending}
                 />
               )}
               {currentStep === 2 && (
-                <StepYourPeople
-                  data={peopleData}
-                  onChange={(field, value) => setPeopleData((p) => ({ ...p, [field]: value }))}
+                <StepYourHome
+                  data={homeData}
+                  onChange={(field, value) => setHomeData((p) => ({ ...p, [field]: value }))}
                   onContinue={handleStep2}
                   onBack={goBack}
                   onSkip={skipToNext}
@@ -1726,9 +1912,9 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                 />
               )}
               {currentStep === 3 && (
-                <StepPainPoints
-                  data={painPointsData}
-                  onChange={(field, value) => setPainPointsData((p) => ({ ...p, [field]: value }))}
+                <StepYourPeople
+                  data={peopleData}
+                  onChange={(field, value) => setPeopleData((p) => ({ ...p, [field]: value }))}
                   onContinue={handleStep3}
                   onBack={goBack}
                   onSkip={skipToNext}
@@ -1736,34 +1922,44 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                 />
               )}
               {currentStep === 4 && (
+                <StepPainPoints
+                  data={painPointsData}
+                  onChange={(field, value) => setPainPointsData((p) => ({ ...p, [field]: value }))}
+                  onContinue={handleStep4}
+                  onBack={goBack}
+                  onSkip={skipToNext}
+                  isSaving={saveMutation.isPending}
+                />
+              )}
+              {currentStep === 5 && (
                 <StepServiceHabits
                   data={serviceHabitsData}
                   onChange={(field, value) => setServiceHabitsData((p) => ({ ...p, [field]: value }))}
-                  onContinue={handleStep4}
+                  onContinue={handleStep5}
                   onBack={goBack}
                   onSkip={skipToNext}
                   isSaving={saveMutation.isPending}
                   selectedPainPoints={painPointsData.timeConsumingTasks || []}
                 />
               )}
-              {currentStep === 5 && (
+              {currentStep === 6 && (
                 <StepPreferences
                   data={prefsData}
                   onChange={(field, value) => setPrefsData((p) => ({ ...p, [field]: value }))}
-                  onContinue={handleStep5}
+                  onContinue={handleStep6}
                   onBack={goBack}
                   isSaving={saveMutation.isPending}
                 />
               )}
-              {currentStep === 6 && (
+              {currentStep === 7 && (
                 <StepMeetAnna
-                  onContinue={handleStep6}
+                  onContinue={handleStep7}
                   onBack={goBack}
                   topPainPoint={(painPointsData.timeConsumingTasks || [])[0]}
                 />
               )}
-              {currentStep === 7 && (
-                <StepYourControl onContinue={handleStep7} onBack={goBack} />
+              {currentStep === 8 && (
+                <StepYourControl onContinue={handleStep8} onBack={goBack} />
               )}
             </motion.div>
           </AnimatePresence>
