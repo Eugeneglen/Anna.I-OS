@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getHouseholdSession } from "@/lib/household-auth";
 import { buildFullAddress, getRequiredFields } from "@/lib/address";
+import { validateSgPhone } from "@/lib/phone-validation";
 import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code";
 import { z } from "zod";
 
@@ -24,6 +25,8 @@ const patchAddressSchema = z.object({
   streetAddress: z.string().max(200).optional(),
   isDefault: z.boolean().optional(),
   phone: z.string().max(20).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 // PATCH — update an address
@@ -69,6 +72,18 @@ export async function PATCH(
           { status: 400 }
         );
       }
+    }
+
+    // Validate phone if provided
+    if (parsed.phone) {
+      const phoneResult = validateSgPhone(parsed.phone);
+      if (!phoneResult.valid) {
+        return NextResponse.json(
+          { error: phoneResult.error || "Invalid phone number" },
+          { status: 400 }
+        );
+      }
+      parsed.phone = phoneResult.normalized;
     }
 
     // Determine effective property type for field validation
@@ -120,7 +135,7 @@ export async function PATCH(
     // Build the full address
     const fullAddress = buildFullAddress(addressData);
 
-    // Update the address
+    // Update the address (including GPS coordinates if provided)
     const updated = await db.address.update({
       where: { id: addressId },
       data: {
@@ -135,6 +150,14 @@ export async function PATCH(
     // Sync household denormalised fields if this is the new default
     if (shouldSyncHousehold && updated.isDefault) {
       await syncHouseholdDefaultAddress(id, updated);
+    }
+
+    // If phone was provided, also update the household phone
+    if (parsed.phone) {
+      await db.household.update({
+        where: { id },
+        data: { phone: parsed.phone },
+      });
     }
 
     return NextResponse.json({ address: updated });

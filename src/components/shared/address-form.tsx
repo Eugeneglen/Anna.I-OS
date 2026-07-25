@@ -71,6 +71,8 @@ interface PostalLookupResult {
   building?: string;
   address: string;
   postal: string;
+  lat: number;
+  lon: number;
 }
 
 // ─── Main component ───────────────────────────────────────
@@ -87,6 +89,8 @@ export interface AddressFormData {
   streetAddress: string;
   label?: string;
   isDefault?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface AddressFormProps {
@@ -134,6 +138,8 @@ export function AddressForm({
     streetAddress: initialData?.streetAddress || "",
     label: initialData?.label || "",
     isDefault: initialData?.isDefault ?? true,
+    latitude: initialData?.latitude,
+    longitude: initialData?.longitude,
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -165,6 +171,8 @@ export function AddressForm({
       streetName: result.road_name || prev.streetName,
       buildingName: result.building || prev.buildingName,
       streetAddress: result.address || prev.streetAddress,
+      latitude: result.lat || prev.latitude,
+      longitude: result.lon || prev.longitude,
     }));
     setFieldErrors((prev) => {
       const next = { ...prev };

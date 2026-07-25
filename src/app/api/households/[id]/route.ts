@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { z } from "zod"
+import { validateSgPhone } from "@/lib/phone-validation"
+import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code"
 
 const patchHouseholdSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  fullName: z.string().min(1).max(200).optional(),
   email: z.string().email().optional(),
   phone: z.string().max(20).optional(),
   address: z.string().min(1).max(200).optional(),
@@ -20,9 +23,49 @@ export async function PATCH(
     const body = await request.json()
     const parsed = patchHouseholdSchema.parse(body)
 
+    // Validate phone number format if provided (not clearing it)
+    if (parsed.phone) {
+      const phoneResult = validateSgPhone(parsed.phone)
+      if (!phoneResult.valid) {
+        return NextResponse.json(
+          { error: phoneResult.error || "Invalid Singapore phone number" },
+          { status: 400 }
+        )
+      }
+      // Normalize to +65XXXXXXXX format
+      parsed.phone = phoneResult.normalized
+    }
+
+    // Validate postal code format if provided
+    if (parsed.postalCode) {
+      const code = normalizePostalCode(parsed.postalCode)
+      if (!isValidPostalCode(code)) {
+        return NextResponse.json(
+          { error: "Invalid postal code. Must be exactly 6 digits." },
+          { status: 400 }
+        )
+      }
+      parsed.postalCode = code
+    }
+
     const household = await db.household.update({
       where: { id },
       data: parsed,
+      select: {
+        id: true,
+        name: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        address: true,
+        postalCode: true,
+        unitNumber: true,
+        activeCategories: true,
+        preferences: true,
+        onboardingStep: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     })
 
     return NextResponse.json({ household })
@@ -53,6 +96,7 @@ export async function GET(
       select: {
         id: true,
         name: true,
+        fullName: true,
         email: true,
         phone: true,
         address: true,

@@ -25,6 +25,8 @@ const createAddressSchema = z.object({
   streetAddress: z.string().max(200).optional(),
   isDefault: z.boolean().optional().default(false),
   phone: z.string().max(20).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 // GET — list all addresses for a household
@@ -144,7 +146,7 @@ export async function POST(
       });
     }
 
-    // Create the address
+    // Create the address (with GPS coordinates if provided from postal lookup)
     const address = await db.address.create({
       data: {
         ownerType: "HOUSEHOLD",
@@ -162,6 +164,8 @@ export async function POST(
         streetAddress: parsed.streetAddress,
         fullAddress,
         isDefault: parsed.isDefault,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
       },
     });
 

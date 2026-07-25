@@ -23,6 +23,8 @@ const createVendorAddressSchema = z.object({
   houseNumber: z.string().max(20).optional(),
   streetAddress: z.string().max(200).optional(),
   isDefault: z.boolean().optional().default(false),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 // GET — list all addresses for the vendor
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create the address
+    // Create the address (with GPS coordinates if provided)
     const address = await db.address.create({
       data: {
         ownerType: "VENDOR",
@@ -127,6 +129,8 @@ export async function POST(request: NextRequest) {
         streetAddress: parsed.streetAddress,
         fullAddress,
         isDefault: parsed.isDefault,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
       },
     });
 

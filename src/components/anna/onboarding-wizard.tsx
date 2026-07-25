@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 export interface OnboardingHousehold {
   id: string;
   name: string;
+  fullName?: string;
   email: string;
   phone?: string;
   address: string;
@@ -551,21 +552,24 @@ function StepWelcome({ onContinue }: { onContinue: () => void }) {
 // ─── Step 1: Contact & Address ──────────────────────────────
 
 function StepContactAddress({
-  initialName,
+  initialFullName,
+  initialHouseholdName,
   initialPhone,
   initialAddressData,
   onContinue,
   onBack,
   isSaving,
 }: {
-  initialName: string;
+  initialFullName?: string;
+  initialHouseholdName?: string;
   initialPhone?: string;
   initialAddressData?: Partial<AddressFormData>;
-  onContinue: (name: string, phone: string, addressData: AddressFormData) => void;
+  onContinue: (fullName: string, householdName: string, phone: string, addressData: AddressFormData) => void;
   onBack: () => void;
   isSaving: boolean;
 }) {
-  const [name, setName] = useState(initialName);
+  const [fullName, setFullName] = useState(initialFullName || initialHouseholdName || "");
+  const [householdName, setHouseholdName] = useState(initialHouseholdName || "");
   const [nameError, setNameError] = useState("");
   const [phone, setPhone] = useState(initialPhone || "");
   const [phoneValid, setPhoneValid] = useState(() => {
@@ -586,11 +590,11 @@ function StepContactAddress({
     addressDataRef.current = data;
   }, []);
 
-  const canContinue = name.trim() !== "" && phoneValid;
+  const canContinue = fullName.trim() !== "" && phoneValid;
 
   const handleNext = useCallback(() => {
-    if (!name.trim()) {
-      setNameError("Please enter your name");
+    if (!fullName.trim()) {
+      setNameError("Please enter your full name");
       return;
     }
     if (!phoneValid) return;
@@ -602,9 +606,10 @@ function StepContactAddress({
     form.requestSubmit();
 
     if (addressDataRef.current) {
-      onContinue(name.trim(), phone, addressDataRef.current);
+      const hhName = householdName.trim() || `${fullName.trim()}'s Home`;
+      onContinue(fullName.trim(), hhName, phone, addressDataRef.current);
     }
-  }, [name, phone, phoneValid, onContinue]);
+  }, [fullName, householdName, phone, phoneValid, onContinue]);
 
   return (
     <div>
@@ -619,16 +624,31 @@ function StepContactAddress({
           Full Name <span className="text-red-500">*</span>
         </Label>
         <Input
-          value={name}
-          onChange={(e) => { setName(e.target.value); setNameError(""); }}
+          value={fullName}
+          onChange={(e) => { setFullName(e.target.value); setNameError(""); }}
           placeholder="e.g. Alex Tan"
           className={cn(
             "h-10 text-sm",
             nameError && "border-red-400"
           )}
         />
+        <p className="text-[10px] text-[var(--anna-muted)]">This is your personal name — your service providers will see this.</p>
         {nameError && <p className="text-xs text-red-500">{nameError}</p>}
       </div>
+
+      {/* Household Name (optional — pre-filled from existing) */}
+      {householdName && (
+        <div className="space-y-1.5 mb-4">
+          <Label className="text-sm font-medium">Household Name</Label>
+          <Input
+            value={householdName}
+            onChange={(e) => setHouseholdName(e.target.value)}
+            placeholder="e.g. Tan Family"
+            className="h-10 text-sm"
+          />
+          <p className="text-[10px] text-[var(--anna-muted)]">What your household is called — shown in your dashboard.</p>
+        </div>
+      )}
 
       {/* Mobile Number */}
       <div className="mb-4">
@@ -1700,7 +1720,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   const [serviceHabitsData, setServiceHabitsData] = useState<ServiceHabitsData>((profile.serviceHabits as ServiceHabitsData) || {});
   const [prefsData, setPrefsData] = useState<PreferencesData>((profile.preferences as PreferencesData) || {});
   // ── Contact step state ──
-  const [contactName, setContactName] = useState(household.name);
+  const [contactName, setContactName] = useState(household.fullName || household.name);
   const [contactPhone, setContactPhone] = useState(household.phone || "");
   const [savedContactAddress, setSavedContactAddress] = useState<Partial<AddressFormData>>({});
 
@@ -1741,14 +1761,14 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
 
   // Contact step mutation (separate from profile mutation)
   const contactMutation = useMutation({
-    mutationFn: async (params: { name: string; phone: string; addressData: AddressFormData }) => {
+    mutationFn: async (params: { fullName: string; householdName: string; phone: string; addressData: AddressFormData }) => {
       const householdId = household.id;
 
-      // 1. Update household name and phone
+      // 1. Update household fullName, name, and phone
       const hhRes = await fetch(`/api/households/${householdId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: params.name, phone: params.phone }),
+        body: JSON.stringify({ fullName: params.fullName, name: params.householdName, phone: params.phone }),
       });
       if (!hhRes.ok) {
         const err = await hhRes.json().catch(() => ({ error: "Failed to save contact" }));
@@ -1786,10 +1806,10 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
   });
 
   // Step handlers: save then advance
-  const handleStepContact = useCallback(async (name: string, phone: string, addressData: AddressFormData) => {
+  const handleStepContact = useCallback(async (fullName: string, householdName: string, phone: string, addressData: AddressFormData) => {
     setSavedContactAddress(addressData);
     try {
-      await contactMutation.mutateAsync({ name, phone, addressData });
+      await contactMutation.mutateAsync({ fullName, householdName, phone, addressData });
       goNext();
     } catch { /* handled in onError */ }
   }, [contactMutation, goNext]);
@@ -1893,7 +1913,8 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
               {currentStep === 0 && <StepWelcome onContinue={goNext} />}
               {currentStep === 1 && (
                 <StepContactAddress
-                  initialName={contactName}
+                  initialFullName={household.fullName}
+                  initialHouseholdName={household.name}
                   initialPhone={contactPhone}
                   initialAddressData={savedContactAddress}
                   onContinue={handleStepContact}

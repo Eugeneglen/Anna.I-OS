@@ -263,10 +263,12 @@ function AddressCard({
   address,
   onEdit,
   onDelete,
+  onSetDefault,
 }: {
   address: Address;
   onEdit: (address: Address) => void;
   onDelete: (address: Address) => void;
+  onSetDefault: (address: Address) => void;
 }) {
   return (
     <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)]/50 p-3.5 space-y-2 group/card">
@@ -285,6 +287,16 @@ function AddressCard({
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity">
+          {!address.isDefault && (
+            <button
+              onClick={() => onSetDefault(address)}
+              className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
+              aria-label="Set as default address"
+              title="Set as default"
+            >
+              <ArrowUpCircle size={12} />
+            </button>
+          )}
           <button
             onClick={() => onEdit(address)}
             className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
@@ -730,6 +742,30 @@ export function SettingsPanel() {
     onError: (err) => toast.error(err.message),
   });
 
+  const setDefaultAddress = useMutation({
+    mutationFn: async (addressId: string) => {
+      const res = await fetch(
+        `/api/households/${selectedHouseholdId}/addresses/${addressId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isDefault: true }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to set default address");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["addresses", selectedHouseholdId] });
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
+      toast.success("Default address updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   // ── Derived ──
 
   const household: Household | undefined = data?.household;
@@ -763,14 +799,14 @@ export function SettingsPanel() {
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
         {/* Contact subsection */}
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-4">
-          Household
+          Contact Information
         </h3>
         <div className="space-y-3.5 group/contact">
-          {/* Name (non-editable display) */}
+          {/* Avatar with household name */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center flex-shrink-0">
               <span className="text-sm font-bold text-[var(--anna-sage-dark)]">
-                {household?.name?.charAt(0) || "?"}
+                {(household?.fullName || household?.name)?.charAt(0) || "?"}
               </span>
             </div>
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -778,10 +814,25 @@ export function SettingsPanel() {
                 <p className="text-sm font-semibold text-[var(--anna-slate)]">
                   {household?.name}
                 </p>
-                <p className="text-xs text-[var(--anna-muted)]">Owner</p>
+                {household?.fullName && household.fullName !== household.name && (
+                  <p className="text-xs text-[var(--anna-muted)]">
+                    {household.fullName}
+                  </p>
+                )}
               </div>
             </div>
           </div>
+
+          {/* Full Name — editable */}
+          <EditableField
+            label="Full Name"
+            value={household?.fullName || ""}
+            icon={Users}
+            fieldKey="fullName"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
 
           {/* Email — keep existing EditableField */}
           <EditableField
@@ -848,6 +899,7 @@ export function SettingsPanel() {
                   setAddressDialogOpen(true);
                 }}
                 onDelete={(a) => setDeleteAddressTarget(a)}
+                onSetDefault={(a) => setDefaultAddress.mutate(a.id)}
               />
             ))}
           </div>

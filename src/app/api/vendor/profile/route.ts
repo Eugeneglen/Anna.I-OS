@@ -113,15 +113,18 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Validate phone format if changing (basic +65 or +60 prefix)
+    // Validate phone format if changing — strict Singapore mobile validation
     if ("phone" in updateData && updateData.phone) {
-      const phone = String(updateData.phone).replace(/\s/g, "");
-      if (!/^\+65\d{8,11}$/.test(phone) && !/^\+60\d{9,12}$/.test(phone)) {
+      const { validateSgPhone } = await import("@/lib/phone-validation");
+      const result = validateSgPhone(String(updateData.phone));
+      if (!result.valid) {
         return NextResponse.json(
-          { error: "Phone must be a valid SG (+65) or MY (+60) number" },
+          { error: result.error || "Invalid Singapore phone number" },
           { status: 400 }
         );
       }
+      // Normalize to +65XXXXXXXX format
+      updateData.phone = result.normalized;
     }
 
     // Validate availability structure if changing

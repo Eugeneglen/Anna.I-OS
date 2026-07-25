@@ -165,16 +165,17 @@ enum QuotationStatus {
 
 model Household {
   id                    String          @id @default(cuid())
-  name                  String
+  name                  String           // Household name (e.g. "Tan Family")
+  fullName              String?          // Primary contact person's full name (e.g. "Alex Tan")
   email                 String          @unique
-  phone                 String?
+  phone                 String?          // Singapore mobile (+65XXXXXXXX, 8 digits starting 8/9)
   address               String           // estate-level for batching (denormalised from default Address)
   postalCode            String?
   unitNumber            String?
   activeCategories      String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
   preferences           Json              // flexible: language, preferred times, notes
   onboardingProfile     Json?             // Deep household intelligence: homeType, occupants, lifestyle, painPoints, serviceHabits, autonomyPreference
-  onboardingStep        Int             @default(0) // 0=not started, 1-5=get-to-know-you, 6-8=anna-intro, 8=complete
+  onboardingStep        Int             @default(0) // 0=not started, 1-9 steps
   onboardingCompletedAt DateTime?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
