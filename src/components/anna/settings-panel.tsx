@@ -66,6 +66,7 @@ import { Badge } from "@/components/ui/badge";
 import { PhoneInput } from "@/components/shared/phone-input";
 import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
 import { HouseholdProfileSection, type HouseholdProfile } from "@/components/anna/household-profile-section";
+import { BillingSection } from "@/components/anna/billing-section";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────
@@ -643,34 +644,10 @@ export function SettingsPanel() {
     phone: "",
   });
   const [deleteTarget, setDeleteTarget] = useState<FamilyMember | null>(null);
-  const [cancelSubDialog, setCancelSubDialog] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [deleteAddressTarget, setDeleteAddressTarget] = useState<Address | null>(null);
-
-  // ── Subscription mutation (cancel) ──
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      if (!sub) throw new Error("No subscription");
-      // Household-initiated cancellation sends a request to ops
-      const res = await fetch(`/api/households/${selectedHouseholdId}/subscription`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "request_cancel" }),
-      });
-      if (!res.ok) throw new Error("Failed to request cancellation");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success("Cancellation request submitted. Ops will process it shortly.");
-      setCancelSubDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
-    },
-    onError: () => {
-      toast.error("Failed to submit cancellation request");
-    },
-  });
 
   // ── Address mutations ──
 
@@ -988,172 +965,8 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {/* ── Subscription ── */}
-      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
-          Subscription
-        </h3>
-        {sub ? (
-          <div className="space-y-3">
-            {/* Status and tier */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Crown size={16} className="text-[var(--anna-warning)]" />
-                <span className="text-sm font-semibold text-[var(--anna-slate)]">
-                  {sub.tier === "HOME" ? "Home" : "Care"} Tier
-                </span>
-              </div>
-              <span
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${
-                  sub.status === "ACTIVE"
-                    ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)]"
-                    : sub.status === "PAST_DUE"
-                    ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)]"
-                    : "bg-[var(--anna-error)]/15 text-[var(--anna-error)]"
-                }`}
-              >
-                {sub.status.replace(/_/g, " ")}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[var(--anna-muted)]">Price</span>
-              <span className="font-data font-semibold text-[var(--anna-slate)]">
-                {formatSgd(sub.priceCents)}
-                <span className="text-[var(--anna-muted)] font-sans font-normal">
-                  /mo
-                </span>
-              </span>
-            </div>
-            {sub.nextBillingDate && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[var(--anna-muted)]">Next billing</span>
-                <span className="font-data text-[var(--anna-slate-light)]">
-                  {new Date(sub.nextBillingDate).toLocaleDateString("en-SG", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </span>
-              </div>
-            )}
-
-            {/* Upgrade prompt for HOME tier */}
-            {sub.tier === "HOME" && sub.status === "ACTIVE" && (
-              <div className="bg-[var(--anna-sage-light)] rounded-xl p-3 mt-2 border border-[var(--anna-sage)]/20">
-                <div className="flex items-start gap-2">
-                  <ArrowUpCircle size={18} className="text-[var(--anna-sage-dark)] shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[var(--anna-slate)]">Upgrade to Anna.I Care</p>
-                    <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">
-                      Premium eldercare companion bundles, priority support, and dedicated coordinator access.
-                    </p>
-                    <p className="text-xs font-data font-semibold text-[var(--anna-slate)] mt-1">
-                      SGD $68/mo
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[10px] text-[var(--anna-muted)] mt-2 flex items-center gap-1">
-                  <Info size={10} />
-                  Contact Ops to upgrade your plan
-                </p>
-              </div>
-            )}
-
-            {/* CARE tier badge */}
-            {sub.tier === "CARE" && sub.status === "ACTIVE" && (
-              <div className="bg-[var(--anna-sage-light)] rounded-xl p-3 mt-2 border border-[var(--anna-sage)]/20">
-                <div className="flex items-center gap-2">
-                  <Crown size={16} className="text-[var(--anna-sage-dark)]" />
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--anna-slate)]">Care Tier Active</p>
-                    <p className="text-[10px] text-[var(--anna-muted)]">
-                      Eldercare companion bundles + priority support
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* CANCELLED / PAST_DUE states */}
-            {sub.status === "CANCELLED" && (
-              <div className="bg-[var(--anna-error)]/10 rounded-xl p-3 mt-2 border border-[var(--anna-error)]/20">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-[var(--anna-error)]" />
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--anna-error)]">Subscription Cancelled</p>
-                    <p className="text-[10px] text-[var(--anna-muted)]">
-                      Your subscription has been cancelled. Contact Ops to reactivate.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {sub.status === "PAST_DUE" && (
-              <div className="bg-[var(--anna-warning)]/10 rounded-xl p-3 mt-2 border border-[var(--anna-warning)]/20">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-[var(--anna-warning)]" />
-                  <div>
-                    <p className="text-xs font-semibold text-[var(--anna-warning)]">Payment Overdue</p>
-                    <p className="text-[10px] text-[var(--anna-muted)]">
-                      Please update your payment method to continue using Anna.I services.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Cancel button for ACTIVE */}
-            {sub.status === "ACTIVE" && (
-              <div className="pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs rounded-lg border-[var(--anna-error)]/30 text-[var(--anna-error)] hover:bg-[var(--anna-error)]/10"
-                  onClick={() => setCancelSubDialog(true)}
-                >
-                  Cancel Subscription
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[var(--anna-bg)] flex items-center justify-center">
-              <Crown size={16} className="text-[var(--anna-muted)]" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-[var(--anna-slate)]">Home Tier</p>
-              <p className="text-xs text-[var(--anna-muted)]">Free trial — SGD $8/mo</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Cancel Subscription Confirmation */}
-      <AlertDialog open={cancelSubDialog} onOpenChange={setCancelSubDialog}>
-        <AlertDialogContent className="rounded-2xl border-[var(--anna-border)]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[var(--anna-slate)] flex items-center gap-2">
-              <AlertTriangle size={18} className="text-red-500" />
-              Cancel Subscription
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[var(--anna-muted)]">
-              Are you sure you want to cancel your Anna.I {sub?.tier === "HOME" ? "Home" : "Care"} subscription?
-              Your service will remain active until the end of the current billing period. You can reactivate at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Keep Subscription</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending}
-              className="rounded-xl bg-red-600 hover:bg-red-700"
-            >
-              {cancelMutation.isPending ? "Submitting..." : "Yes, Cancel"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* ── Subscription & Billing (Stripe-integrated) ── */}
+      <BillingSection sub={sub} householdId={selectedHouseholdId} />
 
       {/* ── Members ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)]">

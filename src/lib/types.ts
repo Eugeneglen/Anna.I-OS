@@ -185,6 +185,7 @@ export interface Subscription {
   tier: "HOME" | "CARE";
   status: "ACTIVE" | "CANCELLED" | "PAST_DUE";
   priceCents: number;
+  stripeSubscriptionId?: string | null;
   nextBillingDate?: string | null;
 }
 

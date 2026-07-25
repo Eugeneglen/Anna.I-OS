@@ -45,9 +45,17 @@ export async function GET(request: Request) {
     if (memberId) {
       unreadWhere.memberId = memberId
     }
-    const unreadCount = await db.notification.count({ where: unreadWhere })
+    const [unreadCount, anomalyUnreadCount] = await Promise.all([
+      db.notification.count({ where: unreadWhere }),
+      db.notification.count({
+        where: {
+          ...unreadWhere,
+          eventType: { startsWith: "ANOMALY_" },
+        },
+      }),
+    ])
 
-    return NextResponse.json({ notifications, unreadCount })
+    return NextResponse.json({ notifications, unreadCount, anomalyUnreadCount })
   } catch (error) {
     console.error("GET /api/notifications error:", error)
     return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 })

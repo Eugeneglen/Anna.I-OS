@@ -100,9 +100,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useQuery({
     queryKey: ["notifications", selectedHouseholdId, "count"],
     queryFn: async () => {
-      if (!selectedHouseholdId) return { unreadCount: 0 };
+      if (!selectedHouseholdId) return { unreadCount: 0, anomalyUnreadCount: 0 };
       const res = await fetch(`/api/notifications?householdId=${selectedHouseholdId}`);
-      if (!res.ok) return { unreadCount: 0 };
+      if (!res.ok) return { unreadCount: 0, anomalyUnreadCount: 0 };
       return res.json();
     },
     enabled: !!selectedHouseholdId,
@@ -111,6 +111,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   });
 
   const unreadCount = notifData?.unreadCount || 0;
+  const anomalyUnreadCount = notifData?.anomalyUnreadCount || 0;
 
   const currentHouseholdName = householdNames[selectedHouseholdId] || (sessionLoading ? "Loading..." : "");
 
@@ -204,8 +205,18 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             >
               <Bell size={18} className="text-[var(--anna-slate-light)]" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[var(--anna-sage-dark)] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className={cn(
+                  "absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1",
+                  anomalyUnreadCount > 0
+                    ? "bg-[var(--anna-warning)]"
+                    : "bg-[var(--anna-sage-dark)]"
+                )}>
                   {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+              {anomalyUnreadCount > 0 && unreadCount !== anomalyUnreadCount && (
+                <span className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 ring-2 ring-[var(--anna-white)]">
+                  {anomalyUnreadCount > 9 ? "9+" : anomalyUnreadCount}
                 </span>
               )}
             </button>
