@@ -248,7 +248,7 @@ function EditableField({
               setDraft(value);
               setEditing(true);
             }}
-            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
             aria-label={`Edit ${label}`}
           >
             <Pencil size={12} />
