@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { NotificationStatus } from "@prisma/client"
+import { NotificationEventType, NotificationStatus } from "@prisma/client"
+
+const ANOMALY_EVENT_TYPES: NotificationEventType[] = [
+  NotificationEventType.ANOMALY_VENDOR_LATE,
+  NotificationEventType.ANOMALY_TASK_OVERDUE,
+  NotificationEventType.ANOMALY_VERIFICATION_MISSING,
+  NotificationEventType.ANOMALY_RATING_DROP,
+  NotificationEventType.ANOMALY_ESCROW_DISPUTED,
+]
 
 export async function GET(request: Request) {
   try {
@@ -50,7 +58,7 @@ export async function GET(request: Request) {
       db.notification.count({
         where: {
           ...unreadWhere,
-          eventType: { startsWith: "ANOMALY_" },
+          eventType: { in: ANOMALY_EVENT_TYPES },
         },
       }),
     ])
