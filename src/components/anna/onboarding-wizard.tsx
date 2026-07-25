@@ -345,11 +345,11 @@ function OptionCard({
             <Icon size={18} />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <p className={cn("font-semibold leading-tight", large ? "text-sm" : "text-xs", "text-[var(--anna-slate)]")}>
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <p className={cn("font-semibold leading-tight break-words", large ? "text-sm" : "text-xs", "text-[var(--anna-slate)]")}>
             {label}
           </p>
-          {sub && <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">{sub}</p>}
+          {sub && <p className="text-[10px] text-[var(--anna-muted)] mt-0.5 truncate">{sub}</p>}
         </div>
         {selected && (
           <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center shrink-0">
@@ -565,7 +565,7 @@ function StepYourHome({
       <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I tailor recommendations to your home.</p>
 
       {/* Home type selection */}
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
         {HOME_TYPES.map((t) => (
           <OptionCard
             key={t.value}

@@ -380,7 +380,7 @@ export function SettingsPanel() {
     mutationFn: async () => {
       if (!sub) throw new Error("No subscription");
       // Household-initiated cancellation sends a request to ops
-      const res = await fetch(`/api/households/${householdId}/subscription`, {
+      const res = await fetch(`/api/households/${selectedHouseholdId}/subscription`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "request_cancel" }),
@@ -391,7 +391,7 @@ export function SettingsPanel() {
     onSuccess: () => {
       toast.success("Cancellation request submitted. Ops will process it shortly.");
       setCancelSubDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["household-detail", householdId] });
+      queryClient.invalidateQueries({ queryKey: ["household", selectedHouseholdId] });
     },
     onError: () => {
       toast.error("Failed to submit cancellation request");
@@ -480,13 +480,15 @@ export function SettingsPanel() {
             mutate={updateHousehold.mutate}
           />
 
-          <div className="flex items-center gap-3">
-            <MapPin size={14} className="text-[var(--anna-muted)] flex-shrink-0" />
-            <span className="text-sm text-[var(--anna-slate-light)]">
-              {household?.unitNumber || "—"} &middot;{" "}
-              {household?.postalCode || "—"}
-            </span>
-          </div>
+          <EditableField
+            label="Unit / Postal"
+            value={[household?.unitNumber, household?.postalCode].filter(Boolean).join(" · ") || ""}
+            icon={MapPin}
+            fieldKey="unitNumber"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
         </div>
       </div>
 
@@ -638,9 +640,15 @@ export function SettingsPanel() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-[var(--anna-muted)]">
-            No subscription found
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[var(--anna-bg)] flex items-center justify-center">
+              <Crown size={16} className="text-[var(--anna-muted)]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[var(--anna-slate)]">Home Tier</p>
+              <p className="text-xs text-[var(--anna-muted)]">Free trial — SGD $8/mo</p>
+            </div>
+          </div>
         )}
       </div>
 

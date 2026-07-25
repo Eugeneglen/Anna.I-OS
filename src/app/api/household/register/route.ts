@@ -74,6 +74,18 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Create default HOME tier subscription
+      await tx.subscription.create({
+        data: {
+          householdId: household.id,
+          tier: "HOME",
+          status: "ACTIVE",
+          priceCents: 800,
+          billingCycleStart: new Date(),
+          nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+
       // Create the first member as OWNER
       const member = await tx.familyMember.create({
         data: {
