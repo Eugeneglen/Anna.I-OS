@@ -53,31 +53,38 @@ import Icon from '../components/Icon.astro';
   </section>
 </BaseLayout>
 
-<script>
-  const form = document.getElementById('lead-form') as HTMLFormElement | null;
-  const status = document.getElementById('form-status');
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!status) return;
-    status.style.display = 'block';
-    status.textContent = 'Submitting...';
-    try {
-      const data = new FormData(form);
-      const res = await fetch('/api/lead', {
-        method: 'POST',
-        body: JSON.stringify(Object.fromEntries(data)),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        status.textContent = 'Thank you. We will be in touch within one business day.';
-        form.reset();
-      } else {
+<script is:inline>
+  (function () {
+    var form = document.getElementById('lead-form');
+    var status = document.getElementById('form-status');
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!status) return;
+      status.style.display = 'block';
+      status.textContent = 'Submitting...';
+      try {
+        var data = new FormData(form);
+        // Preserve XTransformPort so the POST reaches the marketing site API
+        var url = '/api/lead';
+        var port = new URLSearchParams(window.location.search).get('XTransformPort');
+        if (port) url += '?XTransformPort=' + port;
+        var res = await fetch(url, {
+          method: 'POST',
+          body: JSON.stringify(Object.fromEntries(data)),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          status.textContent = 'Thank you. We will be in touch within one business day.';
+          form.reset();
+        } else {
+          status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
+        }
+      } catch (err) {
         status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
       }
-    } catch {
-      status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
-    }
-  });
+    });
+  })();
 </script>
 
 <style>

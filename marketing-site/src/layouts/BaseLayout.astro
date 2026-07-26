@@ -60,56 +60,76 @@ const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
       <Footer />
     </div>
 
-    {/* Scroll reveal observer */}
-    <script>
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('is-visible');
-              observer.unobserve(entry.target);
-            }
+    {/* Scroll reveal observer — is:inline so it never gets hoisted to an
+        external JS file (which would 404 through the preview gateway). */}
+    <script is:inline>
+      (function () {
+        function reveal() {
+          var observer = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add('is-visible');
+                  observer.unobserve(entry.target);
+                }
+              });
+            },
+            { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+          );
+          document.querySelectorAll('.reveal').forEach(function (el) {
+            observer.observe(el);
           });
-        },
-        { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
-      );
-      document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', reveal);
+        } else {
+          reveal();
+        }
+      })();
     </script>
 
     {/* Preview-gateway bridge — preserves XTransformPort across navigation.
+        is:inline so it is embedded directly in the HTML and always runs,
+        even when the hoisted JS bundle fails to load through the gateway.
         When the page is loaded via ?XTransformPort=4321 (sandbox preview),
         internal links to the marketing site keep that param. Links to the
         product app (/login, /register, /dashboard) intentionally drop it
         so they route to port 3000 (the Next.js product app). */}
-    <script>
+    <script is:inline>
       (function () {
-        const params = new URLSearchParams(window.location.search);
-        const port = params.get('XTransformPort');
+        var params = new URLSearchParams(window.location.search);
+        var port = params.get('XTransformPort');
         if (!port) return;
 
         // Product-app paths that should NOT carry XTransformPort
-        const productPaths = ['/login', '/register', '/dashboard', '/api/auth', '/api/household'];
+        var productPaths = ['/login', '/register', '/dashboard', '/api/auth', '/api/household'];
 
         function shouldPreserve(href) {
           if (!href) return false;
-          for (const p of productPaths) {
-            if (href === p || href.startsWith(p + '?') || href.startsWith(p + '/')) return false;
+          for (var i = 0; i < productPaths.length; i++) {
+            var p = productPaths[i];
+            if (href === p || href.indexOf(p + '?') === 0 || href.indexOf(p + '/') === 0) return false;
           }
           return href.charAt(0) === '/' && href.indexOf('XTransformPort') === -1;
         }
 
-        // Rewrite anchor hrefs on click
-        document.addEventListener('click', function (e) {
-          const a = e.target.closest('a');
-          if (!a) return;
-          const href = a.getAttribute('href');
-          if (shouldPreserve(href)) {
-            const u = new URL(href, window.location.origin);
-            if (!u.searchParams.has('XTransformPort')) {
-              u.searchParams.set('XTransformPort', port);
-              a.setAttribute('href', u.pathname + u.search);
-            }
+        function rewriteLink(a) {
+          var href = a.getAttribute('href');
+          if (!shouldPreserve(href)) return;
+          var u = new URL(href, window.location.origin);
+          if (!u.searchParams.has('XTransformPort')) {
+            u.searchParams.set('XTransformPort', port);
+            a.setAttribute('href', u.pathname + u.search);
           }
+        }
+
+        // Rewrite all existing anchor hrefs on load
+        document.querySelectorAll('a[href]').forEach(rewriteLink);
+
+        // Also rewrite on click (catches dynamically-added links)
+        document.addEventListener('click', function (e) {
+          var a = e.target.closest && e.target.closest('a');
+          if (a) rewriteLink(a);
         });
       })();
     </script>
