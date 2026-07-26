@@ -1,0 +1,86 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+
+<BaseLayout
+  title="Register — Anna.I"
+  description="Register your household with Anna.I."
+>
+  <section class="section">
+    <div class="container-content" style="max-width: 42rem;">
+      <div class="text-center mb-12 reveal">
+        <span class="badge mb-5">Get started</span>
+        <h1 class="text-fluid-3xl mb-4 text-balance">Register your household.</h1>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Tell us about your home and preferences. We will set up your account and match you with vetted vendors.
+        </p>
+      </div>
+
+      <div class="card reveal" style="padding: clamp(2rem, 1.5rem + 2vw, 3rem);">
+        <form id="lead-form" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label for="name" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Full name</label>
+            <input type="text" id="name" name="name" class="field" required placeholder="Your name" />
+          </div>
+          <div>
+            <label for="email" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Email</label>
+            <input type="email" id="email" name="email" class="field" required placeholder="you@example.com" />
+          </div>
+          <div>
+            <label for="postal" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Postal code</label>
+            <input type="text" id="postal" name="postal" class="field" required placeholder="e.g. 238859" />
+          </div>
+          <div>
+            <label for="services" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Services you need</label>
+            <select id="services" name="services" class="field" required>
+              <option value="">Select a category</option>
+              <option value="cleaning">Cleaning</option>
+              <option value="laundry">Laundry</option>
+              <option value="aircon">Aircon Servicing</option>
+              <option value="handyman">Handyman</option>
+              <option value="multiple">Multiple categories</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">
+            Register
+            <Icon name="arrowRight" class="w-4 h-4" decorative />
+          </button>
+          <p id="form-status" style="font-size: 0.875rem; color: var(--sage-600); display: none;"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById('lead-form') as HTMLFormElement | null;
+  const status = document.getElementById('form-status');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!status) return;
+    status.style.display = 'block';
+    status.textContent = 'Submitting...';
+    try {
+      const data = new FormData(form);
+      const res = await fetch('/api/lead', {
+        method: 'POST',
+        body: JSON.stringify(Object.fromEntries(data)),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        status.textContent = 'Thank you. We will be in touch within one business day.';
+        form.reset();
+      } else {
+        status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
+      }
+    } catch {
+      status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
+    }
+  });
+</script>
+
+<style>
+  .w-4 { width: 1rem; }
+  .h-4 { height: 1rem; }
+</style>

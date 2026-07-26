@@ -1,0 +1,117 @@
+---
+/**
+ * Anna.I Marketing — Base Layout
+ * ─────────────────────────────────────────────────────────────
+ * Wraps every page with: <head>, fonts, header, main, footer.
+ * Includes the scroll-reveal observer + preview-gateway bridge.
+ */
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+export interface Props {
+  title: string;
+  description?: string;
+  schema?: object;
+}
+
+const {
+  title,
+  description = 'Anna.I — The operating system for the modern household. Cleaning, laundry, aircon, and handyman services coordinated through one intelligent system in Singapore.',
+  schema,
+} = Astro.props;
+
+const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+
+    {/* Open Graph */}
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-default.svg" />
+
+    {/* Fonts — Manrope (body) + JetBrains Mono (labels) */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    {schema && (
+      <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+    )}
+  </head>
+  <body>
+    <div class="flex flex-col" style="min-height: 100vh;">
+      <Header />
+      <main class="flex-1">
+        <slot />
+      </main>
+      <Footer />
+    </div>
+
+    {/* Scroll reveal observer */}
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+      );
+      document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+    </script>
+
+    {/* Preview-gateway bridge — preserves XTransformPort across navigation.
+        When the page is loaded via ?XTransformPort=4321 (sandbox preview),
+        internal links to the marketing site keep that param. Links to the
+        product app (/login, /register, /dashboard) intentionally drop it
+        so they route to port 3000 (the Next.js product app). */}
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const port = params.get('XTransformPort');
+        if (!port) return;
+
+        // Product-app paths that should NOT carry XTransformPort
+        const productPaths = ['/login', '/register', '/dashboard', '/api/auth', '/api/household'];
+
+        function shouldPreserve(href) {
+          if (!href) return false;
+          for (const p of productPaths) {
+            if (href === p || href.startsWith(p + '?') || href.startsWith(p + '/')) return false;
+          }
+          return href.charAt(0) === '/' && href.indexOf('XTransformPort') === -1;
+        }
+
+        // Rewrite anchor hrefs on click
+        document.addEventListener('click', function (e) {
+          const a = e.target.closest('a');
+          if (!a) return;
+          const href = a.getAttribute('href');
+          if (shouldPreserve(href)) {
+            const u = new URL(href, window.location.origin);
+            if (!u.searchParams.has('XTransformPort')) {
+              u.searchParams.set('XTransformPort', port);
+              a.setAttribute('href', u.pathname + u.search);
+            }
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

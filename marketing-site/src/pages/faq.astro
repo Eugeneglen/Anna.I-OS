@@ -1,0 +1,60 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CtaBand from '../components/CtaBand.astro';
+
+const faqs = [
+  { q: 'What services does Anna.I coordinate?', a: 'Four household essentials: cleaning, laundry, aircon servicing, and handyman work. Each category has vetted vendors matched to your home type and schedule.' },
+  { q: 'How is payment handled?', a: 'Payment is held in milestone escrow before the job starts. It is released to the vendor only when the work is verified complete — with photo proof. You never pay upfront for work that does not get done.' },
+  { q: 'How does Anna.I remember my preferences?', a: 'When you register, you tell Anna.I your home type, schedule, and preferences once. Every booking carries that context forward — no re-explaining, no starting from scratch.' },
+  { q: 'How are vendors vetted?', a: 'Every vendor passes background checks and identity verification before joining the network. Performance is tracked over time, not just through one-off star ratings.' },
+  { q: 'What if something goes wrong?', a: 'Because payment stays in escrow until verified completion, you have leverage. If a job is incomplete or unsatisfactory, payment does not release until it is resolved. Anna.I mediates disputes.' },
+  { q: 'Is Anna.I available outside Singapore?', a: 'Anna.I is currently Singapore-only. We are built specifically for the Singapore home-services context — including local vendor networks, CASE consumer protection frameworks, and local payment rails.' },
+  { q: 'Do I need to be at home for every job?', a: 'No. Once Anna.I knows your home access and preferences, vendors can complete jobs while you are away. Photo verification confirms completion remotely.' },
+  { q: 'How much does it cost?', a: 'Registration is free. You pay per job, with prices quoted before work begins. Anna.I takes a small coordination fee included in the quoted price — no hidden charges.' },
+];
+---
+
+<BaseLayout
+  title="FAQ — Anna.I"
+  description="Answers to common questions about Anna.I — how payment escrow works, vendor vetting, preference memory, and what services are coordinated."
+>
+  <section class="section">
+    <div class="container-content" style="max-width: 48rem;">
+      <div class="text-center mb-12 reveal">
+        <span class="badge mb-5">FAQ</span>
+        <h1 class="text-fluid-3xl mb-4 text-balance">Questions, answered.</h1>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Everything you need to know about how Anna.I coordinates your household.
+        </p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {faqs.map((faq) => (
+          <details class="card reveal" style="cursor: pointer;">
+            <summary style="font-weight: 600; font-size: 1.05rem; color: var(--slate); list-style: none; display: flex; justify-content: space-between; align-items: center;">
+              {faq.q}
+              <span style="color: var(--sage-600); font-size: 1.5rem; line-height: 1;">+</span>
+            </summary>
+            <p class="text-slate\/70 text-pretty" style="margin-top: 0.75rem; line-height: 1.6;">
+              {faq.a}
+            </p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    eyebrow="Still have questions?"
+    headline="Talk to us."
+    body="If your question is not answered here, reach out. We will get back to you within one business day."
+    primaryLabel="Register Now"
+    secondaryLabel="Contact us"
+    secondaryHref="/contact-us"
+  />
+</BaseLayout>
+
+<style>
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary > span { transform: rotate(45deg); display: inline-block; }
+</style>

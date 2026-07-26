@@ -1,0 +1,59 @@
+---
+/**
+ * Anna.I Marketing — Footer
+ * ─────────────────────────────────────────────────────────────
+ * Dark sage footer with wordmark "Anna.I" (cream/sage-400),
+ * nav columns, and legal links. No logo icon.
+ */
+const year = new Date().getFullYear();
+---
+
+<footer style="background: var(--sage-dark); color: var(--cream); margin-top: auto;">
+  <div class="container-content" style="padding-block: clamp(2.5rem, 1.5rem + 3vw, 4rem);">
+    <div style="display: grid; grid-template-columns: 1fr; gap: 2.5rem;">
+      {/* Brand + tagline */}
+      <div>
+        <p style="font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: var(--sage-300); font-family: 'Manrope', sans-serif; margin-bottom: 0.75rem;">
+          Anna.I
+        </p>
+        <p style="font-size: 0.9rem; color: rgba(249,248,243,0.6); max-width: 20rem; line-height: 1.6;">
+          The operating system for the modern household. Cleaning, laundry, aircon, and handyman — coordinated.
+        </p>
+      </div>
+
+      {/* Link columns */}
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem;">
+        <div>
+          <p class="font-mono-label" style="color: rgba(249,248,243,0.4); margin-bottom: 1rem;">Company</p>
+          <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+            <a href="/partners" style="font-size: 0.9rem; color: rgba(249,248,243,0.7); transition: color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='rgba(249,248,243,0.7)'">Partners</a>
+            <a href="/faq" style="font-size: 0.9rem; color: rgba(249,248,243,0.7); transition: color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='rgba(249,248,243,0.7)'">FAQ</a>
+            <a href="/contact-us" style="font-size: 0.9rem; color: rgba(249,248,243,0.7); transition: color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='rgba(249,248,243,0.7)'">Contact</a>
+          </div>
+        </div>
+        <div>
+          <p class="font-mono-label" style="color: rgba(249,248,243,0.4); margin-bottom: 1rem;">Legal</p>
+          <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+            <a href="/privacy" style="font-size: 0.9rem; color: rgba(249,248,243,0.7); transition: color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='rgba(249,248,243,0.7)'">Privacy</a>
+            <a href="/terms" style="font-size: 0.9rem; color: rgba(249,248,243,0.7); transition: color 0.2s;" onmouseover="this.style.color='var(--cream)'" onmouseout="this.style.color='rgba(249,248,243,0.7)'">Terms</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Bottom bar */}
+    <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(249,248,243,0.1); display: flex; flex-direction: column; gap: 0.5rem;">
+      <p style="font-size: 0.8rem; color: rgba(249,248,243,0.4);">
+        © {year} Anna.I. All rights reserved. Singapore.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  @media (min-width: 768px) {
+    footer > div > div:first-child {
+      grid-template-columns: 1fr 2fr !important;
+    }
+  }
+</style>
