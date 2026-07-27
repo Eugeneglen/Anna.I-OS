@@ -61,9 +61,12 @@ const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
     </div>
 
     {/* Scroll reveal observer — is:inline so it never gets hoisted to an
-        external JS file (which would 404 through the preview gateway). */}
+        external JS file (which would 404 through the preview gateway).
+        Adds .js class to <html> FIRST so CSS can hide .reveal elements
+        only when JS is available (progressive enhancement). */}
     <script is:inline>
       (function () {
+        document.documentElement.classList.add('js');
         function reveal() {
           var observer = new IntersectionObserver(
             function (entries) {

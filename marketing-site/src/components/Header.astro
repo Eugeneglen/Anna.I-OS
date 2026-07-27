@@ -6,6 +6,10 @@
  * Wordmark "Anna.I" (sage-600, bold). No logo icon.
  * Nav: Home / Partners / Services (anchor) / FAQ / Contact / [Register Now]
  * Register Now → /login (routes to product app on port 3000).
+ *
+ * Mobile: nav links in a horizontal scroll row with a right-edge
+ * fade gradient to indicate more items. Scroll-snap for smooth UX.
+ * Touch targets enlarged to meet WCAG 44px minimum.
  */
 ---
 
@@ -29,21 +33,21 @@
       </div>
     </div>
 
-    {/* CTA + mobile toggle */}
+    {/* CTA button */}
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <a href="/login" class="btn btn-primary" data-cta="header-register" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;">
+      <a href="/login" class="btn btn-primary" data-cta="header-register" style="padding: 0.7rem 1.25rem; font-size: 0.9rem;">
         Register Now
       </a>
     </div>
   </nav>
 
-  {/* Mobile nav — simple horizontal scroll */}
-  <div class="lg:hidden" style="display: flex; gap: 1.25rem; padding: 0 1.25rem 0.75rem; overflow-x: auto; font-size: 0.85rem;">
-    <a href="/" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Home</a>
-    <a href="/partners" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Partners</a>
-    <a href="/#services" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Services</a>
-    <a href="/faq" style="font-weight: 500; color: var(--slate); white-space: nowrap;">FAQ</a>
-    <a href="/contact-us" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Contact</a>
+  {/* Mobile nav — horizontal scroll with fade indicator */}
+  <div class="lg:hidden mobile-nav-scroll" style="display: flex; gap: 0.25rem; padding: 0.25rem 0.75rem 0.75rem; overflow-x: auto; font-size: 0.85rem; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; scrollbar-width: none;">
+    <a href="/" style="font-weight: 500; color: var(--slate); white-space: nowrap; padding: 0.5rem 0.375rem; scroll-snap-align: start;">Home</a>
+    <a href="/partners" style="font-weight: 500; color: var(--slate); white-space: nowrap; padding: 0.5rem 0.375rem; scroll-snap-align: start;">Partners</a>
+    <a href="/#services" style="font-weight: 500; color: var(--slate); white-space: nowrap; padding: 0.5rem 0.375rem; scroll-snap-align: start;">Services</a>
+    <a href="/faq" style="font-weight: 500; color: var(--slate); white-space: nowrap; padding: 0.5rem 0.375rem; scroll-snap-align: start;">FAQ</a>
+    <a href="/contact-us" style="font-weight: 500; color: var(--slate); white-space: nowrap; padding: 0.5rem 0.375rem; scroll-snap-align: start;">Contact</a>
   </div>
 </header>
 
@@ -52,4 +56,34 @@
     header .hidden.lg\:block { display: block !important; }
     header .lg\:hidden { display: none !important; }
   }
+  /* Hide scrollbar on mobile nav (keep scroll functionality) */
+  .mobile-nav-scroll::-webkit-scrollbar { display: none; }
+  /* Right-edge fade gradient to indicate more items when scrollable */
+  .mobile-nav-scroll {
+    -webkit-mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+    mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+  }
+  /* When scrolled to end, remove the fade (JS toggles .scrolled-end) */
+  .mobile-nav-scroll.scrolled-end {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 </style>
+
+<script is:inline>
+  // Toggle fade indicator based on scroll position
+  (function() {
+    var nav = document.querySelector('.mobile-nav-scroll');
+    if (!nav) return;
+    function updateFade() {
+      var maxScroll = nav.scrollWidth - nav.clientWidth;
+      if (nav.scrollLeft >= maxScroll - 2) {
+        nav.classList.add('scrolled-end');
+      } else {
+        nav.classList.remove('scrolled-end');
+      }
+    }
+    nav.addEventListener('scroll', updateFade, { passive: true });
+    updateFade();
+  })();
+</script>
