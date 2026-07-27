@@ -251,7 +251,7 @@ export async function PATCH(
           });
         }
 
-        return { updatedTask, updatedEscrow, vendorNotification }
+        return { updatedTask, updatedEscrow, vendorNotification, vendorId: bookingVendor?.vendorId ?? null }
       })
 
       // Phase 5: Background anomaly detection (dispute triggers ESCROW_DISPUTED check)
@@ -264,13 +264,13 @@ export async function PATCH(
         category: task.category,
         reason: reason ?? "No reason provided",
         escrowAmountCents: escrow.amountCents,
-        vendorId: bookingVendor?.vendorId,
+        vendorId: result.vendorId,
       }).catch(() => {})
 
       // Real-time: push notification to vendor room
       if (result.vendorNotification) {
         emitVendorNotification({
-          vendorId: bookingVendor!.vendorId,
+          vendorId: result.vendorId,
           notificationId: result.vendorNotification.id,
           eventType: NotificationEventType.DISPUTE_RAISED,
           title: "Dispute Raised on Booking",
