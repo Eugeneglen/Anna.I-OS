@@ -56,33 +56,50 @@ export const ICONS: Record<IconName, IconDef> = {
       <circle class="icon-node" cx="42" cy="6" r="0.5"/>`,
   },
 
-  // ── 2. KNOT → ARROW → SPIRAL ──────────────────────────────
-  // Copy: "Chaos → Order" — crossing-curve tangle (chaos) → arrow →
-  // concentric circles (focused order). Three-part transformation.
-  // Redesigned: old knot had circles that read as a head+body (stick
-  // figure). New design uses only crossing curves — unambiguously
-  // abstract. Old "order" end was a starburst (radiating lines) which
-  // read as "sparkle." New end is concentric circles — the visual
-  // opposite of a tangle: perfectly nested, non-crossing, on-target.
+  // ── 2. CHAOS → ARROW → ORDER ──────────────────────────────
+  // Copy: "Chaos → Order" — 9 scattered dots (chaos) → arrow →
+  // same 9 dots arranged in a 3×3 grid (coordinated order).
+  //
+  // Design rationale: the SAME elements (9 dots, identical size)
+  // appear on both sides — only the ARRANGEMENT differs. This is
+  // the purest possible expression of "disorder transformed into
+  // a coordinated system." Instantly legible at any size.
+  //
+  // Redesigned (v3): previous versions used crossing S-curves which
+  // read as a "messy ball of yarn / random doodle" — too organic
+  // and hand-drawn. Dots are geometric, bold, and unambiguously
+  // intentional. The scatter→grid transformation is a universally
+  // understood visual metaphor (cf. "scatter plot → organized data").
   knotScribbleSpiral: {
     viewBox: '0 0 120 48',
     title: 'From chaos to order',
     inner: `
-      <g class="icon-stroke" transform="translate(2,8) scale(1.33)" stroke-width="1.7">
-        <path d="M3 5 C 10 1, 10 9, 17 5"/>
-        <path d="M3 15 C 10 11, 10 19, 17 15"/>
-        <path d="M5 3 C 1 10, 9 10, 5 17"/>
-        <path d="M15 3 C 19 10, 11 10, 15 17"/>
+      <g class="icon-node">
+        <circle cx="10" cy="10" r="3.5"/>
+        <circle cx="22" cy="8" r="3.5"/>
+        <circle cx="30" cy="16" r="3.5"/>
+        <circle cx="14" cy="20" r="3.5"/>
+        <circle cx="26" cy="22" r="3.5"/>
+        <circle cx="6" cy="26" r="3.5"/>
+        <circle cx="20" cy="32" r="3.5"/>
+        <circle cx="12" cy="38" r="3.5"/>
+        <circle cx="30" cy="36" r="3.5"/>
       </g>
-      <g class="icon-stroke" transform="translate(48,0)" stroke-width="2.25">
-        <path d="M0 24 L24 24"/>
-        <path d="M17 17 L24 24 L17 31"/>
+      <g class="icon-stroke" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="48" y1="24" x2="70" y2="24"/>
+        <polyline points="63,18 70,24 63,30"/>
       </g>
-      <g class="icon-stroke" transform="translate(78,0)" stroke-width="2.25">
-        <circle cx="24" cy="24" r="5"/>
-        <circle cx="24" cy="24" r="10"/>
-      </g>
-      <circle class="icon-node" cx="102" cy="24" r="2"/>`,
+      <g class="icon-node">
+        <circle cx="88" cy="12" r="3.5"/>
+        <circle cx="100" cy="12" r="3.5"/>
+        <circle cx="112" cy="12" r="3.5"/>
+        <circle cx="88" cy="24" r="3.5"/>
+        <circle cx="100" cy="24" r="3.5"/>
+        <circle cx="112" cy="24" r="3.5"/>
+        <circle cx="88" cy="36" r="3.5"/>
+        <circle cx="100" cy="36" r="3.5"/>
+        <circle cx="112" cy="36" r="3.5"/>
+      </g>`,
   },
 
   // ── 3. KNOT ───────────────────────────────────────────────
