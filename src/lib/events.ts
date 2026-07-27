@@ -16,6 +16,10 @@ const OPS_EVENTS_URL = process.env.OPS_EVENTS_URL || "http://localhost:3004";
 
 let socket: Socket | null = null;
 let connecting = false;
+// Buffer of events emitted before the socket connected. These are flushed
+// once the connection establishes, so the very first events after a cold
+// server start are no longer silently dropped.
+const pendingEmits: OpsEventPayload[] = [];
 
 function getSocket(): Socket | null {
   if (socket?.connected) return socket;
@@ -35,6 +39,18 @@ function getSocket(): Socket | null {
       socket.on("connect", () => {
         connecting = false;
         console.log("[events] Connected to ops-events service");
+        // Flush any events that were buffered while we were connecting
+        if (pendingEmits.length > 0) {
+          console.log(`[events] Flushing ${pendingEmits.length} buffered event(s)`);
+          for (const evt of pendingEmits) {
+            socket!.emit("event:emit", {
+              type: evt.type,
+              data: evt.data,
+              timestamp: evt.timestamp || new Date().toISOString(),
+            });
+          }
+          pendingEmits.length = 0;
+        }
       });
 
       socket.on("disconnect", () => {
@@ -54,6 +70,13 @@ function getSocket(): Socket | null {
   return socket?.connected ? socket : null;
 }
 
+// Eagerly initiate the connection on module load so the first emit doesn't
+// have to wait for a connection round-trip. Safe to call multiple times.
+if (typeof window === "undefined") {
+  // Server-side only — don't run on the client bundle
+  getSocket();
+}
+
 // ─────────────────────────────────────────────────────────────
 // Event Types
 // ─────────────────────────────────────────────────────────────
@@ -70,16 +93,24 @@ export interface OpsEventPayload {
 
 export async function emitOpsEvent(event: OpsEventPayload): Promise<void> {
   const s = getSocket();
-  if (!s) {
-    // Service not available — silently skip (fire-and-forget)
-    return;
-  }
 
   const payload = {
     type: event.type,
     data: event.data,
     timestamp: event.timestamp || new Date().toISOString(),
   };
+
+  if (!s) {
+    // Socket not yet connected — buffer the event so it can be flushed
+    // once the connection establishes. Caps at 50 events to avoid
+    // unbounded memory growth if the ops-events service is down.
+    if (pendingEmits.length < 50) {
+      pendingEmits.push(payload);
+    } else {
+      console.warn(`[events] Buffer full, dropping event: ${event.type}`);
+    }
+    return;
+  }
 
   try {
     s.emit("event:emit", payload);

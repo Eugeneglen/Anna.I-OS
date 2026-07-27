@@ -54,10 +54,10 @@ export function TaskList() {
   const { selectedHouseholdId } = useAnnaStore();
 
   // Initialize filters — consume pending filter from store if set by dashboard cards.
-  // NOTE: We must NOT call setPendingTaskFilter during render (it updates the Zustand
-  // store which LayoutShell also subscribes to → "Cannot update a component while
-  // rendering a different component" error). Instead we read the value here and clear
-  // it in a useEffect after mount.
+  // NOTE: We read the pending filter via useAnnaStore.getState() (a non-reactive read)
+  // in a lazy useState initializer. This runs only on first mount, never during a
+  // re-render, so it cannot trigger the "Cannot update a component while rendering a
+  // different component" error. The store-clearing is deferred to a useEffect.
   const [filters, setFilters] = useState<TaskFilters>(() => {
     const pending = useAnnaStore.getState().pendingTaskFilter;
     if (pending) {
@@ -67,8 +67,11 @@ export function TaskList() {
   });
 
   // Clear the consumed pending filter after mount so it doesn't get re-applied
+  // if TaskList remounts. Using getState() (not the hook) avoids subscribing to
+  // the store here, which would cause re-renders.
   useEffect(() => {
-    if (useAnnaStore.getState().pendingTaskFilter) {
+    const pending = useAnnaStore.getState().pendingTaskFilter;
+    if (pending) {
       useAnnaStore.getState().setPendingTaskFilter(null);
     }
   }, []);

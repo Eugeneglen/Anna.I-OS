@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { VendorPhotoUpload } from "./vendor-photo-upload";
 import { cn } from "@/lib/utils";
@@ -24,12 +35,14 @@ import {
   CheckCircle,
   Play,
   ThumbsUp,
+  ThumbsDown,
   CalendarDays,
   ImageIcon,
   FileText,
   AlertTriangle,
   ShieldCheck,
   Wallet,
+  Loader2,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -64,20 +77,26 @@ const STATUS_LABELS: Record<string, string> = {
 
 // ─── Action config ────────────────────────────────────────
 
-function getActionConfig(status: string): {
-  label: string;
-  icon: React.ElementType;
-  action: string;
-} | null {
+interface ActionConfig {
+  primary: { label: string; icon: React.ElementType; action: string } | null;
+  /** Optional secondary action (e.g. reject) rendered as an outline button */
+  secondary?: { label: string; icon: React.ElementType; action: string; destructive?: boolean } | null;
+}
+
+function getActionConfig(status: string): ActionConfig {
   switch (status) {
     case "assigned":
-      return { label: "Accept Job", icon: ThumbsUp, action: "accept" };
+      return {
+        primary: { label: "Accept Job", icon: ThumbsUp, action: "accept" },
+        // Vendor can decline a job they cannot take — triggers auto-re-route to next vendor
+        secondary: { label: "Decline", icon: ThumbsDown, action: "reject", destructive: true },
+      };
     case "accepted":
-      return { label: "Start Work", icon: Play, action: "start" };
+      return { primary: { label: "Start Work", icon: Play, action: "start" } };
     case "in_progress":
-      return { label: "Mark Complete", icon: CheckCircle, action: "complete" };
+      return { primary: { label: "Mark Complete", icon: CheckCircle, action: "complete" } };
     default:
-      return null;
+      return { primary: null };
   }
 }
 
@@ -124,9 +143,12 @@ function VendorTaskDetailContent({
   isActionPending: boolean;
   vendorId: string;
 }) {
-  const action = getActionConfig(booking.status);
+  const actionConfig = getActionConfig(booking.status);
+  const action = actionConfig.primary;
+  const secondaryAction = actionConfig.secondary;
   const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
   const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
 
   return (
     <div className="p-6 space-y-6 anna-fade-in">
@@ -401,17 +423,74 @@ function VendorTaskDetailContent({
 
       <Separator className="bg-[var(--anna-border)]" />
 
-      {/* Action button */}
-      {action && (
-        <Button
-          onClick={() => onAction(booking.id, action.action)}
-          disabled={isActionPending}
-          className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-11 text-sm font-semibold"
-        >
-          <action.icon size={16} className="mr-2" />
-          {isActionPending ? "Updating..." : action.label}
-        </Button>
+      {/* Action buttons — primary + optional secondary (reject) */}
+      {(action || secondaryAction) && (
+        <div className="space-y-2">
+          {action && (
+            <Button
+              onClick={() => onAction(booking.id, action.action)}
+              disabled={isActionPending}
+              className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-11 text-sm font-semibold"
+            >
+              {isActionPending ? (
+                <Loader2 size={16} className="mr-2 animate-spin" />
+              ) : (
+                <action.icon size={16} className="mr-2" />
+              )}
+              {isActionPending ? "Updating..." : action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button
+              onClick={() => {
+                if (secondaryAction.action === "reject") {
+                  setRejectDialogOpen(true);
+                } else {
+                  onAction(booking.id, secondaryAction.action);
+                }
+              }}
+              disabled={isActionPending}
+              variant="outline"
+              className={cn(
+                "w-full rounded-xl h-10 text-sm font-medium",
+                secondaryAction.destructive
+                  ? "border-[var(--anna-error)]/30 text-[var(--anna-error)] hover:bg-[var(--anna-error)]/5 hover:text-[var(--anna-error)]"
+                  : ""
+              )}
+            >
+              <secondaryAction.icon size={14} className="mr-2" />
+              {secondaryAction.label}
+            </Button>
+          )}
+        </div>
       )}
+
+      {/* Reject confirmation dialog — prevents accidental declines */}
+      <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Decline this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The booking will be cancelled and automatically re-routed to the next
+              available provider for the {getCategoryLabel(booking.category).toLowerCase()} task.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Keep Job</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onAction(booking.id, "reject");
+                setRejectDialogOpen(false);
+              }}
+              className="bg-[var(--anna-error)] hover:bg-red-600 text-white rounded-xl"
+            >
+              <ThumbsDown size={14} className="mr-1.5" />
+              Decline Job
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -320,16 +320,26 @@ export function VendorPhotoUpload({
       }
       queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       toast({
         title: "Upload failed",
         description: err.message || "Failed to upload photo",
         variant: "destructive",
       });
-      // Remove failed local photo
-      setPhotos((prev) => ({
-        ...prev,
-      }));
+      // Remove the failed local photo from the preview grid. Match by the
+      // File object reference (the same File passed to mutate). This
+      // prevents the broken preview from lingering after the upload fails.
+      // Also revoke the blob URL inside the same callback to prevent leaks.
+      setPhotos((prev) => {
+        const failed = prev[variables.zone].find((p) => p.file === variables.file);
+        if (failed && failed.url.startsWith("blob:")) {
+          URL.revokeObjectURL(failed.url);
+        }
+        return {
+          ...prev,
+          [variables.zone]: prev[variables.zone].filter((p) => p.file !== variables.file),
+        };
+      });
     },
   });
 
