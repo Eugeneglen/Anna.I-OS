@@ -11,7 +11,7 @@
 export type IconName =
   | 'brain'
   | 'knotScribbleSpiral'
-  | 'knot'
+  | 'juggle'
   | 'scribble'
   | 'spiral'
   | 'nodeCluster'
@@ -102,21 +102,32 @@ export const ICONS: Record<IconName, IconDef> = {
       </g>`,
   },
 
-  // ── 3. KNOT ───────────────────────────────────────────────
-  // Copy: "Before / You manage" — tangled complexity.
-  // Redesigned: four crossing S-curves interlocking into a tangle.
-  // NO circles (old design's circles read as head+body = stick figure).
-  // NO straight lines (those read as limbs). Purely abstract woven
-  // pattern that unambiguously reads as "tangled/complex."
-  knot: {
+  // ── 3. JUGGLE ────────────────────────────────────────────
+  // Copy: "Before / You manage" — manual juggling of multiple
+  // vendors and tasks. The universal "juggling cascade" silhouette:
+  // two balls in hands (bottom corners) + one ball in the air (apex)
+  // + two curved throwing arcs. Instantly reads as "managing many
+  // things at once with active effort."
+  //
+  // Pairs as the visual opposite of `spiral` (coordinated hub):
+  // juggle = scattered manual effort; spiral = organized system.
+  //
+  // Redesigned (v3): old crossing S-curves read as an abstract
+  // tangle / "ball of yarn" — no correlation to "you manage."
+  // The juggling cascade is a universally understood metaphor for
+  // manual multitasking and overwhelm.
+  juggle: {
     viewBox: '0 0 48 48',
-    title: 'Tangled complexity',
+    title: 'Manual juggling and management',
     inner: `
-      <g class="icon-stroke" transform="scale(2)" stroke-width="1.25">
-        <path d="M3 5 C 10 1, 10 9, 17 5"/>
-        <path d="M3 15 C 10 11, 10 19, 17 15"/>
-        <path d="M5 3 C 1 10, 9 10, 5 17"/>
-        <path d="M15 3 C 19 10, 11 10, 15 17"/>
+      <g class="icon-stroke" stroke-width="2.5">
+        <path d="M8 38 C 1 28, 5 14, 24 8"/>
+        <path d="M40 38 C 47 28, 43 14, 24 8"/>
+      </g>
+      <g class="icon-node">
+        <circle cx="8" cy="38" r="3.5"/>
+        <circle cx="40" cy="38" r="3.5"/>
+        <circle cx="24" cy="8" r="3.5"/>
       </g>`,
   },
 
