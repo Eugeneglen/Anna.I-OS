@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Terms of Service — Anna.I</title><meta name="description" content="The terms and conditions for using Anna.I's home-services coordination platform."><meta property="og:title" content="Terms of Service — Anna.I"><meta property="og:description" content="The terms and conditions for using Anna.I's home-services coordination platform."><meta property="og:type" content="website"><meta property="og:image" content="/og-default.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="/_astro/contact-us.D3RyhuNK.css"></head> <body> <div class="flex flex-col" style="min-height: 100vh;"> <header style="position: sticky; top: 0; z-index: 50; background: rgba(244, 247, 245, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(32,49,50,0.08);" data-astro-cid-3ef6ksr2> <nav class="container-content" style="display: flex; align-items: center; justify-content: space-between; height: 4rem;" data-astro-cid-3ef6ksr2>  <a href="/" style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--sage-600); font-family: 'Manrope', sans-serif;" data-astro-cid-3ef6ksr2>
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>Terms of Service — Anna.I</title><meta name="description" content="The terms and conditions for using Anna.I's home-services coordination platform."><meta property="og:title" content="Terms of Service — Anna.I"><meta property="og:description" content="The terms and conditions for using Anna.I's home-services coordination platform."><meta property="og:type" content="website"><meta property="og:image" content="/og-default.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="/_astro/contact-us.CWCtUifg.css"></head> <body> <div class="flex flex-col" style="min-height: 100vh; min-height: 100dvh;"> <header style="position: sticky; top: 0; z-index: 50; background: rgba(244, 247, 245, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(32,49,50,0.08);" data-astro-cid-3ef6ksr2> <nav class="container-content" style="display: flex; align-items: center; justify-content: space-between; height: 4rem;" data-astro-cid-3ef6ksr2>  <a href="/" style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--sage-600); font-family: 'Manrope', sans-serif;" data-astro-cid-3ef6ksr2>
 Anna.I
 </a>  <div class="hidden lg:block" style="display: none;" data-astro-cid-3ef6ksr2> <div style="display: flex; align-items: center; gap: 2rem;" data-astro-cid-3ef6ksr2> <a href="/" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'" data-astro-cid-3ef6ksr2>Home</a> <a href="/partners" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'" data-astro-cid-3ef6ksr2>Partners</a> <a href="/#services" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'" data-astro-cid-3ef6ksr2>Services</a> <a href="/faq" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'" data-astro-cid-3ef6ksr2>FAQ</a> <a href="/contact-us" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'" data-astro-cid-3ef6ksr2>Contact</a> </div> </div>  <div style="display: flex; align-items: center; gap: 0.75rem;" data-astro-cid-3ef6ksr2> <a href="/login" class="btn btn-primary" data-cta="header-register" style="padding: 0.7rem 1.25rem; font-size: 0.9rem;" data-astro-cid-3ef6ksr2>
 Register Now
@@ -53,29 +53,49 @@ The operating system for the modern household. Cleaning, laundry, aircon, and ha
       (function () {
         var params = new URLSearchParams(window.location.search);
         var port = params.get('XTransformPort');
-        if (!port) return;
 
-        // Product-app paths that should NOT carry XTransformPort
+        // Product-app paths that route to the Next.js product app
         var productPaths = ['/login', '/register', '/dashboard', '/api/auth', '/api/household'];
+        // Production product-app URL (Railway)
+        var PRODUCT_APP_URL = 'https://annai-os-production.up.railway.app';
 
-        function shouldPreserve(href) {
+        function isProductPath(href) {
           if (!href) return false;
           for (var i = 0; i < productPaths.length; i++) {
             var p = productPaths[i];
-            if (href === p || href.indexOf(p + '?') === 0 || href.indexOf(p + '/') === 0) return false;
+            if (href === p) return true;
+            if (href.indexOf(p + '?') === 0) return true;
+            if (href.indexOf(p + '/') === 0) return true;
+            if (href.indexOf(p + '#') === 0) return true;
           }
-          return href.charAt(0) === '/' && href.indexOf('XTransformPort') === -1;
+          return false;
         }
 
         function rewriteLink(a) {
           var href = a.getAttribute('href');
-          if (!shouldPreserve(href)) return;
-          var u = new URL(href, window.location.origin);
-          if (!u.searchParams.has('XTransformPort')) {
-            u.searchParams.set('XTransformPort', port);
-            // Preserve hash (e.g. #services, #how-it-works) — without this,
-            // anchor links like /#services would lose the hash and jump to top.
-            a.setAttribute('href', u.pathname + u.search + u.hash);
+          if (!href) return;
+
+          if (port) {
+            // ── Sandbox mode (preview gateway) ──
+            // Marketing links: preserve XTransformPort so they stay on port 4321.
+            // Product links: leave as-is — the gateway routes them to port 3000.
+            if (href.charAt(0) !== '/') return;                // external/absolute
+            if (href.indexOf('XTransformPort') !== -1) return; // already rewritten
+            if (isProductPath(href)) return;                   // product app → gateway handles
+            var u = new URL(href, window.location.origin);
+            if (!u.searchParams.has('XTransformPort')) {
+              u.searchParams.set('XTransformPort', port);
+              // Preserve hash (e.g. #services, #how-it-works)
+              a.setAttribute('href', u.pathname + u.search + u.hash);
+            }
+          } else {
+            // ── Production mode (Railway, no gateway) ──
+            // Product links: rewrite to the production product-app URL so
+            // they don't 404 on the marketing site's domain.
+            // Marketing links: leave as-is (same domain).
+            if (isProductPath(href)) {
+              a.setAttribute('href', PRODUCT_APP_URL + href);
+            }
           }
         }
 

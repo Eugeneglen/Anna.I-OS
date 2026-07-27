@@ -52,7 +52,7 @@ const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
     )}
   </head>
   <body>
-    <div class="flex flex-col" style="min-height: 100vh;">
+    <div class="flex flex-col" style="min-height: 100vh; min-height: 100dvh;">
       <Header />
       <main class="flex-1">
         <slot />
@@ -91,40 +91,66 @@ const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
       })();
     </script>
 
-    {/* Preview-gateway bridge — preserves XTransformPort across navigation.
+    {/* Link-bridge — handles both sandbox preview and production.
         is:inline so it is embedded directly in the HTML and always runs,
         even when the hoisted JS bundle fails to load through the gateway.
-        When the page is loaded via ?XTransformPort=4321 (sandbox preview),
-        internal links to the marketing site keep that param. Links to the
-        product app (/login, /register, /dashboard) intentionally drop it
-        so they route to port 3000 (the Next.js product app). */}
+
+        SANDBOX MODE (page loaded via ?XTransformPort=4321):
+          Marketing links keep XTransformPort so they stay on port 4321.
+          Product-app links (/login, /register, /dashboard) drop it so the
+          gateway routes them to port 3000 (the Next.js product app).
+
+        PRODUCTION MODE (no XTransformPort — e.g. Railway deployment):
+          Marketing links stay as-is (same domain).
+          Product-app links are rewritten to the absolute production product-app
+          URL so they don't 404 on the marketing site's domain. */}
     <script is:inline>
       (function () {
         var params = new URLSearchParams(window.location.search);
         var port = params.get('XTransformPort');
-        if (!port) return;
 
-        // Product-app paths that should NOT carry XTransformPort
+        // Product-app paths that route to the Next.js product app
         var productPaths = ['/login', '/register', '/dashboard', '/api/auth', '/api/household'];
+        // Production product-app URL (Railway)
+        var PRODUCT_APP_URL = 'https://annai-os-production.up.railway.app';
 
-        function shouldPreserve(href) {
+        function isProductPath(href) {
           if (!href) return false;
           for (var i = 0; i < productPaths.length; i++) {
             var p = productPaths[i];
-            if (href === p || href.indexOf(p + '?') === 0 || href.indexOf(p + '/') === 0) return false;
+            if (href === p) return true;
+            if (href.indexOf(p + '?') === 0) return true;
+            if (href.indexOf(p + '/') === 0) return true;
+            if (href.indexOf(p + '#') === 0) return true;
           }
-          return href.charAt(0) === '/' && href.indexOf('XTransformPort') === -1;
+          return false;
         }
 
         function rewriteLink(a) {
           var href = a.getAttribute('href');
-          if (!shouldPreserve(href)) return;
-          var u = new URL(href, window.location.origin);
-          if (!u.searchParams.has('XTransformPort')) {
-            u.searchParams.set('XTransformPort', port);
-            // Preserve hash (e.g. #services, #how-it-works) — without this,
-            // anchor links like /#services would lose the hash and jump to top.
-            a.setAttribute('href', u.pathname + u.search + u.hash);
+          if (!href) return;
+
+          if (port) {
+            // ── Sandbox mode (preview gateway) ──
+            // Marketing links: preserve XTransformPort so they stay on port 4321.
+            // Product links: leave as-is — the gateway routes them to port 3000.
+            if (href.charAt(0) !== '/') return;                // external/absolute
+            if (href.indexOf('XTransformPort') !== -1) return; // already rewritten
+            if (isProductPath(href)) return;                   // product app → gateway handles
+            var u = new URL(href, window.location.origin);
+            if (!u.searchParams.has('XTransformPort')) {
+              u.searchParams.set('XTransformPort', port);
+              // Preserve hash (e.g. #services, #how-it-works)
+              a.setAttribute('href', u.pathname + u.search + u.hash);
+            }
+          } else {
+            // ── Production mode (Railway, no gateway) ──
+            // Product links: rewrite to the production product-app URL so
+            // they don't 404 on the marketing site's domain.
+            // Marketing links: leave as-is (same domain).
+            if (isProductPath(href)) {
+              a.setAttribute('href', PRODUCT_APP_URL + href);
+            }
           }
         }
 
