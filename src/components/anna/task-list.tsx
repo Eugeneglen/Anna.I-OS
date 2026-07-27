@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { TaskCard } from "./task-card";
@@ -53,15 +53,25 @@ async function fetchTasks(householdId: string): Promise<Task[]> {
 export function TaskList() {
   const { selectedHouseholdId } = useAnnaStore();
 
-  // Initialize filters — consume pending filter from store if set by dashboard cards
+  // Initialize filters — consume pending filter from store if set by dashboard cards.
+  // NOTE: We must NOT call setPendingTaskFilter during render (it updates the Zustand
+  // store which LayoutShell also subscribes to → "Cannot update a component while
+  // rendering a different component" error). Instead we read the value here and clear
+  // it in a useEffect after mount.
   const [filters, setFilters] = useState<TaskFilters>(() => {
     const pending = useAnnaStore.getState().pendingTaskFilter;
     if (pending) {
-      useAnnaStore.getState().setPendingTaskFilter(null);
       return { ...DEFAULT_FILTERS, ...pending };
     }
     return DEFAULT_FILTERS;
   });
+
+  // Clear the consumed pending filter after mount so it doesn't get re-applied
+  useEffect(() => {
+    if (useAnnaStore.getState().pendingTaskFilter) {
+      useAnnaStore.getState().setPendingTaskFilter(null);
+    }
+  }, []);
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks", selectedHouseholdId],
