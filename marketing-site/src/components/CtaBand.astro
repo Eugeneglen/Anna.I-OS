@@ -42,9 +42,11 @@ const {
             {primaryLabel}
             <Icon name="arrowRight" class="w-4 h-4" decorative />
           </a>
-          <a href={secondaryHref} class="btn btn-outline-light w-full lg:w-auto">
-            {secondaryLabel}
-          </a>
+          {secondaryLabel && (
+            <a href={secondaryHref} class="btn btn-outline-light w-full lg:w-auto">
+              {secondaryLabel}
+            </a>
+          )}
           {reassurance && (
             <p class="font-mono-label text-cream\/40 mt-2" style="text-align: center;">{reassurance}</p>
           )}
