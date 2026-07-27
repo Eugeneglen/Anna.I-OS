@@ -3,20 +3,47 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import CtaBand from '../components/CtaBand.astro';
 
 const faqs = [
-  { q: 'What services does Anna.I coordinate?', a: 'Four household essentials: cleaning, laundry, aircon servicing, and handyman work. Each category has vetted vendors matched to your home type and schedule.' },
-  { q: 'How is payment handled?', a: 'Payment is held in milestone escrow before the job starts. It is released to the vendor only when the work is verified complete — with photo proof. You never pay upfront for work that does not get done.' },
-  { q: 'How does Anna.I remember my preferences?', a: 'When you register, you tell Anna.I your home type, schedule, and preferences once. Every booking carries that context forward — no re-explaining, no starting from scratch.' },
-  { q: 'How are vendors vetted?', a: 'Every vendor passes background checks and identity verification before joining the network. Performance is tracked over time, not just through one-off star ratings.' },
-  { q: 'What if something goes wrong?', a: 'Because payment stays in escrow until verified completion, you have leverage. If a job is incomplete or unsatisfactory, payment does not release until it is resolved. Anna.I mediates disputes.' },
-  { q: 'Is Anna.I available outside Singapore?', a: 'Anna.I is currently Singapore-only. We are built specifically for the Singapore home-services context — including local vendor networks, CASE consumer protection frameworks, and local payment rails.' },
-  { q: 'Do I need to be at home for every job?', a: 'No. Once Anna.I knows your home access and preferences, vendors can complete jobs while you are away. Photo verification confirms completion remotely.' },
-  { q: 'How much does it cost?', a: 'Registration is free. You pay per job, with prices quoted before work begins. Anna.I takes a small coordination fee included in the quoted price — no hidden charges.' },
+  // Getting started
+  { category: 'Getting started', q: 'What is Anna.I?', a: 'Anna.I is an AI-powered household operating system. It coordinates cleaning, laundry, aircon servicing, and handyman services through a single platform — matching you with vetted vendors, remembering your preferences, and holding payment in escrow until work is verified complete.' },
+  { category: 'Getting started', q: 'How is this different from Helpling or Kaodim?', a: 'Helpling and Kaodim are marketplaces — you browse vendors, compare quotes, schedule, and manage each booking yourself. Anna.I is a coordination layer. You tell it your household needs once, and it matches, schedules, verifies, and remembers — so you stop being a project manager and become an approver.' },
+  { category: 'Getting started', q: 'Do I need to download an app?', a: 'Anna.I works through a web app and a mobile-optimised interface. There is no heavy app download required to get started. You can register, manage bookings, and approve work from your browser.' },
+  { category: 'Getting started', q: 'What services does Anna.I coordinate?', a: 'Four household essentials: cleaning, laundry, aircon servicing, and handyman work. Each category has vetted vendors matched to your home type and schedule. These four are canonical for the current build — we do not offer eldercare or renovation at this stage.' },
+
+  // Trust & payments
+  { category: 'Trust & payments', q: 'How does escrow work?', a: 'When a job is booked, your payment is held securely in milestone escrow — not sent directly to the vendor. The vendor completes the work and uploads photo proof. Once you confirm the work is done, payment is released from escrow to the vendor. You never pay upfront for work that does not get done.' },
+  { category: 'Trust & payments', q: 'What happens if a vendor does not show up or does bad work?', a: 'Because payment stays in escrow until verified completion, you have leverage. If a vendor no-shows or the work is unsatisfactory, payment does not release. You flag the issue through the platform and Anna.I mediates — the vendor does not get paid until the job is done right.' },
+  { category: 'Trust & payments', q: 'Is my payment information secure?', a: 'Payment is processed through secure, PCI-compliant payment rails. Anna.I does not store your full card details — they are handled by the payment processor. Payment is only charged to escrow when a job is booked, and released only on verified completion.' },
+
+  // Pricing
+  { category: 'Pricing', q: 'What does Anna.I cost?', a: 'Registration is free. You pay per job, with prices quoted before work begins — no surprise charges. Anna.I takes a small coordination fee included in the quoted price.' },
+  { category: 'Pricing', q: 'Are there hidden fees?', a: 'No. The price quoted before a job begins is the price you pay. Anna.I\'s coordination fee is included in the quoted price, not added on top. If a job requires additional materials or scope changes, the vendor must quote and you must approve before the extra work proceeds.' },
+  { category: 'Pricing', q: 'Can I cancel anytime?', a: 'Yes. There are no lock-in contracts or subscriptions. You can cancel a booking before the vendor is dispatched at no cost. If a job is already in progress, cancellation is handled through Anna.I mediation to ensure fair treatment for both parties.' },
+
+  // Vendors
+  { category: 'Vendors', q: 'How are vendors vetted?', a: 'Every vendor passes background checks and identity verification before joining the network. Performance is tracked over time through longitudinal scoring — not just one-off star ratings. Vendors who consistently deliver well get more jobs; vendors who do not are removed from the network.' },
+  { category: 'Vendors', q: 'Can I request a specific vendor again?', a: 'Yes. Anna.I remembers which vendors you liked and which preferences matter to you. If a vendor did great work, Anna.I prioritises matching them to your future bookings in the same category — subject to their availability.' },
+
+  // Privacy
+  { category: 'Privacy', q: 'What data does Anna.I collect, and what happens to it?', a: 'Anna.I collects your household profile — home type, schedule, service preferences, and booking history — to coordinate and remember your needs. This data is used to improve matching and is never sold to third parties. See our Privacy Policy for full details on data handling and retention.' },
 ];
+
+const categories = [...new Set(faqs.map(f => f.category))];
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(f => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
 ---
 
 <BaseLayout
   title="FAQ — Anna.I"
-  description="Answers to common questions about Anna.I — how payment escrow works, vendor vetting, preference memory, and what services are coordinated."
+  description="Answers to common questions about Anna.I — how payment escrow works, vendor vetting, preference memory, pricing, and what services are coordinated."
+  schema={faqSchema}
 >
   <section class="section">
     <div class="container-content" style="max-width: 48rem;">
@@ -28,19 +55,24 @@ const faqs = [
         </p>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        {faqs.map((faq) => (
-          <details class="card reveal" style="cursor: pointer;">
-            <summary style="font-weight: 600; font-size: 1.05rem; color: var(--slate); list-style: none; display: flex; justify-content: space-between; align-items: center;">
-              {faq.q}
-              <span style="color: var(--sage-600); font-size: 1.5rem; line-height: 1;">+</span>
-            </summary>
-            <p class="text-slate\/70 text-pretty" style="margin-top: 0.75rem; line-height: 1.6;">
-              {faq.a}
-            </p>
-          </details>
-        ))}
-      </div>
+      {categories.map((cat) => (
+        <div class="mb-10 reveal">
+          <p class="font-mono-label text-slate\/40 mb-4">{cat}</p>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {faqs.filter(f => f.category === cat).map((faq) => (
+              <details class="card" style="cursor: pointer;">
+                <summary style="font-weight: 600; font-size: 1.05rem; color: var(--slate); list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+                  {faq.q}
+                  <span style="color: var(--sage-600); font-size: 1.5rem; line-height: 1; flex-shrink: 0;">+</span>
+                </summary>
+                <p class="text-slate\/70 text-pretty" style="margin-top: 0.75rem; line-height: 1.6;">
+                  {faq.a}
+                </p>
+              </details>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   </section>
 

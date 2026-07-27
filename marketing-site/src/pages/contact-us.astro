@@ -28,6 +28,16 @@ import Icon from '../components/Icon.astro';
             <input type="email" id="email" name="email" class="field" required placeholder="you@example.com" />
           </div>
           <div>
+            <label for="role" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">I am a</label>
+            <select id="role" name="role" class="field" required>
+              <option value="">Select one</option>
+              <option value="household">Household</option>
+              <option value="vendor">Vendor</option>
+              <option value="press">Press</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
             <label for="message" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Message</label>
             <textarea id="message" name="message" class="field" required rows="5" placeholder="How can we help?"></textarea>
           </div>

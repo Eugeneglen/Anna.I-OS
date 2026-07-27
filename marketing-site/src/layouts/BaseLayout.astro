@@ -119,7 +119,9 @@ const fullTitle = title.includes('Anna.I') ? title : `${title} — Anna.I`;
           var u = new URL(href, window.location.origin);
           if (!u.searchParams.has('XTransformPort')) {
             u.searchParams.set('XTransformPort', port);
-            a.setAttribute('href', u.pathname + u.search);
+            // Preserve hash (e.g. #services, #how-it-works) — without this,
+            // anchor links like /#services would lose the hash and jump to top.
+            a.setAttribute('href', u.pathname + u.search + u.hash);
           }
         }
 

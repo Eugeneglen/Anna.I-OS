@@ -28,8 +28,25 @@ import Icon from '../components/Icon.astro';
             <input type="email" id="email" name="email" class="field" required placeholder="you@example.com" />
           </div>
           <div>
-            <label for="postal" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Postal code</label>
-            <input type="text" id="postal" name="postal" class="field" required placeholder="e.g. 238859" />
+            <label for="phone" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Phone <span style="color: rgba(32,49,50,0.35); font-weight: 400;">(optional)</span></label>
+            <input type="tel" id="phone" name="phone" class="field" placeholder="+65 9123 4567" />
+          </div>
+          <div>
+            <label class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">I am registering as a</label>
+            <div style="display: flex; gap: 0.75rem;">
+              <label style="flex: 1; display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border: 1.5px solid rgba(32,49,50,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--sage-500)'" onmouseout="this.style.borderColor='rgba(32,49,50,0.15)'">
+                <input type="radio" id="type-household" name="accountType" value="household" checked style="accent-color: var(--sage-600);" />
+                <span style="font-size: 0.9rem; font-weight: 500; color: var(--slate);">Household</span>
+              </label>
+              <label style="flex: 1; display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border: 1.5px solid rgba(32,49,50,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--sage-500)'" onmouseout="this.style.borderColor='rgba(32,49,50,0.15)'">
+                <input type="radio" id="type-vendor" name="accountType" value="vendor" style="accent-color: var(--sage-600);" />
+                <span style="font-size: 0.9rem; font-weight: 500; color: var(--slate);">Vendor</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label for="postal" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Postal code <span style="color: rgba(32,49,50,0.35); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="postal" name="postal" class="field" placeholder="e.g. 238859" />
           </div>
           <div>
             <label for="services" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Services you need</label>

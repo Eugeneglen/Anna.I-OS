@@ -158,27 +158,28 @@ ul, ol { list-style: none; }
 @media (min-width: 1024px) { .lg\:w-auto { width: auto; } }
 
 /* ── Icon size utilities (global, unscoped so they apply to Icon component SVGs) ── */
-.w-4 { width: 1rem; }
-.h-4 { height: 1rem; }
-.w-5 { width: 1.25rem; }
-.h-5 { height: 1.25rem; }
-.w-6 { width: 1.5rem; }
-.h-6 { height: 1.5rem; }
-.w-7 { width: 1.75rem; }
-.h-7 { height: 1.75rem; }
-.w-8 { width: 2rem; }
-.h-8 { height: 2rem; }
-.w-9 { width: 2.25rem; }
-.h-9 { height: 2.25rem; }
-.w-10 { width: 2.5rem; }
-.h-10 { height: 2.5rem; }
-.w-12 { width: 3rem; }
-.h-12 { height: 3rem; }
-.w-14 { width: 3.5rem; }
-.h-14 { height: 3.5rem; }
-.w-16 { width: 4rem; }
-.h-16 { height: 4rem; }
-.h-20 { height: 5rem; }
+/* Values increased 20% per user request */
+.w-4 { width: 1.2rem; }
+.h-4 { height: 1.2rem; }
+.w-5 { width: 1.5rem; }
+.h-5 { height: 1.5rem; }
+.w-6 { width: 1.8rem; }
+.h-6 { height: 1.8rem; }
+.w-7 { width: 2.1rem; }
+.h-7 { height: 2.1rem; }
+.w-8 { width: 2.4rem; }
+.h-8 { height: 2.4rem; }
+.w-9 { width: 2.7rem; }
+.h-9 { height: 2.7rem; }
+.w-10 { width: 3rem; }
+.h-10 { height: 3rem; }
+.w-12 { width: 3.6rem; }
+.h-12 { height: 3.6rem; }
+.w-14 { width: 4.2rem; }
+.h-14 { height: 4.2rem; }
+.w-16 { width: 4.8rem; }
+.h-16 { height: 4.8rem; }
+.h-20 { height: 6rem; }
 .rounded-full { border-radius: 9999px; }
 .border-t { border-top: 1px solid; }
 .border-slate\/10 { border-color: rgba(32,49,50,0.1); }
