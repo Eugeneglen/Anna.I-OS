@@ -1,15 +1,20 @@
 ---
 /**
  * Reusable final-CTA band. Used on Home, Partners, FAQ.
- * Deep slate background, Register Now + secondary link.
+ * Deep slate background, primary Register CTA + optional secondary link.
+ *
+ * Primary CTA defaults to the production webapp with an `?intent=` param.
+ * Pass `primaryIntent="user"` or `primaryIntent="vendor"` to set the intent.
  */
 import Icon from './Icon.astro';
+import { webappUrl, type Intent } from '../config/webapp';
 
 export interface Props {
   eyebrow?: string;
   headline?: string;
   body?: string;
   primaryHref?: string;
+  primaryIntent?: Intent;
   primaryLabel?: string;
   secondaryHref?: string;
   secondaryLabel?: string;
@@ -20,12 +25,15 @@ const {
   eyebrow = 'Get started',
   headline = 'Your home. Managed.',
   body = 'Tell Anna.I what your household needs once. We handle the rest — matching, scheduling, verifying, and remembering.',
-  primaryHref = '/login',
-  primaryLabel = 'Register Now',
+  primaryIntent = 'user',
+  primaryHref,
+  primaryLabel = 'Get Started',
   secondaryHref = '/#how-it-works',
   secondaryLabel = 'See how it works',
   reassurance = 'No credit card required to register',
 } = Astro.props;
+
+const resolvedPrimaryHref = primaryHref || webappUrl(primaryIntent);
 ---
 
 <section class="section">
@@ -38,7 +46,7 @@ const {
           <p class="text-lg text-cream\/70 max-w-xl text-pretty">{body}</p>
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <a href={primaryHref} class="btn btn-primary w-full lg:w-auto" data-cta="cta-band-primary">
+          <a href={resolvedPrimaryHref} class="btn btn-primary w-full lg:w-auto" data-cta="cta-band-primary">
             {primaryLabel}
             <Icon name="arrowRight" class="w-4 h-4" decorative />
           </a>

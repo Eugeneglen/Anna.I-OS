@@ -2,11 +2,15 @@
 /**
  * Anna.I Marketing — Header
  * ─────────────────────────────────────────────────────────────
- * Sticky global nav with persistent Register Now CTA button.
+ * Sticky global nav with prominent "Register / Sign In" CTA.
  * Wordmark "Anna.I" (sage-600, bold). No logo icon.
- * Nav: Home / Partners / Services (anchor) / FAQ / Contact / [Register Now]
- * Register Now → /login (routes to product app on port 3000).
+ *
+ * Nav: Features (/#services) / Vendors (/partners) / FAQ / Contact
+ * CTA: "Register / Sign In" → production webapp (no intent — general auth).
  */
+import { webappUrl } from '../config/webapp';
+
+const signInHref = webappUrl(); // https://annai-os-production.up.railway.app
 ---
 
 <header
@@ -21,27 +25,25 @@
     {/* Desktop nav */}
     <div class="hidden lg:block" style="display: none;">
       <div style="display: flex; align-items: center; gap: 2rem;">
-        <a href="/" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Home</a>
-        <a href="/partners" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Partners</a>
-        <a href="/#services" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Services</a>
+        <a href="/#services" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Features</a>
+        <a href="/partners" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Vendors</a>
         <a href="/faq" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">FAQ</a>
         <a href="/contact-us" style="font-size: 0.9rem; font-weight: 500; color: var(--slate); transition: color 0.2s;" onmouseover="this.style.color='var(--sage-600)'" onmouseout="this.style.color='var(--slate)'">Contact</a>
       </div>
     </div>
 
-    {/* CTA + mobile toggle */}
+    {/* CTA — Register / Sign In → production webapp */}
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <a href="/login" class="btn btn-primary" data-cta="header-register" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;">
-        Register Now
+      <a href={signInHref} class="btn btn-primary" data-cta="header-signin" style="padding: 0.6rem 1.25rem; font-size: 0.9rem;">
+        Register / Sign In
       </a>
     </div>
   </nav>
 
   {/* Mobile nav — simple horizontal scroll */}
   <div class="lg:hidden" style="display: flex; gap: 1.25rem; padding: 0 1.25rem 0.75rem; overflow-x: auto; font-size: 0.85rem;">
-    <a href="/" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Home</a>
-    <a href="/partners" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Partners</a>
-    <a href="/#services" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Services</a>
+    <a href="/#services" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Features</a>
+    <a href="/partners" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Vendors</a>
     <a href="/faq" style="font-weight: 500; color: var(--slate); white-space: nowrap;">FAQ</a>
     <a href="/contact-us" style="font-weight: 500; color: var(--slate); white-space: nowrap;">Contact</a>
   </div>
