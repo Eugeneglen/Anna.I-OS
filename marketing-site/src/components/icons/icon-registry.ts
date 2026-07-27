@@ -57,49 +57,49 @@ export const ICONS: Record<IconName, IconDef> = {
   },
 
   // ── 2. KNOT → ARROW → SPIRAL ──────────────────────────────
-  // Copy: "Chaos → Order" — tangled knot (chaos) → arrow →
-  // neat loader spiral (order). Three-part transformation.
+  // Copy: "Chaos → Order" — crossing-curve tangle (chaos) → arrow →
+  // concentric circles (focused order). Three-part transformation.
+  // Redesigned: old knot had circles that read as a head+body (stick
+  // figure). New design uses only crossing curves — unambiguously
+  // abstract. Old "order" end was a starburst (radiating lines) which
+  // read as "sparkle." New end is concentric circles — the visual
+  // opposite of a tangle: perfectly nested, non-crossing, on-target.
   knotScribbleSpiral: {
     viewBox: '0 0 120 48',
     title: 'From chaos to order',
     inner: `
       <g class="icon-stroke" transform="translate(2,8) scale(1.33)" stroke-width="1.7">
-        <circle cx="16" cy="8" r="3"/>
-        <circle cx="8" cy="24" r="3"/>
-        <path d="M8 21V11a4 4 0 0 0 4-4"/>
-        <path d="M16 11v4a4 4 0 0 0 4 4h4"/>
-        <path d="M11 19c2 1 4 1 6-1"/>
-        <path d="M14 14c1 2 3 3 5 3"/>
+        <path d="M3 5 C 10 1, 10 9, 17 5"/>
+        <path d="M3 15 C 10 11, 10 19, 17 15"/>
+        <path d="M5 3 C 1 10, 9 10, 5 17"/>
+        <path d="M15 3 C 19 10, 11 10, 15 17"/>
       </g>
       <g class="icon-stroke" transform="translate(48,0)" stroke-width="2.25">
         <path d="M0 24 L24 24"/>
         <path d="M17 17 L24 24 L17 31"/>
       </g>
       <g class="icon-stroke" transform="translate(78,0)" stroke-width="2.25">
-        <path d="M24 6v4"/>
-        <path d="M20.2 12.2l-2.9-2.9"/>
-        <path d="M18 24h4"/>
-        <path d="M20.2 20.2l-2.9 2.9"/>
-        <path d="M24 18v4"/>
-        <path d="M31.1 13.9l-2.9 2.9"/>
-        <path d="M34 24h-4"/>
-        <path d="M31.1 13.9l2.9-2.9"/>
+        <circle cx="24" cy="24" r="5"/>
+        <circle cx="24" cy="24" r="10"/>
       </g>
-      <circle class="icon-node" cx="102" cy="24" r="2.5"/>`,
+      <circle class="icon-node" cx="102" cy="24" r="2"/>`,
   },
 
   // ── 3. KNOT ───────────────────────────────────────────────
   // Copy: "Before / You manage" — tangled complexity.
+  // Redesigned: four crossing S-curves interlocking into a tangle.
+  // NO circles (old design's circles read as head+body = stick figure).
+  // NO straight lines (those read as limbs). Purely abstract woven
+  // pattern that unambiguously reads as "tangled/complex."
   knot: {
     viewBox: '0 0 48 48',
     title: 'Tangled complexity',
     inner: `
-      <g class="icon-stroke" transform="scale(2)" stroke-width="1.125">
-        <circle cx="18" cy="18" r="3"/>
-        <circle cx="6" cy="6" r="3"/>
-        <path d="M6 21V9a9 9 0 0 0 9 9"/>
-        <path d="M15 15c-2-2-5-2-7 0"/>
-        <path d="M18 11c0-2-2-4-4-4"/>
+      <g class="icon-stroke" transform="scale(2)" stroke-width="1.25">
+        <path d="M3 5 C 10 1, 10 9, 17 5"/>
+        <path d="M3 15 C 10 11, 10 19, 17 15"/>
+        <path d="M5 3 C 1 10, 9 10, 5 17"/>
+        <path d="M15 3 C 19 10, 11 10, 15 17"/>
       </g>`,
   },
 
