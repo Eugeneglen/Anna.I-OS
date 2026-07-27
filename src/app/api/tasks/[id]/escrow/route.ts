@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
-import { emitEscrowStateChanged, emitDisputeRaised } from "@/lib/events"
+import { emitEscrowStateChanged, emitDisputeRaised, emitVendorNotification } from "@/lib/events"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -233,8 +233,9 @@ export async function PATCH(
             })
           : null;
 
+        let vendorNotification: any = null;
         if (bookingVendor?.vendorId) {
-          await tx.notification.create({
+          vendorNotification = await tx.notification.create({
             data: {
               householdId: task.householdId,
               recipientType: RecipientType.VENDOR,
@@ -250,7 +251,7 @@ export async function PATCH(
           });
         }
 
-        return { updatedTask, updatedEscrow }
+        return { updatedTask, updatedEscrow, vendorNotification }
       })
 
       // Phase 5: Background anomaly detection (dispute triggers ESCROW_DISPUTED check)
@@ -263,7 +264,23 @@ export async function PATCH(
         category: task.category,
         reason: reason ?? "No reason provided",
         escrowAmountCents: escrow.amountCents,
-      }).catch(() => {});
+        vendorId: bookingVendor?.vendorId,
+      }).catch(() => {})
+
+      // Real-time: push notification to vendor room
+      if (result.vendorNotification) {
+        emitVendorNotification({
+          vendorId: bookingVendor!.vendorId,
+          notificationId: result.vendorNotification.id,
+          eventType: NotificationEventType.DISPUTE_RAISED,
+          title: "Dispute Raised on Booking",
+          body: `A dispute has been raised on your ${task.category.toLowerCase()} task.${reason ? ` Reason: ${reason}` : ""} The booking has been cancelled. Ops will review shortly.`,
+          referenceType: "task",
+          referenceId: task.id,
+          householdId: task.householdId,
+          category: task.category,
+        }).catch(() => {})
+      };
       emitEscrowStateChanged({
         id: escrow.id,
         state: "DISPUTED",

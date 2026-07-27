@@ -185,8 +185,9 @@ export function VendorNotificationPanel({ vendorId, compact }: VendorNotificatio
       return res.json();
     },
     enabled: !!vendorId,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    // No refetchInterval — real-time invalidation via useVendorEvents in the vendor layout.
+    // When a vendor:notification WebSocket event arrives, the layout invalidates this query.
+    staleTime: 60_000,
   });
 
   const unreadCount = data?.unreadCount ?? 0;

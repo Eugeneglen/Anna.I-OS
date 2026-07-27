@@ -23,6 +23,7 @@ import {
 import { AUTONOMY_LEVEL_NAMES, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES } from "./constants"
 import { autoSelectVendor } from "./routing"
 import { triggerAnomalyDetection } from "./notify"
+import { emitVendorNotification, emitTaskDispatched } from "./events"
 
 /** Minimum autonomy level required for auto-match */
 const AUTO_MATCH_LEVEL = 3
@@ -166,7 +167,7 @@ export async function checkAutoMatch(
       }
 
       // Notify the matched vendor
-      await tx.notification.create({
+      const vendorNotification = await tx.notification.create({
         data: {
           householdId,
           recipientType: RecipientType.VENDOR,
@@ -181,8 +182,31 @@ export async function checkAutoMatch(
         },
       })
 
-      return { booking, updatedTask }
+      return { booking, updatedTask, vendorNotification }
     })
+
+    // Real-time: push notification + dispatch event to vendor room
+    emitVendorNotification({
+      vendorId,
+      notificationId: result.vendorNotification.id,
+      eventType: NotificationEventType.TASK_DISPATCHED,
+      title: "New Booking Request",
+      body: `You have a new ${category.toLowerCase()} booking request. Please accept within 15 minutes.`,
+      referenceType: "task",
+      referenceId: taskId,
+      householdId,
+      category,
+    }).catch(() => {})
+
+    emitTaskDispatched({
+      taskId,
+      bookingId: result.booking.id,
+      vendorId,
+      householdId,
+      category,
+      scheduledStart: start.toISOString(),
+      responseDeadline: new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000).toISOString(),
+    }).catch(() => {})
 
     // Mark automation flag
     await setAutomationFlag(taskId, "autoMatched")

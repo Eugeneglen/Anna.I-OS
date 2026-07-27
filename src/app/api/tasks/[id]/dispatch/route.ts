@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, VendorStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { autoSelectVendor } from "@/lib/routing"
 import { triggerAnomalyDetection } from "@/lib/notify"
-import { emitTaskStatusChanged, emitBookingStatusChanged } from "@/lib/events"
+import { emitTaskStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 
 const matchSchema = z.object({
@@ -248,7 +248,7 @@ export async function POST(
       }
 
       // Notify the vendor about the new booking opportunity
-      await tx.notification.create({
+      const vendorNotification = await tx.notification.create({
         data: {
           householdId: task.householdId,
           recipientType: RecipientType.VENDOR,
@@ -263,7 +263,7 @@ export async function POST(
         },
       })
 
-      return { booking, updatedTask }
+      return { booking, updatedTask, vendorNotification }
     })
 
     // Background anomaly detection
@@ -276,6 +276,29 @@ export async function POST(
       status: "MATCHING",
       previousStatus: task.status,
       householdId: task.householdId,
+    }).catch(() => {})
+
+    // Real-time: push notification + dispatch event to vendor room
+    emitVendorNotification({
+      vendorId,
+      notificationId: result.vendorNotification.id,
+      eventType: NotificationEventType.TASK_DISPATCHED,
+      title: "New Booking Request",
+      body: `You have a new ${task.category.toLowerCase()} booking request. Please accept or decline within 15 minutes.`,
+      referenceType: "task",
+      referenceId: task.id,
+      householdId: task.householdId,
+      category: task.category,
+    }).catch(() => {})
+
+    emitTaskDispatched({
+      taskId: task.id,
+      bookingId: result.booking.id,
+      vendorId,
+      householdId: task.householdId,
+      category: task.category,
+      scheduledStart: start.toISOString(),
+      responseDeadline: new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000).toISOString(),
     }).catch(() => {})
 
     return NextResponse.json(

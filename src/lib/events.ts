@@ -148,6 +148,7 @@ export async function emitBookingStatusChanged(booking: {
   status: string;
   previousStatus: string;
   vendorName?: string;
+  vendorId?: string;          // ← NEW: routes to vendor room
   householdId?: string;
   householdName?: string;
   category: string;
@@ -158,7 +159,7 @@ export async function emitBookingStatusChanged(booking: {
   });
 }
 
-/** Escrow state changed — routes to specific household room */
+/** Escrow state changed — routes to specific household + vendor rooms */
 export async function emitEscrowStateChanged(escrow: {
   id: string;
   state: string;
@@ -167,6 +168,7 @@ export async function emitEscrowStateChanged(escrow: {
   category: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   vendorPayoutCents?: number;
   disputeReason?: string;
   disputeResolution?: string;
@@ -191,11 +193,12 @@ export async function emitAutonomyPromoted(data: {
   });
 }
 
-/** Dispute raised — routes to specific household room */
+/** Dispute raised — routes to specific household + vendor rooms */
 export async function emitDisputeRaised(data: {
   taskId: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   category: string;
   reason: string;
   escrowAmountCents: number;
@@ -206,11 +209,12 @@ export async function emitDisputeRaised(data: {
   });
 }
 
-/** Dispute resolved — routes to specific household room */
+/** Dispute resolved — routes to specific household + vendor rooms */
 export async function emitDisputeResolved(data: {
   taskId: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   category: string;
   resolution: string;     // "dismissed" | "refunded"
   escrowAmountCents?: number;
@@ -222,12 +226,13 @@ export async function emitDisputeResolved(data: {
   });
 }
 
-/** Vendor completed work — routes to specific household room */
+/** Vendor completed work — routes to specific household + vendor rooms */
 export async function emitWorkCompleted(data: {
   taskId: string;
   bookingId: string;
   householdId: string;
   category: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   vendorName?: string;
   hasPhotos: boolean;
   completionNotes?: string;
@@ -238,16 +243,60 @@ export async function emitWorkCompleted(data: {
   });
 }
 
-/** Photos uploaded by vendor — routes to specific household room */
+/** Photos uploaded by vendor — routes to specific household + vendor rooms */
 export async function emitPhotosUploaded(data: {
   taskId: string;
   bookingId: string;
   householdId: string;
   category: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   photoCount: number;
 }) {
   return emitOpsEvent({
     type: "photos:uploaded",
+    data,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vendor-specific event helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Vendor notification created — routes to the vendor room.
+ * Use this whenever a notification with recipientType=VENDOR is
+ * created in the DB. The vendor portal listens on `vendor:event`
+ * and invalidates its notification cache + shows a toast.
+ */
+export async function emitVendorNotification(data: {
+  vendorId: string;
+  notificationId: string;
+  eventType: string;
+  title: string;
+  body: string;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  householdId?: string;
+  category?: string;
+}) {
+  return emitOpsEvent({
+    type: "vendor:notification",
+    data,
+  });
+}
+
+/** Task dispatched to vendor (new booking opportunity) — routes to vendor room */
+export async function emitTaskDispatched(data: {
+  taskId: string;
+  bookingId: string;
+  vendorId: string;
+  householdId: string;
+  category: string;
+  scheduledStart?: string;
+  responseDeadline?: string;
+}) {
+  return emitOpsEvent({
+    type: "task:dispatched",
     data,
   });
 }
