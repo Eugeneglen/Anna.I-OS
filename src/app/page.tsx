@@ -12,6 +12,7 @@ import { EscrowPanel } from "@/components/anna/escrow-panel";
 import { SettingsPanel } from "@/components/anna/settings-panel";
 import { OnboardingWizard, type OnboardingHousehold } from "@/components/anna/onboarding-wizard";
 import { useAnnaStore } from "@/lib/store";
+import { WithErrorBoundary } from "@/components/error-boundary";
 import { AnimatePresence, motion } from "framer-motion";
 
 const VIEWS: Record<string, React.ComponentType> = {
@@ -108,7 +109,9 @@ export default function Home() {
           transition={{ duration: 0.2 }}
           className="min-h-[calc(100vh-3.5rem)] md:min-h-[calc(100vh-3.5rem-3.25rem)]"
         >
-          <ActiveView />
+          <WithErrorBoundary name={activeTab} variant="page">
+            <ActiveView />
+          </WithErrorBoundary>
         </motion.div>
       </AnimatePresence>
     </LayoutShell>

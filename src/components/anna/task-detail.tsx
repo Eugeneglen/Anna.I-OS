@@ -30,6 +30,7 @@ import {
 import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle, Pencil } from "lucide-react";
 import { RaiseDisputeDialog } from "./raise-dispute-dialog";
 import { EditPredictedDialog } from "./edit-predicted-dialog";
+import { WithErrorBoundary } from "@/components/error-boundary";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -1097,7 +1098,9 @@ export function TaskDetailPanel() {
       {/* Desktop: inline panel below task list */}
       {selectedTaskId && !isMobile && (
         <div className="border-t border-[var(--anna-border)] bg-[var(--anna-white)]">
-          <TaskDetailContent taskId={selectedTaskId} />
+          <WithErrorBoundary name="TaskDetail (Desktop)" variant="inline">
+            <TaskDetailContent taskId={selectedTaskId} />
+          </WithErrorBoundary>
         </div>
       )}
 
@@ -1109,7 +1112,11 @@ export function TaskDetailPanel() {
               <SheetTitle>Task Detail</SheetTitle>
               <SheetDescription>View and manage this task</SheetDescription>
             </SheetHeader>
-            {selectedTaskId && <TaskDetailContent taskId={selectedTaskId} />}
+            {selectedTaskId && (
+              <WithErrorBoundary name="TaskDetail (Mobile Sheet)" variant="inline">
+                <TaskDetailContent taskId={selectedTaskId} />
+              </WithErrorBoundary>
+            )}
           </SheetContent>
         </Sheet>
       )}
