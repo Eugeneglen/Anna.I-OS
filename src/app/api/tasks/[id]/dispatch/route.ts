@@ -6,6 +6,7 @@ import { autoSelectVendor } from "@/lib/routing"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged } from "@/lib/events"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
+import { isCategoryActive } from "@/lib/get-active-categories"
 
 const matchSchema = z.object({
   vendorId: z.string().min(1).optional(),
@@ -48,6 +49,15 @@ export async function POST(
       return NextResponse.json(
         { error: `Task cannot be matched — current status is ${task.status}` },
         { status: 409 }
+      )
+    }
+
+    // Category active guard — reject dispatch for inactive categories
+    const categoryActive = await isCategoryActive(task.category)
+    if (!categoryActive) {
+      return NextResponse.json(
+        { error: `Category ${task.category} is currently unavailable and cannot be dispatched`, code: "CATEGORY_INACTIVE" },
+        { status: 403 }
       )
     }
 

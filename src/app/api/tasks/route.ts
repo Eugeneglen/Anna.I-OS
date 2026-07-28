@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
 import { triggerAutomationOnTaskCreated } from "@/lib/automation"
+import { isCategoryActive } from "@/lib/get-active-categories"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -101,6 +102,15 @@ export async function POST(request: Request) {
     }
 
     const { householdId, category, instructions, amountCents, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
+
+    // Category active guard — reject if category is currently unavailable
+    const categoryActive = await isCategoryActive(category)
+    if (!categoryActive) {
+      return NextResponse.json(
+        { error: `Category ${category} is currently unavailable`, code: "CATEGORY_INACTIVE" },
+        { status: 403 }
+      )
+    }
 
     // M-1 FIX: Validate household exists
     const household = await db.household.findUnique({ where: { id: householdId } })
