@@ -593,7 +593,7 @@ export function Dashboard() {
             onOpenChange={(open) => !open && setEditingTaskId(null)}
             taskId={editingTaskId}
             category={editingItem?.category || editingTask?.category || ""}
-            currentScheduledStart={editingItem?.lockAt || editingTask?.scheduledStart ?? null}
+            currentScheduledStart={(editingItem?.lockAt || editingTask?.scheduledStart) ?? null}
             currentInstructions={editingTask?.instructions}
             currentAmountCents={editingTask?.amountCents}
             lockAt={editingTask?.lockAt ?? null}
