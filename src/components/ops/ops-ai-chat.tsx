@@ -178,6 +178,7 @@ export function OpsAiChat() {
       <AnimatePresence>
         {!open && (
           <motion.button
+            type="button"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
@@ -225,8 +226,9 @@ export function OpsAiChat() {
             transition={{ type: "spring", stiffness: 350, damping: 30 }}
             className={cn(
               "fixed z-50 bg-[var(--anna-white)] shadow-2xl flex flex-col overflow-hidden",
-              "md:bottom-8 md:right-6 md:w-[380px] md:h-[520px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
-              "inset-0 md:inset-auto rounded-none md:rounded-2xl"
+              "bottom-0 left-0 right-0 top-0",
+              "md:bottom-8 md:left-auto md:right-6 md:top-auto md:w-[380px] md:h-[520px] md:rounded-2xl md:border md:border-[var(--anna-border)]",
+              "rounded-none md:rounded-2xl"
             )}
           >
             {/* ── Header ── */}

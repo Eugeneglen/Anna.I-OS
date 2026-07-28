@@ -518,7 +518,10 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
         </div>
 
         {/* Live Toast Notifications (top-right) */}
-        <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-auto">
+        <div className={cn(
+          "fixed top-4 right-4 z-[60] flex flex-col gap-2",
+          latestToast ? "pointer-events-auto" : "pointer-events-none"
+        )}>
           <AnimatePresence>
             {latestToast && (
               <VendorLiveToast
