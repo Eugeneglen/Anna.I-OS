@@ -212,11 +212,11 @@ export function JobTypeEditDialog({
                 </label>
                 <Input
                   type="number"
-                  step="0.01"
+                  step={1}
                   min="0"
                   value={basePriceDollars}
                   onChange={(e) => setBasePriceDollars(e.target.value)}
-                  placeholder="0.00"
+                  placeholder="0"
                   className="rounded-lg border-[var(--anna-border)] text-xs"
                 />
               </div>

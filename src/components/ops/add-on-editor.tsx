@@ -151,7 +151,7 @@ export function AddOnEditor({ addOns: incomingAddOns, onChange }: AddOnEditorPro
                 </span>
                 <Input
                   type="number"
-                  step="0.01"
+                  step={1}
                   min="0"
                   value={centsToDollars(addOn.priceCents)}
                   onChange={(e) =>

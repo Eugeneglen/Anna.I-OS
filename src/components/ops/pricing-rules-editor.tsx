@@ -322,8 +322,8 @@ export default function PricingRulesEditor({
                   <Input
                     type="number"
                     min={0}
-                    step={0.5}
-                    value={Math.round(surcharge.amountCents / 100) / 100}
+                    step={1}
+                    value={surcharge.amountCents / 100}
                     onChange={(e) => {
                       const surcharges = [...(rules.surcharges ?? [])];
                       surcharges[idx] = {
@@ -334,7 +334,7 @@ export default function PricingRulesEditor({
                       };
                       update({ surcharges });
                     }}
-                    placeholder="0.00"
+                    placeholder="0"
                     className="h-6 w-16 rounded-lg border-[var(--anna-border)] text-xs font-data"
                   />
                 </div>
