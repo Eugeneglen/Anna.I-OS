@@ -67,6 +67,7 @@ const actionButtons: Record<
   VERIFIED: [{ label: "Release Escrow", icon: ShieldCheck, variant: "default", action: "release" }],
   ESCROW_RELEASED: [{ label: "Rebook", icon: RefreshCw, variant: "outline", action: "rebook" }],
   DISPUTED: [{ label: "Resolve Dispute", icon: RotateCcw, variant: "outline", action: "resolve" }],
+  CANCELLED: [],
 };
 
 const statusBadgeStyles: Record<TaskStatus, string> = {
@@ -80,6 +81,7 @@ const statusBadgeStyles: Record<TaskStatus, string> = {
   VERIFIED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   ESCROW_RELEASED: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
   DISPUTED: "bg-[var(--anna-error)]/15 text-[var(--anna-error)] border-[var(--anna-error)]/20",
+  CANCELLED: "bg-[var(--anna-bg)]/15 text-[var(--anna-muted)] border-[var(--anna-border)]/20",
 };
 
 function TaskDetailContent({ taskId }: { taskId: string }) {
@@ -553,7 +555,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       )}
 
       {/* Booking Info — only show when status >= ACCEPTED (vendor name visible) */}
-      {booking && task.status !== "MATCHING" && task.status !== "CREATED" && task.status !== "PREDICTED" && (
+      {booking && task.status !== "MATCHING" && task.status !== "CREATED" && task.status !== "PREDICTED" && task.status !== "CANCELLED" && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Booking Details

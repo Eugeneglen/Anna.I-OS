@@ -30,6 +30,7 @@ import {
   DollarSign,
   Camera,
   ImageIcon,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -358,6 +359,75 @@ export function BookingDetailSheet({
                     )}
                   </div>
                 </section>
+
+                {/* ── Task Instructions ── */}
+                {task?.instructions && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <FileText size={12} />
+                        Task Instructions
+                      </h4>
+                      <div className="p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]">
+                        <p className="text-xs text-[var(--anna-slate)] leading-relaxed whitespace-pre-wrap">
+                          {task.instructions as string}
+                        </p>
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {/* ── Customer Attachments (Photos/Videos) ── */}
+                {((task?.attachments as Array<Record<string, unknown>>)?.length ?? 0) > 0 && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <ImageIcon size={12} />
+                        Customer Attachments
+                        <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-[var(--anna-bg)] px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                          {(task?.attachments as Array<Record<string, unknown>>).length}
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {(task?.attachments as Array<Record<string, unknown>>).map((att: Record<string, unknown>) =>
+                          att.fileType === "PHOTO" ? (
+                            <a
+                              key={att.id as string}
+                              href={att.fileUrl as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] relative"
+                            >
+                              <img
+                                src={att.fileUrl as string}
+                                alt={att.fileName as string}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <ImageIcon size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </a>
+                          ) : (
+                            <a
+                              key={att.id as string}
+                              href={att.fileUrl as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="aspect-square rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] flex flex-col items-center justify-center gap-1 p-2 hover:border-[var(--anna-sage)]/40 transition-colors"
+                            >
+                              <Film size={20} className="text-[var(--anna-muted)]" />
+                              <span className="text-[9px] text-[var(--anna-muted)] text-center line-clamp-2">
+                                {att.fileName as string}
+                              </span>
+                            </a>
+                          )
+                        )}
+                      </div>
+                    </section>
+                  </>
+                )}
 
                 <Separator />
 
