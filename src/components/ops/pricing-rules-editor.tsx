@@ -318,7 +318,7 @@ export default function PricingRulesEditor({
                   className="h-6 w-28 rounded-lg border-[var(--anna-border)] text-xs"
                 />
                 <div className="flex items-center gap-0.5">
-                  <span className="text-[10px] text-[var(--anna-muted)]">$</span>
+                  <span className="text-[10px] text-[var(--anna-muted)]">SGD $</span>
                   <Input
                     type="number"
                     min={0}

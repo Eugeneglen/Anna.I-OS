@@ -147,7 +147,7 @@ export function AddOnEditor({ addOns: incomingAddOns, onChange }: AddOnEditorPro
               {/* Price (dollars display, cents storage) */}
               <div className="relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--anna-muted)] pointer-events-none">
-                  $
+                  SGD $
                 </span>
                 <Input
                   type="number"
@@ -161,8 +161,8 @@ export function AddOnEditor({ addOns: incomingAddOns, onChange }: AddOnEditorPro
                       dollarsToCents(e.target.value),
                     )
                   }
-                  placeholder="0.00"
-                  className="h-7 rounded-md border-[var(--anna-border)] bg-[var(--anna-white)] text-[11px] text-[var(--anna-slate)] pl-5 pr-1.5"
+                  placeholder="0"
+                  className="h-7 rounded-md border-[var(--anna-border)] bg-[var(--anna-white)] text-[11px] text-[var(--anna-slate)] pl-12 pr-1.5"
                 />
               </div>
 
