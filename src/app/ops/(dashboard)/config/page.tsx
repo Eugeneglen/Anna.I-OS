@@ -414,16 +414,16 @@ export default function ConfigPage() {
                               <Input
                                 type="number"
                                 min={0}
-                                step={100}
+                                step={1}
                                 value={Math.round(currentPrice / 100)}
                                 onChange={(e) => {
                                   setLocalPriceEdits((prev) => ({
                                     ...(prev ?? priceEdits),
-                                    [cat]: (parseInt(e.target.value) || 0) * 100,
+                                    [cat]: (parseFloat(e.target.value) || 0) * 100,
                                   }));
                                 }}
                                 className={cn(
-                                  "w-20 h-7 text-right text-xs font-data rounded-lg border-[var(--anna-border)]",
+                                  "w-24 h-8 text-right text-sm font-data rounded-lg border-[var(--anna-border)]",
                                   changed && "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/30"
                                 )}
                               />
@@ -726,8 +726,43 @@ export default function ConfigPage() {
                               <td className="px-5 py-2.5 font-medium text-[var(--anna-slate)]">
                                 {j.name as string}
                               </td>
-                              <td className="px-5 py-2.5 text-right font-data text-sm text-[var(--anna-slate)]">
-                                {formatPrice(j.basePriceCents as number)}
+                              <td className="px-5 py-2.5 text-right">
+                                {isAdmin ? (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span className="text-[10px] text-[var(--anna-muted)]">SGD $</span>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={(j.basePriceCents as number / 100).toFixed(2)}
+                                      onChange={(e) => {
+                                        const newCents = Math.round((parseFloat(e.target.value) || 0) * 100);
+                                        configMutation.mutate({
+                                          action: "update_job_type",
+                                          id: j.id,
+                                          basePriceCents: newCents,
+                                        });
+                                      }}
+                                      onBlur={(e) => {
+                                        // Snap to round number on blur
+                                        const raw = parseFloat(e.target.value);
+                                        if (!isNaN(raw) && raw !== Math.floor(raw)) {
+                                          const newCents = Math.round(raw) * 100;
+                                          configMutation.mutate({
+                                            action: "update_job_type",
+                                            id: j.id,
+                                            basePriceCents: newCents,
+                                          });
+                                        }
+                                      }}
+                                      className="w-20 h-7 text-right text-sm font-data rounded-lg border-[var(--anna-border)] bg-[var(--anna-white)]"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="font-data text-sm text-[var(--anna-slate)]">
+                                    {formatPrice(j.basePriceCents as number)}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-5 py-2.5 text-xs text-[var(--anna-muted)]">
                                 {j.unitLabel as string}
