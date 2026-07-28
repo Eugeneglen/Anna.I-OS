@@ -122,8 +122,6 @@ const HOME_TYPES = [
   { value: "HDB", label: "HDB Flat", icon: Building2, desc: "Public housing" },
   { value: "CONDO", label: "Condominium", icon: Building2, desc: "Private apartment" },
   { value: "LANDED", label: "Landed Property", icon: Trees, desc: "Detached or semi-D" },
-  { value: "TERRACE", label: "Terrace House", icon: Home, desc: "Link house" },
-  { value: "OTHER", label: "Other", icon: HelpCircle, desc: "Studio, dorm, etc." },
 ];
 
 const HDB_SIZES = [
