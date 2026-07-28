@@ -29,6 +29,7 @@ import {
   Wrench,
   Shirt,
   ShoppingCart,
+  CalendarDays,
   Handshake,
   Bell,
   Lightbulb,
@@ -172,7 +173,7 @@ const PAIN_POINT_TASKS = [
   { value: "AIRCON", label: "Air-con servicing", icon: Wind },
   { value: "REPAIRS", label: "Repairs & maintenance", icon: Wrench },
   { value: "LAUNDRY", label: "Laundry", icon: Shirt },
-  { value: "PLANNING", label: "Planning & scheduling", icon: ShoppingCart },
+  { value: "PLANNING", label: "Planning & scheduling", icon: CalendarDays },
   { value: "FINDING", label: "Finding reliable providers", icon: Handshake },
 ];
 
@@ -260,8 +261,13 @@ function AnnaInsight({ children }: { children: React.ReactNode }) {
       transition={{ delay: 0.3, duration: 0.3 }}
       className="mt-5 flex items-start gap-2.5 bg-[var(--anna-sage-light)]/40 rounded-xl p-3"
     >
-      <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center shrink-0 mt-0.5">
-        <Sparkles size={14} className="text-white" />
+      <div
+        className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center shrink-0 mt-0.5"
+        role="img"
+        aria-label="Anna.I insight"
+        title="Anna.I insight"
+      >
+        <Sparkles size={14} className="text-white" aria-hidden="true" />
       </div>
       <p className="text-xs text-[var(--anna-sage-dark)] leading-relaxed">{children}</p>
     </motion.div>
@@ -880,7 +886,26 @@ function StepPainPoints({
       </motion.div>
 
       <AnnaInsight>
-        🎯 I&apos;ll prioritise solutions for these exact pain points and proactively suggest improvements over time.
+        {(() => {
+          const labels: Record<string, string> = {
+            CLEANING: "cleaning & tidying",
+            AIRCON: "air-con servicing",
+            REPAIRS: "repairs & maintenance",
+            LAUNDRY: "laundry",
+            PLANNING: "planning & scheduling",
+            FINDING: "finding reliable providers",
+          };
+          const selected = (data.timeConsumingTasks || []).map((t) => labels[t] || t);
+
+          if (selected.length === 0) {
+            return "🎯 I'll prioritise solutions for these exact pain points and proactively suggest improvements over time.";
+          }
+          if (selected.length === 1) {
+            return `🎯 I'll prioritise ${selected[0]} for you — and suggest improvements as I learn more.`;
+          }
+          const list = selected.slice(0, -1).join(", ") + " and " + selected.slice(-1);
+          return `🎯 I'll prioritise ${list} for you — and suggest improvements as I learn more.`;
+        })()}
       </AnnaInsight>
 
       <StepNav
