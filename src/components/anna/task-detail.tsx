@@ -1077,10 +1077,10 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         onOpenChange={setEditPredictedOpen}
         taskId={taskId}
         category={task.category}
-        currentScheduledStart={task.scheduledStart?.toISOString()}
+        currentScheduledStart={task.scheduledStart ?? null}
         currentInstructions={task.instructions}
         currentAmountCents={task.amountCents}
-        lockAt={task.lockAt?.toISOString()}
+        lockAt={task.lockAt ?? null}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["task", taskId] });
         }}
