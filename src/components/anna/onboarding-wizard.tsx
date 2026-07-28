@@ -142,7 +142,6 @@ const OCCUPANT_OPTIONS = [
 const MEMBER_TYPES = [
   { value: "ADULTS", label: "Working Adults", icon: Users },
   { value: "CHILDREN", label: "Young Children", icon: Baby },
-  { value: "TEENS", label: "Teenagers", icon: GraduationCap },
   { value: "ELDERLY", label: "Elderly", icon: HeartPulse },
   { value: "PETS", label: "Pets", icon: Dog },
 ];
