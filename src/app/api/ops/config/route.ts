@@ -280,19 +280,25 @@ export async function POST(req: NextRequest) {
       });
 
     } else if (action === "toggle_category") {
-      const { name, isActive } = body as { name: string; isActive: boolean };
+      const categoryName = (body as { name?: string; category?: string }).name ?? (body as { category?: string }).category;
+      const { isActive } = body as { isActive: boolean };
+      if (!categoryName) {
+        return NextResponse.json({ error: "Category name is required" }, { status: 400 });
+      }
       let activeCats = await getConfigArray("active_categories");
       if (activeCats.length === 0) activeCats = [...ACTIVE_CATEGORIES];
-      if (isActive && !activeCats.includes(name)) {
-        activeCats.push(name);
+      // Filter out any falsy entries
+      activeCats = activeCats.filter(Boolean);
+      if (isActive && !activeCats.includes(categoryName)) {
+        activeCats.push(categoryName);
       } else if (!isActive) {
-        activeCats = activeCats.filter((c) => c !== name);
+        activeCats = activeCats.filter((c) => c !== categoryName);
       }
       await setConfigArray("active_categories", activeCats, "Active service categories (JSON array)");
       await logAction({
         userId: session.userId, userName: session.name,
         action: "config.toggle_category", entityType: "PlatformConfig",
-        metadata: { name, isActive, activeCategories: activeCats },
+        metadata: { name: categoryName, isActive, activeCategories: activeCats },
       });
 
     } else if (action === "create_category") {
