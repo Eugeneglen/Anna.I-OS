@@ -16,6 +16,10 @@ const OPS_EVENTS_URL = process.env.OPS_EVENTS_URL || "http://localhost:3004";
 
 let socket: Socket | null = null;
 let connecting = false;
+// Buffer of events emitted before the socket connected. These are flushed
+// once the connection establishes, so the very first events after a cold
+// server start are no longer silently dropped.
+const pendingEmits: OpsEventPayload[] = [];
 
 function getSocket(): Socket | null {
   if (socket?.connected) return socket;
@@ -35,6 +39,18 @@ function getSocket(): Socket | null {
       socket.on("connect", () => {
         connecting = false;
         console.log("[events] Connected to ops-events service");
+        // Flush any events that were buffered while we were connecting
+        if (pendingEmits.length > 0) {
+          console.log(`[events] Flushing ${pendingEmits.length} buffered event(s)`);
+          for (const evt of pendingEmits) {
+            socket!.emit("event:emit", {
+              type: evt.type,
+              data: evt.data,
+              timestamp: evt.timestamp || new Date().toISOString(),
+            });
+          }
+          pendingEmits.length = 0;
+        }
       });
 
       socket.on("disconnect", () => {
@@ -54,6 +70,13 @@ function getSocket(): Socket | null {
   return socket?.connected ? socket : null;
 }
 
+// Eagerly initiate the connection on module load so the first emit doesn't
+// have to wait for a connection round-trip. Safe to call multiple times.
+if (typeof window === "undefined") {
+  // Server-side only — don't run on the client bundle
+  getSocket();
+}
+
 // ─────────────────────────────────────────────────────────────
 // Event Types
 // ─────────────────────────────────────────────────────────────
@@ -70,16 +93,24 @@ export interface OpsEventPayload {
 
 export async function emitOpsEvent(event: OpsEventPayload): Promise<void> {
   const s = getSocket();
-  if (!s) {
-    // Service not available — silently skip (fire-and-forget)
-    return;
-  }
 
   const payload = {
     type: event.type,
     data: event.data,
     timestamp: event.timestamp || new Date().toISOString(),
   };
+
+  if (!s) {
+    // Socket not yet connected — buffer the event so it can be flushed
+    // once the connection establishes. Caps at 50 events to avoid
+    // unbounded memory growth if the ops-events service is down.
+    if (pendingEmits.length < 50) {
+      pendingEmits.push(payload);
+    } else {
+      console.warn(`[events] Buffer full, dropping event: ${event.type}`);
+    }
+    return;
+  }
 
   try {
     s.emit("event:emit", payload);
@@ -148,6 +179,7 @@ export async function emitBookingStatusChanged(booking: {
   status: string;
   previousStatus: string;
   vendorName?: string;
+  vendorId?: string;          // ← NEW: routes to vendor room
   householdId?: string;
   householdName?: string;
   category: string;
@@ -158,7 +190,7 @@ export async function emitBookingStatusChanged(booking: {
   });
 }
 
-/** Escrow state changed — routes to specific household room */
+/** Escrow state changed — routes to specific household + vendor rooms */
 export async function emitEscrowStateChanged(escrow: {
   id: string;
   state: string;
@@ -167,6 +199,7 @@ export async function emitEscrowStateChanged(escrow: {
   category: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   vendorPayoutCents?: number;
   disputeReason?: string;
   disputeResolution?: string;
@@ -191,11 +224,12 @@ export async function emitAutonomyPromoted(data: {
   });
 }
 
-/** Dispute raised — routes to specific household room */
+/** Dispute raised — routes to specific household + vendor rooms */
 export async function emitDisputeRaised(data: {
   taskId: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   category: string;
   reason: string;
   escrowAmountCents: number;
@@ -206,11 +240,12 @@ export async function emitDisputeRaised(data: {
   });
 }
 
-/** Dispute resolved — routes to specific household room */
+/** Dispute resolved — routes to specific household + vendor rooms */
 export async function emitDisputeResolved(data: {
   taskId: string;
   householdId: string;
   householdName?: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   category: string;
   resolution: string;     // "dismissed" | "refunded"
   escrowAmountCents?: number;
@@ -222,12 +257,13 @@ export async function emitDisputeResolved(data: {
   });
 }
 
-/** Vendor completed work — routes to specific household room */
+/** Vendor completed work — routes to specific household + vendor rooms */
 export async function emitWorkCompleted(data: {
   taskId: string;
   bookingId: string;
   householdId: string;
   category: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   vendorName?: string;
   hasPhotos: boolean;
   completionNotes?: string;
@@ -238,16 +274,60 @@ export async function emitWorkCompleted(data: {
   });
 }
 
-/** Photos uploaded by vendor — routes to specific household room */
+/** Photos uploaded by vendor — routes to specific household + vendor rooms */
 export async function emitPhotosUploaded(data: {
   taskId: string;
   bookingId: string;
   householdId: string;
   category: string;
+  vendorId?: string;            // ← NEW: routes to vendor room
   photoCount: number;
 }) {
   return emitOpsEvent({
     type: "photos:uploaded",
+    data,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vendor-specific event helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Vendor notification created — routes to the vendor room.
+ * Use this whenever a notification with recipientType=VENDOR is
+ * created in the DB. The vendor portal listens on `vendor:event`
+ * and invalidates its notification cache + shows a toast.
+ */
+export async function emitVendorNotification(data: {
+  vendorId: string;
+  notificationId: string;
+  eventType: string;
+  title: string;
+  body: string;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  householdId?: string;
+  category?: string;
+}) {
+  return emitOpsEvent({
+    type: "vendor:notification",
+    data,
+  });
+}
+
+/** Task dispatched to vendor (new booking opportunity) — routes to vendor room */
+export async function emitTaskDispatched(data: {
+  taskId: string;
+  bookingId: string;
+  vendorId: string;
+  householdId: string;
+  category: string;
+  scheduledStart?: string;
+  responseDeadline?: string;
+}) {
+  return emitOpsEvent({
+    type: "task:dispatched",
     data,
   });
 }

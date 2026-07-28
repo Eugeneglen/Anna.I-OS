@@ -126,8 +126,12 @@ export function useHouseholdEvents(
     if (socketRef.current?.connected) return;
 
     try {
+      // NOTE: polling first is more reliable through the Caddy gateway (port 81).
+      // Socket.IO will upgrade to websocket once the polling channel confirms
+      // the connection works. This avoids "Connect error: timeout" when the
+      // WS upgrade handshake is delayed or dropped by an intermediary.
       const socket = io("/?XTransformPort=3004", {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         forceNew: true,
         reconnection: true,
         reconnectionAttempts: 10,

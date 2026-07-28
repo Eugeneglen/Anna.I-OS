@@ -28,6 +28,8 @@ import {
   User,
   Calendar,
   DollarSign,
+  Camera,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -155,6 +157,17 @@ export function BookingDetailSheet({
   const escrow = (task?.escrowEntries as Record<string, unknown>[])?.[0];
   const taskStatus = task?.status as string;
   const escrowState = escrow?.state as string;
+  // Verification photos (before/after) — already returned by /api/tasks/[id]
+  const verificationPhotos = (task?.verificationPhotos as Array<{
+    id: string;
+    fileUrl: string;
+    thumbnailUrl?: string | null;
+    uploadedBy: string;
+    isVerified: boolean;
+    rejectionReason?: string | null;
+    verifiedAt?: string | null;
+    createdAt: string;
+  }>) || [];
 
   // ── Action handlers ──
 
@@ -520,6 +533,88 @@ export function BookingDetailSheet({
                           {booking.completionNotes as string}
                         </p>
                       </div>
+                    </section>
+                  </>
+                )}
+
+                {/* ── Verification Photos ── */}
+                {verificationPhotos.length > 0 && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <Camera size={12} />
+                        Verification Photos
+                        <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-[var(--anna-bg)] px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                          {verificationPhotos.length}
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        {verificationPhotos.map((photo) => {
+                          const isBefore = photo.uploadedBy?.includes("before");
+                          return (
+                            <a
+                              key={photo.id}
+                              href={photo.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] group hover:border-[var(--anna-sage)]/50 transition-colors"
+                              title={`Uploaded ${formatDateTime(photo.createdAt)} — click to view full size`}
+                            >
+                              <img
+                                src={photo.thumbnailUrl || photo.fileUrl}
+                                alt={`Verification photo (${isBefore ? "Before" : "After"})`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.opacity = "0.3";
+                                }}
+                              />
+                              {/* Top-left: Before/After label */}
+                              <div className="absolute top-1 left-1">
+                                <span className={cn(
+                                  "text-[8px] font-bold px-1 py-0 h-4 rounded flex items-center border-0",
+                                  isBefore
+                                    ? "bg-[var(--anna-warning)] text-white"
+                                    : "bg-[var(--anna-sage)] text-white"
+                                )}>
+                                  {isBefore ? "Before" : "After"}
+                                </span>
+                              </div>
+                              {/* Top-right: Verification status */}
+                              <div className="absolute top-1 right-1">
+                                {photo.isVerified ? (
+                                  <span className="bg-[var(--anna-success)] text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <CheckCircle2 size={9} />
+                                  </span>
+                                ) : photo.rejectionReason ? (
+                                  <span className="bg-red-500 text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <XCircle size={9} />
+                                  </span>
+                                ) : (
+                                  <span className="bg-[var(--anna-warning)] text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <Clock size={9} />
+                                  </span>
+                                )}
+                              </div>
+                              {/* Hover overlay with zoom hint */}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <ImageIcon size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                      {/* Rejection reason footer (if any photo was rejected) */}
+                      {verificationPhotos.some((p) => p.rejectionReason) && (
+                        <div className="mt-2 p-2 rounded-lg bg-red-50/70 border border-red-100">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-0.5">
+                            Rejection Reason
+                          </p>
+                          <p className="text-xs text-red-700">
+                            {verificationPhotos.find((p) => p.rejectionReason)?.rejectionReason}
+                          </p>
+                        </div>
+                      )}
                     </section>
                   </>
                 )}

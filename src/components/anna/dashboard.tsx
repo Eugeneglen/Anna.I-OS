@@ -538,9 +538,17 @@ export function Dashboard() {
                   key={idx}
                   type="button"
                   onClick={() => {
+                    // Defer openTaskDetail to the next tick so the Activity tab
+                    // (and its TaskList) can mount first. Calling setPendingTaskFilter
+                    // + setActiveTab + openTaskDetail synchronously caused React to
+                    // crash with "Cannot update a component while rendering a different
+                    // component" because TaskList's useState initializer reads the
+                    // store while LayoutShell is still re-rendering from the tab change.
                     navigateToActivity({ search: "" });
                     const task = tasks.find((t) => t.id === item.taskId);
-                    if (task) useAnnaStore.getState().openTaskDetail(task);
+                    if (task) {
+                      setTimeout(() => useAnnaStore.getState().openTaskDetail(task), 0);
+                    }
                   }}
                   className="w-full text-left px-4 py-3 hover:bg-[var(--anna-sage-light)]/30 transition-colors"
                 >

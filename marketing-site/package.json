@@ -1,0 +1,16 @@
+{
+  "name": "annai-marketing",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev --host 0.0.0.0 --port 4321",
+    "build": "astro build",
+    "preview": "astro preview",
+    "start": "HOST=0.0.0.0 PORT=${PORT} node dist/server/entry.mjs"
+  },
+  "dependencies": {
+    "@astrojs/node": "^8.3.4",
+    "astro": "^4.16.18"
+  }
+}

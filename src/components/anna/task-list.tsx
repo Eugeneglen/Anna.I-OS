@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import { TaskCard } from "./task-card";
@@ -53,15 +53,28 @@ async function fetchTasks(householdId: string): Promise<Task[]> {
 export function TaskList() {
   const { selectedHouseholdId } = useAnnaStore();
 
-  // Initialize filters — consume pending filter from store if set by dashboard cards
+  // Initialize filters — consume pending filter from store if set by dashboard cards.
+  // NOTE: We read the pending filter via useAnnaStore.getState() (a non-reactive read)
+  // in a lazy useState initializer. This runs only on first mount, never during a
+  // re-render, so it cannot trigger the "Cannot update a component while rendering a
+  // different component" error. The store-clearing is deferred to a useEffect.
   const [filters, setFilters] = useState<TaskFilters>(() => {
     const pending = useAnnaStore.getState().pendingTaskFilter;
     if (pending) {
-      useAnnaStore.getState().setPendingTaskFilter(null);
       return { ...DEFAULT_FILTERS, ...pending };
     }
     return DEFAULT_FILTERS;
   });
+
+  // Clear the consumed pending filter after mount so it doesn't get re-applied
+  // if TaskList remounts. Using getState() (not the hook) avoids subscribing to
+  // the store here, which would cause re-renders.
+  useEffect(() => {
+    const pending = useAnnaStore.getState().pendingTaskFilter;
+    if (pending) {
+      useAnnaStore.getState().setPendingTaskFilter(null);
+    }
+  }, []);
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks", selectedHouseholdId],

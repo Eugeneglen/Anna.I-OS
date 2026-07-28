@@ -15,8 +15,9 @@ const io = new Server(httpServer, {
 
 const clients = new Map<string, {
   id: string;
-  type: string;           // "ops_dashboard" | "household" | "event_source"
+  type: string;           // "ops_dashboard" | "household" | "vendor" | "event_source"
   householdId?: string;   // Only for household clients
+  vendorId?: string;      // Only for vendor clients
   joinedAt: number;
 }>();
 
@@ -34,6 +35,16 @@ function getHouseholdClients(householdId: string): number {
   return count;
 }
 
+function getVendorClients(vendorId: string): number {
+  let count = 0;
+  for (const client of clients.values()) {
+    if (client.type === "vendor" && client.vendorId === vendorId) {
+      count++;
+    }
+  }
+  return count;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Connection handling
 // ─────────────────────────────────────────────────────────────
@@ -41,14 +52,18 @@ function getHouseholdClients(householdId: string): number {
 io.on("connection", (socket) => {
   const type = (socket.handshake.auth?.type as string) || "client";
   const householdId = (socket.handshake.auth?.householdId as string) || undefined;
+  const vendorId = (socket.handshake.auth?.vendorId as string) || undefined;
 
-  console.log(`[ops-events] ${type} connected: ${socket.id}${householdId ? ` (household: ${householdId})` : ""}`);
+  console.log(`[ops-events] ${type} connected: ${socket.id}${
+    householdId ? ` (household: ${householdId})` : ""
+  }${vendorId ? ` (vendor: ${vendorId})` : ""}`);
 
   // Register client
   clients.set(socket.id, {
     id: socket.id,
     type,
     householdId,
+    vendorId,
     joinedAt: Date.now(),
   });
 
@@ -56,6 +71,12 @@ io.on("connection", (socket) => {
   if (type === "household" && householdId) {
     socket.join(`household:${householdId}`);
     console.log(`[ops-events] ${socket.id} joined room: household:${householdId}`);
+  }
+
+  // Auto-join vendor room if vendorId provided
+  if (type === "vendor" && vendorId) {
+    socket.join(`vendor:${vendorId}`);
+    console.log(`[ops-events] ${socket.id} joined room: vendor:${vendorId}`);
   }
 
   // Send ops dashboard initial data
@@ -66,7 +87,7 @@ io.on("connection", (socket) => {
   // Broadcast online count
   io.emit("ops:online", { count: getOnlineCount() });
 
-  // ── Room management ──
+  // ── Room management: household ──
 
   socket.on("join:household", (data: { householdId: string }) => {
     if (!data?.householdId) return;
@@ -98,6 +119,38 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ── Room management: vendor ──
+
+  socket.on("join:vendor", (data: { vendorId: string }) => {
+    if (!data?.vendorId) return;
+    const newRoom = `vendor:${data.vendorId}`;
+
+    // Leave old room if switching
+    const client = clients.get(socket.id);
+    if (client?.vendorId && client.vendorId !== data.vendorId) {
+      socket.leave(`vendor:${client.vendorId}`);
+      console.log(`[ops-events] ${socket.id} left room: vendor:${client.vendorId}`);
+    }
+
+    socket.join(newRoom);
+    if (client) {
+      client.vendorId = data.vendorId;
+    }
+    console.log(`[ops-events] ${socket.id} joined room: ${newRoom}`);
+
+    // Confirm join
+    socket.emit("vendor:joined", { vendorId: data.vendorId });
+  });
+
+  socket.on("leave:vendor", () => {
+    const client = clients.get(socket.id);
+    if (client?.vendorId) {
+      socket.leave(`vendor:${client.vendorId}`);
+      console.log(`[ops-events] ${socket.id} left room: vendor:${client.vendorId}`);
+      client.vendorId = undefined;
+    }
+  });
+
   // ── Event relay (from event_source → broadcast) ──
 
   socket.on("event:emit", (event: { type: string; data: Record<string, unknown>; timestamp: string }) => {
@@ -115,12 +168,28 @@ io.on("connection", (socket) => {
       io.to(`household:${targetHouseholdId}`).emit(`household:event:${event.type}`, event);
       console.log(`[ops-events] Routed ${event.type} to household:${targetHouseholdId} (${getHouseholdClients(targetHouseholdId)} clients)`);
     }
+
+    // If event has a vendorId, also send to that vendor room
+    const targetVendorId = event.data?.vendorId as string | undefined;
+    if (targetVendorId) {
+      io.to(`vendor:${targetVendorId}`).emit("vendor:event", event);
+      io.to(`vendor:${targetVendorId}`).emit(`vendor:event:${event.type}`, event);
+      console.log(`[ops-events] Routed ${event.type} to vendor:${targetVendorId} (${getVendorClients(targetVendorId)} clients)`);
+    }
   });
 
   // ── Heartbeat from household clients ──
   socket.on("household:ping", (data: { householdId: string }) => {
     socket.emit("household:pong", {
       householdId: data?.householdId,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ── Heartbeat from vendor clients ──
+  socket.on("vendor:ping", (data: { vendorId: string }) => {
+    socket.emit("vendor:pong", {
+      vendorId: data?.vendorId,
       timestamp: new Date().toISOString(),
     });
   });

@@ -1,13 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -18,10 +19,27 @@ import {
   Briefcase,
   ArrowLeft,
   Bell,
+  Wifi,
+  WifiOff,
+  X,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  CreditCard,
+  Camera,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VendorAiChat } from "@/components/vendor/vendor-ai-chat";
 import { VendorNotificationPanel } from "@/components/vendor/vendor-notification-panel";
+import {
+  useVendorEvents,
+  type VendorEvent,
+  getVendorEventLabel,
+  getVendorEventToastVariant,
+} from "@/hooks/use-vendor-events";
 
 interface VendorUser {
   id: string;
@@ -36,6 +54,21 @@ export function useVendorUser() {
   return useContext(VendorUserContext);
 }
 
+// ── Real-time event context ──
+interface VendorLiveContextType {
+  isConnected: boolean;
+  latestToast: VendorEvent | null;
+  dismissToast: () => void;
+}
+const VendorLiveContext = createContext<VendorLiveContextType>({
+  isConnected: false,
+  latestToast: null,
+  dismissToast: () => {},
+});
+export function useVendorLive() {
+  return useContext(VendorLiveContext);
+}
+
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/vendor/", icon: LayoutDashboard, exact: true },
   { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays },
@@ -43,7 +76,22 @@ const NAV_ITEMS = [
   { label: "Settings", href: "/vendor/settings", icon: Settings },
 ];
 
-// Simple notification indicator for the sidebar (no Sheet/Popover to avoid portal issues)
+// Live indicator for the sidebar — shows WebSocket connection status
+function LiveIndicator({ isConnected }: { isConnected: boolean }) {
+  return (
+    <div className={cn(
+      "flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium",
+      isConnected
+        ? "bg-emerald-50 text-emerald-600"
+        : "bg-red-50 text-red-500"
+    )}>
+      {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
+      <span>Live</span>
+    </div>
+  );
+}
+
+// Simple notification indicator for the sidebar (no polling — uses WebSocket for invalidation)
 function NotificationIndicator({ vendorId }: { vendorId: string }) {
   const { data } = useQuery({
     queryKey: ["vendor-notifications-count", vendorId],
@@ -53,8 +101,8 @@ function NotificationIndicator({ vendorId }: { vendorId: string }) {
       return res.json();
     },
     enabled: !!vendorId,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    // No refetchInterval — real-time invalidation via useVendorEvents in the layout
+    staleTime: 60_000,
     select: (d) => d.unreadCount,
   });
 
@@ -82,6 +130,7 @@ function NotificationIndicator({ vendorId }: { vendorId: string }) {
 function SidebarNav({ vendorId }: { vendorId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const live = useVendorLive();
 
   async function handleLogout() {
     await fetch("/api/vendor/auth", { method: "DELETE" });
@@ -92,18 +141,22 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="px-4 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[var(--anna-sage)] flex items-center justify-center">
-            <Briefcase size={16} className="text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-sage)] flex items-center justify-center">
+              <Briefcase size={16} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-[var(--anna-sage-dark)]">
+                Anna.I
+              </h1>
+              <p className="text-[10px] font-data uppercase tracking-widest text-[var(--anna-muted)]">
+                Vendor Portal
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-[var(--anna-sage-dark)]">
-              Anna.I
-            </h1>
-            <p className="text-[10px] font-data uppercase tracking-widest text-[var(--anna-muted)]">
-              Vendor Portal
-            </p>
-          </div>
+          {/* Live indicator */}
+          <LiveIndicator isConnected={live.isConnected} />
         </div>
       </div>
       <Separator className="bg-[var(--anna-border)]" />
@@ -201,10 +254,102 @@ function UserSection({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Real-time toast (mirrors Ops LiveToast pattern)
+// ─────────────────────────────────────────────────────────────
+
+const VENDOR_TOAST_STYLES: Record<string, { bg: string; border: string; icon: string }> = {
+  success: { bg: "bg-emerald-50", border: "border-emerald-200", icon: "text-emerald-600" },
+  warning: { bg: "bg-amber-50", border: "border-amber-200", icon: "text-amber-600" },
+  error: { bg: "bg-red-50", border: "border-red-200", icon: "text-red-600" },
+  info: { bg: "bg-[var(--anna-sage-light)]", border: "border-[var(--anna-border)]", icon: "text-[var(--anna-sage-dark)]" },
+};
+
+const VENDOR_EVENT_ICONS: Record<string, React.ElementType> = {
+  "vendor:notification": Bell,
+  "booking:status_changed": CalendarDays,
+  "task:status_changed": Clock,
+  "task:dispatched": Briefcase,
+  "escrow:state_changed": CreditCard,
+  "dispute:raised": AlertTriangle,
+  "dispute:resolved": CheckCircle2,
+  "work:completed": CheckCircle2,
+  "photos:uploaded": Camera,
+};
+
+function VendorLiveToast({
+  event,
+  onDismiss,
+}: {
+  event: VendorEvent;
+  onDismiss: () => void;
+}) {
+  const variant = getVendorEventToastVariant(event.type);
+  const styles = VENDOR_TOAST_STYLES[variant] || VENDOR_TOAST_STYLES.info;
+  const Icon = VENDOR_EVENT_ICONS[event.type] || Info;
+
+  // Auto-dismiss after 8s
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 8000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  // Extract title/body from event data (works for vendor:notification + generic events)
+  const title = (event.data.title as string) || getVendorEventLabel(event.type);
+  const body = (event.data.body as string) || (event.data.message as string) || "";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20, x: 20 }}
+      animate={{ opacity: 1, y: 0, x: 0 }}
+      exit={{ opacity: 0, x: 40 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className={cn(
+        "w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border shadow-lg p-3 flex gap-3",
+        styles.bg,
+        styles.border
+      )}
+    >
+      <div className="flex-shrink-0 mt-0.5">
+        <Icon size={18} className={styles.icon} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className={cn("text-[10px] font-bold uppercase tracking-wider", styles.icon)}>
+            {title}
+          </span>
+          <span className="text-[10px] text-[var(--anna-muted)]">
+            {new Date(event.timestamp).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
+        {body && (
+          <p className="text-xs text-[var(--anna-slate)] leading-relaxed line-clamp-2">
+            {body}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={onDismiss}
+        className="flex-shrink-0 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] mt-0.5"
+      >
+        <X size={14} />
+      </button>
+    </motion.div>
+  );
+}
+
 export default function VendorPortalLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [timedOut, setTimedOut] = useState(false);
   const mounted = useRef(false);
+  const [latestToast, setLatestToast] = useState<VendorEvent | null>(null);
+  const [toastKey, setToastKey] = useState(0);
+
+  const dismissToast = useCallback(() => {
+    setLatestToast(null);
+    setToastKey((k) => k + 1);
+  }, []);
 
   const {
     data: user,
@@ -226,6 +371,40 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     },
     retry: false,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Real-time event handler: invalidate React Query caches + show toasts ──
+  const handleVendorEvent = useCallback((event: VendorEvent) => {
+    // Always invalidate notifications (new vendor notification arrived)
+    if (event.type === "vendor:notification") {
+      queryClient.invalidateQueries({ queryKey: ["vendor-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["vendor-notifications-count"] });
+    }
+
+    // Booking/task changes → invalidate dashboard + schedule
+    if (
+      event.type.startsWith("booking") ||
+      event.type.startsWith("task") ||
+      event.type === "task:dispatched"
+    ) {
+      queryClient.invalidateQueries({ queryKey: ["vendor-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] });
+    }
+
+    // Escrow changes → invalidate earnings
+    if (event.type.startsWith("escrow")) {
+      queryClient.invalidateQueries({ queryKey: ["vendor-earnings"] });
+    }
+
+    // Show toast for all events (dedup by event timestamp in the toast component)
+    setLatestToast(event);
+    setToastKey((k) => k + 1);
+  }, [queryClient]);
+
+  // Connect to ops-events WebSocket as a vendor client (only when user is loaded)
+  const { isConnected } = useVendorEvents(user?.id || null, {
+    enabled: !!user?.id,
+    onEvent: handleVendorEvent,
   });
 
   // Redirect on error or when session fetch returned null (unauthenticated)
@@ -274,58 +453,86 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     );
   }
 
-  return (
-    <VendorUserContext.Provider value={user}>
-      <div className="min-h-screen flex bg-[var(--anna-bg)]">
-        {/* Desktop Sidebar */}
-        <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">
-          <SidebarNav vendorId={user.id} />
-        </aside>
+  const liveContextValue: VendorLiveContextType = {
+    isConnected,
+    latestToast,
+    dismissToast,
+  };
 
-        {/* Main Content */}
-        <main className="flex-1 min-w-0 overflow-auto">
-          {/* Mobile Header */}
-          <div className="md:hidden flex items-center justify-between border-b border-[var(--anna-border)] bg-[var(--anna-white)]/80 backdrop-blur-lg px-4 py-3 sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 hover:bg-[var(--anna-sage-light)]"
-                  >
-                    <Menu className="h-4 w-4 text-[var(--anna-slate-light)]" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-60 p-0 bg-[var(--anna-white)]">
-                  <SidebarNav vendorId={user.id} />
-                </SheetContent>
-              </Sheet>
+  return (
+    <VendorLiveContext.Provider value={liveContextValue}>
+      <VendorUserContext.Provider value={user}>
+        <div className="min-h-screen flex bg-[var(--anna-bg)]">
+          {/* Desktop Sidebar */}
+          <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">
+            <SidebarNav vendorId={user.id} />
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 min-w-0 overflow-auto">
+            {/* Mobile Header */}
+            <div className="md:hidden flex items-center justify-between border-b border-[var(--anna-border)] bg-[var(--anna-white)]/80 backdrop-blur-lg px-4 py-3 sticky top-0 z-40">
               <div className="flex items-center gap-2">
-                <Briefcase size={16} className="text-[var(--anna-sage-dark)]" />
-                <h1 className="text-sm font-bold text-[var(--anna-sage-dark)]">
-                  {user.name}
-                </h1>
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-[var(--anna-sage-light)]"
+                    >
+                      <Menu className="h-4 w-4 text-[var(--anna-slate-light)]" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-60 p-0 bg-[var(--anna-white)]">
+                    <SidebarNav vendorId={user.id} />
+                  </SheetContent>
+                </Sheet>
+                <div className="flex items-center gap-2">
+                  <Briefcase size={16} className="text-[var(--anna-sage-dark)]" />
+                  <h1 className="text-sm font-bold text-[var(--anna-sage-dark)]">
+                    {user.name}
+                  </h1>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Mobile live indicator */}
+                <div className={cn(
+                  "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium",
+                  isConnected ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
+                )}>
+                  {isConnected ? <Wifi size={8} /> : <WifiOff size={8} />}
+                </div>
+                <VendorNotificationPanel vendorId={user.id} />
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
+                >
+                  {user.vendorType}
+                </Badge>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <VendorNotificationPanel vendorId={user.id} />
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
-              >
-                {user.vendorType}
-              </Badge>
-            </div>
-          </div>
 
-          {/* Page Content */}
-          <div className="p-4 md:p-6 anna-fade-in">{children}</div>
-        </main>
-      </div>
+            {/* Page Content */}
+            <div className="p-4 md:p-6 anna-fade-in">{children}</div>
+          </main>
+        </div>
 
-      {/* Vendor AI Chat */}
-      <VendorAiChat />
-    </VendorUserContext.Provider>
+        {/* Live Toast Notifications (top-right) */}
+        <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-auto">
+          <AnimatePresence>
+            {latestToast && (
+              <VendorLiveToast
+                key={toastKey}
+                event={latestToast}
+                onDismiss={dismissToast}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Vendor AI Chat */}
+        <VendorAiChat />
+      </VendorUserContext.Provider>
+    </VendorLiveContext.Provider>
   );
 }

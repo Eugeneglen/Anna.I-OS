@@ -1,0 +1,40 @@
+---
+/**
+ * <Icon name="brain" class="w-16 h-16" />
+ * <Icon name="shieldLock" class="w-12 h-12 icon-on-dark" />
+ *
+ * Renders any icon from the registry. The `icon-on-dark` / `icon-on-sage`
+ * classes (defined in global.css) flip the --ink CSS var so the same icon
+ * renders correctly on any background.
+ */
+import { ICONS, type IconName } from './icons/icon-registry';
+
+interface Props {
+  name: IconName;
+  class?: string;
+  decorative?: boolean;
+}
+
+const { name, class: className = 'w-12 h-12', decorative = false } = Astro.props;
+const icon = ICONS[name];
+
+const innerSvg = (decorative ? '' : `<title>${icon.title}</title>`) + icon.inner;
+---
+
+<svg
+  viewBox={icon.viewBox}
+  class={className}
+  fill="none"
+  role={decorative ? 'presentation' : 'img'}
+  aria-label={decorative ? undefined : icon.title}
+  aria-hidden={decorative ? 'true' : undefined}
+  set:html={innerSvg}
+>
+</svg>
+
+<style>
+  svg {
+    display: inline-block;
+    vertical-align: middle;
+  }
+</style>
