@@ -47,18 +47,42 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, contactPerson, companyName, companyRegNo, vendorType, categories, staffCount, dailyCapacity, zones } = body;
+    const {
+      companyName,
+      contactPerson,
+      contactEmail1,
+      contactPhone1,
+      contactPerson2,
+      contactEmail2,
+      contactPhone2,
+      companyRegNo,
+      vendorType,
+      categories,
+      staffCount,
+      dailyCapacity,
+      zones,
+    } = body;
 
-    if (!name || !email || !phone) {
-      return NextResponse.json({ error: "Name, email, phone required" }, { status: 400 });
+    if (!companyName) {
+      return NextResponse.json({ error: "Company name is required" }, { status: 400 });
     }
+
+    // Auto-generate vendor login credentials from contact person 1 info
+    const vendorName = companyName;
+    const vendorEmail = contactEmail1 || `${companyName.toLowerCase().replace(/\s+/g, ".")}@vendor.local`;
+    const vendorPhone = contactPhone1 || "";
 
     const vendor = await db.vendor.create({
       data: {
-        name,
-        email,
-        phone,
+        name: vendorName,
+        email: vendorEmail,
+        phone: vendorPhone,
         contactPerson: contactPerson || null,
+        contactEmail1: contactEmail1 || null,
+        contactPhone1: contactPhone1 || null,
+        contactPerson2: contactPerson2 || null,
+        contactEmail2: contactEmail2 || null,
+        contactPhone2: contactPhone2 || null,
         companyName: companyName || null,
         companyRegNo: companyRegNo || null,
         vendorType: vendorType || "MICRO",
@@ -75,7 +99,7 @@ export async function POST(req: NextRequest) {
       action: "vendor.create",
       entityType: "Vendor",
       entityId: vendor.id,
-      metadata: { name, email, vendorType },
+      metadata: { companyName, contactPerson, vendorType },
     });
 
     return NextResponse.json({ vendor }, { status: 201 });

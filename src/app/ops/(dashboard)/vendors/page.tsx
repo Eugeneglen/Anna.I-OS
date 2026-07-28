@@ -318,16 +318,18 @@ function AddVendorForm({
   loading: boolean;
 }) {
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
     companyName: "",
-    companyRegNo: "",
     contactPerson: "",
+    contactEmail1: "",
+    contactPhone1: "",
+    contactPerson2: "",
+    contactEmail2: "",
+    contactPhone2: "",
+    companyRegNo: "",
     vendorType: "MICRO",
-    categories: [] as string[],
     staffCount: 1,
     dailyCapacity: 6,
+    categories: [] as string[],
     zones: "",
   });
 
@@ -351,89 +353,136 @@ function AddVendorForm({
     });
   }
 
+  const inputCls =
+    "rounded-xl border-[var(--anna-border)] text-sm";
+  const labelCls = "text-xs font-medium text-[var(--anna-slate)]";
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Name
-        </Label>
-        <Input
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          required
-          className="rounded-xl border-[var(--anna-border)]"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Email
-        </Label>
-        <Input
-          type="email"
-          value={form.email}
-          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-          required
-          className="rounded-xl border-[var(--anna-border)]"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Phone
-        </Label>
-        <Input
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-          required
-          className="rounded-xl border-[var(--anna-border)]"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Company Name
-        </Label>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* ── 1. Company Name ── */}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Company Name</Label>
         <Input
           placeholder="e.g. FreshWash Pte Ltd"
           value={form.companyName}
-          onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
-          className="rounded-xl border-[var(--anna-border)]"
+          onChange={(e) =>
+            setForm((f) => ({ ...f, companyName: e.target.value }))
+          }
+          required
+          className={inputCls}
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-[var(--anna-slate)]">
-            Company Reg No.
-          </Label>
-          <Input
-            placeholder="e.g. 2024XXXXXX"
-            value={form.companyRegNo}
-            onChange={(e) => setForm((f) => ({ ...f, companyRegNo: e.target.value }))}
-            className="rounded-xl border-[var(--anna-border)]"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-[var(--anna-slate)]">
-            Contact Person
-          </Label>
+
+      {/* ── 2. Contact Person 1 ── */}
+      <div className="space-y-3 rounded-xl border border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+          Contact Person 1
+        </p>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Name</Label>
           <Input
             placeholder="e.g. John Lim"
             value={form.contactPerson}
-            onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))}
-            className="rounded-xl border-[var(--anna-border)]"
+            onChange={(e) =>
+              setForm((f) => ({ ...f, contactPerson: e.target.value }))
+            }
+            className={inputCls}
           />
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Email</Label>
+            <Input
+              type="email"
+              placeholder="john@example.com"
+              value={form.contactEmail1}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, contactEmail1: e.target.value }))
+              }
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Phone</Label>
+            <Input
+              placeholder="+65 8XXX XXXX"
+              value={form.contactPhone1}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, contactPhone1: e.target.value }))
+              }
+              className={inputCls}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* ── 3. Contact Person 2 ── */}
+      <div className="space-y-3 rounded-xl border border-dashed border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+          Contact Person 2 (Optional)
+        </p>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Name</Label>
+          <Input
+            placeholder="e.g. Sarah Tan"
+            value={form.contactPerson2}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, contactPerson2: e.target.value }))
+            }
+            className={inputCls}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Email</Label>
+            <Input
+              type="email"
+              placeholder="sarah@example.com"
+              value={form.contactEmail2}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, contactEmail2: e.target.value }))
+              }
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Phone</Label>
+            <Input
+              placeholder="+65 9XXX XXXX"
+              value={form.contactPhone2}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, contactPhone2: e.target.value }))
+            }
+              className={inputCls}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── 4. Company Reg No. ── */}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Company Reg No.</Label>
+        <Input
+          placeholder="e.g. 2024XXXXXX"
+          value={form.companyRegNo}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, companyRegNo: e.target.value }))
+          }
+          className={inputCls}
+        />
+      </div>
+
+      {/* ── 5. Type & Staff ── */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-[var(--anna-slate)]">
-            Type
-          </Label>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Type</Label>
           <Select
             value={form.vendorType}
             onValueChange={(v) =>
               setForm((f) => ({ ...f, vendorType: v }))
             }
           >
-            <SelectTrigger className="rounded-xl border-[var(--anna-border)]">
+            <SelectTrigger className={inputCls}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -442,10 +491,8 @@ function AddVendorForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-medium text-[var(--anna-slate)]">
-            Staff Count
-          </Label>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Staff Count</Label>
           <Input
             type="number"
             min={1}
@@ -456,14 +503,14 @@ function AddVendorForm({
                 staffCount: parseInt(e.target.value) || 1,
               }))
             }
-            className="rounded-xl border-[var(--anna-border)]"
+            className={inputCls}
           />
         </div>
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Daily Capacity
-        </Label>
+
+      {/* ── 6. Daily Capacity ── */}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Daily Capacity</Label>
         <Input
           type="number"
           min={1}
@@ -474,13 +521,13 @@ function AddVendorForm({
               dailyCapacity: parseInt(e.target.value) || 6,
             }))
           }
-          className="rounded-xl border-[var(--anna-border)]"
+          className={inputCls}
         />
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Categories
-        </Label>
+
+      {/* ── 7. Categories ── */}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Categories</Label>
         <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto anna-scroll p-1 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)]">
           {CATEGORIES.map((cat) => (
             <label
@@ -498,19 +545,7 @@ function AddVendorForm({
           ))}
         </div>
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-medium text-[var(--anna-slate)]">
-          Zones (comma-separated)
-        </Label>
-        <Input
-          placeholder="e.g. East, North-East"
-          value={form.zones}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, zones: e.target.value }))
-          }
-          className="rounded-xl border-[var(--anna-border)]"
-        />
-      </div>
+
       <Button
         type="submit"
         className="w-full bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl h-10 text-sm font-semibold"
