@@ -141,6 +141,7 @@ export default function HouseholdsPage() {
         detail={detail}
         householdName={selectedHousehold?.name as string | undefined}
         isLoading={detailLoading}
+        selectedId={selectedId || undefined}
       />
 
       {/* Create Household Dialog */}

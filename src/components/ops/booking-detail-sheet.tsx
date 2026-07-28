@@ -15,6 +15,15 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EscrowActionDialog } from "@/components/ops/escrow-action-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
   X,
   ShieldCheck,
   ShieldAlert,
@@ -25,13 +34,16 @@ import {
   Wallet,
   Loader2,
   FileText,
+  FileEdit,
   User,
   Calendar,
+  CalendarClock,
   DollarSign,
   Camera,
   ImageIcon,
   Film,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // ── Props ──
@@ -107,6 +119,15 @@ export function BookingDetailSheet({
   const [dialogAmount, setDialogAmount] = useState(0);
   const [dialogDisputeReason, setDialogDisputeReason] = useState<string | null>(null);
 
+  // Dialog state for booking actions
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleStart, setRescheduleStart] = useState("");
+  const [rescheduleEnd, setRescheduleEnd] = useState("");
+  const [editNotesDialogOpen, setEditNotesDialogOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+
   // Fetch full task details
   const { data, isLoading } = useQuery({
     queryKey: ["ops-task-detail", taskId],
@@ -170,7 +191,97 @@ export function BookingDetailSheet({
     createdAt: string;
   }>) || [];
 
+  // ── Booking Action Mutations ──
+
+  const bookingAction = useMutation({
+    mutationFn: async ({ bookingId, action, ...payload }: { bookingId: string; action: string; reason?: string; scheduledStart?: string; scheduledEnd?: string; completionNotes?: string }) => {
+      const res = await fetch(`/api/ops/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Action failed" }));
+        throw new Error(err.error);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-task-detail", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["ops-bookings"] });
+    },
+  });
+
   // ── Action handlers ──
+
+  const openCancelDialog = () => {
+    setCancelReason("");
+    setCancelDialogOpen(true);
+  };
+
+  const openRescheduleDialog = () => {
+    const toLocalDatetime = (isoStr: string | null | undefined) => {
+      if (!isoStr) return "";
+      const d = new Date(isoStr);
+      // Format as YYYY-MM-DDTHH:mm for datetime-local input
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setRescheduleStart(toLocalDatetime((initialBooking?.scheduledStart as string) ?? (booking?.scheduledStart as string)));
+    setRescheduleEnd(toLocalDatetime((initialBooking?.scheduledEnd as string) ?? (booking?.scheduledEnd as string)));
+    setRescheduleDialogOpen(true);
+  };
+
+  const openEditNotesDialog = () => {
+    setEditNotes((booking?.completionNotes as string) || "");
+    setEditNotesDialogOpen(true);
+  };
+
+  const handleCancelBooking = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "cancel",
+        reason: cancelReason || undefined,
+      });
+      toast.success("Booking cancelled successfully");
+      setCancelDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to cancel booking");
+    }
+  };
+
+  const handleReschedule = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "reschedule",
+        scheduledStart: new Date(rescheduleStart).toISOString(),
+        scheduledEnd: new Date(rescheduleEnd).toISOString(),
+      });
+      toast.success("Booking rescheduled successfully");
+      setRescheduleDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to reschedule booking");
+    }
+  };
+
+  const handleUpdateNotes = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "update_notes",
+        completionNotes: editNotes,
+      });
+      toast.success("Notes updated successfully");
+      setEditNotesDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to update notes");
+    }
+  };
 
   const openReleaseDialog = () => {
     if (!escrow) return;
@@ -298,6 +409,44 @@ export function BookingDetailSheet({
               </div>
 
               <div className="p-5 space-y-5">
+                {/* ── Booking Actions ── */}
+                {booking && (
+                  <section>
+                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
+                      Booking Actions
+                    </h4>
+                    <div className="flex gap-2 flex-wrap">
+                      {booking.status !== "completed" && booking.status !== "cancelled" && (
+                        <>
+                          <button
+                            onClick={openCancelDialog}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 transition-colors"
+                          >
+                            <XCircle size={13} />
+                            Cancel Booking
+                          </button>
+                          <button
+                            onClick={openRescheduleDialog}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 inline-flex items-center gap-1.5 transition-colors"
+                          >
+                            <CalendarClock size={13} />
+                            Reschedule
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={openEditNotesDialog}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-[var(--anna-bg)] text-[var(--anna-slate-light)] border border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]/30 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <FileEdit size={13} />
+                        Edit Notes
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                <Separator />
+
                 {/* ── Booking Details ── */}
                 <section>
                   <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
@@ -693,6 +842,113 @@ export function BookingDetailSheet({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── Cancel Booking Dialog ── */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Cancel Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-[var(--anna-slate-light)]">
+              Are you sure you want to cancel this booking? This action cannot be undone.
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Reason (optional)</label>
+              <Input
+                placeholder="Enter cancellation reason..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleCancelBooking}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Confirm Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reschedule Dialog ── */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Reschedule Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Scheduled Start</label>
+              <Input
+                type="datetime-local"
+                value={rescheduleStart}
+                onChange={(e) => setRescheduleStart(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Scheduled End</label>
+              <Input
+                type="datetime-local"
+                value={rescheduleEnd}
+                onChange={(e) => setRescheduleEnd(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleReschedule}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Confirm Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Notes Dialog ── */}
+      <Dialog open={editNotesDialogOpen} onOpenChange={setEditNotesDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Completion Notes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Completion Notes</label>
+              <Textarea
+                placeholder="Enter completion notes..."
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditNotesDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateNotes}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Save Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Escrow Action Dialog ── */}
       <EscrowActionDialog

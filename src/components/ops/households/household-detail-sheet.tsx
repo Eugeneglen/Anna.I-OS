@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import {
   Sheet,
   SheetContent,
@@ -8,6 +9,8 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Users,
   MapPin,
@@ -20,7 +23,12 @@ import {
   ShieldAlert,
   CheckCircle2,
   ArrowDownLeft,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AUTONOMY_LEVEL_NAMES } from "@/lib/constants";
 import { formatCents, formatDateTime } from "@/lib/ops-format";
@@ -53,6 +61,7 @@ interface HouseholdDetailSheetProps {
   detail: Record<string, unknown> | null;
   householdName?: string;
   isLoading: boolean;
+  selectedId?: string;
 }
 
 // ── Escrow aggregation helper ──
@@ -86,12 +95,114 @@ export function HouseholdDetailSheet({
   detail,
   householdName,
   isLoading,
+  selectedId,
 }: HouseholdDetailSheetProps) {
+  const queryClient = useQueryClient();
   const members = (detail?.members || []) as Record<string, unknown>[];
   const tasks = (detail?.tasks || []) as Record<string, unknown>[];
   const subscriptions = (detail?.subscriptions || []) as Record<string, unknown>[];
   const categoryAutonomy = (detail?.categoryAutonomy || []) as Record<string, unknown>[];
   const householdInfo = (detail?.household || {}) as Record<string, unknown>;
+
+  // ── Edit mode state ──
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    fullName: "",
+    phone: "",
+    address: "",
+    postalCode: "",
+    unitNumber: "",
+  });
+
+  // Wrap onOpenChange to reset edit state on close
+  const handleSheetOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        setIsEditing(false);
+        setEditForm({
+          name: "",
+          fullName: "",
+          phone: "",
+          address: "",
+          postalCode: "",
+          unitNumber: "",
+        });
+      }
+      onOpenChange(nextOpen);
+    },
+    [onOpenChange],
+  );
+
+  // Sync form values from household data
+  const startEditing = useCallback(() => {
+    setEditForm({
+      name: (householdInfo.name as string) || "",
+      fullName: (householdInfo.fullName as string) || "",
+      phone: (householdInfo.phone as string) || "",
+      address: (householdInfo.address as string) || "",
+      postalCode: (householdInfo.postalCode as string) || "",
+      unitNumber: (householdInfo.unitNumber as string) || "",
+    });
+    setIsEditing(true);
+  }, [householdInfo]);
+
+  const cancelEditing = useCallback(() => {
+    setIsEditing(false);
+    setEditForm({
+      name: "",
+      fullName: "",
+      phone: "",
+      address: "",
+      postalCode: "",
+      unitNumber: "",
+    });
+  }, []);
+
+  // ── Save mutation ──
+  const saveMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const householdId = householdInfo.id as string;
+      const res = await fetch(`/api/ops/households/${householdId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Save failed" }));
+        throw new Error(err.error || "Save failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsEditing(false);
+      toast.success("Household updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["ops-households"] });
+      if (selectedId) {
+        queryClient.invalidateQueries({ queryKey: ["ops-household-detail", selectedId] });
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to save changes");
+    },
+  });
+
+  const handleSave = useCallback(() => {
+    // Build payload with only changed fields
+    const changed: Record<string, unknown> = {};
+    if (editForm.name !== ((householdInfo.name as string) || "")) changed.name = editForm.name;
+    if (editForm.fullName !== ((householdInfo.fullName as string) || "")) changed.fullName = editForm.fullName;
+    if (editForm.phone !== ((householdInfo.phone as string) || "")) changed.phone = editForm.phone;
+    if (editForm.address !== ((householdInfo.address as string) || "")) changed.address = editForm.address;
+    if (editForm.postalCode !== ((householdInfo.postalCode as string) || "")) changed.postalCode = editForm.postalCode;
+    if (editForm.unitNumber !== ((householdInfo.unitNumber as string) || "")) changed.unitNumber = editForm.unitNumber;
+
+    if (Object.keys(changed).length > 0) {
+      saveMutation.mutate(changed);
+    } else {
+      setIsEditing(false);
+    }
+  }, [editForm, householdInfo, saveMutation]);
 
   // Escrow summary — only render if at least one task has escrow entries
   const hasEscrow = tasks.some((t) => {
@@ -105,7 +216,7 @@ export function HouseholdDetailSheet({
   const showEscrow = escrowAgg !== null && totalEscrow > 0;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-[var(--anna-white)] anna-scroll">
         {isLoading ? (
           <div className="p-6 space-y-4">
@@ -116,32 +227,139 @@ export function HouseholdDetailSheet({
           </div>
         ) : detail ? (
           <div className="p-6 space-y-5">
-            <SheetHeader>
+            <SheetHeader className="flex-row items-center justify-between">
               <SheetTitle className="text-[var(--anna-slate)]">{householdName}</SheetTitle>
+              {isEditing ? (
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={cancelEditing}
+                  >
+                    <X size={14} className="mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl"
+                    onClick={handleSave}
+                    disabled={saveMutation.isPending}
+                  >
+                    <Save size={14} className="mr-1" />
+                    {saveMutation.isPending ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl border-[var(--anna-border)] ml-auto"
+                  onClick={startEditing}
+                >
+                  <Pencil size={14} className="mr-1" />
+                  Edit
+                </Button>
+              )}
             </SheetHeader>
 
             {/* Contact Info */}
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
-                <Mail size={14} className="text-[var(--anna-muted)]" />
-                {householdInfo.email as string}
-              </div>
-              <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
-                <Phone size={14} className="text-[var(--anna-muted)]" />
-                {(householdInfo.phone as string) || "—"}
-              </div>
-              <div className="flex items-start gap-2 text-[var(--anna-slate-light)]">
-                <MapPin size={14} className="text-[var(--anna-muted)] mt-0.5 shrink-0" />
-                <span>
-                  {(householdInfo.address as string) || "—"}
-                  {householdInfo.postalCode ? (
-                    <span className="font-data text-[var(--anna-muted)]"> · {householdInfo.postalCode as string}</span>
-                  ) : null}
-                  {householdInfo.unitNumber ? (
-                    <span className="font-data text-[var(--anna-muted)]"> #{householdInfo.unitNumber as string}</span>
-                  ) : null}
-                </span>
-              </div>
+              {isEditing ? (
+                <div className="space-y-3 p-3 rounded-2xl bg-[var(--anna-bg)]">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+                      <Mail size={12} />Name
+                    </label>
+                    <Input
+                      className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Household name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+                      <Mail size={12} />Full Name
+                    </label>
+                    <Input
+                      className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                      value={editForm.fullName}
+                      onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+                      <Phone size={12} />Phone
+                    </label>
+                    <Input
+                      className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder="Phone number"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+                      <MapPin size={12} />Address
+                    </label>
+                    <Input
+                      className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                      value={editForm.address}
+                      onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                      placeholder="Street address"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                        Postal Code
+                      </label>
+                      <Input
+                        className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                        value={editForm.postalCode}
+                        onChange={(e) => setEditForm((f) => ({ ...f, postalCode: e.target.value }))}
+                        placeholder="Postal code"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                        Unit Number
+                      </label>
+                      <Input
+                        className="rounded-xl border-[var(--anna-border)] h-9 text-sm w-full"
+                        value={editForm.unitNumber}
+                        onChange={(e) => setEditForm((f) => ({ ...f, unitNumber: e.target.value }))}
+                        placeholder="Unit #"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
+                    <Mail size={14} className="text-[var(--anna-muted)]" />
+                    {householdInfo.email as string}
+                  </div>
+                  <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
+                    <Phone size={14} className="text-[var(--anna-muted)]" />
+                    {(householdInfo.phone as string) || "—"}
+                  </div>
+                  <div className="flex items-start gap-2 text-[var(--anna-slate-light)]">
+                    <MapPin size={14} className="text-[var(--anna-muted)] mt-0.5 shrink-0" />
+                    <span>
+                      {(householdInfo.address as string) || "—"}
+                      {householdInfo.postalCode ? (
+                        <span className="font-data text-[var(--anna-muted)]"> · {householdInfo.postalCode as string}</span>
+                      ) : null}
+                      {householdInfo.unitNumber ? (
+                        <span className="font-data text-[var(--anna-muted)]"> #{householdInfo.unitNumber as string}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Subscription */}
