@@ -7,6 +7,9 @@ type VendorUpdateData = {
   name?: string;
   email?: string;
   phone?: string;
+  contactPerson?: string | null;
+  companyName?: string | null;
+  companyRegNo?: string | null;
   vendorType?: string;
   categories?: string[];
   staffCount?: number;
@@ -77,6 +80,9 @@ export async function PATCH(
     if (body.name !== undefined) updateData.name = body.name;
     if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.contactPerson !== undefined) updateData.contactPerson = body.contactPerson;
+    if (body.companyName !== undefined) updateData.companyName = body.companyName;
+    if (body.companyRegNo !== undefined) updateData.companyRegNo = body.companyRegNo;
     if (body.vendorType !== undefined) updateData.vendorType = body.vendorType;
     if (body.categories !== undefined) updateData.categories = JSON.stringify(body.categories);
     if (body.staffCount !== undefined) updateData.staffCount = body.staffCount;

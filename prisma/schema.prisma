@@ -213,6 +213,8 @@ model Vendor {
   email           String       @unique
   phone           String
   contactPerson   String?      // Name of primary contact person
+  companyName     String?      // Registered company name (e.g. "FreshWash Pte Ltd")
+  companyRegNo    String?      // ACRA / UEN registration number
   categories      String // JSON array of ServiceCategory
   status          VendorStatus @default(PENDING)
   vendorType      VendorType  @default(MICRO)

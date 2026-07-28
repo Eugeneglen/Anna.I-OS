@@ -321,6 +321,9 @@ function AddVendorForm({
     name: "",
     email: "",
     phone: "",
+    companyName: "",
+    companyRegNo: "",
+    contactPerson: "",
     vendorType: "MICRO",
     categories: [] as string[],
     staffCount: 1,
@@ -383,6 +386,41 @@ function AddVendorForm({
           required
           className="rounded-xl border-[var(--anna-border)]"
         />
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-[var(--anna-slate)]">
+          Company Name
+        </Label>
+        <Input
+          placeholder="e.g. FreshWash Pte Ltd"
+          value={form.companyName}
+          onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+          className="rounded-xl border-[var(--anna-border)]"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-[var(--anna-slate)]">
+            Company Reg No.
+          </Label>
+          <Input
+            placeholder="e.g. 2024XXXXXX"
+            value={form.companyRegNo}
+            onChange={(e) => setForm((f) => ({ ...f, companyRegNo: e.target.value }))}
+            className="rounded-xl border-[var(--anna-border)]"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-[var(--anna-slate)]">
+            Contact Person
+          </Label>
+          <Input
+            placeholder="e.g. John Lim"
+            value={form.contactPerson}
+            onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))}
+            className="rounded-xl border-[var(--anna-border)]"
+          />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">

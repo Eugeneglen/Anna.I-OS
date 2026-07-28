@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, vendorType, categories, staffCount, dailyCapacity, zones } = body;
+    const { name, email, phone, contactPerson, companyName, companyRegNo, vendorType, categories, staffCount, dailyCapacity, zones } = body;
 
     if (!name || !email || !phone) {
       return NextResponse.json({ error: "Name, email, phone required" }, { status: 400 });
@@ -58,6 +58,9 @@ export async function POST(req: NextRequest) {
         name,
         email,
         phone,
+        contactPerson: contactPerson || null,
+        companyName: companyName || null,
+        companyRegNo: companyRegNo || null,
         vendorType: vendorType || "MICRO",
         categories: JSON.stringify(categories || []),
         staffCount: staffCount || 1,
