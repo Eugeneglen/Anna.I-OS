@@ -1,0 +1,237 @@
+From 27b671f793c06aa1df98e25125a2d81589b27507 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Wed, 29 Jul 2026 04:29:50 +0000
+Subject: [PATCH 3/3] 05363de8-3c1c-4970-828a-89eb4e69f181
+
+---
+ prisma/schema.prisma                          |  1 +
+ src/app/api/ops/vendors/[id]/route.ts         |  2 +
+ src/app/api/ops/vendors/route.ts              |  2 +
+ src/app/api/vendor/profile/route.ts           |  2 +
+ src/app/ops/(dashboard)/vendors/[id]/page.tsx | 56 +++++--------------
+ src/app/ops/(dashboard)/vendors/page.tsx      | 14 +++++
+ src/app/vendor/(portal)/settings/page.tsx     |  2 +
+ 7 files changed, 38 insertions(+), 41 deletions(-)
+
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index f2fbafd..7526de5 100755
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -220,6 +220,7 @@ model Vendor {
+   contactPhone2   String?      // Contact Person 2 phone
+   companyName     String?      // Registered company name (e.g. "FreshWash Pte Ltd")
+   companyRegNo    String?      // ACRA / UEN registration number
++  registeredAddress String?      // Registered office address (free-text)
+   categories      String // JSON array of ServiceCategory
+   status          VendorStatus @default(PENDING)
+   vendorType      VendorType  @default(MICRO)
+diff --git a/src/app/api/ops/vendors/[id]/route.ts b/src/app/api/ops/vendors/[id]/route.ts
+index cc79de3..e7f95f8 100755
+--- a/src/app/api/ops/vendors/[id]/route.ts
++++ b/src/app/api/ops/vendors/[id]/route.ts
+@@ -15,6 +15,7 @@ type VendorUpdateData = {
+   contactPhone2?: string | null;
+   companyName?: string | null;
+   companyRegNo?: string | null;
++  registeredAddress?: string | null;
+   vendorType?: string;
+   categories?: string[];
+   staffCount?: number;
+@@ -99,6 +100,7 @@ export async function PATCH(
+     if (body.contactPhone2 !== undefined) updateData.contactPhone2 = body.contactPhone2;
+     if (body.companyName !== undefined) updateData.companyName = body.companyName;
+     if (body.companyRegNo !== undefined) updateData.companyRegNo = body.companyRegNo;
++    if (body.registeredAddress !== undefined) updateData.registeredAddress = body.registeredAddress;
+     if (body.vendorType !== undefined) updateData.vendorType = body.vendorType;
+     if (body.categories !== undefined) updateData.categories = JSON.stringify(body.categories);
+     if (body.staffCount !== undefined) updateData.staffCount = body.staffCount;
+diff --git a/src/app/api/ops/vendors/route.ts b/src/app/api/ops/vendors/route.ts
+index d34eeb2..d999501 100755
+--- a/src/app/api/ops/vendors/route.ts
++++ b/src/app/api/ops/vendors/route.ts
+@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
+       contactEmail2,
+       contactPhone2,
+       companyRegNo,
++      registeredAddress,
+       vendorType,
+       categories,
+       staffCount,
+@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
+         contactPhone2: contactPhone2 || null,
+         companyName: companyName || null,
+         companyRegNo: companyRegNo || null,
++        registeredAddress: registeredAddress || null,
+         vendorType: vendorType || "MICRO",
+         categories: JSON.stringify(categories || []),
+         staffCount: staffCount || 1,
+diff --git a/src/app/api/vendor/profile/route.ts b/src/app/api/vendor/profile/route.ts
+index 8423ba0..230b05a 100755
+--- a/src/app/api/vendor/profile/route.ts
++++ b/src/app/api/vendor/profile/route.ts
+@@ -51,6 +51,7 @@ export async function GET() {
+         contactPhone2: true,
+         companyName: true,
+         companyRegNo: true,
++        registeredAddress: true,
+         categories: true,
+         vendorType: true,
+         staffCount: true,
+@@ -169,6 +170,7 @@ export async function PATCH(req: NextRequest) {
+         contactPhone2: true,
+         companyName: true,
+         companyRegNo: true,
++        registeredAddress: true,
+         categories: true,
+         vendorType: true,
+         staffCount: true,
+diff --git a/src/app/ops/(dashboard)/vendors/[id]/page.tsx b/src/app/ops/(dashboard)/vendors/[id]/page.tsx
+index f80e494..5169966 100755
+--- a/src/app/ops/(dashboard)/vendors/[id]/page.tsx
++++ b/src/app/ops/(dashboard)/vendors/[id]/page.tsx
+@@ -19,7 +19,7 @@ import {
+ import { Switch } from "@/components/ui/switch";
+ import { Checkbox } from "@/components/ui/checkbox";
+ import { Separator } from "@/components/ui/separator";
+-import { ArrowLeft, Save, Plus, Trash2, MapPin } from "lucide-react";
++import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ import { useOpsUser } from "@/app/ops/(dashboard)/layout";
+ import { CATEGORIES } from "@/lib/constants";
+@@ -79,6 +79,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+   const [form, setForm] = useState<Record<string, unknown>>(() => ({
+     companyName: data.companyName || "",
+     companyRegNo: data.companyRegNo || "",
++    registeredAddress: data.registeredAddress || "",
+     contactPerson: data.contactPerson || "",
+     contactEmail1: data.contactEmail1 || "",
+     contactPhone1: data.contactPhone1 || "",
+@@ -142,6 +143,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+       contactPhone2: form.contactPhone2 || null,
+       companyName: form.companyName || null,
+       companyRegNo: form.companyRegNo || null,
++      registeredAddress: form.registeredAddress || null,
+       vendorType: form.vendorType,
+       categories: form.categories,
+       staffCount: form.staffCount,
+@@ -464,7 +466,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+         </div>
+       </div>
+ 
+-      {/* ── Registered Address (read-only) ── */}
++      {/* ── Registered Address ── */}
+       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+         <div className="px-5 py-3 border-b border-[var(--anna-border)]">
+           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+@@ -472,45 +474,17 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+           </h3>
+         </div>
+         <div className="p-5">
+-          {addresses.length > 0 ? (
+-            <div className="space-y-2">
+-              {addresses.map((addr) => (
+-                <div
+-                  key={addr.id}
+-                  className="flex items-start p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]"
+-                >
+-                  <MapPin className="h-4 w-4 text-[var(--anna-muted)] mt-0.5 mr-3 shrink-0" />
+-                  <div className="flex-1 min-w-0">
+-                    <div className="flex items-center gap-2 mb-1">
+-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
+-                        {PROPERTY_TYPE_LABELS[addr.propertyType] || addr.propertyType}
+-                      </span>
+-                      {addr.isDefault && (
+-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-success)]/15 text-[var(--anna-success)]">
+-                          Default
+-                        </span>
+-                      )}
+-                      {addr.label && (
+-                        <span className="text-[10px] text-[var(--anna-muted)]">
+-                          {addr.label}
+-                        </span>
+-                      )}
+-                    </div>
+-                    <p className="text-xs text-[var(--anna-slate)] leading-relaxed">
+-                      {addr.fullAddress}
+-                    </p>
+-                  </div>
+-                </div>
+-              ))}
+-            </div>
+-          ) : (
+-            <div className="text-center py-6">
+-              <MapPin className="h-6 w-6 text-[var(--anna-muted)] mx-auto mb-2" />
+-              <p className="text-xs text-[var(--anna-muted)]">
+-                No addresses added yet
+-              </p>
+-            </div>
+-          )}
++          <div className="space-y-1.5">
++            <Label className={labelCls}>Registered Address</Label>
++            <Input
++              placeholder="e.g. 123 Orchard Road, #10-01, Singapore 238888"
++              value={(form.registeredAddress as string) || ""}
++              onChange={(e) =>
++                updateField("registeredAddress", e.target.value)
++              }
++              className={inputCls}
++            />
++          </div>
+         </div>
+       </div>
+ 
+diff --git a/src/app/ops/(dashboard)/vendors/page.tsx b/src/app/ops/(dashboard)/vendors/page.tsx
+index 4553b87..33bc1f2 100755
+--- a/src/app/ops/(dashboard)/vendors/page.tsx
++++ b/src/app/ops/(dashboard)/vendors/page.tsx
+@@ -326,6 +326,7 @@ function AddVendorForm({
+     contactEmail2: "",
+     contactPhone2: "",
+     companyRegNo: "",
++    registeredAddress: "",
+     vendorType: "MICRO",
+     staffCount: 1,
+     dailyCapacity: 6,
+@@ -472,6 +473,19 @@ function AddVendorForm({
+         />
+       </div>
+ 
++      {/* ── 4a. Registered Address ── */}
++      <div className="space-y-1.5">
++        <Label className={labelCls}>Registered Address</Label>
++        <Input
++          placeholder="e.g. 123 Orchard Road, #10-01, Singapore 238888"
++          value={form.registeredAddress}
++          onChange={(e) =>
++            setForm((f) => ({ ...f, registeredAddress: e.target.value }))
++          }
++          className={inputCls}
++        />
++      </div>
++
+       {/* ── 5. Type & Staff ── */}
+       <div className="grid grid-cols-2 gap-3">
+         <div className="space-y-1.5">
+diff --git a/src/app/vendor/(portal)/settings/page.tsx b/src/app/vendor/(portal)/settings/page.tsx
+index 133267e..034cf34 100755
+--- a/src/app/vendor/(portal)/settings/page.tsx
++++ b/src/app/vendor/(portal)/settings/page.tsx
+@@ -62,6 +62,7 @@ interface VendorProfile {
+   contactPhone2?: string | null;
+   companyName?: string | null;
+   companyRegNo?: string | null;
++  registeredAddress?: string | null;
+   categories: string;
+   vendorType: string;
+   staffCount: number;
+@@ -594,6 +595,7 @@ export default function VendorSettingsPage() {
+           <InfoRow icon={Shield} label="Type" value={profile.vendorType} />
+           <InfoRow icon={Building2} label="Company Name" value={profile.companyName || "Not set"} />
+           <InfoRow icon={Shield} label="Company Reg No." value={profile.companyRegNo || "Not set"} />
++          <InfoRow icon={MapPin} label="Registered Address" value={profile.registeredAddress || "Not set"} />
+           <InfoRow icon={Users} label="Staff" value={`${profile.staffCount} members`} />
+           <InfoRow icon={Calendar} label="Member Since" value={formatDate(profile.createdAt)} />
+           <InfoRow icon={Calendar} label="Last Updated" value={formatDate(profile.updatedAt)} />
+-- 
+2.47.3
+

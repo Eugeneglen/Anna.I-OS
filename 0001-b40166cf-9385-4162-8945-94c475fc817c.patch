@@ -1,0 +1,25 @@
+From c7208f82da8f5d546473ed49a70182ac8b2da6f1 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Wed, 29 Jul 2026 03:49:32 +0000
+Subject: [PATCH 1/3] b40166cf-9385-4162-8945-94c475fc817c
+
+---
+ eslint.config.mjs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+index 84578b3..145a7a1 100755
+--- a/eslint.config.mjs
++++ b/eslint.config.mjs
+@@ -44,7 +44,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
+     "no-useless-escape": "off",
+   },
+ }, {
+-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
++  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "marketing-site/**"]
+ }];
+ 
+ export default eslintConfig;
+-- 
+2.47.3
+
