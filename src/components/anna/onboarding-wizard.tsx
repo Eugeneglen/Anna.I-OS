@@ -1367,54 +1367,55 @@ function StepMeetAnnaMerged({
         </p>
       </div>
 
-      {/* 2. Before / With Anna.I — comparison */}
-      <div className="space-y-3 mb-4">
-        <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] p-3.5">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-5 h-5 rounded-full bg-[var(--anna-error)]/10 flex items-center justify-center">
-              <span className="text-[9px]">❌</span>
-            </div>
-            <p className="text-xs font-semibold text-[var(--anna-slate)]">Before Anna.I</p>
+      {/* ROW 1 — Before & With Anna.I in a single card */}
+      <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] p-4 mb-3">
+        {/* Before Anna.I */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-5 h-5 rounded-full bg-[var(--anna-error)]/10 flex items-center justify-center">
+            <span className="text-[9px]">❌</span>
           </div>
-          <div className="space-y-1.5 text-[11px] text-[var(--anna-muted)] pl-7">
-            <p className="italic">{demo.before}</p>
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {["Search Google", "Read reviews", "Message vendors", "Wait..."].map((s) => (
-                <span key={s} className="px-2 py-0.5 rounded-md bg-white text-[9px] text-[var(--anna-muted)] border border-[var(--anna-border)]">
-                  {s}
-                </span>
-              ))}
-            </div>
+          <p className="text-xs font-semibold text-[var(--anna-slate)]">Before Anna.I</p>
+        </div>
+        <div className="space-y-1.5 text-[11px] text-[var(--anna-muted)] pl-7">
+          <p className="italic">{demo.before}</p>
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {["Search Google", "Read reviews", "Message vendors", "Wait..."].map((s) => (
+              <span key={s} className="px-2 py-0.5 rounded-md bg-[var(--anna-bg)] text-[9px] text-[var(--anna-muted)] border border-[var(--anna-border)]">
+                {s}
+              </span>
+            ))}
           </div>
         </div>
 
-        <div className="rounded-xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-white)] p-3.5">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
-              <Sparkles size={11} className="text-white" />
-            </div>
-            <p className="text-xs font-semibold text-[var(--anna-sage-dark)]">With Anna.I</p>
+        {/* Divider */}
+        <div className="border-t border-[var(--anna-border)] my-3" />
+
+        {/* With Anna.I */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+            <Sparkles size={11} className="text-white" />
           </div>
-          <div className="space-y-1.5 pl-7">
-            <div className="flex items-start gap-2">
-              <MessageCircle size={12} className="text-[var(--anna-sage)] shrink-0 mt-0.5" />
-              <p className="text-[11px] text-[var(--anna-slate)] italic">
-                {`\u201CBased on 200+ reviews, I\u2019ve shortlisted 3 verified providers — all available this week.\u201D`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <Button size="sm" className="h-7 text-[10px] rounded-lg bg-[var(--anna-sage)] text-white px-3">
-                Book the best match
-                <ChevronRight size={10} />
-              </Button>
-              <span className="text-[9px] text-[var(--anna-muted)]">One tap. Done.</span>
-            </div>
+          <p className="text-xs font-semibold text-[var(--anna-sage-dark)]">With Anna.I</p>
+        </div>
+        <div className="space-y-1.5 pl-7">
+          <div className="flex items-start gap-2">
+            <MessageCircle size={12} className="text-[var(--anna-sage)] shrink-0 mt-0.5" />
+            <p className="text-[11px] text-[var(--anna-slate)] italic">
+              {`\u201CBased on 200+ reviews, I\u2019ve shortlisted 3 verified providers — all available this week.\u201D`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <Button size="sm" className="h-7 text-[10px] rounded-lg bg-[var(--anna-sage)] text-white px-3">
+              Book the best match
+              <ChevronRight size={10} />
+            </Button>
+            <span className="text-[9px] text-[var(--anna-muted)]">One tap. Done.</span>
           </div>
         </div>
       </div>
 
-      {/* 3. Your AI, Your Control — compact timeline */}
-      <div className="mb-4">
+      {/* ROW 2 — Your AI, Your Control */}
+      <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] p-4 mb-3">
         <p className="text-xs font-bold text-[var(--anna-slate)] mb-2.5">Your AI, Your Control</p>
         <div className="space-y-0">
           {timeline.map((item, idx) => (
