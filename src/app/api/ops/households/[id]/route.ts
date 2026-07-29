@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import { validateSgPhone } from "@/lib/phone-validation";
+import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code";
 
 // Allowed fields for PATCH
 const ALLOWED_FIELDS = [
@@ -73,6 +75,30 @@ export async function PATCH(
         { error: "Field 'address' must be a string" },
         { status: 400 }
       );
+    }
+
+    // Validate phone format if provided
+    if (updateData.phone !== undefined && updateData.phone !== null) {
+      const phoneResult = validateSgPhone(String(updateData.phone));
+      if (!phoneResult.valid) {
+        return NextResponse.json(
+          { error: phoneResult.error || "Invalid Singapore phone number" },
+          { status: 400 }
+        );
+      }
+      updateData.phone = phoneResult.normalized;
+    }
+
+    // Validate postal code format if provided
+    if (updateData.postalCode !== undefined && updateData.postalCode !== null) {
+      const code = normalizePostalCode(String(updateData.postalCode));
+      if (!isValidPostalCode(code)) {
+        return NextResponse.json(
+          { error: "Invalid postal code. Must be exactly 6 digits." },
+          { status: 400 }
+        );
+      }
+      updateData.postalCode = code;
     }
 
     // Audit the change

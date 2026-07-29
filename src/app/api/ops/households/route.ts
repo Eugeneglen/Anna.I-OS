@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       const hh = await tx.household.create({
         data: {
           name,
+          fullName: ownerName || null,
           email: householdEmail,
           phone: phone || null,
           address,

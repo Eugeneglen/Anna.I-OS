@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
             status: true,
             amountCents: true,
             household: {
-              select: { id: true, name: true, address: true, postalCode: true },
+              select: { id: true, name: true, email: true, phone: true, address: true, postalCode: true },
             },
           },
         },

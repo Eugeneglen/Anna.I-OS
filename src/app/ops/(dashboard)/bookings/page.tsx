@@ -267,6 +267,7 @@ export default function BookingsPage() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-[var(--anna-slate)]">{(household?.name as string) || "—"}</p>
+                            <p className="text-[10px] text-[var(--anna-muted)]">{(household?.email as string) || ""}{household?.phone ? ` · ${(household?.phone as string)}` : ""}</p>
                             <p className="text-[10px] text-[var(--anna-muted)] font-data">{household?.postalCode || ""}</p>
                           </div>
                           <ChevronRight size={14} className="text-[var(--anna-muted)] shrink-0" />
@@ -346,6 +347,9 @@ export default function BookingsPage() {
                       <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">
                         {(vendor?.name as string) || "No vendor"}
                         {staff?.name ? ` · ${staff.name as string}` : ""}
+                      </p>
+                      <p className="text-[10px] text-[var(--anna-muted)] font-data">
+                        {(household?.email as string) || ""}{household?.phone ? ` · ${(household?.phone as string)}` : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">

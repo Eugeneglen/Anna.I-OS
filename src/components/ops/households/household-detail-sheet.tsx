@@ -338,6 +338,16 @@ export function HouseholdDetailSheet({
                 </div>
               ) : (
                 <>
+                  <div className="flex items-center gap-2 text-[var(--anna-slate)]">
+                    <Users size={14} className="text-[var(--anna-muted)]" />
+                    <span className="font-medium">{householdInfo.name as string}</span>
+                  </div>
+                  {(householdInfo.fullName as string) && householdInfo.fullName !== householdInfo.name && (
+                    <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
+                      <Users size={14} className="text-[var(--anna-muted)] opacity-0" />
+                      <span>{householdInfo.fullName as string}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-[var(--anna-slate-light)]">
                     <Mail size={14} className="text-[var(--anna-muted)]" />
                     {householdInfo.email as string}
@@ -394,6 +404,9 @@ export function HouseholdDetailSheet({
                       <div>
                         <p className="text-xs font-medium text-[var(--anna-slate)]">{m.name as string}</p>
                         <p className="text-[10px] text-[var(--anna-muted)]">{m.email as string}</p>
+                        {m.phone && (
+                          <p className="text-[10px] text-[var(--anna-muted)]">{m.phone as string}</p>
+                        )}
                       </div>
                     </div>
                     <Badge variant="outline" className={cn("text-[10px]", m.role === "OWNER" ? "border-[var(--anna-sage)]/30 text-[var(--anna-sage-dark)]" : "border-[var(--anna-border)] text-[var(--anna-muted)]")}>

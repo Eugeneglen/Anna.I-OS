@@ -36,6 +36,10 @@ export function HouseholdTable({ households, onSelect }: HouseholdTableProps) {
         <tbody>
           {households.map((h: Record<string, unknown>) => {
             const cats = parseCategoryList(h.activeCategories as string);
+            const subs = (h.subscriptions as Record<string, unknown>[]) || [];
+            const sub = subs[0];
+            const subTier = (sub?.tier as string) || "HOME";
+            const subStatus = (sub?.status as string) || "";
             return (
               <tr
                 key={h.id as string}
@@ -69,9 +73,18 @@ export function HouseholdTable({ households, onSelect }: HouseholdTableProps) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge variant="secondary" className={cn("text-[10px] font-medium", SUBSCRIPTION_STYLES["HOME"])}>
-                    HOME
-                  </Badge>
+                  {sub ? (
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className={cn("text-[10px] font-medium", SUBSCRIPTION_STYLES[subTier] || SUBSCRIPTION_STYLES["HOME"])}>
+                        {subTier}
+                      </Badge>
+                      <Badge variant="secondary" className={cn("text-[10px] font-medium", subStatus === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600")}>
+                        {subStatus}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-[var(--anna-muted)]">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-data text-xs text-[var(--anna-muted)]">
                   {new Date(h.createdAt as string).toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" })}
