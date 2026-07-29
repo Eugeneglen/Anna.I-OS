@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth";
 import { db } from "@/lib/db";
@@ -6,7 +7,7 @@ import { createHouseholdToken } from "@/lib/household-auth";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
-export async function POST() {
+async function bridgeLogic(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
@@ -114,7 +115,12 @@ export async function POST() {
     });
 
     // Sign out of NextAuth session (we use our custom JWT going forward)
-    const signOutUrl = new URL("/api/auth/signout", new URL(request.url));
+    // Use public origin (NEXTAUTH_URL or request origin) — request.url may be 0.0.0.0 on Railway
+    const origin =
+      process.env.NEXTAUTH_URL ||
+      (await headers()).get("origin") ||
+      new URL(request.url).origin;
+    const signOutUrl = new URL("/api/auth/signout", origin);
     signOutUrl.searchParams.set("callbackUrl", "/");
     res.headers.set("Location", signOutUrl.toString());
 
@@ -126,4 +132,12 @@ export async function POST() {
     console.error("[google-bridge] Error:", error);
     return NextResponse.json({ error: "Google sign-in failed" }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return bridgeLogic(request);
+}
+
+export async function POST(request: Request) {
+  return bridgeLogic(request);
 }
