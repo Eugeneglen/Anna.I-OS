@@ -1,28 +1,117 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/nextauth";
+import { cookies } from "next/headers";
+import { jwtDecrypt } from "jose";
+import hkdf from "@panva/hkdf";
 import { db } from "@/lib/db";
 import { createHouseholdToken } from "@/lib/household-auth";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
-export async function POST() {
+/**
+ * Get the public-facing origin URL for redirects.
+ * On Railway, request.url resolves to http://0.0.0.0:8080 which is unreachable by the browser.
+ * We use NEXTAUTH_URL or forwarded headers to get the correct public origin.
+ */
+function getPublicOrigin(request: Request): string {
+  // 1. Explicit env var (most reliable for Railway/production)
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+  // 2. Proxy-forwarded headers (Railway sets these)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  // 3. Direct host header (local dev)
+  const host = request.headers.get("host");
+  if (host) {
+    const proto = request.headers.get("x-forwarded-proto") || "http";
+    return `${proto}://${host}`;
+  }
+  // 4. Last resort — same behavior as before
+  return new URL(request.url).origin;
+}
+
+/**
+ * Read and decrypt the NextAuth session token directly.
+ *
+ * Why not use getServerSession()? NextAuth v4's getServerSession() relies on
+ * internal `AuthHandler` logic that can break in Next.js 16 App Router route
+ * handlers (CJS require of next/headers, mismatched cookie handling, etc.).
+ *
+ * Instead we replicate exactly what next-auth/jwt does internally:
+ *  1. Read the session cookie (name depends on HTTPS / VERCEL env)
+ *  2. Derive an AES-256-GCM encryption key via HKDF-SHA256
+ *  3. Decrypt the JWE token with jose's jwtDecrypt
+ */
+async function getNextAuthSession(): Promise<{
+  email: string;
+  name: string | null;
+  picture: string | null;
+} | null> {
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("NEXTAUTH_SECRET is not configured");
+  }
+
+  const cookieStore = await cookies();
+  const isHttps =
+    process.env.NEXTAUTH_URL?.startsWith("https://") || !!process.env.VERCEL;
+  const cookieName = isHttps
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token";
+
+  const token = cookieStore.get(cookieName)?.value;
+  if (!token) {
+    console.error(
+      `[google-bridge] Cookie "${cookieName}" not found. Available:`,
+      cookieStore.getAll().map((c) => c.name)
+    );
+    return null;
+  }
+
+  // Derive encryption key the same way next-auth/jwt encode() does
+  const encryptionKey = await hkdf(
+    "sha256",
+    secret,
+    "", // salt (empty string = default)
+    "NextAuth.js Generated Encryption Key",
+    32
+  );
+
+  const { payload } = await jwtDecrypt(token, encryptionKey, {
+    clockTolerance: 15,
+  });
+
+  return {
+    email: (payload.email as string) || (payload.sub as string) || "",
+    name: (payload.name as string) || null,
+    picture: (payload.picture as string) || null,
+  };
+}
+
+async function bridgeLogic(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "No Google session found" }, { status: 401 });
+    // Step 1: Decrypt the NextAuth session token
+    const session = await getNextAuthSession();
+    if (!session?.email) {
+      return NextResponse.json(
+        { error: "No Google session found" },
+        { status: 401 }
+      );
     }
 
-    const googleEmail = session.user.email;
-    const googleName = session.user.name || googleEmail.split("@")[0];
+    const googleEmail = session.email;
+    const googleName = session.name || googleEmail.split("@")[0];
 
-    // Look up existing member by email
+    // Step 2: Look up existing member by email
     let member = await db.familyMember.findUnique({
       where: { email: googleEmail },
       include: { household: true },
     });
 
-    // If no member exists, create Household + Member + Subscription (like registration)
+    // Step 3: If no member exists, create Household + Member + Subscription
     if (!member) {
       const householdName = `${googleName.split(" ")[0]}'s Home`;
 
@@ -55,16 +144,17 @@ export async function POST() {
             name: googleName,
             email: googleEmail,
             role: "OWNER",
-            avatarUrl: session.user.image || null,
+            avatarUrl: session.picture || null,
           },
         });
 
         return { household, member: newMember };
       });
 
-      member = result.member as typeof member & { household: typeof result.household };
+      member = result.member as typeof member & {
+        household: typeof result.household;
+      };
 
-      // If the Google name was used as a household name, update fullName too
       if (!member.household.fullName) {
         await db.household.update({
           where: { id: member.householdId },
@@ -73,15 +163,15 @@ export async function POST() {
       }
     } else {
       // Update avatar if it changed
-      if (session.user.image && session.user.image !== member.avatarUrl) {
+      if (session.picture && session.picture !== member.avatarUrl) {
         await db.familyMember.update({
           where: { id: member.id },
-          data: { avatarUrl: session.user.image },
+          data: { avatarUrl: session.picture },
         });
       }
     }
 
-    // Create our custom JWT cookie
+    // Step 4: Create our custom JWT cookie
     const token = await createHouseholdToken({
       id: member.id,
       name: member.name,
@@ -102,7 +192,7 @@ export async function POST() {
         householdName: member.household.name,
         onboardingStep: member.household.onboardingStep,
       },
-      isNewUser: !member.passwordHash, // If no password set, they came via Google
+      isNewUser: !member.passwordHash,
     });
 
     res.cookies.set("household_token", token, {
@@ -113,8 +203,9 @@ export async function POST() {
       maxAge: 7 * 24 * 3600,
     });
 
-    // Sign out of NextAuth session (we use our custom JWT going forward)
-    const signOutUrl = new URL("/api/auth/signout", new URL(request.url));
+    // Step 5: Sign out of NextAuth session (we use our custom JWT going forward)
+    const publicOrigin = getPublicOrigin(request);
+    const signOutUrl = new URL("/api/auth/signout", publicOrigin);
     signOutUrl.searchParams.set("callbackUrl", "/");
     res.headers.set("Location", signOutUrl.toString());
 
@@ -124,6 +215,19 @@ export async function POST() {
     });
   } catch (error) {
     console.error("[google-bridge] Error:", error);
-    return NextResponse.json({ error: "Google sign-in failed" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: "Google sign-in failed", debug: msg },
+      { status: 500 }
+    );
   }
+}
+
+// GET: Google OAuth redirects browser here via callbackUrl (browser redirect = GET)
+export async function GET(request: Request) {
+  return bridgeLogic(request);
+}
+
+export async function POST(request: Request) {
+  return bridgeLogic(request);
 }
