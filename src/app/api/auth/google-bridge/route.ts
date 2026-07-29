@@ -6,6 +6,32 @@ import { createHouseholdToken } from "@/lib/household-auth";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
+/**
+ * Get the public-facing origin URL for redirects.
+ * On Railway, request.url resolves to http://0.0.0.0:8080 which is unreachable by the browser.
+ * We use NEXTAUTH_URL or forwarded headers to get the correct public origin.
+ */
+function getPublicOrigin(request: Request): string {
+  // 1. Explicit env var (most reliable for Railway/production)
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+  // 2. Proxy-forwarded headers (Railway sets these)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  // 3. Direct host header (local dev)
+  const host = request.headers.get("host");
+  if (host) {
+    const proto = request.headers.get("x-forwarded-proto") || "http";
+    return `${proto}://${host}`;
+  }
+  // 4. Last resort — same behavior as before
+  return new URL(request.url).origin;
+}
+
 async function bridgeLogic(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -114,7 +140,8 @@ async function bridgeLogic(request: Request) {
     });
 
     // Sign out of NextAuth session (we use our custom JWT going forward)
-    const signOutUrl = new URL("/api/auth/signout", new URL(request.url));
+    const publicOrigin = getPublicOrigin(request);
+    const signOutUrl = new URL("/api/auth/signout", publicOrigin);
     signOutUrl.searchParams.set("callbackUrl", "/");
     res.headers.set("Location", signOutUrl.toString());
 
