@@ -1862,10 +1862,7 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
     <div className="min-h-screen flex flex-col items-center justify-start bg-[var(--anna-bg)] p-4 md:p-6">
       <div className="w-full max-w-lg pt-4 md:pt-8">
         {/* Logo / Brand */}
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center">
-            <Sparkles size={14} className="text-white" />
-          </div>
+        <div className="flex items-center justify-center mb-4">
           <span className="text-sm font-bold text-[var(--anna-slate)]">Anna.I</span>
         </div>
 
