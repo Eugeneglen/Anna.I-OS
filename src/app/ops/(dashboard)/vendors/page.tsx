@@ -326,6 +326,7 @@ function AddVendorForm({
     contactEmail2: "",
     contactPhone2: "",
     companyRegNo: "",
+    registeredAddress: "",
     vendorType: "MICRO",
     staffCount: 1,
     dailyCapacity: 6,
@@ -467,6 +468,19 @@ function AddVendorForm({
           value={form.companyRegNo}
           onChange={(e) =>
             setForm((f) => ({ ...f, companyRegNo: e.target.value }))
+          }
+          className={inputCls}
+        />
+      </div>
+
+      {/* ── 4a. Registered Address ── */}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Registered Address</Label>
+        <Input
+          placeholder="e.g. 123 Orchard Road, #10-01, Singapore 238888"
+          value={form.registeredAddress}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, registeredAddress: e.target.value }))
           }
           className={inputCls}
         />

@@ -8,8 +8,14 @@ type VendorUpdateData = {
   email?: string;
   phone?: string;
   contactPerson?: string | null;
+  contactEmail1?: string | null;
+  contactPhone1?: string | null;
+  contactPerson2?: string | null;
+  contactEmail2?: string | null;
+  contactPhone2?: string | null;
   companyName?: string | null;
   companyRegNo?: string | null;
+  registeredAddress?: string | null;
   vendorType?: string;
   categories?: string[];
   staffCount?: number;
@@ -33,7 +39,13 @@ export async function GET(
     const { id } = await params;
     const vendor = await db.vendor.findUnique({
       where: { id },
-      include: { staff: { orderBy: { createdAt: "asc" } } },
+      include: {
+        staff: { orderBy: { createdAt: "asc" } },
+        addresses: {
+          where: { ownerType: "VENDOR", vendorId: id },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        },
+      },
     });
 
     if (!vendor) {
@@ -81,8 +93,14 @@ export async function PATCH(
     if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone;
     if (body.contactPerson !== undefined) updateData.contactPerson = body.contactPerson;
+    if (body.contactEmail1 !== undefined) updateData.contactEmail1 = body.contactEmail1;
+    if (body.contactPhone1 !== undefined) updateData.contactPhone1 = body.contactPhone1;
+    if (body.contactPerson2 !== undefined) updateData.contactPerson2 = body.contactPerson2;
+    if (body.contactEmail2 !== undefined) updateData.contactEmail2 = body.contactEmail2;
+    if (body.contactPhone2 !== undefined) updateData.contactPhone2 = body.contactPhone2;
     if (body.companyName !== undefined) updateData.companyName = body.companyName;
     if (body.companyRegNo !== undefined) updateData.companyRegNo = body.companyRegNo;
+    if (body.registeredAddress !== undefined) updateData.registeredAddress = body.registeredAddress;
     if (body.vendorType !== undefined) updateData.vendorType = body.vendorType;
     if (body.categories !== undefined) updateData.categories = JSON.stringify(body.categories);
     if (body.staffCount !== undefined) updateData.staffCount = body.staffCount;
@@ -139,10 +157,16 @@ export async function PATCH(
       metadata: { changes: updateData },
     });
 
-    // Re-fetch with staff
+    // Re-fetch with staff and addresses
     const updated = await db.vendor.findUnique({
       where: { id },
-      include: { staff: { orderBy: { createdAt: "asc" } } },
+      include: {
+        staff: { orderBy: { createdAt: "asc" } },
+        addresses: {
+          where: { ownerType: "VENDOR", vendorId: id },
+          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        },
+      },
     });
 
     return NextResponse.json({ vendor: updated });

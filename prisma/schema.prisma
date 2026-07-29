@@ -220,6 +220,7 @@ model Vendor {
   contactPhone2   String?      // Contact Person 2 phone
   companyName     String?      // Registered company name (e.g. "FreshWash Pte Ltd")
   companyRegNo    String?      // ACRA / UEN registration number
+  registeredAddress String?      // Registered office address (free-text)
   categories      String // JSON array of ServiceCategory
   status          VendorStatus @default(PENDING)
   vendorType      VendorType  @default(MICRO)
