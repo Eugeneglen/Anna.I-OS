@@ -49,6 +49,7 @@ async function getNextAuthSession(): Promise<{
   email: string;
   name: string | null;
   picture: string | null;
+  _debug?: { availableCookies: string[]; nextauthUrl: string };
 } | null> {
   const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
   if (!secret) {
@@ -56,20 +57,49 @@ async function getNextAuthSession(): Promise<{
   }
 
   const cookieStore = await cookies();
-  const isHttps =
-    process.env.NEXTAUTH_URL?.startsWith("https://") || !!process.env.VERCEL;
-  const cookieName = isHttps
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token";
+  const allCookies = cookieStore.getAll();
+  const cookieNames = allCookies.map((c) => c.name);
 
-  const token = cookieStore.get(cookieName)?.value;
+  // NextAuth uses different cookie names depending on env:
+  //   - HTTPS + NEXTAUTH_URL  → __Secure-next-auth.session-token
+  //   - HTTP / local dev     → next-auth.session-token
+  // Try all candidates to avoid name mismatches on Railway's SSL termination.
+  const CANDIDATES = [
+    "next-auth.session-token",
+    "__Secure-next-auth.session-token",
+    "next-auth.session-token.0",   // large token split variant
+    "__Secure-next-auth.session-token.0",
+  ];
+
+  let token: string | undefined;
+  let usedName: string | undefined;
+  for (const name of CANDIDATES) {
+    token = allCookies.find((c) => c.name === name)?.value;
+    if (token) {
+      usedName = name;
+      break;
+    }
+  }
+
   if (!token) {
     console.error(
-      `[google-bridge] Cookie "${cookieName}" not found. Available:`,
-      cookieStore.getAll().map((c) => c.name)
+      `[google-bridge] No NextAuth session cookie found. Available cookies:`,
+      cookieNames,
+      `NEXTAUTH_URL=${process.env.NEXTAUTH_URL ?? "<not set>"}`
     );
-    return null;
+    // Return diagnostic info in the response for debugging
+    return {
+      email: "",
+      name: null,
+      picture: null,
+      _debug: {
+        availableCookies: cookieNames,
+        nextauthUrl: process.env.NEXTAUTH_URL ?? "<not set>",
+      },
+    };
   }
+
+  console.log(`[google-bridge] Found session cookie: ${usedName}`);
 
   // Derive encryption key the same way next-auth/jwt encode() does
   const encryptionKey = await hkdf(
@@ -96,8 +126,10 @@ async function bridgeLogic(request: Request) {
     // Step 1: Decrypt the NextAuth session token
     const session = await getNextAuthSession();
     if (!session?.email) {
+      // Include debug info if available (cookie name mismatch diagnostics)
+      const debug = (session as any)?._debug;
       return NextResponse.json(
-        { error: "No Google session found" },
+        { error: "No Google session found", debug: debug ?? undefined },
         { status: 401 }
       );
     }
