@@ -15,7 +15,11 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 function getPublicOrigin(request: Request): string {
   // 1. Explicit env var (most reliable for Railway/production)
   if (process.env.NEXTAUTH_URL) {
-    return process.env.NEXTAUTH_URL;
+    const url = process.env.NEXTAUTH_URL;
+    if (!url.startsWith("http")) {
+      return `https://${url}`;
+    }
+    return url;
   }
   // 2. Proxy-forwarded headers (Railway sets these)
   const forwardedHost = request.headers.get("x-forwarded-host");
@@ -29,15 +33,92 @@ function getPublicOrigin(request: Request): string {
     const proto = request.headers.get("x-forwarded-proto") || "http";
     return `${proto}://${host}`;
   }
-  // 4. Last resort — same behavior as before
+  // 4. Last resort
   return new URL(request.url).origin;
+}
+
+/**
+ * Determine the session cookie name exactly how NextAuth v4 does it.
+ *
+ * CRITICAL: NextAuth internally calls parseUrl() (next-auth/src/utils/parse-url.ts)
+ * which auto-prepends https:// if the URL does NOT start with http:
+ *
+ *   if (url && !url.startsWith("http")) {
+ *     url = `https://${url}`
+ *   }
+ *
+ * Then in init.ts, useSecureCookies is determined by:
+ *   authOptions.useSecureCookies ?? url.base.startsWith("https://")
+ *
+ * So when NEXTAUTH_URL is a bare domain like "annai-os-production.up.railway.app",
+ * parseUrl rewrites it to "https://annai-os-production.up.railway.app", making
+ * useSecureCookies = true, and the cookie name becomes
+ * "__Secure-next-auth.session-token".
+ *
+ * The old code checked NEXTAUTH_URL?.startsWith("https://") directly,
+ * which returned false for a bare domain — causing it to look for the wrong
+ * cookie name ("next-auth.session-token" instead of
+ * "__Secure-next-auth.session-token").
+ */
+function getNextAuthCookieName(): string {
+  const rawUrl = process.env.NEXTAUTH_URL;
+  let effectiveUrl = rawUrl;
+
+  // Replicate parseUrl: if URL doesn't start with "http", prepend "https://"
+  if (effectiveUrl && !effectiveUrl.startsWith("http")) {
+    effectiveUrl = `https://${effectiveUrl}`;
+  }
+
+  // Same logic as init.ts: useSecureCookies
+  const useSecureCookies =
+    !!process.env.VERCEL || (effectiveUrl?.startsWith("https://") ?? false);
+
+  return useSecureCookies
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token";
+}
+
+/**
+ * Read the NextAuth session token from cookies, handling chunked cookies.
+ *
+ * NextAuth chunks session cookies into multiple cookies if the JWE token
+ * exceeds ~3933 bytes. Chunked cookies are named like:
+ *   __Secure-next-auth.session-token.0
+ *   __Secure-next-auth.session-token.1
+ *
+ * We must collect all chunks and join them in order, matching the
+ * SessionStore class in next-auth/src/core/lib/cookie.ts.
+ */
+function extractSessionToken(
+  allCookies: { name: string; value: string }[],
+  cookieName: string
+): string | null {
+  const chunks: { suffix: number; value: string }[] = [];
+
+  for (const cookie of allCookies) {
+    if (cookie.name === cookieName) {
+      chunks.push({ suffix: -1, value: cookie.value });
+    } else if (cookie.name.startsWith(cookieName + ".")) {
+      const suffix = parseInt(cookie.name.split(".").pop() ?? "0", 10);
+      chunks.push({ suffix, value: cookie.value });
+    }
+  }
+
+  if (chunks.length === 0) return null;
+
+  if (chunks.length === 1 && chunks[0].suffix === -1) {
+    return chunks[0].value;
+  }
+
+  chunks.sort((a, b) => a.suffix - b.suffix);
+  return chunks.map((c) => c.value).join("");
 }
 
 /**
  * Read and decrypt the NextAuth session token directly.
  *
  * Why not use getServerSession()? NextAuth v4's getServerSession() relies on
- * internal `AuthHandler` logic that can break in Next.js 16 App Router route
+ * internal AuthHandler logic that can break in Next.js 16 App Router route
  * handlers (CJS require of next/headers, mismatched cookie handling, etc.).
  *
  * Instead we replicate exactly what next-auth/jwt does internally:
@@ -45,7 +126,7 @@ function getPublicOrigin(request: Request): string {
  *  2. Derive an AES-256-GCM encryption key via HKDF-SHA256
  *  3. Decrypt the JWE token with jose's jwtDecrypt
  */
-async function getNextAuthSession(): Promise<{
+async function getNextAuthSession(request: Request): Promise<{
   email: string;
   name: string | null;
   picture: string | null;
@@ -55,27 +136,50 @@ async function getNextAuthSession(): Promise<{
     throw new Error("NEXTAUTH_SECRET is not configured");
   }
 
-  const cookieStore = await cookies();
-  const isHttps =
-    process.env.NEXTAUTH_URL?.startsWith("https://") || !!process.env.VERCEL;
-  const cookieName = isHttps
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token";
+  const primaryCookieName = getNextAuthCookieName();
+  const fallbackCookieName = primaryCookieName.startsWith("__Secure-")
+    ? "next-auth.session-token"
+    : "__Secure-next-auth.session-token";
 
-  const token = cookieStore.get(cookieName)?.value;
+  let allCookies: { name: string; value: string }[] = [];
+  try {
+    const cookieStore = await cookies();
+    allCookies = cookieStore.getAll();
+  } catch {
+    const rawCookie = request.headers.get("cookie") || "";
+    allCookies = rawCookie
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((pair) => {
+        const eqIdx = pair.indexOf("=");
+        if (eqIdx === -1) return { name: pair, value: "" };
+        return {
+          name: pair.substring(0, eqIdx).trim(),
+          value: pair.substring(eqIdx + 1).trim(),
+        };
+      });
+  }
+
+  let token = extractSessionToken(allCookies, primaryCookieName);
+  if (!token) {
+    token = extractSessionToken(allCookies, fallbackCookieName);
+  }
+
   if (!token) {
     console.error(
-      `[google-bridge] Cookie "${cookieName}" not found. Available:`,
-      cookieStore.getAll().map((c) => c.name)
+      `[google-bridge] No NextAuth session cookie found. ` +
+        `Tried "${primaryCookieName}" and "${fallbackCookieName}". ` +
+        `Available cookies:`,
+      allCookies.map((c) => c.name)
     );
     return null;
   }
 
-  // Derive encryption key the same way next-auth/jwt encode() does
   const encryptionKey = await hkdf(
     "sha256",
     secret,
-    "", // salt (empty string = default)
+    "",
     "NextAuth.js Generated Encryption Key",
     32
   );
@@ -93,8 +197,7 @@ async function getNextAuthSession(): Promise<{
 
 async function bridgeLogic(request: Request) {
   try {
-    // Step 1: Decrypt the NextAuth session token
-    const session = await getNextAuthSession();
+    const session = await getNextAuthSession(request);
     if (!session?.email) {
       return NextResponse.json(
         { error: "No Google session found" },
@@ -105,13 +208,11 @@ async function bridgeLogic(request: Request) {
     const googleEmail = session.email;
     const googleName = session.name || googleEmail.split("@")[0];
 
-    // Step 2: Look up existing member by email
     let member = await db.familyMember.findUnique({
       where: { email: googleEmail },
       include: { household: true },
     });
 
-    // Step 3: If no member exists, create Household + Member + Subscription
     if (!member) {
       const householdName = `${googleName.split(" ")[0]}'s Home`;
 
@@ -162,7 +263,6 @@ async function bridgeLogic(request: Request) {
         });
       }
     } else {
-      // Update avatar if it changed
       if (session.picture && session.picture !== member.avatarUrl) {
         await db.familyMember.update({
           where: { id: member.id },
@@ -171,7 +271,6 @@ async function bridgeLogic(request: Request) {
       }
     }
 
-    // Step 4: Create our custom JWT cookie
     const token = await createHouseholdToken({
       id: member.id,
       name: member.name,
@@ -203,7 +302,6 @@ async function bridgeLogic(request: Request) {
       maxAge: 7 * 24 * 3600,
     });
 
-    // Step 5: Sign out of NextAuth session (we use our custom JWT going forward)
     const publicOrigin = getPublicOrigin(request);
     const signOutUrl = new URL("/api/auth/signout", publicOrigin);
     signOutUrl.searchParams.set("callbackUrl", "/");
@@ -223,7 +321,6 @@ async function bridgeLogic(request: Request) {
   }
 }
 
-// GET: Google OAuth redirects browser here via callbackUrl (browser redirect = GET)
 export async function GET(request: Request) {
   return bridgeLogic(request);
 }
