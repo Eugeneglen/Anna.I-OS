@@ -302,10 +302,52 @@ async function bridgeLogic(request: Request) {
       maxAge: 7 * 24 * 3600,
     });
 
+    // Clear NextAuth session cookies directly instead of redirecting to
+    // /api/auth/signout (which shows an unwanted "Are you sure?" confirmation page)
+    const cookieName = getNextAuthCookieName();
+    const fallbackName = cookieName.startsWith("__Secure-")
+      ? "next-auth.session-token"
+      : "__Secure-next-auth.session-token";
+    for (const name of [cookieName, fallbackName]) {
+      res.cookies.set(name, "", {
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0, // delete
+      });
+    }
+    // Also clear any chunked variants
+    for (let i = 0; i <= 2; i++) {
+      for (const prefix of [cookieName, fallbackName]) {
+        res.cookies.set(`${prefix}.${i}`, "", {
+          httpOnly: true,
+          secure: IS_PRODUCTION,
+          sameSite: "lax",
+          path: "/",
+          maxAge: 0,
+        });
+      }
+    }
+    // Clear NextAuth CSRF and callback cookies too
+    res.cookies.set("next-auth.csrf-token", "", {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    res.cookies.set("__Host-next-auth.csrf-token", "", {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+
+    // Redirect directly to home
     const publicOrigin = getPublicOrigin(request);
-    const signOutUrl = new URL("/api/auth/signout", publicOrigin);
-    signOutUrl.searchParams.set("callbackUrl", "/");
-    res.headers.set("Location", signOutUrl.toString());
+    res.headers.set("Location", `${publicOrigin}/`);
 
     return new NextResponse(null, {
       status: 302,
