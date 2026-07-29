@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/nextauth";
 import { db } from "@/lib/db";
@@ -115,12 +114,7 @@ async function bridgeLogic(request: Request) {
     });
 
     // Sign out of NextAuth session (we use our custom JWT going forward)
-    // Use public origin (NEXTAUTH_URL or request origin) — request.url may be 0.0.0.0 on Railway
-    const origin =
-      process.env.NEXTAUTH_URL ||
-      (await headers()).get("origin") ||
-      new URL(request.url).origin;
-    const signOutUrl = new URL("/api/auth/signout", origin);
+    const signOutUrl = new URL("/api/auth/signout", new URL(request.url));
     signOutUrl.searchParams.set("callbackUrl", "/");
     res.headers.set("Location", signOutUrl.toString());
 
@@ -135,6 +129,7 @@ async function bridgeLogic(request: Request) {
   }
 }
 
+// GET: Google OAuth redirects browser here via callbackUrl (browser redirect = GET)
 export async function GET(request: Request) {
   return bridgeLogic(request);
 }
