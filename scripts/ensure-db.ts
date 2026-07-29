@@ -9,12 +9,20 @@
  *   1. Ensures the database directory exists (SQLite)
  *   2. Runs `prisma db push` to sync schema (idempotent — safe to re-run)
  *   3. Runs `prisma generate` to regenerate the client
- *   4. Checks if seed data exists, and seeds if needed (idempotent)
+ *   4. Checks seed version — re-seeds if missing or outdated
+ *
+ * Version-aware seeding:
+ *   - Seed data has a SEED_VERSION constant (in prisma/seed.ts)
+ *   - After seeding, the version is stored in PlatformConfig
+ *   - On startup, ensure-db.ts compares stored vs code version
+ *   - If they differ (or no version stored), the seed is re-run
+ *   - Bump SEED_VERSION in seed.ts when demo data changes
  *
  * Failure modes it prevents:
  *   - "Unable to open database file" (missing directory)
  *   - "Table doesn't exist" (schema not applied)
  *   - "No users found" (empty database, no seed)
+ *   - Stale demo data after code changes (version mismatch)
  *
  * Usage:
  *   npx tsx scripts/ensure-db.ts
@@ -85,37 +93,47 @@ function runPrismaGenerate() {
 }
 
 async function checkSeed() {
-  console.log("  [4/4] Checking seed data...");
-  // Re-import the ensure-seed logic directly to avoid spawning another process
+  console.log("  [4/4] Checking seed version...");
   const { PrismaClient } = await import("@prisma/client");
   const seedDb = new PrismaClient();
 
   try {
+    // Import the SEED_VERSION constant from seed.ts
+    const seedModule = await import("../prisma/seed");
+    const codeVersion: string = seedModule.SEED_VERSION;
+
+    // Check stored version in PlatformConfig
+    const stored = await seedDb.platformConfig.findUnique({
+      where: { key: "seed_version" },
+    });
+    const storedVersion = stored?.value ?? null;
+
+    // Also check if tables are completely empty (first-ever boot)
     const [householdCount, opsUserCount, jobTypeCount] = await Promise.all([
       seedDb.household.count(),
       seedDb.opsUser.count(),
       seedDb.serviceJobType.count(),
     ]);
+    const isEmpty = householdCount === 0 || opsUserCount === 0 || jobTypeCount === 0;
 
-    console.log(
-      `  [4/4] Current data: ${householdCount} households, ${opsUserCount} ops users, ${jobTypeCount} job types`
-    );
+    const needsSeed = isEmpty || storedVersion !== codeVersion;
 
-    const needsSeed = householdCount === 0 || opsUserCount === 0 || jobTypeCount === 0;
-
-    if (needsSeed) {
-      console.log("  [4/4] Running seed...");
-      // Dynamic import the seed script (uses default export)
-      const seedModule = await import("../prisma/seed");
-      const seed = seedModule.default || seedModule.main;
-      if (typeof seed !== "function") {
-        throw new Error("seed.ts does not export a default or named 'main' function");
-      }
-      await seed();
-      console.log("  [4/4] ✅ Seed complete");
+    if (isEmpty) {
+      console.log(`  [4/4] Database empty (${householdCount} households, ${opsUserCount} ops, ${jobTypeCount} jobs) — seeding...`);
+    } else if (storedVersion !== codeVersion) {
+      console.log(`  [4/4] Seed version mismatch: stored='${storedVersion}' code='${codeVersion}' — re-seeding...`);
     } else {
-      console.log("  [4/4] ✅ Seed data present — skipping");
+      console.log(`  [4/4] ✅ Seed data up-to-date (v${codeVersion}) — skipping`);
+      return;
     }
+
+    // Run seed
+    const seed = seedModule.default || seedModule.main;
+    if (typeof seed !== "function") {
+      throw new Error("seed.ts does not export a default or named 'main' function");
+    }
+    await seed();
+    console.log("  [4/4] ✅ Seed complete");
   } finally {
     await seedDb.$disconnect();
   }
