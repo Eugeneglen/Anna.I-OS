@@ -936,7 +936,7 @@ const PAIN_POINT_ICONS: Record<string, React.ElementType> = {
   AIRCON: Wind,
   REPAIRS: Wrench,
   LAUNDRY: Shirt,
-  PLANNING: ShoppingCart,
+  PLANNING: CalendarDays,
   FINDING: Handshake,
 };
 
@@ -957,8 +957,12 @@ function StepServiceHabits({
   isSaving: boolean;
   selectedPainPoints: string[];
 }) {
-  // Default to pain points if no categories selected yet
-  const categories = selectedPainPoints.length > 0 ? selectedPainPoints : [];
+  // Only bookable service categories get a frequency/trust card.
+  // Non-bookable pain points (PLANNING, FINDING) are excluded — they're
+  // coordination/process issues, not schedulable services.
+  const BOOKABLE_CATEGORIES = ["CLEANING", "AIRCON", "REPAIRS", "LAUNDRY"];
+  const bookableSelected = selectedPainPoints.filter((c) => BOOKABLE_CATEGORIES.includes(c));
+  const categories = bookableSelected.length > 0 ? bookableSelected : [];
 
   const categoryFrequency = data.categoryFrequency || {};
   const existingVendors = data.existingVendors || {};
@@ -1003,7 +1007,7 @@ function StepServiceHabits({
         <p className="text-xs text-[var(--anna-muted)] mb-5">This helps Anna.I set the right expectations for you.</p>
         <div className="text-center py-6">
           <p className="text-sm text-[var(--anna-muted)]">
-            You didn&apos;t select any pain points earlier. No worries — you can always add services later from the dashboard.
+            The pain points you selected are coordination challenges, not specific services — so we don&apos;t need frequency questions for them. You&apos;re almost done!
           </p>
         </div>
         <StepNav onBack={onBack} onContinue={onContinue} onSkip={onSkip} continueDisabled={false} isSaving={isSaving} />
