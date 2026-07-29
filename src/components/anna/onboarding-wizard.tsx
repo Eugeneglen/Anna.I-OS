@@ -107,7 +107,7 @@ interface PreferencesData {
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 const STEP_LABELS = [
   "Welcome",
   "Your Home",
@@ -116,7 +116,6 @@ const STEP_LABELS = [
   "Service Habits",
   "Preferences",
   "Meet Anna.I",
-  "Your Control",
 ];
 
 const HOME_TYPES = [
@@ -1300,7 +1299,175 @@ const DEFAULT_DEMO = {
   after: `\u201CI noticed your air-con service is due based on your 6-month schedule. I found 3 top-rated options nearby. Want me to book one?\u201D`,
 };
 
-function StepMeetAnna({
+// ─── New merged Step 7: Meet Anna.I + Your Control ───────────
+// Old Steps 7 (Meet Anna.I) & 8 (Your Control) merged into one
+// screen to reduce onboarding fatigue (8 → 7 total steps).
+
+function StepMeetAnnaMerged({
+  onContinue,
+  onBack,
+  topPainPoint,
+}: {
+  onContinue: () => void;
+  onBack: () => void;
+  topPainPoint?: string;
+}) {
+  const demo = topPainPoint ? (DEMO_MESSAGES[topPainPoint] || DEFAULT_DEMO) : DEFAULT_DEMO;
+
+  const timeline = [
+    {
+      phase: "Week 1",
+      label: "Learning",
+      desc: "Learns your preferences and booking patterns.",
+      icon: Eye,
+      dotColor: "bg-[var(--anna-sage)]",
+      iconColor: "text-[var(--anna-sage-dark)]",
+    },
+    {
+      phase: "Month 1",
+      label: "Suggesting",
+      desc: "Recommends better routines, timing, and vendor matches.",
+      icon: Lightbulb,
+      dotColor: "bg-[var(--anna-warning)]",
+      iconColor: "text-[var(--anna-warning)]",
+    },
+    {
+      phase: "Month 3+",
+      label: "Assisting",
+      desc: "Manages recurring tasks — always with your approval.",
+      icon: Rocket,
+      dotColor: "bg-[var(--anna-sage)]",
+      iconColor: "text-[var(--anna-sage)]",
+    },
+    {
+      phase: "Always",
+      label: "Your Control",
+      desc: "You approve every decision. Adjust or pause anytime.",
+      icon: Shield,
+      dotColor: "bg-[var(--anna-slate)]",
+      iconColor: "text-[var(--anna-slate)]",
+    },
+  ];
+
+  return (
+    <div>
+      {/* 1. Header */}
+      <div className="text-center mb-4">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, type: "spring" }}
+          className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center mx-auto mb-3 shadow-lg"
+        >
+          <Brain size={24} className="text-white" />
+        </motion.div>
+        <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Meet Anna.I</h2>
+        <p className="text-xs text-[var(--anna-muted)] max-w-sm mx-auto">
+          Your household AI. Gets smarter the more it learns — always with your approval.
+        </p>
+      </div>
+
+      {/* 2. Before / With Anna.I — comparison */}
+      <div className="space-y-3 mb-4">
+        <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] p-3.5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full bg-[var(--anna-error)]/10 flex items-center justify-center">
+              <span className="text-[9px]">❌</span>
+            </div>
+            <p className="text-xs font-semibold text-[var(--anna-slate)]">Before Anna.I</p>
+          </div>
+          <div className="space-y-1.5 text-[11px] text-[var(--anna-muted)] pl-7">
+            <p className="italic">{demo.before}</p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {["Search Google", "Read reviews", "Message vendors", "Wait..."].map((s) => (
+                <span key={s} className="px-2 py-0.5 rounded-md bg-white text-[9px] text-[var(--anna-muted)] border border-[var(--anna-border)]">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-white)] p-3.5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+              <Sparkles size={11} className="text-white" />
+            </div>
+            <p className="text-xs font-semibold text-[var(--anna-sage-dark)]">With Anna.I</p>
+          </div>
+          <div className="space-y-1.5 pl-7">
+            <div className="flex items-start gap-2">
+              <MessageCircle size={12} className="text-[var(--anna-sage)] shrink-0 mt-0.5" />
+              <p className="text-[11px] text-[var(--anna-slate)] italic">
+                {`\u201CBased on 200+ reviews, I\u2019ve shortlisted 3 verified providers — all available this week.\u201D`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <Button size="sm" className="h-7 text-[10px] rounded-lg bg-[var(--anna-sage)] text-white px-3">
+                Book the best match
+                <ChevronRight size={10} />
+              </Button>
+              <span className="text-[9px] text-[var(--anna-muted)]">One tap. Done.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Your AI, Your Control — compact timeline */}
+      <div className="mb-4">
+        <p className="text-xs font-bold text-[var(--anna-slate)] mb-2.5">Your AI, Your Control</p>
+        <div className="space-y-0">
+          {timeline.map((item, idx) => (
+            <motion.div
+              key={item.phase}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: idx * 0.08 }}
+              className="flex gap-2.5"
+            >
+              <div className="flex flex-col items-center">
+                <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mt-1", item.dotColor)} />
+                {idx < timeline.length - 1 && (
+                  <div className="w-0.5 flex-1 bg-[var(--anna-border)] min-h-[18px]" />
+                )}
+              </div>
+              <div className="flex-1 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <item.icon size={12} className={item.iconColor} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--anna-muted)]">{item.phase}</span>
+                  <span className="text-[11px] font-bold text-[var(--anna-slate)]">{item.label}</span>
+                </div>
+                <p className="text-[10px] leading-snug text-[var(--anna-muted)] pl-5">{item.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Trust disclaimer — single line */}
+      <div className="flex items-start gap-2 bg-[var(--anna-sage-light)]/40 rounded-xl p-2.5 mb-4">
+        <Shield size={13} className="text-[var(--anna-sage-dark)] shrink-0 mt-0.5" />
+        <p className="text-[10px] text-[var(--anna-sage-dark)] leading-relaxed">
+          You review every recommendation. No automatic charges, no surprises.
+        </p>
+      </div>
+
+      {/* 5. CTA */}
+      <StepNav
+        onBack={onBack}
+        onContinue={onContinue}
+        continueLabel="Got it, let's go!"
+      />
+    </div>
+  );
+}
+
+// ─── REVERT: old Step 7 (retained as export for rollback) ──────
+// To restore the 8-step flow: remove this export, re-add the
+// currentStep===7 render branch, restore TOTAL_STEPS=8 +
+// STEP_LABELS "Your Control" entry, and un-merge handleStep7.
+
+export function StepMeetAnna({
   onContinue,
   onBack,
   topPainPoint,
@@ -1391,9 +1558,9 @@ function StepMeetAnna({
   );
 }
 
-// ─── Step 8: Your AI, Your Control ────────────────────────────
+// ─── REVERT: old Step 8 (retained as export for rollback) ─────
 
-function StepYourControl({
+export function StepYourControl({
   onContinue,
   onBack,
 }: {
@@ -1676,19 +1843,11 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
     } catch { /* handled in onError */ }
   }, [prefsData, saveMutation, goNext]);
 
-  // Step 7 (Meet Anna.I) — just advance, no data to save
+  // Step 7 (merged Meet Anna.I + Your Control) — save step 7, then complete
   const handleStep7 = useCallback(async () => {
     try {
       await saveMutation.mutateAsync({ step: 7, data: {} });
-      goNext();
-    } catch { /* handled in onError */ }
-  }, [saveMutation, goNext]);
-
-  // Step 8 (Your Control) — complete onboarding
-  const handleStep8 = useCallback(async () => {
-    try {
-      await saveMutation.mutateAsync({ step: 8, data: {} });
-      // Complete onboarding
+      // Complete onboarding (old step 8 removed; jump straight to step 9)
       await saveMutation.mutateAsync({ step: 9, data: {} });
       setIsCompleted(true);
       setTimeout(() => onComplete(), 2000);
@@ -1789,14 +1948,11 @@ export function OnboardingWizard({ household, onComplete }: OnboardingWizardProp
                 />
               )}
               {currentStep === 6 && (
-                <StepMeetAnna
+                <StepMeetAnnaMerged
                   onContinue={handleStep7}
                   onBack={goBack}
                   topPainPoint={(painPointsData.timeConsumingTasks || [])[0]}
                 />
-              )}
-              {currentStep === 7 && (
-                <StepYourControl onContinue={handleStep8} onBack={goBack} />
               )}
             </motion.div>
           </AnimatePresence>
