@@ -130,7 +130,8 @@ async function bridgeLogic(request: Request) {
     });
   } catch (error) {
     console.error("[google-bridge] Error:", error);
-    return NextResponse.json({ error: "Google sign-in failed" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Google sign-in failed", debug: msg }, { status: 500 });
   }
 }
 
