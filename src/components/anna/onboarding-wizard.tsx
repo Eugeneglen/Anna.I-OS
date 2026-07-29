@@ -1353,14 +1353,6 @@ function StepMeetAnnaMerged({
     <div>
       {/* 1. Header */}
       <div className="text-center mb-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.4, type: "spring" }}
-          className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--anna-sage)] to-[var(--anna-sage-dark)] flex items-center justify-center mx-auto mb-3 shadow-lg"
-        >
-          <Brain size={24} className="text-white" />
-        </motion.div>
         <h2 className="text-lg font-bold text-[var(--anna-slate)] mb-1">Meet Anna.I</h2>
         <p className="text-xs text-[var(--anna-muted)] max-w-sm mx-auto">
           Your household AI. Gets smarter the more it learns — always with your approval.
@@ -1416,7 +1408,7 @@ function StepMeetAnnaMerged({
 
       {/* ROW 2 — Your AI, Your Control */}
       <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] p-4 mb-3">
-        <p className="text-xs font-bold text-[var(--anna-slate)] mb-2.5">Your AI, Your Control</p>
+        <p className="text-sm font-bold text-[var(--anna-slate)] mb-3">Your AI, Your Control</p>
         <div className="space-y-0">
           {timeline.map((item, idx) => (
             <motion.div
@@ -1427,18 +1419,18 @@ function StepMeetAnnaMerged({
               className="flex gap-2.5"
             >
               <div className="flex flex-col items-center">
-                <div className={cn("w-2.5 h-2.5 rounded-full shrink-0 mt-1", item.dotColor)} />
+                <div className={cn("w-3 h-3 rounded-full shrink-0 mt-1", item.dotColor)} />
                 {idx < timeline.length - 1 && (
-                  <div className="w-0.5 flex-1 bg-[var(--anna-border)] min-h-[18px]" />
+                  <div className="w-0.5 flex-1 bg-[var(--anna-border)] min-h-[22px]" />
                 )}
               </div>
               <div className="flex-1 mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <item.icon size={12} className={item.iconColor} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--anna-muted)]">{item.phase}</span>
-                  <span className="text-[11px] font-bold text-[var(--anna-slate)]">{item.label}</span>
+                  <item.icon size={14} className={item.iconColor} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--anna-muted)]">{item.phase}</span>
+                  <span className="text-xs font-bold text-[var(--anna-slate)]">{item.label}</span>
                 </div>
-                <p className="text-[10px] leading-snug text-[var(--anna-muted)] pl-5">{item.desc}</p>
+                <p className="text-xs leading-snug text-[var(--anna-slate)] pl-5">{item.desc}</p>
               </div>
             </motion.div>
           ))}
