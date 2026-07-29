@@ -12,10 +12,19 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
  * On Railway, request.url resolves to http://0.0.0.0:8080 which is unreachable by the browser.
  * We use NEXTAUTH_URL or forwarded headers to get the correct public origin.
  */
+function ensureProtocol(url: string): string {
+  // Railway users may set NEXTAUTH_URL without protocol (e.g. "example.com")
+  // new URL() requires a protocol, so we prepend https:// if missing
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+}
+
 function getPublicOrigin(request: Request): string {
   // 1. Explicit env var (most reliable for Railway/production)
   if (process.env.NEXTAUTH_URL) {
-    return process.env.NEXTAUTH_URL;
+    return ensureProtocol(process.env.NEXTAUTH_URL);
   }
   // 2. Proxy-forwarded headers (Railway sets these)
   const forwardedHost = request.headers.get("x-forwarded-host");
@@ -49,7 +58,6 @@ async function getNextAuthSession(): Promise<{
   email: string;
   name: string | null;
   picture: string | null;
-  _debug?: { availableCookies: string[]; nextauthUrl: string };
 } | null> {
   const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
   if (!secret) {
@@ -57,49 +65,20 @@ async function getNextAuthSession(): Promise<{
   }
 
   const cookieStore = await cookies();
-  const allCookies = cookieStore.getAll();
-  const cookieNames = allCookies.map((c) => c.name);
+  const isHttps =
+    process.env.NEXTAUTH_URL?.startsWith("https://") || !!process.env.VERCEL;
+  const cookieName = isHttps
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token";
 
-  // NextAuth uses different cookie names depending on env:
-  //   - HTTPS + NEXTAUTH_URL  → __Secure-next-auth.session-token
-  //   - HTTP / local dev     → next-auth.session-token
-  // Try all candidates to avoid name mismatches on Railway's SSL termination.
-  const CANDIDATES = [
-    "next-auth.session-token",
-    "__Secure-next-auth.session-token",
-    "next-auth.session-token.0",   // large token split variant
-    "__Secure-next-auth.session-token.0",
-  ];
-
-  let token: string | undefined;
-  let usedName: string | undefined;
-  for (const name of CANDIDATES) {
-    token = allCookies.find((c) => c.name === name)?.value;
-    if (token) {
-      usedName = name;
-      break;
-    }
-  }
-
+  const token = cookieStore.get(cookieName)?.value;
   if (!token) {
     console.error(
-      `[google-bridge] No NextAuth session cookie found. Available cookies:`,
-      cookieNames,
-      `NEXTAUTH_URL=${process.env.NEXTAUTH_URL ?? "<not set>"}`
+      `[google-bridge] Cookie "${cookieName}" not found. Available:`,
+      cookieStore.getAll().map((c) => c.name)
     );
-    // Return diagnostic info in the response for debugging
-    return {
-      email: "",
-      name: null,
-      picture: null,
-      _debug: {
-        availableCookies: cookieNames,
-        nextauthUrl: process.env.NEXTAUTH_URL ?? "<not set>",
-      },
-    };
+    return null;
   }
-
-  console.log(`[google-bridge] Found session cookie: ${usedName}`);
 
   // Derive encryption key the same way next-auth/jwt encode() does
   const encryptionKey = await hkdf(
@@ -126,10 +105,8 @@ async function bridgeLogic(request: Request) {
     // Step 1: Decrypt the NextAuth session token
     const session = await getNextAuthSession();
     if (!session?.email) {
-      // Include debug info if available (cookie name mismatch diagnostics)
-      const debug = (session as any)?._debug;
       return NextResponse.json(
-        { error: "No Google session found", debug: debug ?? undefined },
+        { error: "No Google session found" },
         { status: 401 }
       );
     }
