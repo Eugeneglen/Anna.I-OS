@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Save, Info, DollarSign, Calculator, TrendingUp, RotateCcw } from "lucide-react";
+import { Save, Info, DollarSign, Calculator, TrendingUp, RotateCcw, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 import {
@@ -164,13 +164,31 @@ export default function ConfigPage() {
 
   return (
     <div className="space-y-4 pb-20 md:pb-0 anna-fade-in">
-      <div>
-        <h2 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
-          Configuration
-        </h2>
-        <p className="text-sm text-[var(--anna-muted)] mt-0.5">
-          Manage categories, pricing, and autonomy thresholds
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">
+            Configuration
+          </h2>
+          <p className="text-sm text-[var(--anna-muted)] mt-0.5">
+            Manage categories, pricing, and autonomy thresholds
+          </p>
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-[var(--anna-border)] text-[var(--anna-slate)] hover:bg-[var(--anna-sage-light)]"
+              onClick={() => window.open("/guide/Anna.I_Ops_Config_Guide.pdf", "_blank")}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Admin Guide
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p className="text-xs">Download the Configuration Guide PDF (50 pages)</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <Tabs defaultValue="pricing">
