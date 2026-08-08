@@ -332,7 +332,7 @@ function AutonomyCard({
       {topVendor && (
         <div className="mt-3">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-full bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
-            ★ {topVendor.avgRating.toFixed(1)} · {topVendor.vendorName} · {topVendor.bookingCount} booking{topVendor.bookingCount !== 1 ? "s" : ""}
+            ★ {(topVendor.avgRating ?? 0).toFixed(1)} · {topVendor.vendorName} · {topVendor.bookingCount} booking{topVendor.bookingCount !== 1 ? "s" : ""}
           </span>
         </div>
       )}
