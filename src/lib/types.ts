@@ -262,7 +262,8 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
-export function formatSgd(cents: number): string {
+export function formatSgd(cents: number | null | undefined): string {
+  if (cents == null) return "SGD $0.00";
   return `SGD $${(cents / 100).toFixed(2)}`;
 }
 

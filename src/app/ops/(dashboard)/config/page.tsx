@@ -3,8 +3,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Download } from "lucide-react";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants";
 import { OpsPageHeader } from "@/components/ops/ops-page-header";
@@ -198,6 +205,24 @@ export default function ConfigPage() {
       <OpsPageHeader
         title="Configuration"
         subtitle="Manage categories, pricing, and autonomy thresholds"
+        actions={
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-[var(--anna-border)] text-[var(--anna-slate)] hover:bg-[var(--anna-sage-light)]"
+                onClick={() => window.open("/guide/Anna.I_Ops_Config_Guide.pdf", "_blank")}
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Admin Guide
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p className="text-xs">Download the Configuration Guide PDF</p>
+            </TooltipContent>
+          </Tooltip>
+        }
       />
 
       <Tabs defaultValue="pricing">

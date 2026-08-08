@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anna.I Ops Dashboard - Admin Configuration Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+@page { size: 210mm 297mm; margin: 0; }
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { background:#f8fafc; font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; color:#1e293b; font-size:9.5pt; line-height:1.6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.cover { width:210mm; height:297mm; background:linear-gradient(160deg,#3a6b39 0%,#5B8C5A 40%,#7aaa79 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; color:#fff; page-break-after:always; position:relative; overflow:hidden; }
+.cover::before { content:''; position:absolute; top:-80px; right:-80px; width:350px; height:350px; background:rgba(255,255,255,0.06); border-radius:50%; }
+.cover::after { content:''; position:absolute; bottom:-120px; left:-100px; width:450px; height:450px; background:rgba(255,255,255,0.04); border-radius:50%; }
+.cover-badge { background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); padding:6px 20px; border-radius:20px; font-size:9pt; font-weight:500; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:28px; position:relative; z-index:1; }
+.cover h1 { font-size:32pt; font-weight:800; letter-spacing:-0.5px; margin-bottom:8px; position:relative; z-index:1; }
+.cover h1 span { font-weight:300; opacity:0.85; }
+.cover-subtitle { font-size:14pt; font-weight:300; opacity:0.9; margin-bottom:36px; position:relative; z-index:1; }
+.cover-meta { font-size:9pt; opacity:0.7; position:relative; z-index:1; line-height:1.8; }
+.cover-line { width:60px; height:2px; background:rgba(255,255,255,0.4); margin:24px auto; position:relative; z-index:1; }
+.main-content { padding:0; }
+.page { width:210mm; min-height:297mm; padding:22mm 20mm 20mm 20mm; background:#f8fafc; }
+.toc-page { page-break-after:always; }
+.toc-title { font-size:18pt; font-weight:700; color:#3a6b39; margin-bottom:24px; padding-bottom:10px; border-bottom:2px solid #5B8C5A; }
+.toc-section { margin-bottom:18px; }
+.toc-section-title { font-size:10pt; font-weight:700; color:#5B8C5A; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; }
+.toc-item { display:flex; justify-content:space-between; align-items:baseline; padding:3px 0; font-size:9pt; color:#475569; border-bottom:1px dotted #cbd5e1; }
+.chapter-header { break-after:avoid; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #5B8C5A; }
+.chapter-number { font-size:8pt; font-weight:700; color:#5B8C5A; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px; }
+.chapter-title { font-size:18pt; font-weight:700; color:#1e293b; line-height:1.3; }
+.chapter-desc { font-size:9pt; color:#64748b; margin-top:4px; max-width:95%; }
+.section-header { break-after:avoid; font-size:13pt; font-weight:700; color:#334155; margin:22px 0 10px 0; padding-left:12px; border-left:3px solid #5B8C5A; }
+.sub-header { font-size:10.5pt; font-weight:600; color:#475569; margin:14px 0 6px 0; }
+.card { background:#fff; border-radius:8px; border:1px solid #e2e8f0; padding:14px 16px; margin-bottom:14px; break-inside:avoid; }
+.card-accent { border-left:4px solid #5B8C5A; }
+.card-warning { border-left:4px solid #f59e0b; background:#fffbeb; }
+.card-info { border-left:4px solid #3b82f6; background:#eff6ff; }
+.card-title { font-size:10.5pt; font-weight:700; color:#1e293b; margin-bottom:6px; }
+.card-title .price { float:right; font-weight:600; color:#5B8C5A; font-size:10pt; }
+.card-title .inactive-tag { float:right; font-size:7.5pt; font-weight:600; color:#dc2626; background:#fef2f2; padding:2px 8px; border-radius:10px; border:1px solid #fecaca; }
+table { width:100%; border-collapse:collapse; font-size:8.5pt; margin:8px 0 4px 0; break-inside:avoid; }
+th { background:#f1f5f9; color:#475569; font-weight:600; text-align:left; padding:6px 8px; border-bottom:2px solid #cbd5e1; font-size:8pt; text-transform:uppercase; letter-spacing:0.3px; }
+td { padding:5px 8px; border-bottom:1px solid #e2e8f0; color:#334155; vertical-align:top; }
+tr:last-child td { border-bottom:none; }
+.rule-badge { display:inline-block; font-size:7pt; font-weight:600; padding:2px 7px; border-radius:4px; margin-right:4px; text-transform:uppercase; letter-spacing:0.3px; }
+.badge-flat { background:#dbeafe; color:#1d4ed8; }
+.badge-per-unit { background:#dcfce7; color:#15803d; }
+.badge-per-item { background:#fef3c7; color:#92400e; }
+.badge-per-room { background:#f3e8ff; color:#7c3aed; }
+.badge-surcharge { background:#fef2f2; color:#dc2626; }
+.badge-multiplier { background:#ecfdf5; color:#059669; }
+.callout { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 16px; margin:12px 0; break-inside:avoid; }
+.callout-title { font-size:9pt; font-weight:700; color:#166534; margin-bottom:4px; }
+.callout-body { font-size:8.5pt; color:#15803d; line-height:1.5; }
+.formula-box { background:#f8fafc; border:1px dashed #94a3b8; border-radius:6px; padding:10px 14px; margin:10px 0; font-family:'Courier New',monospace; font-size:8.5pt; color:#334155; break-inside:avoid; }
+ul { margin:6px 0 6px 18px; font-size:9pt; color:#475569; }
+li { margin-bottom:3px; }
+p { margin-bottom:8px; }
+.status-active { display:inline-block; font-size:7pt; font-weight:600; padding:2px 6px; border-radius:3px; background:#dcfce7; color:#15803d; text-transform:uppercase; letter-spacing:0.3px; }
+.status-inactive { display:inline-block; font-size:7pt; font-weight:600; padding:2px 6px; border-radius:3px; background:#fee2e2; color:#dc2626; text-transform:uppercase; letter-spacing:0.3px; }
+.ref-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0; }
+.ref-item { background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; break-inside:avoid; }
+.ref-item-title { font-size:9pt; font-weight:700; color:#1e293b; margin-bottom:3px; }
+.ref-item-value { font-size:8.5pt; color:#5B8C5A; font-weight:600; }
+.level-row td:first-child { font-weight:600; color:#1e293b; }
+.ending-page { width:210mm; height:297mm; background:linear-gradient(160deg,#3a6b39 0%,#5B8C5A 40%,#7aaa79 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; color:#fff; page-break-before:always; }
+.ending-page h2 { font-size:20pt; font-weight:700; margin-bottom:10px; }
+.ending-page p { font-size:10pt; opacity:0.8; max-width:400px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-badge">Internal Operations Guide</div>
+  <h1>Anna.I <span>Ops Dashboard</span></h1>
+  <div class="cover-subtitle">Admin Configuration Guide</div>
+  <div class="cover-line"></div>
+  <div class="cover-meta">
+    ServiceJobType Configuration Reference<br>
+    Organized by Category<br><br>
+    Version 1.0 -- June 2025<br>
+    Singapore Home Services Platform<br>
+    CONFIDENTIAL -- For Internal Use Only
+  </div>
+</div>
+
+<div class="main-content">
+
+<!-- TOC -->
+<div class="page toc-page">
+  <div class="toc-title">Table of Contents</div>
+  <div class="toc-section">
+    <div class="toc-section-title">Introduction</div>
+    <div class="toc-item"><span>How to Use This Guide</span></div>
+    <div class="toc-item"><span>Dashboard Configuration Overview</span></div>
+    <div class="toc-item"><span>How Pricing Works</span></div>
+    <div class="toc-item"><span>Understanding Autonomy Thresholds</span></div>
+    <div class="toc-item"><span>Pricing Tab Configuration</span></div>
+  </div>
+  <div class="toc-section">
+    <div class="toc-section-title">Active Categories</div>
+    <div class="toc-item"><span>1. Cleaning (4 Job Types)</span></div>
+    <div class="toc-item"><span>2. Laundry (4 Job Types)</span></div>
+    <div class="toc-item"><span>3. Aircon (5 Job Types)</span></div>
+    <div class="toc-item"><span>4. Electrical (4 Job Types)</span></div>
+    <div class="toc-item"><span>5. Plumbing (4 Job Types)</span></div>
+    <div class="toc-item"><span>6. Handyman (4 Job Types)</span></div>
+    <div class="toc-item"><span>7. Appliance Repair (3 Job Types)</span></div>
+  </div>
+  <div class="toc-section">
+    <div class="toc-section-title">Inactive Categories (Config-Only)</div>
+    <div class="toc-item"><span>8. Painting (3 Job Types)</span></div>
+    <div class="toc-item"><span>9. Pest Control (4 Job Types)</span></div>
+    <div class="toc-item"><span>10. Locksmith (3 Job Types)</span></div>
+  </div>
+  <div class="toc-section">
+    <div class="toc-section-title">Reference</div>
+    <div class="toc-item"><span>Quick Reference Cards</span></div>
+    <div class="toc-item"><span>Active vs. Inactive Summary</span></div>
+    <div class="toc-item"><span>Pricing Model Summary</span></div>
+  </div>
+</div>
+
+<!-- HOW TO USE -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Introduction</div>
+    <div class="chapter-title">How to Use This Guide</div>
+    <div class="chapter-desc">A reference for operations administrators who manage the Anna.I service configuration.</div>
+  </div>
+  <p>This guide is designed for non-technical administrators who are responsible for managing the Configuration section of the Anna.I operations dashboard. The Configuration page is the central control panel where service categories, job types, pricing rules, and autonomy settings are defined and maintained. Every change made here directly affects how jobs are priced, what information customers provide when booking, and how the autonomous dispatch system behaves across the platform.</p>
+  <p>The document is organized by service category. Within each category, you will find every job type with a detailed breakdown of four key configuration areas: <strong>Basic</strong> information (name, base price, active status), <strong>Pricing Rules</strong> (how the final price is calculated including multipliers and surcharges), <strong>Required Fields</strong> (the questions customers must answer when booking), and <strong>Add-ons</strong> (optional extras they can purchase). Each section includes tables showing exact field names, values, and their meanings in plain language.</p>
+  <div class="card card-accent">
+    <div class="card-title">Four Configuration Tabs</div>
+    <p>The dashboard Configuration page has four tabs that work together. The <strong>Pricing</strong> tab sets category-level base prices and the platform commission rate. The <strong>Categories</strong> tab controls which categories are visible to households. The <strong>Job Types</strong> tab lets you toggle individual services on or off and edit their detailed settings. The <strong>Autonomy Thresholds</strong> tab defines how many completed job cycles a service provider needs before the system grants higher levels of automated dispatch. Understanding how these tabs interact is essential for making configuration changes correctly and avoiding unintended side effects.</p>
+  </div>
+  <p>All monetary values in this guide are displayed in Singapore Dollars (SGD, $). In the database, prices are stored in cents (e.g., $80 is stored as 8000). When editing values in the dashboard, you will typically work with dollar amounts in the user interface. The autonomy thresholds section explains the five-level progression system that controls how much automation each vendor receives based on their track record and completed job history on the platform.</p>
+</div>
+
+<!-- HOW PRICING WORKS -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Introduction</div>
+    <div class="chapter-title">How Pricing Works</div>
+    <div class="chapter-desc">Understanding the price calculation model used across all job types on the platform.</div>
+  </div>
+  <p>Every job type in Anna.I uses one of four pricing models to calculate the final amount charged to a household. The pricing model determines whether the base price is charged once per booking, multiplied by a unit count, or scaled by a field value. Understanding these models is critical because they affect how the quote is presented to the customer and how the vendor payout is computed after the job is completed and confirmed.</p>
+  <div class="section-header">The Four Pricing Types</div>
+  <table>
+    <tr><th>Type</th><th>How It Works</th><th>Example</th></tr>
+    <tr><td><span class="rule-badge badge-flat">flat</span></td><td>A single base price charged per booking. Multipliers and surcharges may still apply on top of the base.</td><td>Deep Cleaning: $300 per session, adjusted by floor area multiplier.</td></tr>
+    <tr><td><span class="rule-badge badge-per-unit">per_unit</span></td><td>Base price multiplied by the number of units specified in a required field (unitField).</td><td>Standard Aircon Service: $50 per unit x number of units selected.</td></tr>
+    <tr><td><span class="rule-badge badge-per-item">per_item</span></td><td>Base price multiplied by item count. Similar to per_unit but for discrete items.</td><td>Dry Cleaning: $10 per item x number of items entered.</td></tr>
+    <tr><td><span class="rule-badge badge-per-room">per_room</span></td><td>Base price multiplied by room or wall count. Used for painting and space-based services.</td><td>Room Painting: $320 per room x number of rooms to paint.</td></tr>
+  </table>
+  <div class="section-header">Multipliers and Surcharges</div>
+  <p>Most job types include a <strong>multiplierField</strong> in their pricing rules. This references a required field whose selected option carries a numeric multiplier value. The <strong>areaMultiplier</strong> flag tells the system to automatically apply a floor-area-based multiplier from the required fields, commonly used in cleaning services. Surcharges are fixed additional amounts triggered by specific field selections, such as a ceiling cassette surcharge for aircon work or an after-hours premium. Surcharges can be flat amounts or per-unit amounts depending on the job type.</p>
+  <div class="formula-box">Final Price = basePrice x multiplier x (areaMultiplier or 1.0) + surcharges + add-ons</div>
+  <div class="section-header">Commission and Vendor Payout</div>
+  <div class="card card-accent">
+    <div class="card-title">Pricing Formula</div>
+    <p>The platform retains a commission on every job. The default commission rate is <strong>10%</strong>. The vendor receives the remainder. For example, a $100 job yields a $90 vendor payout. The <strong>Blended Job Value</strong> metric shown on the Pricing tab is the average base price across all active categories, currently benchmarked at <strong>SGD $68.00</strong>. This figure helps the operations team monitor overall pricing health and identify categories that may need adjustment to remain competitive in the Singapore market.</p>
+  </div>
+  <div class="formula-box">Vendor Payout = Total Job Price x (1 - commission_rate)<br>Current Commission Rate = 10% (0.10)</div>
+</div>
+
+<!-- AUTONOMY THRESHOLDS -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Introduction</div>
+    <div class="chapter-title">Understanding Autonomy Thresholds</div>
+    <div class="chapter-desc">How the five-level automation ladder controls vendor dispatch behaviour per category.</div>
+  </div>
+  <p>The autonomy system determines how much automated control the system has over job dispatching for each vendor on a per-category basis. New vendors start at Level 1, where every job requires manual operator intervention. As they complete more jobs successfully, they advance through the levels, gaining increasing independence. The thresholds are configured per category on the Autonomy Thresholds tab of the dashboard, allowing different categories to have different ramp-up speeds based on complexity and risk.</p>
+  <div class="section-header">The Five Autonomy Levels</div>
+  <table>
+    <tr><th>Level</th><th>Name</th><th>Behaviour</th></tr>
+    <tr class="level-row"><td>L1</td><td>Manual</td><td>Operations team dispatches every job. The system provides no automated suggestions. This is the starting level for all new vendors to ensure quality and safety oversight during their initial engagement period.</td></tr>
+    <tr class="level-row"><td>L2</td><td>Guided Suggestions</td><td>The system analyses demand and availability, then suggests optimal assignments. An operator reviews and confirms each suggestion. This introduces automation while maintaining human oversight for quality assurance.</td></tr>
+    <tr class="level-row"><td>L3</td><td>Auto-Dispatch</td><td>The system automatically assigns jobs based on matching algorithms. The vendor can cancel, and operators can intervene. This is the standard level for established, reliable vendors on the platform.</td></tr>
+    <tr class="level-row"><td>L4</td><td>Predictive Pre-Booking</td><td>The system uses demand forecasting to pre-book vendors for anticipated jobs before formal requests arrive. This reduces response times and improves service reliability during peak demand periods.</td></tr>
+    <tr class="level-row"><td>L5</td><td>Full Autonomous</td><td>The system manages the vendor's entire schedule including pre-booking, dispatch, and rescheduling. Vendors at this level have demonstrated consistent reliability and require minimal human oversight.</td></tr>
+  </table>
+  <div class="section-header">Cycles Required Per Level</div>
+  <p>A "cycle" represents one completed job in that category. To advance from L1 to L2, a vendor must complete the specified number of cycles in that category. The same number applies for each subsequent level advancement. Categories with higher risk or complexity require more cycles before granting autonomy. This graduated approach protects service quality while rewarding consistent performance with greater operational efficiency.</p>
+  <table>
+    <tr><th>Category</th><th>Cycles Per Level</th><th>Total for L5</th><th>Rationale</th></tr>
+    <tr><td>Cleaning</td><td>2</td><td>8</td><td>Lower risk, high volume, faster ramp-up appropriate</td></tr>
+    <tr><td>Laundry</td><td>2</td><td>8</td><td>Standardized process, low complexity per job</td></tr>
+    <tr><td>Locksmith</td><td>2</td><td>8</td><td>Emergency service but limited scope per job type</td></tr>
+    <tr><td>Aircon</td><td>3</td><td>12</td><td>Technical complexity requires more proven experience</td></tr>
+    <tr><td>Plumbing</td><td>3</td><td>12</td><td>Variable scope and potential for property damage</td></tr>
+    <tr><td>Electrical</td><td>3</td><td>12</td><td>Safety-critical work requiring verified competence</td></tr>
+    <tr><td>Painting</td><td>3</td><td>12</td><td>High-value jobs with significant quality expectations</td></tr>
+    <tr><td>Pest Control</td><td>3</td><td>12</td><td>Chemical handling requires demonstrated responsibility</td></tr>
+    <tr><td>Handyman</td><td>3</td><td>12</td><td>Variable task types need broader experience base</td></tr>
+    <tr><td>Appliance Repair</td><td>3</td><td>12</td><td>Technical diagnostic skills require more verification</td></tr>
+  </table>
+  <div class="callout">
+    <div class="callout-title">Important Note</div>
+    <div class="callout-body">Autonomy levels are tracked per vendor, per category. A vendor may be at L4 for Cleaning but only L2 for Electrical. This granular approach ensures that automation is only granted where the vendor has proven competence. Thresholds can be adjusted by operations admins if market conditions or vendor performance data suggest a change is needed.</div>
+  </div>
+</div>
+
+<!-- PRICING TAB -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Introduction</div>
+    <div class="chapter-title">Pricing Tab Configuration</div>
+    <div class="chapter-desc">Understanding the category-level pricing controls on the Configuration page.</div>
+  </div>
+  <p>The Pricing tab on the Configuration page provides category-level controls that work in conjunction with the job type pricing rules. While individual job types define their own base prices and calculation logic, the Pricing tab allows operations administrators to set override base prices at the category level and manage the platform's commission structure. This tab serves as the high-level financial control panel for the entire service marketplace.</p>
+  <div class="section-header">Category Base Prices</div>
+  <p>Each active category has a base price that represents the average expected job value for that category. This value is used primarily for reporting and for calculating the Blended Job Value metric. The actual price charged to customers is determined by the individual job type's pricing rules (base price, multipliers, surcharges), not directly by the category base price. However, the category base price serves as a sanity check and benchmark when setting individual job type prices. If a job type's base price deviates significantly from the category average, it may indicate a configuration error that needs investigation.</p>
+  <div class="section-header">Commission Rate</div>
+  <div class="card card-accent">
+    <div class="card-title">Commission Configuration</div>
+    <p>The platform commission rate is currently set to <strong>10%</strong>. This single rate applies uniformly across all categories and job types. The commission is deducted from the total job price (base price plus all multipliers, surcharges, and add-ons) before the vendor payout is calculated. When adjusting this rate, consider the impact on vendor economics and marketplace competitiveness. Even small changes can significantly affect vendor willingness to accept jobs, especially for lower-value services where the absolute dollar commission is already modest.</p>
+  </div>
+  <div class="section-header">Blended Job Value</div>
+  <p>The Blended Job Value is a computed metric equal to the average base price across all active job types in active categories. As of this guide's publication, the baseline is <strong>SGD $68.00</strong>. This metric is used internally by the operations team to monitor pricing trends and identify categories that may need adjustment. A declining blended value might indicate that lower-priced job types are being added or that existing prices need upward revision. An increasing blended value could signal that the platform is becoming less accessible to budget-conscious households.</p>
+  <div class="card card-warning">
+    <div class="card-title">Categories Tab vs. Job Types Tab</div>
+    <p>The Categories tab controls whether an entire service category is visible to households. Setting a category to Inactive hides all its job types from the booking flow, regardless of individual job type active status. The Job Types tab provides finer-grained control, allowing you to toggle individual services within an active category on or off. Use the Categories tab for broad market decisions (e.g., launching or pausing an entire service line) and the Job Types tab for tactical adjustments (e.g., temporarily disabling a specific service due to vendor shortage).</p>
+  </div>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 1: CLEANING -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 1</div>
+    <div class="chapter-title">Cleaning <span class="status-active">Active</span></div>
+    <div class="chapter-desc">4 job types covering regular maintenance, deep cleaning, move-in/move-out, and post-renovation cleaning services.</div>
+  </div>
+  <p>The Cleaning category is one of the highest-volume service lines on Anna.I, serving households across Singapore for routine and specialized cleaning needs. All cleaning job types use flat pricing with an area multiplier, meaning the base price is adjusted based on the floor area of the home. This ensures fair pricing that reflects the actual effort required. The category requires 2 completed cycles per autonomy level, reflecting the relatively lower risk and standardized nature of cleaning work compared to technical trades.</p>
+
+  <!-- 1.1 Regular Maintenance -->
+  <div class="section-header">1.1 Regular Maintenance</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>regular-maintenance</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">areaMultiplier</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>This is the bread-and-butter service for recurring household cleaning. The flat base price of $80 covers a standard-sized home, and the area multiplier adjusts the final price based on the home's floor area. Customers select their floor area range during booking, and the system automatically applies the corresponding multiplier. This service is the most common entry point for new households joining the platform and typically generates the highest volume of recurring bookings.</p>
+  <div class="sub-header">Pricing Rules</div>
+  <div class="card">
+    <div class="card-title">Price Calculation</div>
+    <p>Type: <strong>flat</strong> with <strong>areaMultiplier</strong> enabled. The system looks at the customer's floor area selection and multiplies the $80 base price by the corresponding factor. No additional multiplierField is used for this job type, as the area multiplier alone provides sufficient price differentiation for the varying home sizes found across Singapore's HDB flats, condominiums, and landed properties.</p>
+    <div class="formula-box">Price = $80 x floorAreaMultiplier</div>
+  </div>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Floor Area</td><td class="field-type">select</td><td>Below 800 sqft (1.0x) | 800-1200 sqft (1.2x) | 1200-1800 sqft (1.4x) | Above 1800 sqft (1.6x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Pet Hair Removal</td><td>$8</td><td>flat</td></tr>
+    <tr><td>Inside Fridge</td><td>$10</td><td>flat</td></tr>
+    <tr><td>Inside Oven</td><td>$15</td><td>flat</td></tr>
+  </table>
+
+  <!-- 1.2 Deep Cleaning -->
+  <div class="section-header">1.2 Deep Cleaning</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$300 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>deep-cleaning</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">areaMultiplier</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Deep cleaning is a thorough, intensive cleaning service that goes well beyond regular maintenance. It covers areas often overlooked in routine cleaning such as behind appliances, inside cabinets, baseboards, and light fixtures. The $300 base price reflects the significantly greater time and effort required. Customers specify their bedroom and bathroom counts in addition to floor area, giving the system more data points for accurate vendor matching even though the primary price adjustment comes from the area multiplier alone.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Bedrooms</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 3</td></tr>
+    <tr><td class="field-label">Bathrooms</td><td class="field-type">number</td><td>Min: 1, Max: 4, Default: 2</td></tr>
+    <tr><td class="field-label">Floor Area</td><td class="field-type">select</td><td>Below 800 sqft (1.0x) | 800-1200 sqft (1.2x) | 1200-1800 sqft (1.4x) | Above 1800 sqft (1.6x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Window Exterior</td><td>$20</td><td>flat</td></tr>
+    <tr><td>Cabinet Interior</td><td>$20</td><td>flat</td></tr>
+    <tr><td>Appliance Cleaning</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- CLEANING continued -->
+<div class="page">
+  <!-- 1.3 Move-in / Move-out -->
+  <div class="section-header">1.3 Move-in / Move-out Cleaning</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$350 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>move-in-move-out</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">areaMultiplier</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Move-in and move-out cleaning is a specialized service designed for tenants and homeowners transitioning between properties. The higher base price of $350 reflects the need to clean empty or partially empty spaces to a handover-standard level. This job type uniquely includes a Furnishing Level required field that acts as a multiplier, adding cost for fully furnished homes that require more detailed cleaning around furniture. The combination of area multiplier and furnishing multiplier ensures accurate pricing across the wide variety of Singapore property types.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Bedrooms</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 3</td></tr>
+    <tr><td class="field-label">Bathrooms</td><td class="field-type">number</td><td>Min: 1, Max: 4, Default: 2</td></tr>
+    <tr><td class="field-label">Floor Area</td><td class="field-type">select</td><td>Below 800 sqft (1.0x) | 800-1200 sqft (1.2x) | 1200-1800 sqft (1.4x) | Above 1800 sqft (1.6x)</td></tr>
+    <tr><td class="field-label">Furnishing Level</td><td class="field-type">select</td><td>Unfurnished (1.0x) | Partially Furnished (1.3x) | Fully Furnished (1.6x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Window Exterior</td><td>$25</td><td>flat</td></tr>
+    <tr><td>Cabinet Interior</td><td>$20</td><td>flat</td></tr>
+  </table>
+
+  <!-- 1.4 Post-Renovation -->
+  <div class="section-header">1.4 Post-Renovation Cleaning</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$500 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>post-renovation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">areaMultiplier</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Post-renovation cleaning is the most intensive cleaning service, dealing with construction dust, paint splatters, adhesive residue, and other renovation debris. The $500 base price is the highest in the Cleaning category, reflecting the specialized equipment and extended time required. Customers specify the number of rooms which helps vendors plan their approach and estimate required supplies. The add-ons for chemical wash, window cleaning, and high dusting address the most common post-renovation cleaning needs that go beyond the standard scope of work.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Floor Area</td><td class="field-type">select</td><td>Below 800 sqft (1.0x) | 800-1200 sqft (1.2x) | 1200-1800 sqft (1.4x) | Above 1800 sqft (1.6x)</td></tr>
+    <tr><td class="field-label">Rooms</td><td class="field-type">number</td><td>Min: 1, Max: 8, Default: 3</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Chemical Wash</td><td>$40</td><td>flat</td></tr>
+    <tr><td>Window Cleaning</td><td>$25</td><td>flat</td></tr>
+    <tr><td>High Dusting</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 2: LAUNDRY -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 2</div>
+    <div class="chapter-title">Laundry <span class="status-active">Active</span></div>
+    <div class="chapter-desc">4 job types covering wash and fold, ironing, dry cleaning, and curtain cleaning services.</div>
+  </div>
+  <p>The Laundry category provides essential fabric care services for Singapore households. Unlike Cleaning, the Laundry category uses a mix of pricing models: flat with multiplier for wash and fold, and per-item pricing for ironing, dry cleaning, and curtain cleaning. This mix reflects the fundamentally different nature of these services. Wash and fold is volume-based (by load size), while the others count individual items. The category requires 2 cycles per autonomy level, consistent with the standardized and lower-risk nature of laundry work.</p>
+
+  <!-- 2.1 Wash & Fold -->
+  <div class="section-header">2.1 Wash and Fold</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$5 / kg base</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>wash-and-fold</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: loadSize</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Wash and Fold is priced at a $5/kg base rate with the total price determined by the customer's selected load size tier. Rather than asking customers to estimate their exact kilogram weight, the system presents four standard load sizes (Small 3kg, Medium 6kg, Large 10kg, XL 15kg) with preset multipliers. The customer picks the tier that best fits their laundry volume, and the system calculates the total automatically. This approach reduces estimation errors and provides predictable pricing for both customers and vendors.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Load Size</td><td class="field-type">select</td><td>Small 3kg (1.0x = $15) | Medium 6kg (2.0x = $30) | Large 10kg (3.3x = $49.50) | XL 15kg (5.0x = $75)</td></tr>
+  </table>
+  <div class="formula-box">Price = $15 (base load) x loadSizeMultiplier + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th><th>Notes</th></tr>
+    <tr><td>Express Same-Day</td><td>$10</td><td>flat</td><td>Fixed surcharge for faster turnaround</td></tr>
+    <tr><td>Stain Treatment</td><td>$5</td><td>per_unit (x loadSize)</td><td>Scaled by the selected load multiplier</td></tr>
+  </table>
+
+  <!-- 2.2 Ironing Only -->
+  <div class="section-header">2.2 Ironing Only</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$3 / item</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>ironing-only</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-item">per_item</span> unitField: itemCount</td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Ironing Only charges $3 per individual garment or fabric item. The customer enters the number of items they need ironed, and the system multiplies by the per-item rate. This is a straightforward per-item pricing model with no additional multipliers, making it one of the simplest configurations on the platform. The Express Same-Day add-on provides an option for customers who need their items returned quickly, which is particularly popular for professional attire needed for work the next day.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Items</td><td class="field-type">number</td><td>Min: 1, Max: 30, Default: 5</td></tr>
+  </table>
+  <div class="formula-box">Price = $3 x itemCount</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Express Same-Day</td><td>$8</td><td>flat</td></tr>
+  </table>
+
+  <!-- 2.3 Dry Cleaning -->
+  <div class="section-header">2.3 Dry Cleaning</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$10 / item</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>dry-cleaning</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-item">per_item</span> unitField: itemCount</td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Dry Cleaning uses the same per-item model as Ironing but at the higher rate of $10 per item, reflecting the cost of chemical solvents and specialized equipment. The Express Service add-on is priced per item rather than as a flat fee, which is appropriate because express dry cleaning of many items requires proportionally more resources. Customers typically use this service for suits, dresses, coats, and other delicate garments that cannot be machine-washed.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Items</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 1</td></tr>
+  </table>
+  <div class="formula-box">Price = $10 x itemCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Express Service</td><td>$5</td><td>per_item (x itemCount)</td></tr>
+  </table>
+
+  <!-- 2.4 Curtain Cleaning -->
+  <div class="section-header">2.4 Curtain Cleaning</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$15 / panel</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>curtain-cleaning</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-item">per_item</span> unitField: panelCount</td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Curtain Cleaning is priced per panel at $15 each. Curtains are counted as individual panels (one panel = one side of a window covering). The unitField is set to panelCount to clearly distinguish this from the generic itemCount used by other laundry types. This distinction helps with vendor instructions and customer communication, as curtains require special handling including removal, treatment, and re-hanging. The Express Service add-on provides priority processing for customers who need their curtains returned quickly.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Panels</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 2</td></tr>
+  </table>
+  <div class="formula-box">Price = $15 x panelCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Express Service</td><td>$20</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 3: AIRCON -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 3</div>
+    <div class="chapter-title">Aircon <span class="status-active">Active</span></div>
+    <div class="chapter-desc">5 job types covering standard servicing, chemical wash, chemical overhaul, installation, and gas top-up.</div>
+  </div>
+  <p>The Aircon category is one of the most technically demanding service lines on the platform. All five job types use per_unit pricing (per aircon unit) with the unitCount field determining the total. Several types include a ceiling cassette surcharge, which adds a significant per-unit premium for the more complex cassette-type units commonly found in commercial spaces and high-end condominiums. The category requires 3 cycles per autonomy level, reflecting the technical skill and safety considerations involved in aircon work.</p>
+
+  <!-- 3.1 Standard Service -->
+  <div class="section-header">3.1 Standard Service</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$50 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>aircon-standard-service</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">Ceiling Cassette +$80/unit</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>The Standard Service is the routine aircon maintenance that every household should have performed regularly. At $50 per unit, it covers filter cleaning, coil washing, and general inspection. The ceiling cassette surcharge of $80 per unit is substantial because cassette units require significantly more time and specialized equipment to service compared to standard wall-mounted units. The Unit Type required field triggers this surcharge: when a customer selects "Ceiling cassette," the system automatically adds the surcharge to the per-unit price.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 1</td></tr>
+    <tr><td class="field-label">Unit Type</td><td class="field-type">select</td><td>Standard Wall-Mounted (+$0) | Ceiling Cassette (+$80/unit)</td></tr>
+  </table>
+  <div class="formula-box">Price = ($50 + surcharge) x unitCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Filter Replacement</td><td>$15</td><td>per_unit (x unitCount)</td></tr>
+    <tr><td>Condenser Cleaning</td><td>$25</td><td>flat</td></tr>
+  </table>
+
+  <!-- 3.2 Chemical Wash -->
+  <div class="section-header">3.2 Chemical Wash</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$90 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>aircon-chemical-wash</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">Ceiling Cassette +$90/unit</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Chemical Wash is a more thorough cleaning that uses chemical solutions to remove stubborn dirt, mold, and bacterial buildup that regular servicing cannot address. At $90 per unit, it is nearly double the standard service price. The ceiling cassette surcharge is also higher at $90 per unit, reflecting the increased chemical volume and handling complexity for cassette units. This service is typically recommended when aircon units show signs of reduced cooling performance, unusual odors, or visible mold growth around the vents.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 1</td></tr>
+    <tr><td class="field-label">Unit Type</td><td class="field-type">select</td><td>Standard Wall-Mounted (+$0) | Ceiling Cassette (+$90/unit)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Anti-Bacterial Wash</td><td>$20</td><td>per_unit (x unitCount)</td></tr>
+  </table>
+</div>
+
+<!-- AIRCON continued -->
+<div class="page">
+  <!-- 3.3 Chemical Overhaul -->
+  <div class="section-header">3.3 Chemical Overhaul</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$150 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>aircon-chemical-overhaul</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">Ceiling Cassette +$100/unit</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Chemical Overhaul is the most comprehensive cleaning procedure, involving complete disassembly of the aircon unit for deep chemical treatment of all internal components. At $150 per unit, it is the most expensive cleaning service and is typically recommended for units that have not been serviced in over a year or are showing severe performance degradation. The $100 ceiling cassette surcharge reflects the significantly more complex disassembly and reassembly process for cassette-type systems. The Gas Top-Up add-on is commonly selected alongside this service since the unit is already fully disassembled.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 8, Default: 1</td></tr>
+    <tr><td class="field-label">Unit Type</td><td class="field-type">select</td><td>Standard Wall-Mounted (+$0) | Ceiling Cassette (+$100/unit)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Gas Top-Up</td><td>$40</td><td>per_unit (x unitCount)</td></tr>
+  </table>
+
+  <!-- 3.4 Installation -->
+  <div class="section-header">3.4 Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$200 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>aircon-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Multiplier</td><td><span class="rule-badge badge-multiplier">multiplierField: mountType</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Installation covers the mounting and setup of new aircon units. The $200 per unit base price applies to standard wall-mounted installations. The Mount Type multiplier adjusts the price based on installation complexity: window units add 10% (1.1x) and cassette units add 50% (1.5x) due to the additional structural work, piping requirements, and ceiling modifications needed. This job type does not use a surcharge system like the other aircon types; instead, the mount type multiplier handles the price variation in a more granular way.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 1</td></tr>
+    <tr><td class="field-label">Mount Type</td><td class="field-type">select</td><td>Wall-Mounted (1.0x) | Window (1.1x) | Cassette (1.5x)</td></tr>
+  </table>
+  <div class="formula-box">Price = $200 x mountTypeMultiplier x unitCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Piping Work</td><td>$80</td><td>flat</td></tr>
+    <tr><td>Bracket Installation</td><td>$30</td><td>flat</td></tr>
+  </table>
+
+  <!-- 3.5 Gas Top-up -->
+  <div class="section-header">3.5 Gas Top-up</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$40 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>aircon-gas-topup</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Sort Order</td><td>5</td></tr>
+    </table>
+  </div>
+  <p>Gas Top-up is the simplest aircon service, involving refrigerant gas replenishment for units that are cooling insufficiently. At $40 per unit, it has no multipliers, no surcharges, and only one add-on (Leak Detection). This simplicity makes it an easy service for vendors to perform and for the operations team to manage. The Leak Detection add-on is recommended when the gas loss is unexplained, as simply topping up gas without finding and fixing a leak will result in the same issue recurring within weeks.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 1</td></tr>
+  </table>
+  <div class="formula-box">Price = $40 x unitCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Leak Detection</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 4: ELECTRICAL -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 4</div>
+    <div class="chapter-title">Electrical <span class="status-active">Active</span></div>
+    <div class="chapter-desc">4 job types covering power trip repair, power point installation, light fixture installation, and ceiling fan installation.</div>
+  </div>
+  <p>The Electrical category addresses one of the most safety-critical service areas on the platform. All electrical work carries inherent risk, and the pricing structure reflects the varying complexity of different electrical tasks. Three of the four job types use flat pricing with a multiplierField that adjusts for complexity or type, while one uses per_unit pricing. The After-Hours add-on appears on three types, providing customers with emergency access outside normal business hours at a premium. The category requires 3 cycles per autonomy level.</p>
+
+  <!-- 4.1 Power Trip Repair -->
+  <div class="section-header">4.1 Power Trip Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>power-trip-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: complexity</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Power Trip Repair handles the common and often urgent issue of circuit breaker tripping. The $80 base price covers a simple reset scenario, but the complexity multiplier significantly increases the cost for more involved issues. A circuit diagnosis that requires testing multiple circuits costs $120 (1.5x), while a DB (distribution board) box issue that may involve component replacement reaches $200 (2.5x). This tiered pricing ensures vendors are fairly compensated for diagnostic work while keeping simple resets affordable for customers. The After-Hours add-on is frequently selected as power trips often occur in the evening.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Complexity</td><td class="field-type">select</td><td>Simple Reset (1.0x = $80) | Circuit Diagnosis (1.5x = $120) | DB Box Issue (2.5x = $200)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Replacement Parts</td><td>$30</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+
+  <!-- 4.2 Power Point Installation -->
+  <div class="section-header">4.2 Power Point Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$90 / point</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>power-point-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: pointCount <span class="rule-badge badge-multiplier">multiplierField: pointType</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Power Point Installation uses per_unit pricing at $90 per power point, adjusted by the type of point being installed. Standard 13A single sockets are the baseline, 13A double sockets add 10% for the wider backbox and cover plate, and 15A aircon-rated points add 40% due to the heavier wiring and dedicated circuit requirements. The Concealed Wiring add-on at $50 per point is significant because it involves chasing walls and running cables behind plaster, which is far more labor-intensive than surface-mounted wiring.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Points</td><td class="field-type">number</td><td>Min: 1, Max: 10, Default: 1</td></tr>
+    <tr><td class="field-label">Point Type</td><td class="field-type">select</td><td>13A Single Socket (1.0x) | 13A Double Socket (1.1x) | 15A Aircon Point (1.4x)</td></tr>
+  </table>
+  <div class="formula-box">Price = $90 x pointTypeMultiplier x pointCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Concealed Wiring</td><td>$50</td><td>per_unit (x pointCount)</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- ELECTRICAL continued -->
+<div class="page">
+  <!-- 4.3 Light Fixture Install -->
+  <div class="section-header">4.3 Light Fixture Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / point</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>light-fixture-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: pointCount</td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">New Wiring +$40/point</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Light Fixture Installation charges $80 per lighting point with a $40 per-point surcharge when new wiring is required. The Wiring Status required field determines whether the surcharge applies: if the customer indicates that existing wiring is already in place, no surcharge is added. If new wiring is needed (for example, installing a light in a location that previously had none), the surcharge covers the additional materials and labor. Unlike the Power Point Installation, this type does not use a multiplierField for different fixture types, keeping the pricing structure simpler since the per-point base rate already accounts for average installation complexity.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Points</td><td class="field-type">number</td><td>Min: 1, Max: 8, Default: 1</td></tr>
+    <tr><td class="field-label">Wiring Status</td><td class="field-type">select</td><td>Existing Wiring (no surcharge) | New Wiring Needed (+$40/point)</td></tr>
+  </table>
+  <div class="formula-box">Price = ($80 + wiringSurcharge) x pointCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Dimmer Switch</td><td>$30</td><td>per_unit (x pointCount)</td></tr>
+  </table>
+
+  <!-- 4.4 Ceiling Fan Installation -->
+  <div class="section-header">4.4 Ceiling Fan Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$100 / unit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>ceiling-fan-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: unitCount</td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">No Existing Point +$50/unit</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Ceiling Fan Installation follows the same pattern as Light Fixture Installation with per_unit pricing and a wiring surcharge. The $100 per unit base covers installation where an existing electrical point and mounting structure are available. The $50 surcharge applies when no existing wiring point is present, covering the cost of running a new circuit from the nearest junction box. This job type has no After-Hours add-on as ceiling fan installation is not typically an emergency service. The Downrod Extension add-on accommodates rooms with high ceilings where a standard mounting height would place the fan too close to the ceiling for effective airflow.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Units</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 1</td></tr>
+    <tr><td class="field-label">Existing Wiring Point</td><td class="field-type">select</td><td>Has Existing Point (no surcharge) | No Existing Point (+$50/unit)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Downrod Extension</td><td>$20</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 5: PLUMBING -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 5</div>
+    <div class="chapter-title">Plumbing <span class="status-active">Active</span></div>
+    <div class="chapter-desc">4 job types covering unclogging, leak repair, pipe replacement, and fixture installation.</div>
+  </div>
+  <p>The Plumbing category handles common household water and drainage issues. All four job types use flat pricing with a multiplierField that adjusts the base price based on the severity, location, or scope of the work. The After-Hours add-on is available on all four types, reflecting the emergency nature of many plumbing issues (burst pipes, severe blockages) that cannot wait until the next business day. The category requires 3 cycles per autonomy level due to the potential for property damage from improper plumbing work.</p>
+
+  <!-- 5.1 Unclogging -->
+  <div class="section-header">5.1 Unclogging</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$100 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>unclogging</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: severity</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Unclogging addresses blocked drains and pipes, one of the most common household plumbing emergencies. The severity multiplier ranges from 1.0x for minor slow drains ($100) to 2.5x for severe complete blockages ($250). The Camera Inspection add-on at $50 is valuable for severe or recurring blockages where the vendor needs to visualize the inside of the pipe to identify the root cause (tree roots, collapsed pipe, foreign objects). The After-Hours surcharge ensures vendors are compensated for emergency callouts during evenings and weekends when most blockages seem to occur.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Severity</td><td class="field-type">select</td><td>Minor Slow Drain (1.0x = $100) | Moderate Partial Block (1.5x = $150) | Severe Complete Block (2.5x = $250)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Camera Inspection</td><td>$50</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+
+  <!-- 5.2 Leak Repair -->
+  <div class="section-header">5.2 Leak Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$120 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>leak-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: location</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Leak Repair pricing is driven by where the leak is located, as access difficulty is the primary cost factor. An exposed pipe leak (1.0x = $120) is straightforward to reach and repair. A concealed wall leak (2.0x = $240) requires opening up walls to access the pipe, patching, and painting afterward. A concealed ceiling leak (2.5x = $300) is the most complex due to the challenges of working overhead, potential water damage to ceiling structures, and the need for ceiling restoration. The Parts add-on covers replacement pipe sections, connectors, and sealing materials that may be needed for the repair.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Leak Location</td><td class="field-type">select</td><td>Exposed Pipe (1.0x = $120) | Concealed Wall (2.0x = $240) | Concealed Ceiling (2.5x = $300)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Parts</td><td>$25</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- PLUMBING continued -->
+<div class="page">
+  <!-- 5.3 Pipe Replacement -->
+  <div class="section-header">5.3 Pipe Replacement</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$200 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>pipe-replacement</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: length</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Pipe Replacement uses a length-based multiplier to account for the material cost and labor involved in replacing different pipe sections. A short pipe section under 1 meter (1.0x = $200) typically covers a localized replacement such as a single joint or valve section. A medium run of 1-3 meters (1.5x = $300) covers common scenarios like replacing a sink supply line or a section of drainage pipe. A long run exceeding 3 meters (2.5x = $500) covers major pipe replacements that may span multiple rooms or involve main supply lines. The New Parts add-on is almost always needed since the whole purpose of the job is to replace old or damaged pipes.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Pipe Length</td><td class="field-type">select</td><td>Short under 1m (1.0x = $200) | Medium 1-3m (1.5x = $300) | Long over 3m (2.5x = $500)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>New Parts</td><td>$40</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+
+  <!-- 5.4 Fixture Installation -->
+  <div class="section-header">5.4 Fixture Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$150 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>fixture-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: fixtureType</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Fixture Installation covers the installation of new plumbing fixtures such as taps, shower heads, and water heaters. The fixture type multiplier reflects both the complexity of installation and the value of the fixture being handled. A tap or basin installation (1.0x = $150) is the most straightforward. A shower head installation (1.2x = $180) may involve additional waterproofing work. A water heater installation (1.5x = $225) is the most complex, involving electrical connections, pressure relief valves, and sometimes modifications to existing plumbing routes. The Supply Lines add-on covers the hoses and connectors needed for the new fixture.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Fixture Type</td><td class="field-type">select</td><td>Tap / Basin (1.0x = $150) | Shower Head (1.2x = $180) | Water Heater (1.5x = $225)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Supply Lines</td><td>$20</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$40</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 6: HANDYMAN -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 6</div>
+    <div class="chapter-title">Handyman <span class="status-active">Active</span></div>
+    <div class="chapter-desc">4 job types covering furniture assembly, TV/shelf mounting, door repair, and general repair work.</div>
+  </div>
+  <p>The Handyman category is the most diverse active category on the platform, covering a wide range of common household tasks that do not require specialized trade licenses. All four types use flat pricing with a multiplierField that adjusts for the complexity or specific characteristics of the work. The category has the broadest scope of any service line, which is why it requires 3 cycles per autonomy level despite individual tasks being relatively low-risk. Vendors need to demonstrate consistent quality across different task types before gaining autonomy.</p>
+
+  <!-- 6.1 Furniture Assembly -->
+  <div class="section-header">6.1 Furniture Assembly</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>furniture-assembly</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: complexity</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Furniture Assembly covers the construction and setup of flat-pack and ready-to-assemble furniture. The complexity multiplier accounts for the vast difference in effort between assembling a simple shelf (1.0x = $80) and building a complex storage system (2.5x = $200). Simple tasks include basic shelves, small side tables, and TV stands. Medium complexity covers wardrobes, beds, and dining tables with multiple components. Complex jobs involve full storage systems, modular shelving units, or multi-piece bedroom sets that can take several hours to complete. The Wall Anchoring add-on provides safety anchoring for tall furniture pieces, which is especially important in Singapore apartments with young children.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Complexity</td><td class="field-type">select</td><td>Simple Shelf/Table (1.0x = $80) | Medium Wardrobe/Bed (1.5x = $120) | Complex Storage System (2.5x = $200)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Wall Anchoring</td><td>$20</td><td>flat</td></tr>
+    <tr><td>Disposal of Packaging</td><td>$15</td><td>flat</td></tr>
+  </table>
+
+  <!-- 6.2 TV / Shelf Mounting -->
+  <div class="section-header">6.2 TV / Shelf Mounting</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / item</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>tv-shelf-mounting</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-item">per_item</span> unitField: itemCount <span class="rule-badge badge-multiplier">multiplierField: wallType</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>TV and Shelf Mounting uses per_item pricing because customers commonly want multiple items mounted in a single visit (e.g., a TV and two floating shelves). The wall type multiplier adds 30% for hollow or plasterboard walls, which require special toggle bolts and careful drilling to ensure a secure mount. Concrete walls (1.0x) are the standard in most HDB flats and are straightforward to drill into. The Cable Concealment add-on at $30 provides a clean, professional installation by hiding cables behind the wall surface or within cable tracks. The Extra-Large TV add-on handles TVs exceeding 65 inches, which require heavier-duty brackets and often two-person handling.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Items</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 1</td></tr>
+    <tr><td class="field-label">Wall Type</td><td class="field-type">select</td><td>Concrete (1.0x) | Hollow / Plasterboard (1.3x)</td></tr>
+  </table>
+  <div class="formula-box">Price = $80 x wallTypeMultiplier x itemCount + add-ons</div>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Cable Concealment</td><td>$30</td><td>flat</td></tr>
+    <tr><td>Extra-Large TV (over 65")</td><td>$20</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- HANDYMAN continued -->
+<div class="page">
+  <!-- 6.3 Door Repair -->
+  <div class="section-header">6.3 Door Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$100 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>door-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: issueType</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Door Repair covers three common door issues with a clear pricing progression. A hinge adjustment (1.0x = $100) is a quick fix that typically takes under 30 minutes but is priced to cover the callout and minimum service charge. Lock replacement (1.2x = $120) involves removing the old lock mechanism and installing a new one, which requires alignment and testing. Full door repair (2.0x = $200) covers significant damage such as warped doors, broken frames, or doors that have been forced open and need structural repair. The New Lock Set add-on at $40 is frequently paired with the lock replacement issue type. The After-Hours add-on provides emergency access for doors that cannot be secured.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Issue Type</td><td class="field-type">select</td><td>Hinge Adjustment (1.0x = $100) | Lock Replacement (1.2x = $120) | Full Door Repair (2.0x = $200)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>New Lock Set</td><td>$40</td><td>flat</td></tr>
+    <tr><td>After-Hours</td><td>$30</td><td>flat</td></tr>
+  </table>
+
+  <!-- 6.4 General Repair -->
+  <div class="section-header">6.4 General Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$80 / job (1hr)</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>general-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: complexity</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>General Repair is the catch-all handyman service for miscellaneous household fixes that do not fit into the more specific categories. The base price of $80 covers the first hour of work. The complexity multiplier adjusts for the nature of the task: simple quick fixes (1.0x = $80) include tightening loose fixtures, replacing screws, or minor adjustments. Moderate tasks needing tools (1.5x = $120) involve more substantial work like fixing cabinet hinges, adjusting cabinet doors, or replacing worn seals. Complex specialized repairs (2.5x = $200) cover tasks requiring specific expertise or significant time such as repairing window mechanisms, fixing built-in wardrobe systems, or addressing structural issues. The Parts add-on covers materials needed for the repair.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Complexity</td><td class="field-type">select</td><td>Simple Quick Fix (1.0x = $80) | Moderate Needs Tools (1.5x = $120) | Complex Specialized (2.5x = $200)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Parts</td><td>$20</td><td>flat</td></tr>
+    <tr><td>Urgent Visit</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 7: APPLIANCE REPAIR -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 7</div>
+    <div class="chapter-title">Appliance Repair <span class="status-active">Active</span></div>
+    <div class="chapter-desc">3 job types covering diagnosis visits, washing machine repair, and fridge repair.</div>
+  </div>
+  <p>The Appliance Repair category handles diagnostic and repair services for common household appliances. This category has a unique structure where the Diagnosis Visit serves as the entry point for customers who are unsure what is wrong with their appliance. The diagnosis fee can then be credited toward the repair cost if the customer proceeds with the fix. All three types use flat pricing with multiplierFields for issue-specific adjustments. The category requires 3 cycles per autonomy level due to the technical diagnostic skills and the potential cost of misdiagnosis.</p>
+
+  <!-- 7.1 Diagnosis Visit -->
+  <div class="section-header">7.1 Diagnosis Visit</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$60 / visit</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>diagnosis-visit</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: applianceType</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>The Diagnosis Visit is the starting point for appliance repair services. At $60, it covers the vendor's travel, initial inspection, and diagnosis report. The appliance type multiplier provides slight variation: most common appliances (washing machine, refrigerator, dryer) are at the baseline 1.0x, while oven and stove repairs carry a 1.2x multiplier due to the additional safety checks required for gas-connected appliances. Notably, this is the only job type in the entire platform with zero add-ons. This is intentional, as the diagnosis visit is meant to be a transparent, no-surprise entry point. Once the diagnosis is complete, the customer can book a specific repair job type with the appropriate add-ons.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Appliance Type</td><td class="field-type">select</td><td>Washing Machine (1.0x) | Refrigerator (1.0x) | Dryer (1.0x) | Oven / Stove (1.2x = $72)</td></tr>
+  </table>
+  <div class="callout">
+    <div class="callout-title">No Add-ons</div>
+    <div class="callout-body">This job type intentionally has no add-ons. The diagnosis visit should be a straightforward, transparent service. If repair work is needed, the customer books a separate repair job type with the relevant add-ons for parts and same-day service.</div>
+  </div>
+
+  <!-- 7.2 Washing Machine Repair -->
+  <div class="section-header">7.2 Washing Machine Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$120 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>washing-machine-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: issueType</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Washing Machine Repair is priced at $120 base with multipliers based on the component that needs repair. Drum issues (1.0x = $120) typically involve bearing replacement or drum realignment. Motor problems (1.5x = $180) are more expensive as they involve the most costly component in the machine. Control board issues (2.0x = $240) require electronic diagnostic skills and may involve circuit-level repairs or full board replacement. The Replacement Parts add-on at $40 provides a standard allowance for common parts; if the required parts exceed this amount, the vendor will communicate the additional cost before proceeding. The Same-Day Repair add-on is popular when households cannot afford to be without a working washing machine.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Issue Type</td><td class="field-type">select</td><td>Drum (1.0x = $120) | Motor (1.5x = $180) | Control Board (2.0x = $240)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Replacement Parts</td><td>$40</td><td>flat</td></tr>
+    <tr><td>Same-Day Repair</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- APPLIANCE REPAIR continued -->
+<div class="page">
+  <!-- 7.3 Fridge Repair -->
+  <div class="section-header">7.3 Fridge Repair</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="price">$150 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>fridge-repair</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: issueType</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Fridge Repair is the highest-base-price appliance repair type at $150, reflecting the complexity and urgency of refrigerator issues where food spoilage is a real concern. Thermostat issues (1.0x = $150) are the most common and typically involve replacing a faulty temperature sensor or thermostat unit. Compressor problems (1.8x = $270) are the most expensive due to the compressor being the most costly component and the refrigerant handling required. Gas leak repairs (1.5x = $225) involve locating and sealing refrigerant leaks, then recharging the system. The Replacement Parts add-on at $50 is higher than for washing machines, reflecting the generally more expensive components used in refrigerators. Same-Day Repair is critical for fridge issues to minimize food loss.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Issue Type</td><td class="field-type">select</td><td>Thermostat (1.0x = $150) | Compressor (1.8x = $270) | Gas Leak (1.5x = $225)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Replacement Parts</td><td>$50</td><td>flat</td></tr>
+    <tr><td>Same-Day Repair</td><td>$30</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 8: PAINTING (INACTIVE) -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 8</div>
+    <div class="chapter-title">Painting <span class="status-inactive">Inactive</span></div>
+    <div class="chapter-desc">3 job types covering touch-up/feature walls, room painting, and whole unit painting. Currently not shown to households.</div>
+  </div>
+  <p>The Painting category is currently inactive and not visible to households on the booking platform. However, the configuration is maintained in the system for when the category is launched. All three job types use space-based pricing models. Painting is unique in using the per_room pricing type, which multiplies the base price by the number of walls or rooms being painted. The category requires 3 cycles per autonomy level due to the high value of painting jobs and the significant quality expectations homeowners have for paintwork in their living spaces.</p>
+
+  <!-- 8.1 Touch-up / Feature Wall -->
+  <div class="section-header">8.1 Touch-up / Feature Wall</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$150 / wall</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>touchup-feature-wall</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-room">per_room</span> unitField: wallCount <span class="rule-badge badge-multiplier">multiplierField: paintGrade</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Touch-up and Feature Wall painting is the smallest-scope painting job, ideal for refreshing a single accent wall or touching up scuffed areas. The per_room pricing at $150 per wall is adjusted by paint grade: Standard Matt finish (1.0x) is the most economical, Washable Eggshell (1.3x) adds durability for high-traffic areas, and Premium Satin/Gloss (1.6x) provides the highest quality finish for feature walls. The Ceiling Paint and Paint Supply add-ons allow customers to extend the scope to include ceilings and materials supply respectively.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Walls</td><td class="field-type">number</td><td>Min: 1, Max: 6, Default: 1</td></tr>
+    <tr><td class="field-label">Paint Grade</td><td class="field-type">select</td><td>Standard Matt (1.0x) | Washable Eggshell (1.3x) | Premium Satin/Gloss (1.6x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Ceiling Paint</td><td>$50</td><td>per_room (x wallCount)</td></tr>
+    <tr><td>Paint Supply</td><td>$30</td><td>per_room (x wallCount)</td></tr>
+  </table>
+
+  <!-- 8.2 Room Painting -->
+  <div class="section-header">8.2 Room Painting</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$320 / room</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>room-painting</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-room">per_room</span> unitField: roomCount <span class="rule-badge badge-multiplier">multiplierField: wallCondition</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Room Painting covers complete room repainting, including all walls within a single room. At $320 per room, the wall condition multiplier adds 20% for fair condition walls needing two coats (1.2x) and 50% for poor condition walls requiring major surface preparation (1.5x). This preparation work can include patching holes, sanding rough areas, applying primer, and taping edges. The per_room pricing means customers can select multiple rooms and receive an accurate total. The Ceiling Painting and Paint Supply add-ons follow the same per_room pattern, ensuring proportional pricing regardless of room count.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Rooms</td><td class="field-type">number</td><td>Min: 1, Max: 6, Default: 1</td></tr>
+    <tr><td class="field-label">Wall Condition</td><td class="field-type">select</td><td>Good - Touch-up (1.0x) | Fair - 2 Coats (1.2x) | Poor - Major Prep (1.5x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Ceiling Painting</td><td>$50</td><td>per_room (x roomCount)</td></tr>
+    <tr><td>Paint Supply</td><td>$30</td><td>per_room (x roomCount)</td></tr>
+  </table>
+</div>
+
+<!-- PAINTING continued -->
+<div class="page">
+  <!-- 8.3 Whole Unit Painting -->
+  <div class="section-header">8.3 Whole Unit Painting</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$700 flat rate</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>whole-unit-painting</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: unitType</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Whole Unit Painting is the flagship painting service, covering an entire home in a single booking. Unlike the per_room types, this uses flat pricing with a unit type multiplier that ranges from 1.0x for a 2-room HDB ($700) to 2.5x for a 4-bedroom condominium ($1,750). This pricing reflects both the floor area and the typical complexity of different Singapore property types. HDB flats generally have uniform room sizes and straightforward layouts, while condominiums may have higher ceilings, feature walls, and irregular spaces that increase painting time. The add-ons are all flat-rated since they apply to the whole unit regardless of size: Ceiling Painting ($200) covers all ceilings, Sealer/Primer ($150) applies a protective base coat, and Feature Wall ($80) provides an accent wall in a contrasting color.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Unit Type</td><td class="field-type">select</td><td>2-Room HDB (1.0x = $700) | 3-Room HDB (1.2x = $840) | 4-Room HDB (1.5x = $1,050) | 3-Bed Condo (2.0x = $1,400) | 4-Bed Condo (2.5x = $1,750)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Ceiling Painting</td><td>$200</td><td>flat</td></tr>
+    <tr><td>Sealer / Primer</td><td>$150</td><td>flat</td></tr>
+    <tr><td>Feature Wall</td><td>$80</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 9: PEST CONTROL (INACTIVE) -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 9</div>
+    <div class="chapter-title">Pest Control <span class="status-inactive">Inactive</span></div>
+    <div class="chapter-desc">4 job types covering cockroach, mosquito, rodent, and termite control services.</div>
+  </div>
+  <p>The Pest Control category is currently inactive but configured and ready for launch. All four job types use flat pricing with a multiplierField that adjusts based on property type, severity, or treatment scope. Pest control services are inherently different from other categories because they often require follow-up visits to ensure effectiveness, which is reflected in the Follow-up Visit add-on available on cockroach and rodent control types. The category requires 3 cycles per autonomy level due to the chemical handling responsibilities and the potential health implications of improper pest control application in residential settings.</p>
+
+  <!-- 9.1 Cockroach Control -->
+  <div class="section-header">9.1 Cockroach Control</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$120 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>cockroach-control</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: propertyType</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Cockroach Control is the most common pest control service in Singapore households. The property type multiplier accounts for the significant difference in treatment area and complexity between HDB flats (1.0x = $120), condominiums (1.2x = $144), and landed properties (1.8x = $216). Landed properties require more extensive treatment due to their larger floor area, outdoor spaces, and multiple entry points. The Follow-up Visit add-on at $80 is recommended as cockroach control often requires a second treatment 2-4 weeks after the initial application to eliminate newly hatched insects. The Kitchen Deep-Treatment add-on provides focused treatment of kitchen areas where cockroach infestations typically originate.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Property Type</td><td class="field-type">select</td><td>HDB (1.0x = $120) | Condo (1.2x = $144) | Landed (1.8x = $216)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Follow-up Visit</td><td>$80</td><td>flat</td></tr>
+    <tr><td>Kitchen Deep-Treatment</td><td>$30</td><td>flat</td></tr>
+  </table>
+
+  <!-- 9.2 Mosquito Control -->
+  <div class="section-header">9.2 Mosquito Control</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$100 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>mosquito-control</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: propertyType</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Mosquito Control addresses Singapore's perennial mosquito problem with targeted treatments. The property type multiplier has a wider range than cockroach control: landed properties (2.0x = $200) carry double the HDB rate (1.0x = $100) because mosquito breeding grounds are far more prevalent in outdoor garden areas, roof gutters, and water features found in landed homes. Condominiums fall in between at 1.3x ($130). The Outdoor Fogging add-on at $50 provides a chemical fog treatment of outdoor areas, which is especially effective for landed properties. The Larvicide Treatment add-on at $40 targets standing water areas where mosquitoes breed, applying biological or chemical larvicides to prevent larvae from developing into adults.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Property Type</td><td class="field-type">select</td><td>HDB (1.0x = $100) | Condo (1.3x = $130) | Landed (2.0x = $200)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Outdoor Fogging</td><td>$50</td><td>flat</td></tr>
+    <tr><td>Larvicide Treatment</td><td>$40</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- PEST CONTROL continued -->
+<div class="page">
+  <!-- 9.3 Rodent Control -->
+  <div class="section-header">9.3 Rodent Control</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$150 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>rodent-control</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: severity</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Rodent Control uses a severity-based multiplier rather than property type, because the effort required is driven more by the extent of the infestation than the property size. Mild infestations (1.0x = $150) typically involve a single rat or mouse that has been spotted. Moderate infestations (1.5x = $225) indicate an established presence with multiple rodents and possible nesting. Severe infestations (2.5x = $375) represent a major rodent problem requiring extensive baiting, trapping, and exclusion work. The Follow-up Visit add-on is strongly recommended as rodent control is rarely resolved in a single visit. The Bait Station Installation add-on at $40 provides permanent bait stations that offer ongoing protection after the initial treatment is complete.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Infestation Severity</td><td class="field-type">select</td><td>Mild (1.0x = $150) | Moderate (1.5x = $225) | Severe (2.5x = $375)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Follow-up Visit</td><td>$80</td><td>flat</td></tr>
+    <tr><td>Bait Station Installation</td><td>$40</td><td>flat</td></tr>
+  </table>
+
+  <!-- 9.4 Termite Control -->
+  <div class="section-header">9.4 Termite Control</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$600 / session</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>termite-control</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: treatmentType</span></td></tr>
+      <tr><td>Sort Order</td><td>4</td></tr>
+    </table>
+  </div>
+  <p>Termite Control is the highest-value pest control service, reflecting the serious structural damage termites can cause and the specialized treatment methods required. The treatment type multiplier covers three scopes: Spot treatment (1.0x = $600) targets a single localized area of termite activity, Partial treatment (1.5x = $900) covers multiple affected areas or a single room, and Full treatment (2.5x = $1,500) treats the entire property with soil treatment, baiting systems, and preventive measures. At $1,500 for full treatment, this is one of the most expensive individual services on the platform. The Follow-up Inspection add-on at $100 provides a professional inspection to verify treatment effectiveness. The Warranty Extension add-on at $150 provides extended coverage guarantees, giving homeowners peace of mind that if termites return within the warranty period, retreatment will be provided at no additional cost.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Treatment Type</td><td class="field-type">select</td><td>Spot Treatment (1.0x = $600) | Partial Treatment (1.5x = $900) | Full Treatment (2.5x = $1,500)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Follow-up Inspection</td><td>$100</td><td>flat</td></tr>
+    <tr><td>Warranty Extension</td><td>$150</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- CATEGORY 10: LOCKSMITH (INACTIVE) -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Chapter 10</div>
+    <div class="chapter-title">Locksmith <span class="status-inactive">Inactive</span></div>
+    <div class="chapter-desc">3 job types covering emergency unlock, lock change, and digital lock installation.</div>
+  </div>
+  <p>The Locksmith category is currently inactive and not shown to households. It covers three essential lock-related services that have high urgency potential, particularly the Emergency Unlock type. The category requires only 2 cycles per autonomy level, the same as Cleaning and Laundry, because while individual tasks may be urgent, the scope per job is limited and the risk of significant property damage from improper work is relatively low compared to categories like Electrical or Plumbing.</p>
+
+  <!-- 10.1 Emergency Unlock -->
+  <div class="section-header">10.1 Emergency Unlock</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$80 / job</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>emergency-unlock</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-flat">flat</span> <span class="rule-badge badge-multiplier">multiplierField: doorType</span></td></tr>
+      <tr><td>Surcharge</td><td><span class="rule-badge badge-surcharge">After 6PM/Weekend +$40</span></td></tr>
+      <tr><td>Sort Order</td><td>1</td></tr>
+    </table>
+  </div>
+  <p>Emergency Unlock is designed for the most time-sensitive scenario on the platform: a customer locked out of their home. The $80 base price covers standard HDB main door unlocking (1.0x). Condo gate locks (1.3x = $104) and digital locks (1.5x = $120) are more complex due to their mechanisms. This job type uniquely uses both a multiplierField and a surcharge: the door type multiplier adjusts the base price, while the Service Time field triggers an after-hours surcharge of $40 when the customer needs service after 6PM or on weekends. The Lock Replacement add-on at $50 allows customers to have a new lock installed immediately after unlocking, which is recommended if the lock was compromised during the unlocking process.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Door Type</td><td class="field-type">select</td><td>HDB Main Door (1.0x) | Condo Gate (1.3x) | Digital Lock (1.5x)</td></tr>
+    <tr><td class="field-label">Service Time</td><td class="field-type">select</td><td>Standard Hours (no surcharge) | After 6PM / Weekend (+$40)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Lock Replacement</td><td>$50</td><td>flat</td></tr>
+  </table>
+
+  <!-- 10.2 Lock Change -->
+  <div class="section-header">10.2 Lock Change</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$100 / lock</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>lock-change</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: lockCount <span class="rule-badge badge-multiplier">multiplierField: lockType</span></td></tr>
+      <tr><td>Sort Order</td><td>2</td></tr>
+    </table>
+  </div>
+  <p>Lock Change uses per_unit pricing at $100 per lock, adjusted by the lock type. Mortise locks (1.0x) are the traditional heavy-duty locks commonly found on HDB main doors. Digital locks (2.0x) are significantly more expensive due to the electronic components and programming required. Gate locks (0.8x) are the least expensive as they are simpler mechanisms. The Additional Keys add-on at $15 per key provides spare keys cut to match the new lock, which is almost always needed when changing locks. The Disposal add-on at $10 covers the proper disposal of the old lock and any associated hardware.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Locks</td><td class="field-type">number</td><td>Min: 1, Max: 5, Default: 1</td></tr>
+    <tr><td class="field-label">Lock Type</td><td class="field-type">select</td><td>Mortise (1.0x) | Digital (2.0x) | Gate (0.8x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Additional Keys</td><td>$15</td><td>per_unit (per key)</td></tr>
+    <tr><td>Disposal</td><td>$10</td><td>flat</td></tr>
+  </table>
+</div>
+
+<!-- LOCKSMITH continued -->
+<div class="page">
+  <!-- 10.3 Digital Lock Install -->
+  <div class="section-header">10.3 Digital Lock Installation</div>
+  <div class="card card-accent">
+    <div class="card-title">Basic Information <span class="inactive-tag">Inactive</span> <span class="price">$200 / lock</span></div>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug</td><td>digital-lock-installation</td></tr>
+      <tr><td>Pricing Type</td><td><span class="rule-badge badge-per-unit">per_unit</span> unitField: lockCount <span class="rule-badge badge-multiplier">multiplierField: brand</span></td></tr>
+      <tr><td>Sort Order</td><td>3</td></tr>
+    </table>
+  </div>
+  <p>Digital Lock Installation is the most valuable locksmith service at $200 per lock base price. The brand/tier multiplier adjusts for the varying complexity of different digital lock brands. Standard digital locks (1.0x) are basic keypad or fingerprint models. Samsung and Yale locks (1.3x = $260) are mid-range with more features and potentially more complex installation requirements. Premium brands like Aqara and Schlage (1.6x = $320) may require smart home integration, Wi-Fi setup, and more precise door preparation. The Retrofit Existing Door add-on at $50 applies when the customer wants to install a digital lock on a door that was not originally designed for one, requiring modification of the door and frame. The WiFi Module add-on at $80 provides network connectivity for remote access and smart home integration.</p>
+  <div class="sub-header">Required Fields</div>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Options / Range</th></tr>
+    <tr><td class="field-label">Number of Locks</td><td class="field-type">number</td><td>Min: 1, Max: 3, Default: 1</td></tr>
+    <tr><td class="field-label">Lock Brand / Tier</td><td class="field-type">select</td><td>Standard (1.0x) | Samsung / Yale (1.3x) | Premium Aqara / Schlage (1.6x)</td></tr>
+  </table>
+  <div class="sub-header">Add-ons</div>
+  <table>
+    <tr><th>Add-on</th><th>Price</th><th>Type</th></tr>
+    <tr><td>Retrofit Existing Door</td><td>$50</td><td>flat</td></tr>
+    <tr><td>WiFi Module</td><td>$80</td><td>flat</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================ -->
+<!-- QUICK REFERENCE -->
+<!-- ============================================ -->
+<div class="page">
+  <div class="chapter-header">
+    <div class="chapter-number">Reference</div>
+    <div class="chapter-title">Quick Reference Cards</div>
+    <div class="chapter-desc">At-a-glance summaries for common administrative tasks and key platform metrics.</div>
+  </div>
+  <p>This section provides condensed reference information that administrators can use for quick lookups without needing to navigate to the detailed category sections. These cards summarize the most frequently needed configuration values and rules. Keep this section bookmarked for quick operational decisions that require fast access to pricing, status, or threshold information during the course of managing the Anna.I platform.</p>
+
+  <div class="section-header">Active vs. Inactive Categories</div>
+  <div class="ref-grid">
+    <div class="ref-item">
+      <div class="ref-item-title">Active Categories (7)</div>
+      <div class="ref-item-value">Cleaning, Laundry, Aircon, Electrical, Plumbing, Handyman, Appliance Repair</div>
+    </div>
+    <div class="ref-item">
+      <div class="ref-item-title">Inactive Categories (3)</div>
+      <div class="ref-item-value">Painting, Pest Control, Locksmith</div>
+    </div>
+    <div class="ref-item">
+      <div class="ref-item-title">Total Job Types</div>
+      <div class="ref-item-value">35 across 10 categories</div>
+    </div>
+    <div class="ref-item">
+      <div class="ref-item-title">Commission Rate</div>
+      <div class="ref-item-value">10% (applies to all categories)</div>
+    </div>
+    <div class="ref-item">
+      <div class="ref-item-title">Blended Job Value</div>
+      <div class="ref-item-value">SGD $68.00 (active categories average)</div>
+    </div>
+    <div class="ref-item">
+      <div class="ref-item-title">Currency</div>
+      <div class="ref-item-value">All prices in SGD ($)</div>
+    </div>
+  </div>
+
+  <div class="section-header">Pricing Types Summary</div>
+  <table>
+    <tr><th>Pricing Type</th><th>Categories Using It</th><th>How Price Is Calculated</th></tr>
+    <tr><td><span class="rule-badge badge-flat">flat</span></td><td>Cleaning, Plumbing, Electrical (partial), Handyman, Appliance Repair, Pest Control</td><td>Base price x multiplierField value. Per job, not per unit.</td></tr>
+    <tr><td><span class="rule-badge badge-per-unit">per_unit</span></td><td>Aircon, Electrical (partial), Locksmith (partial)</td><td>Base price x unit count from unitField x multiplierField.</td></tr>
+    <tr><td><span class="rule-badge badge-per-item">per_item</span></td><td>Laundry (partial), Handyman (partial)</td><td>Base price x item count from unitField x multiplierField.</td></tr>
+    <tr><td><span class="rule-badge badge-per-room">per_room</span></td><td>Painting</td><td>Base price x room/wall count from unitField x multiplierField.</td></tr>
+  </table>
+
+  <div class="section-header">Autonomy Thresholds Quick Lookup</div>
+  <table>
+    <tr><th>Category</th><th>Cycles / Level</th><th>L1 to L2</th><th>L2 to L3</th><th>L3 to L4</th><th>L4 to L5</th><th>Total for L5</th></tr>
+    <tr><td>Cleaning</td><td>2</td><td>2</td><td>4</td><td>6</td><td>8</td><td>8</td></tr>
+    <tr><td>Laundry</td><td>2</td><td>2</td><td>4</td><td>6</td><td>8</td><td>8</td></tr>
+    <tr><td>Locksmith</td><td>2</td><td>2</td><td>4</td><td>6</td><td>8</td><td>8</td></tr>
+    <tr><td>Aircon</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Plumbing</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Electrical</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Painting</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Pest Control</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Handyman</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+    <tr><td>Appliance Repair</td><td>3</td><td>3</td><td>6</td><td>9</td><td>12</td><td>12</td></tr>
+  </table>
+</div>
+
+<!-- QUICK REFERENCE continued -->
+<div class="page">
+  <div class="section-header">Price Range by Category</div>
+  <table>
+    <tr><th>Category</th><th>Lowest Base Price</th><th>Highest Base Price</th><th>Max with Multiplier</th></tr>
+    <tr><td>Cleaning</td><td>$80 (Regular Maintenance)</td><td>$500 (Post-Renovation)</td><td>$800 (Post-Reno + 1.6x area)</td></tr>
+    <tr><td>Laundry</td><td>$3 (Ironing/item)</td><td>$75 (Wash/Fold XL)</td><td>$75 + add-ons</td></tr>
+    <tr><td>Aircon</td><td>$40 (Gas Top-up/unit)</td><td>$200 (Installation/unit)</td><td>$300 (Install Cassette 1.5x)</td></tr>
+    <tr><td>Electrical</td><td>$80 (Power Trip/point)</td><td>$100 (Ceiling Fan/unit)</td><td>$200 (Power Trip DB Box 2.5x)</td></tr>
+    <tr><td>Plumbing</td><td>$100 (Unclogging)</td><td>$200 (Pipe Replacement)</td><td>$500 (Pipe >3m 2.5x)</td></tr>
+    <tr><td>Handyman</td><td>$80 (General Repair)</td><td>$80 (Furniture Assembly)</td><td>$200 (Complex Storage 2.5x)</td></tr>
+    <tr><td>Appliance Repair</td><td>$60 (Diagnosis)</td><td>$150 (Fridge Repair)</td><td>$270 (Fridge Compressor 1.8x)</td></tr>
+    <tr><td>Painting</td><td>$150/wall (Touch-up)</td><td>$700 (Whole Unit)</td><td>$1,750 (4-Bed Condo 2.5x)</td></tr>
+    <tr><td>Pest Control</td><td>$100 (Mosquito)</td><td>$600 (Termite)</td><td>$1,500 (Termite Full 2.5x)</td></tr>
+    <tr><td>Locksmith</td><td>$80 (Emergency)</td><td>$200 (Digital Install)</td><td>$320 (Premium Digital 1.6x)</td></tr>
+  </table>
+
+  <div class="section-header">Common Add-on Patterns</div>
+  <div class="card card-info">
+    <div class="card-title">After-Hours / Emergency Surcharges</div>
+    <p>Available on: Plumbing (all 4 types, $40), Electrical (Power Trip $40, Power Point $40), Handyman (Door Repair $30), Locksmith (Emergency Unlock $40). These surcharges compensate vendors for working outside standard business hours and should only be applied when the customer explicitly requests after-hours service through the Service Time or After-Hours add-on selection.</p>
+  </div>
+  <div class="card card-info">
+    <div class="card-title">Express / Same-Day Services</div>
+    <p>Available on: Laundry (Wash/Fold $10, Ironing $8, Dry Cleaning $5/item, Curtains $20), Appliance Repair (Same-Day $30). Express services require the vendor to prioritize the job above their standard queue. Pricing reflects both the urgency premium and the potential disruption to the vendor's schedule.</p>
+  </div>
+  <div class="card card-info">
+    <div class="card-title">Per-Unit Add-ons</div>
+    <p>Some add-ons scale with the number of units or items. Examples: Aircon Filter Replacement ($15/unit x unitCount), Aircon Anti-Bacterial Wash ($20/unit), Electrical Concealed Wiring ($50/point), Painting Ceiling Paint ($50/room). These ensure proportional pricing when a customer needs the add-on applied across multiple units or areas within a single booking.</p>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">Configuration Best Practice</div>
+    <div class="callout-body">When making configuration changes, always test the pricing calculation with sample values before publishing. Verify that the final price shown to the customer matches your manual calculation using the formula: Base Price x Multiplier + Surcharges + Add-ons. Pay special attention to per_unit and per_item types where the unit count significantly affects the total. Document any changes in the operations changelog for audit purposes.</div>
+  </div>
+</div>
+
+<!-- ENDING -->
+<div class="ending-page">
+  <h2>End of Guide</h2>
+  <p>This document is maintained by the Anna.I operations team.</p>
+  <p>For questions about configuration changes, contact the Ops Lead.</p>
+  <p>Version 1.0 | June 2025</p>
+</div>
+
+</div><!-- end main-content -->
+</body>
+</html>
