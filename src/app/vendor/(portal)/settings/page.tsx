@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVendorUser } from "@/app/vendor/(portal)/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -54,6 +55,14 @@ interface VendorProfile {
   email: string;
   phone: string;
   contactPerson?: string | null;
+  contactEmail1?: string | null;
+  contactPhone1?: string | null;
+  contactPerson2?: string | null;
+  contactEmail2?: string | null;
+  contactPhone2?: string | null;
+  companyName?: string | null;
+  companyRegNo?: string | null;
+  registeredAddress?: string | null;
   categories: string;
   vendorType: string;
   staffCount: number;
@@ -68,7 +77,7 @@ interface VendorProfile {
   updatedAt: string;
 }
 
-type EditSection = "phone" | "email" | "availability" | "contactPerson" | null;
+type EditSection = "phone" | "email" | "availability" | "contactPerson" | "contactPerson2" | null;
 
 interface AvailabilityData {
   workingDays: string[];
@@ -318,6 +327,9 @@ export default function VendorSettingsPage() {
   const [editWorkingHours, setEditWorkingHours] = useState("");
   const [editHoursNotes, setEditHoursNotes] = useState("");
   const [editContactPerson, setEditContactPerson] = useState("");
+  const [editCP2Name, setEditCP2Name] = useState("");
+  const [editCP2Email, setEditCP2Email] = useState("");
+  const [editCP2Phone, setEditCP2Phone] = useState("");
 
   // Address dialog state
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -326,9 +338,15 @@ export default function VendorSettingsPage() {
   // Sync edit state when editing starts
   const startEdit = (section: EditSection) => {
     if (!profile) return;
+    const p = profile as Record<string, unknown>;
     if (section === "phone") setEditPhone(profile.phone || "");
     if (section === "email") setEditEmail(profile.email || "");
-    if (section === "contactPerson") setEditContactPerson((profile as Record<string, unknown>).contactPerson as string || "");
+    if (section === "contactPerson") setEditContactPerson(p.contactPerson as string || "");
+    if (section === "contactPerson2") {
+      setEditCP2Name(p.contactPerson2 as string || "");
+      setEditCP2Email(p.contactEmail2 as string || "");
+      setEditCP2Phone(p.contactPhone2 as string || "");
+    }
     if (section === "availability") {
       try {
         const avail = (profile.availability as AvailabilityData) || {};
@@ -435,6 +453,30 @@ export default function VendorSettingsPage() {
     },
     onSuccess: () => {
       toast({ title: "Contact person updated" });
+      queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      setEditSection(null);
+    },
+    onError: (err) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Contact Person 2 mutation
+  const saveCP2Mutation = useMutation({
+    mutationFn: async (data: { contactPerson2: string; contactEmail2?: string; contactPhone2?: string }) => {
+      const res = await fetch("/api/vendor/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Update failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Contact person 2 updated" });
       queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
       setEditSection(null);
     },
@@ -551,6 +593,9 @@ export default function VendorSettingsPage() {
           </div>
           <Separator className="bg-[var(--anna-border)]" />
           <InfoRow icon={Shield} label="Type" value={profile.vendorType} />
+          <InfoRow icon={Building2} label="Company Name" value={profile.companyName || "Not set"} />
+          <InfoRow icon={Shield} label="Company Reg No." value={profile.companyRegNo || "Not set"} />
+          <InfoRow icon={MapPin} label="Registered Address" value={profile.registeredAddress || "Not set"} />
           <InfoRow icon={Users} label="Staff" value={`${profile.staffCount} members`} />
           <InfoRow icon={Calendar} label="Member Since" value={formatDate(profile.createdAt)} />
           <InfoRow icon={Calendar} label="Last Updated" value={formatDate(profile.updatedAt)} />
@@ -558,114 +603,174 @@ export default function VendorSettingsPage() {
 
         {/* ── Contact Information ── */}
         <SectionCard title="Contact Details" subtitle="Your phone and email for bookings" icon={Phone}>
-          {/* Phone */}
-          <EditableRow
-            icon={Phone}
-            label="Phone"
-            value={profile.phone || "Not set"}
-            isEditing={editSection === "phone"}
-            onEdit={() => startEdit("phone")}
-            editContent={
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="+65 9000 0000"
-                  className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs font-data"
-                />
-                <Button
-                  size="sm"
-                  onClick={() => savePhoneMutation.mutate(editPhone)}
-                  disabled={savePhoneMutation.isPending || editPhone === profile.phone}
-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
-                >
-                  <Save size={12} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={cancelEdit}
-                  className="h-7 px-1 rounded-lg"
-                >
-                  <X size={12} />
-                </Button>
+          {/* ── Contact Person 1 ── */}
+          <div className="space-y-3 rounded-xl border border-[var(--anna-border)] p-3 bg-[var(--anna-bg)] mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+              Contact Person 1
+            </p>
+            {/* Name */}
+            <EditableRow
+              icon={User}
+              label="Name"
+              value={profile.contactPerson || "Not set"}
+              isEditing={editSection === "contactPerson"}
+              onEdit={() => startEdit("contactPerson")}
+              editContent={
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editContactPerson}
+                    onChange={(e) => setEditContactPerson(e.target.value)}
+                    placeholder="e.g. John Lim"
+                    className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => saveContactPersonMutation.mutate(editContactPerson)}
+                    disabled={saveContactPersonMutation.isPending}
+                    className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+                  >
+                    <Save size={12} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={cancelEdit}
+                    className="h-7 px-1 rounded-lg"
+                  >
+                    <X size={12} />
+                  </Button>
+                </div>
+              }
+            />
+            {/* Email (read-only, synced from ops) */}
+            <div className="flex items-center justify-between py-1.5">
+              <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
+                <Mail size={14} className="shrink-0" />
+                <span>Email</span>
               </div>
-            }
-          />
+              <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
+                {profile.contactEmail1 || profile.email || "Not set"}
+              </span>
+            </div>
+            <Separator className="bg-[var(--anna-border)]" />
+            {/* Phone (read-only, synced from ops) */}
+            <div className="flex items-center justify-between py-1.5">
+              <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
+                <Phone size={14} className="shrink-0" />
+                <span>Phone</span>
+              </div>
+              <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
+                {profile.contactPhone1 || profile.phone || "Not set"}
+              </span>
+            </div>
+          </div>
 
-          {/* Email */}
-          <EditableRow
-            icon={Mail}
-            label="Email"
-            value={profile.email || "Not set"}
-            isEditing={editSection === "email"}
-            onEdit={() => startEdit("email")}
-            editContent={
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="ops@sparkclean.sg"
-                  className="w-48 rounded-lg border-[var(--anna-border)] h-8 text-xs font-data"
-                />
-                <Button
-                  size="sm"
-                  onClick={() => saveEmailMutation.mutate(editEmail)}
-                  disabled={saveEmailMutation.isPending || editEmail === profile.email}
-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+          {/* ── Contact Person 2 (Optional) ── */}
+          <div className="space-y-3 rounded-xl border border-dashed border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                Contact Person 2 (Optional)
+              </p>
+              {editSection !== "contactPerson2" && (
+                <button
+                  onClick={() => startEdit("contactPerson2")}
+                  className="p-1 rounded-lg hover:bg-[var(--anna-sage-light)] transition-colors text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)]"
                 >
-                  <Save size={12} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={cancelEdit}
-                  className="h-7 px-1 rounded-lg"
-                >
-                  <X size={12} />
-                </Button>
+                  <Pencil size={12} />
+                </button>
+              )}
+            </div>
+            {editSection === "contactPerson2" ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Name</Label>
+                  <Input
+                    value={editCP2Name}
+                    onChange={(e) => setEditCP2Name(e.target.value)}
+                    placeholder="e.g. Sarah Tan"
+                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Email</Label>
+                  <Input
+                    value={editCP2Email}
+                    onChange={(e) => setEditCP2Email(e.target.value)}
+                    placeholder="sarah@example.com"
+                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Phone</Label>
+                  <Input
+                    value={editCP2Phone}
+                    onChange={(e) => setEditCP2Phone(e.target.value)}
+                    placeholder="+65 9XXX XXXX"
+                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    onClick={() => saveCP2Mutation.mutate({
+                      contactPerson2: editCP2Name,
+                      contactEmail2: editCP2Email || undefined,
+                      contactPhone2: editCP2Phone || undefined,
+                    })}
+                    disabled={saveCP2Mutation.isPending}
+                    className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+                  >
+                    <Save size={12} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={cancelEdit}
+                    className="h-7 px-1 rounded-lg"
+                  >
+                    <X size={12} />
+                  </Button>
+                </div>
               </div>
-            }
-          />
+            ) : (
+              <>
+                <div className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
+                    <User size={14} className="shrink-0" />
+                    <span>Name</span>
+                  </div>
+                  <span className="text-sm font-medium text-[var(--anna-slate)]">
+                    {(profile as Record<string, unknown>).contactPerson2 as string || "Not set"}
+                  </span>
+                </div>
+                <Separator className="bg-[var(--anna-border)]" />
+                <div className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
+                    <Mail size={14} className="shrink-0" />
+                    <span>Email</span>
+                  </div>
+                  <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
+                    {(profile as Record<string, unknown>).contactEmail2 as string || "Not set"}
+                  </span>
+                </div>
+                <Separator className="bg-[var(--anna-border)]" />
+                <div className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
+                    <Phone size={14} className="shrink-0" />
+                    <span>Phone</span>
+                  </div>
+                  <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
+                    {(profile as Record<string, unknown>).contactPhone2 as string || "Not set"}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
 
-          {/* Contact Person */}
-          <EditableRow
-            icon={User}
-            label="Contact Person"
-            value={profile.contactPerson || "Not set"}
-            isEditing={editSection === "contactPerson"}
-            onEdit={() => startEdit("contactPerson")}
-            editContent={
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editContactPerson}
-                  onChange={(e) => setEditContactPerson(e.target.value)}
-                  placeholder="e.g. John Lim"
-                  className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs"
-                />
-                <Button
-                  size="sm"
-                  onClick={() => saveContactPersonMutation.mutate(editContactPerson)}
-                  disabled={saveContactPersonMutation.isPending}
-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
-                >
-                  <Save size={12} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={cancelEdit}
-                  className="h-7 px-1 rounded-lg"
-                >
-                  <X size={12} />
-                </Button>
-              </div>
-            }
-          />
           <div className="mt-3 flex items-start gap-2 px-1">
             <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
             <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
-              Phone must be a valid Singapore (+65) or Malaysia (+60) number. Email must be unique.
+              Phone must be a valid Singapore (+65) or Malaysia (+60) number. Email must be unique. Contact person 1 email and phone are synced from ops.
             </p>
           </div>
         </SectionCard>

@@ -15,6 +15,15 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EscrowActionDialog } from "@/components/ops/escrow-action-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
   X,
   ShieldCheck,
   ShieldAlert,
@@ -25,10 +34,16 @@ import {
   Wallet,
   Loader2,
   FileText,
+  FileEdit,
   User,
   Calendar,
+  CalendarClock,
   DollarSign,
+  Camera,
+  ImageIcon,
+  Film,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // ── Props ──
@@ -104,6 +119,15 @@ export function BookingDetailSheet({
   const [dialogAmount, setDialogAmount] = useState(0);
   const [dialogDisputeReason, setDialogDisputeReason] = useState<string | null>(null);
 
+  // Dialog state for booking actions
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleStart, setRescheduleStart] = useState("");
+  const [rescheduleEnd, setRescheduleEnd] = useState("");
+  const [editNotesDialogOpen, setEditNotesDialogOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+
   // Fetch full task details
   const { data, isLoading } = useQuery({
     queryKey: ["ops-task-detail", taskId],
@@ -155,8 +179,109 @@ export function BookingDetailSheet({
   const escrow = (task?.escrowEntries as Record<string, unknown>[])?.[0];
   const taskStatus = task?.status as string;
   const escrowState = escrow?.state as string;
+  // Verification photos (before/after) — already returned by /api/tasks/[id]
+  const verificationPhotos = (task?.verificationPhotos as Array<{
+    id: string;
+    fileUrl: string;
+    thumbnailUrl?: string | null;
+    uploadedBy: string;
+    isVerified: boolean;
+    rejectionReason?: string | null;
+    verifiedAt?: string | null;
+    createdAt: string;
+  }>) || [];
+
+  // ── Booking Action Mutations ──
+
+  const bookingAction = useMutation({
+    mutationFn: async ({ bookingId, action, ...payload }: { bookingId: string; action: string; reason?: string; scheduledStart?: string; scheduledEnd?: string; completionNotes?: string }) => {
+      const res = await fetch(`/api/ops/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Action failed" }));
+        throw new Error(err.error);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-task-detail", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["ops-bookings"] });
+    },
+  });
 
   // ── Action handlers ──
+
+  const openCancelDialog = () => {
+    setCancelReason("");
+    setCancelDialogOpen(true);
+  };
+
+  const openRescheduleDialog = () => {
+    const toLocalDatetime = (isoStr: string | null | undefined) => {
+      if (!isoStr) return "";
+      const d = new Date(isoStr);
+      // Format as YYYY-MM-DDTHH:mm for datetime-local input
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setRescheduleStart(toLocalDatetime((initialBooking?.scheduledStart as string) ?? (booking?.scheduledStart as string)));
+    setRescheduleEnd(toLocalDatetime((initialBooking?.scheduledEnd as string) ?? (booking?.scheduledEnd as string)));
+    setRescheduleDialogOpen(true);
+  };
+
+  const openEditNotesDialog = () => {
+    setEditNotes((booking?.completionNotes as string) || "");
+    setEditNotesDialogOpen(true);
+  };
+
+  const handleCancelBooking = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "cancel",
+        reason: cancelReason || undefined,
+      });
+      toast.success("Booking cancelled successfully");
+      setCancelDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to cancel booking");
+    }
+  };
+
+  const handleReschedule = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "reschedule",
+        scheduledStart: new Date(rescheduleStart).toISOString(),
+        scheduledEnd: new Date(rescheduleEnd).toISOString(),
+      });
+      toast.success("Booking rescheduled successfully");
+      setRescheduleDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to reschedule booking");
+    }
+  };
+
+  const handleUpdateNotes = async () => {
+    if (!booking) return;
+    try {
+      await bookingAction.mutateAsync({
+        bookingId: booking.id as string,
+        action: "update_notes",
+        completionNotes: editNotes,
+      });
+      toast.success("Notes updated successfully");
+      setEditNotesDialogOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to update notes");
+    }
+  };
 
   const openReleaseDialog = () => {
     if (!escrow) return;
@@ -284,6 +409,44 @@ export function BookingDetailSheet({
               </div>
 
               <div className="p-5 space-y-5">
+                {/* ── Booking Actions ── */}
+                {booking && (
+                  <section>
+                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
+                      Booking Actions
+                    </h4>
+                    <div className="flex gap-2 flex-wrap">
+                      {booking.status !== "completed" && booking.status !== "cancelled" && (
+                        <>
+                          <button
+                            onClick={openCancelDialog}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 transition-colors"
+                          >
+                            <XCircle size={13} />
+                            Cancel Booking
+                          </button>
+                          <button
+                            onClick={openRescheduleDialog}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 inline-flex items-center gap-1.5 transition-colors"
+                          >
+                            <CalendarClock size={13} />
+                            Reschedule
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={openEditNotesDialog}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-[var(--anna-bg)] text-[var(--anna-slate-light)] border border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]/30 inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <FileEdit size={13} />
+                        Edit Notes
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                <Separator />
+
                 {/* ── Booking Details ── */}
                 <section>
                   <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3">
@@ -345,6 +508,75 @@ export function BookingDetailSheet({
                     )}
                   </div>
                 </section>
+
+                {/* ── Task Instructions ── */}
+                {task?.instructions && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <FileText size={12} />
+                        Task Instructions
+                      </h4>
+                      <div className="p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]">
+                        <p className="text-xs text-[var(--anna-slate)] leading-relaxed whitespace-pre-wrap">
+                          {task.instructions as string}
+                        </p>
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {/* ── Customer Attachments (Photos/Videos) ── */}
+                {((task?.attachments as Array<Record<string, unknown>>)?.length ?? 0) > 0 && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <ImageIcon size={12} />
+                        Customer Attachments
+                        <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-[var(--anna-bg)] px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                          {(task?.attachments as Array<Record<string, unknown>>).length}
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {(task?.attachments as Array<Record<string, unknown>>).map((att: Record<string, unknown>) =>
+                          att.fileType === "PHOTO" ? (
+                            <a
+                              key={att.id as string}
+                              href={att.fileUrl as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] relative"
+                            >
+                              <img
+                                src={att.fileUrl as string}
+                                alt={att.fileName as string}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <ImageIcon size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </a>
+                          ) : (
+                            <a
+                              key={att.id as string}
+                              href={att.fileUrl as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="aspect-square rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] flex flex-col items-center justify-center gap-1 p-2 hover:border-[var(--anna-sage)]/40 transition-colors"
+                            >
+                              <Film size={20} className="text-[var(--anna-muted)]" />
+                              <span className="text-[9px] text-[var(--anna-muted)] text-center line-clamp-2">
+                                {att.fileName as string}
+                              </span>
+                            </a>
+                          )
+                        )}
+                      </div>
+                    </section>
+                  </>
+                )}
 
                 <Separator />
 
@@ -523,11 +755,200 @@ export function BookingDetailSheet({
                     </section>
                   </>
                 )}
+
+                {/* ── Verification Photos ── */}
+                {verificationPhotos.length > 0 && (
+                  <>
+                    <Separator />
+                    <section>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                        <Camera size={12} />
+                        Verification Photos
+                        <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-[var(--anna-bg)] px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                          {verificationPhotos.length}
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        {verificationPhotos.map((photo) => {
+                          const isBefore = photo.uploadedBy?.includes("before");
+                          return (
+                            <a
+                              key={photo.id}
+                              href={photo.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] group hover:border-[var(--anna-sage)]/50 transition-colors"
+                              title={`Uploaded ${formatDateTime(photo.createdAt)} — click to view full size`}
+                            >
+                              <img
+                                src={photo.thumbnailUrl || photo.fileUrl}
+                                alt={`Verification photo (${isBefore ? "Before" : "After"})`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.opacity = "0.3";
+                                }}
+                              />
+                              {/* Top-left: Before/After label */}
+                              <div className="absolute top-1 left-1">
+                                <span className={cn(
+                                  "text-[8px] font-bold px-1 py-0 h-4 rounded flex items-center border-0",
+                                  isBefore
+                                    ? "bg-[var(--anna-warning)] text-white"
+                                    : "bg-[var(--anna-sage)] text-white"
+                                )}>
+                                  {isBefore ? "Before" : "After"}
+                                </span>
+                              </div>
+                              {/* Top-right: Verification status */}
+                              <div className="absolute top-1 right-1">
+                                {photo.isVerified ? (
+                                  <span className="bg-[var(--anna-success)] text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <CheckCircle2 size={9} />
+                                  </span>
+                                ) : photo.rejectionReason ? (
+                                  <span className="bg-red-500 text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <XCircle size={9} />
+                                  </span>
+                                ) : (
+                                  <span className="bg-[var(--anna-warning)] text-white text-[8px] px-1 py-0 h-4 rounded flex items-center gap-0.5">
+                                    <Clock size={9} />
+                                  </span>
+                                )}
+                              </div>
+                              {/* Hover overlay with zoom hint */}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                <ImageIcon size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                      {/* Rejection reason footer (if any photo was rejected) */}
+                      {verificationPhotos.some((p) => p.rejectionReason) && (
+                        <div className="mt-2 p-2 rounded-lg bg-red-50/70 border border-red-100">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-0.5">
+                            Rejection Reason
+                          </p>
+                          <p className="text-xs text-red-700">
+                            {verificationPhotos.find((p) => p.rejectionReason)?.rejectionReason}
+                          </p>
+                        </div>
+                      )}
+                    </section>
+                  </>
+                )}
               </div>
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── Cancel Booking Dialog ── */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Cancel Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-[var(--anna-slate-light)]">
+              Are you sure you want to cancel this booking? This action cannot be undone.
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Reason (optional)</label>
+              <Input
+                placeholder="Enter cancellation reason..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleCancelBooking}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Confirm Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reschedule Dialog ── */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Reschedule Booking</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Scheduled Start</label>
+              <Input
+                type="datetime-local"
+                value={rescheduleStart}
+                onChange={(e) => setRescheduleStart(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Scheduled End</label>
+              <Input
+                type="datetime-local"
+                value={rescheduleEnd}
+                onChange={(e) => setRescheduleEnd(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleReschedule}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Confirm Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Notes Dialog ── */}
+      <Dialog open={editNotesDialogOpen} onOpenChange={setEditNotesDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Completion Notes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-[var(--anna-muted)]">Completion Notes</label>
+              <Textarea
+                placeholder="Enter completion notes..."
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditNotesDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateNotes}
+              disabled={bookingAction.isPending}
+            >
+              {bookingAction.isPending && <Loader2 size={14} className="mr-1 animate-spin" />}
+              Save Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Escrow Action Dialog ── */}
       <EscrowActionDialog

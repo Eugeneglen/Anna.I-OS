@@ -1,0 +1,68 @@
+---
+/**
+ * Reusable final-CTA band. Used on Home, Partners, FAQ.
+ * Deep slate background, Register Now + secondary link.
+ */
+import Icon from './Icon.astro';
+
+export interface Props {
+  eyebrow?: string;
+  headline?: string;
+  body?: string;
+  primaryHref?: string;
+  primaryLabel?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+  reassurance?: string;
+}
+
+const {
+  eyebrow = 'Get started',
+  headline = 'Your home. Managed.',
+  body = 'Tell Anna.I what your household needs once. We handle the rest — matching, scheduling, verifying, and remembering.',
+  primaryHref = '/login',
+  primaryLabel = 'Register Now',
+  secondaryHref = '/#how-it-works',
+  secondaryLabel = 'See how it works',
+  reassurance = 'No credit card required to register',
+} = Astro.props;
+---
+
+<section class="section">
+  <div class="container-content">
+    <div class="card-dark reveal" style="padding: clamp(2.5rem, 1.5rem + 4vw, 4.5rem);">
+      <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center;">
+        <div>
+          <span class="badge badge-on-dark mb-5">{eyebrow}</span>
+          <h2 class="text-fluid-3xl text-cream mb-4 text-balance">{headline}</h2>
+          <p class="text-lg text-cream\/70 max-w-xl text-pretty">{body}</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <a href={primaryHref} class="btn btn-primary w-full lg:w-auto" data-cta="cta-band-primary">
+            {primaryLabel}
+            <Icon name="arrowRight" class="w-4 h-4" decorative />
+          </a>
+          {secondaryLabel && (
+            <a href={secondaryHref} class="btn btn-outline-light w-full lg:w-auto">
+              {secondaryLabel}
+            </a>
+          )}
+          {reassurance && (
+            <p class="font-mono-label text-cream\/40 mt-2" style="text-align: center;">{reassurance}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  @media (min-width: 1024px) {
+    section .card-dark > div {
+      grid-template-columns: 2fr 1fr !important;
+    }
+    section .card-dark > div > div:last-child {
+      align-items: flex-end;
+    }
+  }
+</style>

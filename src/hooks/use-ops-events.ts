@@ -64,8 +64,12 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
     if (socketRef.current?.connected) return;
 
     try {
+      // NOTE: transports must include "polling" as a fallback. WebSocket-only
+      // connections fail through the Caddy gateway (port 81) when the WS upgrade
+      // handshake is delayed or dropped — polling falls back gracefully and
+      // then upgrades to websocket once the channel is established.
       const socket = io("/?XTransformPort=3004", {
-        transports: ["websocket"],
+        transports: ["polling", "websocket"],
         forceNew: true,
         reconnection: true,
         reconnectionAttempts: 10,

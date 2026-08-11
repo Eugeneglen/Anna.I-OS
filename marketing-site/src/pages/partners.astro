@@ -1,0 +1,117 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import CtaBand from '../components/CtaBand.astro';
+
+const vendorSteps = [
+  { n: '01', icon: 'fingerprint', title: 'Apply and get vetted', desc: 'Background check, identity verification, and skills validation. One application — not a listing you have to maintain.' },
+  { n: '02', icon: 'nodeCluster', title: 'Receive matched job dispatches', desc: 'Anna.I routes jobs based on your category, capacity, and schedule. You see the job, the pay, and the household details before accepting.' },
+  { n: '03', icon: 'eyeScope', title: 'Complete the job, upload photo verification', desc: 'Do the work. Upload photo proof of completion. The household approves — no back-and-forth arguments about whether something was done.' },
+  { n: '04', icon: 'shieldLock', title: 'Get paid — automatically, on verified completion', desc: 'Payment releases from escrow the moment the job is confirmed done. No invoicing, no chasing, no waiting 30 days for a transfer.' },
+] as const;
+---
+
+<BaseLayout
+  title="Partners — Anna.I"
+  description="Become an Anna.I service partner. Join Singapore's coordinated home-services network — vetted vendors, reliable scheduling, guaranteed payment through escrow."
+>
+  <section class="section">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+        <span class="badge mb-5">For vendors</span>
+        <h1 class="text-fluid-3xl mb-4 text-balance">More jobs. Less chasing. Get paid on time.</h1>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Anna.I fills your calendar with matched, vetted jobs — and pays out reliably
+          through verified milestone completion. No more chasing leads, no-show clients,
+          or payment disputes.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        <div class="card reveal">
+          <Icon name="nodeCluster" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Steady job flow</h3>
+          <p class="text-slate\/70 text-pretty">
+            Anna.I batches and routes jobs to fill your schedule efficiently, instead of
+            you chasing leads across multiple apps. Jobs come to you — matched to your
+            category, capacity, and availability.
+          </p>
+        </div>
+        <div class="card reveal">
+          <Icon name="shieldLock" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Fair, on-time payouts</h3>
+          <p class="text-slate\/70 text-pretty">
+            Milestone escrow means payment is held before the job starts and released the
+            moment your work is verified complete. No chasing customers, no disputes,
+            no bad debt.
+          </p>
+        </div>
+        <div class="card reveal">
+          <Icon name="fingerprint" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Build a reputation that compounds</h3>
+          <p class="text-slate\/70 text-pretty">
+            Longitudinal performance scoring — not one-off star ratings — means good work
+            keeps earning you more bookings at better rates over time.
+          </p>
+        </div>
+        <div class="card reveal">
+          <Icon name="handSquiggle" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Simple tools, not another complicated app</h3>
+          <p class="text-slate\/70 text-pretty">
+            Job dispatch, scheduling, and payout tracking in one place — built for how
+            vendors actually work, not a bloated platform you have to learn.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ HOW IT WORKS FOR VENDORS ═══ */}
+  <section class="section" style="background: var(--white);">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-14 reveal">
+        <span class="badge mb-5">How it works</span>
+        <h2 class="text-fluid-3xl mb-4 text-balance">From application to payout — four steps.</h2>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          No complicated onboarding. No multi-step wizards. Apply once, get vetted,
+          and start receiving matched jobs.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        {vendorSteps.map((step) => (
+          <div class="reveal">
+            <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem;">
+              <span style="font-family: monospace; font-size: 0.875rem; font-weight: 500; color: var(--sage-600); flex-shrink: 0;">{step.n}</span>
+            </div>
+            <Icon name={step.icon} class="w-8 h-8 mb-3" />
+            <h3 class="text-fluid-lg font-semibold mb-2 text-balance">{step.title}</h3>
+            <p class="text-sm text-slate\/65 text-pretty">{step.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    eyebrow="Join the network"
+    headline="Become an Anna.I partner."
+    body="Apply once. Get verified once. From there, Anna.I sends you the work — and escrow guarantees you get paid."
+    primaryHref="/contact-us"
+    primaryLabel="Register as a Partner"
+    secondaryLabel=""
+    secondaryHref=""
+    reassurance=""
+  />
+</BaseLayout>
+
+<style>
+  @media (min-width: 768px) {
+    section:first-of-type > div > div:last-child { grid-template-columns: repeat(2, 1fr) !important; }
+    section:nth-of-type(2) > div > div:last-child { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+  @media (min-width: 1024px) {
+    section:first-of-type > div > div:last-child { grid-template-columns: repeat(4, 1fr) !important; }
+    section:nth-of-type(2) > div > div:last-child { grid-template-columns: repeat(4, 1fr) !important; }
+  }
+</style>

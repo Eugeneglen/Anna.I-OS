@@ -121,7 +121,7 @@ export function AnomalyBanner() {
     refetchInterval: 30_000,
   });
 
-  // M-5 FIX: Auto-trigger detection on mount and when household changes
+  // Manual "Re-scan now" mutation (used by the button — needs isPending state)
   const detectionMutation = useMutation({
     mutationFn: () => triggerDetection(selectedHouseholdId),
     onSuccess: () => {
@@ -129,11 +129,28 @@ export function AnomalyBanner() {
     },
   });
 
+  // M-5 FIX: Auto-trigger detection on mount and when household changes.
+  // IMPORTANT: Do NOT include `detectionMutation` in the deps array — useMutation
+  // returns a new object reference every render, which would cause this effect to
+  // fire every render → infinite POST /api/anomalies/check loop (root cause of the
+  // household task detail crash + socket timeout + dev server instability).
+  // Call triggerDetection directly and invalidate on success.
   useEffect(() => {
-    if (selectedHouseholdId) {
-      detectionMutation.mutate();
-    }
-  }, [selectedHouseholdId, detectionMutation]);
+    if (!selectedHouseholdId) return;
+    let cancelled = false;
+    triggerDetection(selectedHouseholdId)
+      .then(() => {
+        if (!cancelled) {
+          queryClient.invalidateQueries({ queryKey: ["anomalies", selectedHouseholdId] });
+        }
+      })
+      .catch(() => {
+        // Non-critical — detection failures are silent
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedHouseholdId, queryClient]);
 
   // Acknowledge mutation
   const acknowledgeMutation = useMutation({

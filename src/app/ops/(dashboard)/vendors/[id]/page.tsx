@@ -32,6 +32,28 @@ const STATUS_STYLES: Record<string, string> = {
   OFFBOARDED: "bg-red-50 text-red-700 border-red-200",
 };
 
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  HDB: "HDB",
+  CONDOMINIUM: "Condo",
+  LANDED: "Landed",
+  OFFICE: "Office",
+  OTHER: "Other",
+};
+
+interface Address {
+  id: string;
+  label: string | null;
+  propertyType: string;
+  fullAddress: string;
+  isDefault: boolean;
+  postalCode: string;
+  blockNumber: string | null;
+  streetName: string | null;
+  buildingName: string | null;
+  level: string | null;
+  unitNumber: string | null;
+}
+
 function parseJsonField(val: unknown): string[] {
   if (Array.isArray(val)) return val as string[];
   if (typeof val === "string") {
@@ -44,6 +66,9 @@ function parseJsonField(val: unknown): string[] {
   return [];
 }
 
+const inputCls = "rounded-xl border-[var(--anna-border)] text-sm";
+const labelCls = "text-xs font-medium text-[var(--anna-slate)]";
+
 function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -52,19 +77,29 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
   const isAdmin = user?.role === "ADMIN";
 
   const [form, setForm] = useState<Record<string, unknown>>(() => ({
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
+    companyName: data.companyName || "",
+    companyRegNo: data.companyRegNo || "",
+    registeredAddress: data.registeredAddress || "",
+    contactPerson: data.contactPerson || "",
+    contactEmail1: data.contactEmail1 || "",
+    contactPhone1: data.contactPhone1 || "",
+    contactPerson2: data.contactPerson2 || "",
+    contactEmail2: data.contactEmail2 || "",
+    contactPhone2: data.contactPhone2 || "",
     vendorType: data.vendorType,
-    categories: parseJsonField(data.categories),
     staffCount: data.staffCount,
     dailyCapacity: data.dailyCapacity,
+    categories: parseJsonField(data.categories),
     zones: parseJsonField(data.zones),
     status: data.status,
   }));
   const [dirty, setDirty] = useState(false);
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffContact, setNewStaffContact] = useState("");
+
+  const addresses: Address[] = Array.isArray(data.addresses)
+    ? (data.addresses as Address[])
+    : [];
 
   function updateField(key: string, value: unknown) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -100,9 +135,15 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
 
   function handleSave() {
     updateMutation.mutate({
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
+      contactPerson: form.contactPerson || null,
+      contactEmail1: form.contactEmail1 || null,
+      contactPhone1: form.contactPhone1 || null,
+      contactPerson2: form.contactPerson2 || null,
+      contactEmail2: form.contactEmail2 || null,
+      contactPhone2: form.contactPhone2 || null,
+      companyName: form.companyName || null,
+      companyRegNo: form.companyRegNo || null,
+      registeredAddress: form.registeredAddress || null,
       vendorType: form.vendorType,
       categories: form.categories,
       staffCount: form.staffCount,
@@ -173,7 +214,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-[var(--anna-slate)] truncate">
-              {data.name}
+              {data.companyName || data.name}
             </h2>
             <Badge
               variant="outline"
@@ -207,54 +248,42 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
         )}
       </div>
 
-      {/* Details Card */}
+      {/* ── Section A: Company Information ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--anna-border)]">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-            Vendor Details
+            Company Information
           </h3>
         </div>
         <div className="p-5 space-y-4">
+          <div className="space-y-1.5">
+            <Label className={labelCls}>
+              Company Name <span className="text-[var(--anna-error)]">*</span>
+            </Label>
+            <Input
+              placeholder="e.g. FreshWash Pte Ltd"
+              value={(form.companyName as string) || ""}
+              onChange={(e) => updateField("companyName", e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Company Reg No.</Label>
+            <Input
+              placeholder="e.g. 2024XXXXXX"
+              value={(form.companyRegNo as string) || ""}
+              onChange={(e) => updateField("companyRegNo", e.target.value)}
+              className={inputCls}
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Name
-              </Label>
-              <Input
-                value={(form.name as string) || ""}
-                onChange={(e) => updateField("name", e.target.value)}
-                className="rounded-xl border-[var(--anna-border)]"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Email
-              </Label>
-              <Input
-                value={(form.email as string) || ""}
-                onChange={(e) => updateField("email", e.target.value)}
-                className="rounded-xl border-[var(--anna-border)]"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Phone
-              </Label>
-              <Input
-                value={(form.phone as string) || ""}
-                onChange={(e) => updateField("phone", e.target.value)}
-                className="rounded-xl border-[var(--anna-border)]"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Type
-              </Label>
+              <Label className={labelCls}>Type</Label>
               <Select
                 value={(form.vendorType as string) || "MICRO"}
                 onValueChange={(v) => updateField("vendorType", v)}
               >
-                <SelectTrigger className="rounded-xl border-[var(--anna-border)]">
+                <SelectTrigger className={inputCls}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -264,9 +293,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Staff Count
-              </Label>
+              <Label className={labelCls}>Staff Count</Label>
               <Input
                 type="number"
                 min={1}
@@ -277,49 +304,27 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
                     parseInt(e.target.value) || 1
                   )
                 }
-                className="rounded-xl border-[var(--anna-border)] font-data"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Daily Capacity
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                value={(form.dailyCapacity as number) || 6}
-                onChange={(e) =>
-                  updateField(
-                    "dailyCapacity",
-                    parseInt(e.target.value) || 6
-                  )
-                }
-                className="rounded-xl border-[var(--anna-border)] font-data"
+                className={cn(inputCls, "font-data")}
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
-              Zones (comma-separated)
-            </Label>
+            <Label className={labelCls}>Daily Capacity</Label>
             <Input
-              value={zonesStr}
+              type="number"
+              min={1}
+              value={(form.dailyCapacity as number) || 6}
               onChange={(e) =>
                 updateField(
-                  "zones",
-                  e.target.value
-                    .split(",")
-                    .map((z) => z.trim())
-                    .filter(Boolean)
+                  "dailyCapacity",
+                  parseInt(e.target.value) || 6
                 )
               }
-              className="rounded-xl border-[var(--anna-border)]"
+              className={cn(inputCls, "font-data")}
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
-              Service Categories
-            </Label>
+            <Label className={labelCls}>Service Categories</Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)]">
               {CATEGORIES.map((cat) => (
                 <label
@@ -339,6 +344,22 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
               ))}
             </div>
           </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Zones (comma-separated)</Label>
+            <Input
+              value={zonesStr}
+              onChange={(e) =>
+                updateField(
+                  "zones",
+                  e.target.value
+                    .split(",")
+                    .map((z) => z.trim())
+                    .filter(Boolean)
+                )
+              }
+              className={inputCls}
+            />
+          </div>
           {dirty && (
             <Button
               onClick={handleSave}
@@ -349,6 +370,121 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           )}
+        </div>
+      </div>
+
+      {/* ── Section B: Contact Person 1 ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--anna-border)]">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+            Contact Persons
+          </h3>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="space-y-3 rounded-xl border border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+              Contact Person 1
+            </p>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Name</Label>
+              <Input
+                placeholder="e.g. John Lim"
+                value={(form.contactPerson as string) || ""}
+                onChange={(e) => updateField("contactPerson", e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className={labelCls}>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="john@example.com"
+                  value={(form.contactEmail1 as string) || ""}
+                  onChange={(e) =>
+                    updateField("contactEmail1", e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className={labelCls}>Phone</Label>
+                <Input
+                  placeholder="+65 8XXX XXXX"
+                  value={(form.contactPhone1 as string) || ""}
+                  onChange={(e) =>
+                    updateField("contactPhone1", e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section C: Contact Person 2 (Optional) ── */}
+          <div className="space-y-3 rounded-xl border border-dashed border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Contact Person 2 (Optional)
+            </p>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Name</Label>
+              <Input
+                placeholder="e.g. Sarah Tan"
+                value={(form.contactPerson2 as string) || ""}
+                onChange={(e) =>
+                  updateField("contactPerson2", e.target.value)
+                }
+                className={inputCls}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className={labelCls}>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="sarah@example.com"
+                  value={(form.contactEmail2 as string) || ""}
+                  onChange={(e) =>
+                    updateField("contactEmail2", e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className={labelCls}>Phone</Label>
+                <Input
+                  placeholder="+65 9XXX XXXX"
+                  value={(form.contactPhone2 as string) || ""}
+                  onChange={(e) =>
+                    updateField("contactPhone2", e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Registered Address ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--anna-border)]">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+            Registered Address
+          </h3>
+        </div>
+        <div className="p-5">
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Registered Address</Label>
+            <Input
+              placeholder="e.g. 123 Orchard Road, #10-01, Singapore 238888"
+              value={(form.registeredAddress as string) || ""}
+              onChange={(e) =>
+                updateField("registeredAddress", e.target.value)
+              }
+              className={inputCls}
+            />
+          </div>
         </div>
       </div>
 
@@ -365,25 +501,21 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
         <div className="p-5 space-y-4">
           <div className="flex items-end gap-2">
             <div className="flex-1 space-y-1">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Name
-              </Label>
+              <Label className={labelCls}>Name</Label>
               <Input
                 placeholder="Staff name"
                 value={newStaffName}
                 onChange={(e) => setNewStaffName(e.target.value)}
-                className="rounded-xl border-[var(--anna-border)]"
+                className={inputCls}
               />
             </div>
             <div className="flex-1 space-y-1">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Contact
-              </Label>
+              <Label className={labelCls}>Contact</Label>
               <Input
                 placeholder="Phone or email"
                 value={newStaffContact}
                 onChange={(e) => setNewStaffContact(e.target.value)}
-                className="rounded-xl border-[var(--anna-border)]"
+                className={inputCls}
               />
             </div>
             <Button

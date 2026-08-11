@@ -1,0 +1,997 @@
+From 5239f44fe338562d539d2dc03d2fd0af68cbaa8d Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Wed, 29 Jul 2026 04:10:11 +0000
+Subject: [PATCH 2/3] a80eb5cc-2b26-486b-bd4e-2d82699381ce
+
+---
+ src/app/api/ops/vendors/[id]/route.ts         |  28 +-
+ src/app/api/vendor/profile/route.ts           |  19 +
+ src/app/ops/(dashboard)/vendors/[id]/page.tsx | 361 ++++++++++++------
+ src/app/vendor/(portal)/settings/page.tsx     | 307 ++++++++++-----
+ 4 files changed, 489 insertions(+), 226 deletions(-)
+
+diff --git a/src/app/api/ops/vendors/[id]/route.ts b/src/app/api/ops/vendors/[id]/route.ts
+index 95f417c..cc79de3 100755
+--- a/src/app/api/ops/vendors/[id]/route.ts
++++ b/src/app/api/ops/vendors/[id]/route.ts
+@@ -8,6 +8,11 @@ type VendorUpdateData = {
+   email?: string;
+   phone?: string;
+   contactPerson?: string | null;
++  contactEmail1?: string | null;
++  contactPhone1?: string | null;
++  contactPerson2?: string | null;
++  contactEmail2?: string | null;
++  contactPhone2?: string | null;
+   companyName?: string | null;
+   companyRegNo?: string | null;
+   vendorType?: string;
+@@ -33,7 +38,13 @@ export async function GET(
+     const { id } = await params;
+     const vendor = await db.vendor.findUnique({
+       where: { id },
+-      include: { staff: { orderBy: { createdAt: "asc" } } },
++      include: {
++        staff: { orderBy: { createdAt: "asc" } },
++        addresses: {
++          where: { ownerType: "VENDOR", vendorId: id },
++          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
++        },
++      },
+     });
+ 
+     if (!vendor) {
+@@ -81,6 +92,11 @@ export async function PATCH(
+     if (body.email !== undefined) updateData.email = body.email;
+     if (body.phone !== undefined) updateData.phone = body.phone;
+     if (body.contactPerson !== undefined) updateData.contactPerson = body.contactPerson;
++    if (body.contactEmail1 !== undefined) updateData.contactEmail1 = body.contactEmail1;
++    if (body.contactPhone1 !== undefined) updateData.contactPhone1 = body.contactPhone1;
++    if (body.contactPerson2 !== undefined) updateData.contactPerson2 = body.contactPerson2;
++    if (body.contactEmail2 !== undefined) updateData.contactEmail2 = body.contactEmail2;
++    if (body.contactPhone2 !== undefined) updateData.contactPhone2 = body.contactPhone2;
+     if (body.companyName !== undefined) updateData.companyName = body.companyName;
+     if (body.companyRegNo !== undefined) updateData.companyRegNo = body.companyRegNo;
+     if (body.vendorType !== undefined) updateData.vendorType = body.vendorType;
+@@ -139,10 +155,16 @@ export async function PATCH(
+       metadata: { changes: updateData },
+     });
+ 
+-    // Re-fetch with staff
++    // Re-fetch with staff and addresses
+     const updated = await db.vendor.findUnique({
+       where: { id },
+-      include: { staff: { orderBy: { createdAt: "asc" } } },
++      include: {
++        staff: { orderBy: { createdAt: "asc" } },
++        addresses: {
++          where: { ownerType: "VENDOR", vendorId: id },
++          orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
++        },
++      },
+     });
+ 
+     return NextResponse.json({ vendor: updated });
+diff --git a/src/app/api/vendor/profile/route.ts b/src/app/api/vendor/profile/route.ts
+index 1ea9a7f..8423ba0 100755
+--- a/src/app/api/vendor/profile/route.ts
++++ b/src/app/api/vendor/profile/route.ts
+@@ -7,6 +7,11 @@ const ALLOWED_PATCH_FIELDS = [
+   "phone",
+   "email",
+   "contactPerson",
++  "contactEmail1",
++  "contactPhone1",
++  "contactPerson2",
++  "contactEmail2",
++  "contactPhone2",
+   "availability",    // JSON: { workingDays, workingHours, notes }
+ ] as const;
+ 
+@@ -39,6 +44,13 @@ export async function GET() {
+         email: true,
+         phone: true,
+         contactPerson: true,
++        contactEmail1: true,
++        contactPhone1: true,
++        contactPerson2: true,
++        contactEmail2: true,
++        contactPhone2: true,
++        companyName: true,
++        companyRegNo: true,
+         categories: true,
+         vendorType: true,
+         staffCount: true,
+@@ -150,6 +162,13 @@ export async function PATCH(req: NextRequest) {
+         email: true,
+         phone: true,
+         contactPerson: true,
++        contactEmail1: true,
++        contactPhone1: true,
++        contactPerson2: true,
++        contactEmail2: true,
++        contactPhone2: true,
++        companyName: true,
++        companyRegNo: true,
+         categories: true,
+         vendorType: true,
+         staffCount: true,
+diff --git a/src/app/ops/(dashboard)/vendors/[id]/page.tsx b/src/app/ops/(dashboard)/vendors/[id]/page.tsx
+index adf4da5..f80e494 100755
+--- a/src/app/ops/(dashboard)/vendors/[id]/page.tsx
++++ b/src/app/ops/(dashboard)/vendors/[id]/page.tsx
+@@ -19,7 +19,7 @@ import {
+ import { Switch } from "@/components/ui/switch";
+ import { Checkbox } from "@/components/ui/checkbox";
+ import { Separator } from "@/components/ui/separator";
+-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
++import { ArrowLeft, Save, Plus, Trash2, MapPin } from "lucide-react";
+ import { cn } from "@/lib/utils";
+ import { useOpsUser } from "@/app/ops/(dashboard)/layout";
+ import { CATEGORIES } from "@/lib/constants";
+@@ -32,6 +32,28 @@ const STATUS_STYLES: Record<string, string> = {
+   OFFBOARDED: "bg-red-50 text-red-700 border-red-200",
+ };
+ 
++const PROPERTY_TYPE_LABELS: Record<string, string> = {
++  HDB: "HDB",
++  CONDOMINIUM: "Condo",
++  LANDED: "Landed",
++  OFFICE: "Office",
++  OTHER: "Other",
++};
++
++interface Address {
++  id: string;
++  label: string | null;
++  propertyType: string;
++  fullAddress: string;
++  isDefault: boolean;
++  postalCode: string;
++  blockNumber: string | null;
++  streetName: string | null;
++  buildingName: string | null;
++  level: string | null;
++  unitNumber: string | null;
++}
++
+ function parseJsonField(val: unknown): string[] {
+   if (Array.isArray(val)) return val as string[];
+   if (typeof val === "string") {
+@@ -44,6 +66,9 @@ function parseJsonField(val: unknown): string[] {
+   return [];
+ }
+ 
++const inputCls = "rounded-xl border-[var(--anna-border)] text-sm";
++const labelCls = "text-xs font-medium text-[var(--anna-slate)]";
++
+ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+   const { id } = useParams<{ id: string }>();
+   const router = useRouter();
+@@ -52,16 +77,18 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+   const isAdmin = user?.role === "ADMIN";
+ 
+   const [form, setForm] = useState<Record<string, unknown>>(() => ({
+-    name: data.name,
+-    email: data.email,
+-    phone: data.phone,
+     companyName: data.companyName || "",
+     companyRegNo: data.companyRegNo || "",
+     contactPerson: data.contactPerson || "",
++    contactEmail1: data.contactEmail1 || "",
++    contactPhone1: data.contactPhone1 || "",
++    contactPerson2: data.contactPerson2 || "",
++    contactEmail2: data.contactEmail2 || "",
++    contactPhone2: data.contactPhone2 || "",
+     vendorType: data.vendorType,
+-    categories: parseJsonField(data.categories),
+     staffCount: data.staffCount,
+     dailyCapacity: data.dailyCapacity,
++    categories: parseJsonField(data.categories),
+     zones: parseJsonField(data.zones),
+     status: data.status,
+   }));
+@@ -69,6 +96,10 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+   const [newStaffName, setNewStaffName] = useState("");
+   const [newStaffContact, setNewStaffContact] = useState("");
+ 
++  const addresses: Address[] = Array.isArray(data.addresses)
++    ? (data.addresses as Address[])
++    : [];
++
+   function updateField(key: string, value: unknown) {
+     setForm((f) => ({ ...f, [key]: value }));
+     setDirty(true);
+@@ -103,12 +134,14 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+ 
+   function handleSave() {
+     updateMutation.mutate({
+-      name: form.name,
+-      email: form.email,
+-      phone: form.phone,
++      contactPerson: form.contactPerson || null,
++      contactEmail1: form.contactEmail1 || null,
++      contactPhone1: form.contactPhone1 || null,
++      contactPerson2: form.contactPerson2 || null,
++      contactEmail2: form.contactEmail2 || null,
++      contactPhone2: form.contactPhone2 || null,
+       companyName: form.companyName || null,
+       companyRegNo: form.companyRegNo || null,
+-      contactPerson: form.contactPerson || null,
+       vendorType: form.vendorType,
+       categories: form.categories,
+       staffCount: form.staffCount,
+@@ -179,7 +212,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+         <div className="flex-1 min-w-0">
+           <div className="flex items-center gap-2">
+             <h2 className="text-xl font-bold text-[var(--anna-slate)] truncate">
+-              {data.name}
++              {data.companyName || data.name}
+             </h2>
+             <Badge
+               variant="outline"
+@@ -213,87 +246,42 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+         )}
+       </div>
+ 
+-      {/* Details Card */}
++      {/* ── Section A: Company Information ── */}
+       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+         <div className="px-5 py-3 border-b border-[var(--anna-border)]">
+           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+-            Vendor Details
++            Company Information
+           </h3>
+         </div>
+         <div className="p-5 space-y-4">
++          <div className="space-y-1.5">
++            <Label className={labelCls}>
++              Company Name <span className="text-[var(--anna-error)]">*</span>
++            </Label>
++            <Input
++              placeholder="e.g. FreshWash Pte Ltd"
++              value={(form.companyName as string) || ""}
++              onChange={(e) => updateField("companyName", e.target.value)}
++              className={inputCls}
++            />
++          </div>
++          <div className="space-y-1.5">
++            <Label className={labelCls}>Company Reg No.</Label>
++            <Input
++              placeholder="e.g. 2024XXXXXX"
++              value={(form.companyRegNo as string) || ""}
++              onChange={(e) => updateField("companyRegNo", e.target.value)}
++              className={inputCls}
++            />
++          </div>
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Name
+-              </Label>
+-              <Input
+-                value={(form.name as string) || ""}
+-                onChange={(e) => updateField("name", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Email
+-              </Label>
+-              <Input
+-                value={(form.email as string) || ""}
+-                onChange={(e) => updateField("email", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Phone
+-              </Label>
+-              <Input
+-                value={(form.phone as string) || ""}
+-                onChange={(e) => updateField("phone", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Company Name
+-              </Label>
+-              <Input
+-                placeholder="e.g. FreshWash Pte Ltd"
+-                value={(form.companyName as string) || ""}
+-                onChange={(e) => updateField("companyName", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Company Reg No.
+-              </Label>
+-              <Input
+-                placeholder="e.g. 2024XXXXXX"
+-                value={(form.companyRegNo as string) || ""}
+-                onChange={(e) => updateField("companyRegNo", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Contact Person
+-              </Label>
+-              <Input
+-                placeholder="e.g. John Lim"
+-                value={(form.contactPerson as string) || ""}
+-                onChange={(e) => updateField("contactPerson", e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Type
+-              </Label>
++              <Label className={labelCls}>Type</Label>
+               <Select
+                 value={(form.vendorType as string) || "MICRO"}
+                 onValueChange={(v) => updateField("vendorType", v)}
+               >
+-                <SelectTrigger className="rounded-xl border-[var(--anna-border)]">
++                <SelectTrigger className={inputCls}>
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+@@ -303,9 +291,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+               </Select>
+             </div>
+             <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Staff Count
+-              </Label>
++              <Label className={labelCls}>Staff Count</Label>
+               <Input
+                 type="number"
+                 min={1}
+@@ -316,49 +302,27 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+                     parseInt(e.target.value) || 1
+                   )
+                 }
+-                className="rounded-xl border-[var(--anna-border)] font-data"
+-              />
+-            </div>
+-            <div className="space-y-1.5">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Daily Capacity
+-              </Label>
+-              <Input
+-                type="number"
+-                min={1}
+-                value={(form.dailyCapacity as number) || 6}
+-                onChange={(e) =>
+-                  updateField(
+-                    "dailyCapacity",
+-                    parseInt(e.target.value) || 6
+-                  )
+-                }
+-                className="rounded-xl border-[var(--anna-border)] font-data"
++                className={cn(inputCls, "font-data")}
+               />
+             </div>
+           </div>
+           <div className="space-y-1.5">
+-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-              Zones (comma-separated)
+-            </Label>
++            <Label className={labelCls}>Daily Capacity</Label>
+             <Input
+-              value={zonesStr}
++              type="number"
++              min={1}
++              value={(form.dailyCapacity as number) || 6}
+               onChange={(e) =>
+                 updateField(
+-                  "zones",
+-                  e.target.value
+-                    .split(",")
+-                    .map((z) => z.trim())
+-                    .filter(Boolean)
++                  "dailyCapacity",
++                  parseInt(e.target.value) || 6
+                 )
+               }
+-              className="rounded-xl border-[var(--anna-border)]"
++              className={cn(inputCls, "font-data")}
+             />
+           </div>
+           <div className="space-y-2">
+-            <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-              Service Categories
+-            </Label>
++            <Label className={labelCls}>Service Categories</Label>
+             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)]">
+               {CATEGORIES.map((cat) => (
+                 <label
+@@ -378,6 +342,22 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+               ))}
+             </div>
+           </div>
++          <div className="space-y-1.5">
++            <Label className={labelCls}>Zones (comma-separated)</Label>
++            <Input
++              value={zonesStr}
++              onChange={(e) =>
++                updateField(
++                  "zones",
++                  e.target.value
++                    .split(",")
++                    .map((z) => z.trim())
++                    .filter(Boolean)
++                )
++              }
++              className={inputCls}
++            />
++          </div>
+           {dirty && (
+             <Button
+               onClick={handleSave}
+@@ -391,6 +371,149 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+         </div>
+       </div>
+ 
++      {/* ── Section B: Contact Person 1 ── */}
++      <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
++        <div className="px-5 py-3 border-b border-[var(--anna-border)]">
++          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
++            Contact Persons
++          </h3>
++        </div>
++        <div className="p-5 space-y-4">
++          <div className="space-y-3 rounded-xl border border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
++            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
++              Contact Person 1
++            </p>
++            <div className="space-y-1.5">
++              <Label className={labelCls}>Name</Label>
++              <Input
++                placeholder="e.g. John Lim"
++                value={(form.contactPerson as string) || ""}
++                onChange={(e) => updateField("contactPerson", e.target.value)}
++                className={inputCls}
++              />
++            </div>
++            <div className="grid grid-cols-2 gap-2">
++              <div className="space-y-1.5">
++                <Label className={labelCls}>Email</Label>
++                <Input
++                  type="email"
++                  placeholder="john@example.com"
++                  value={(form.contactEmail1 as string) || ""}
++                  onChange={(e) =>
++                    updateField("contactEmail1", e.target.value)
++                  }
++                  className={inputCls}
++                />
++              </div>
++              <div className="space-y-1.5">
++                <Label className={labelCls}>Phone</Label>
++                <Input
++                  placeholder="+65 8XXX XXXX"
++                  value={(form.contactPhone1 as string) || ""}
++                  onChange={(e) =>
++                    updateField("contactPhone1", e.target.value)
++                  }
++                  className={inputCls}
++                />
++              </div>
++            </div>
++          </div>
++
++          {/* ── Section C: Contact Person 2 (Optional) ── */}
++          <div className="space-y-3 rounded-xl border border-dashed border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
++            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
++              Contact Person 2 (Optional)
++            </p>
++            <div className="space-y-1.5">
++              <Label className={labelCls}>Name</Label>
++              <Input
++                placeholder="e.g. Sarah Tan"
++                value={(form.contactPerson2 as string) || ""}
++                onChange={(e) =>
++                  updateField("contactPerson2", e.target.value)
++                }
++                className={inputCls}
++              />
++            </div>
++            <div className="grid grid-cols-2 gap-2">
++              <div className="space-y-1.5">
++                <Label className={labelCls}>Email</Label>
++                <Input
++                  type="email"
++                  placeholder="sarah@example.com"
++                  value={(form.contactEmail2 as string) || ""}
++                  onChange={(e) =>
++                    updateField("contactEmail2", e.target.value)
++                  }
++                  className={inputCls}
++                />
++              </div>
++              <div className="space-y-1.5">
++                <Label className={labelCls}>Phone</Label>
++                <Input
++                  placeholder="+65 9XXX XXXX"
++                  value={(form.contactPhone2 as string) || ""}
++                  onChange={(e) =>
++                    updateField("contactPhone2", e.target.value)
++                  }
++                  className={inputCls}
++                />
++              </div>
++            </div>
++          </div>
++        </div>
++      </div>
++
++      {/* ── Registered Address (read-only) ── */}
++      <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
++        <div className="px-5 py-3 border-b border-[var(--anna-border)]">
++          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
++            Registered Address
++          </h3>
++        </div>
++        <div className="p-5">
++          {addresses.length > 0 ? (
++            <div className="space-y-2">
++              {addresses.map((addr) => (
++                <div
++                  key={addr.id}
++                  className="flex items-start p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]"
++                >
++                  <MapPin className="h-4 w-4 text-[var(--anna-muted)] mt-0.5 mr-3 shrink-0" />
++                  <div className="flex-1 min-w-0">
++                    <div className="flex items-center gap-2 mb-1">
++                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
++                        {PROPERTY_TYPE_LABELS[addr.propertyType] || addr.propertyType}
++                      </span>
++                      {addr.isDefault && (
++                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-success)]/15 text-[var(--anna-success)]">
++                          Default
++                        </span>
++                      )}
++                      {addr.label && (
++                        <span className="text-[10px] text-[var(--anna-muted)]">
++                          {addr.label}
++                        </span>
++                      )}
++                    </div>
++                    <p className="text-xs text-[var(--anna-slate)] leading-relaxed">
++                      {addr.fullAddress}
++                    </p>
++                  </div>
++                </div>
++              ))}
++            </div>
++          ) : (
++            <div className="text-center py-6">
++              <MapPin className="h-6 w-6 text-[var(--anna-muted)] mx-auto mb-2" />
++              <p className="text-xs text-[var(--anna-muted)]">
++                No addresses added yet
++              </p>
++            </div>
++          )}
++        </div>
++      </div>
++
+       {/* Staff Card */}
+       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+         <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
+@@ -404,25 +527,21 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+         <div className="p-5 space-y-4">
+           <div className="flex items-end gap-2">
+             <div className="flex-1 space-y-1">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Name
+-              </Label>
++              <Label className={labelCls}>Name</Label>
+               <Input
+                 placeholder="Staff name"
+                 value={newStaffName}
+                 onChange={(e) => setNewStaffName(e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
++                className={inputCls}
+               />
+             </div>
+             <div className="flex-1 space-y-1">
+-              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+-                Contact
+-              </Label>
++              <Label className={labelCls}>Contact</Label>
+               <Input
+                 placeholder="Phone or email"
+                 value={newStaffContact}
+                 onChange={(e) => setNewStaffContact(e.target.value)}
+-                className="rounded-xl border-[var(--anna-border)]"
++                className={inputCls}
+               />
+             </div>
+             <Button
+diff --git a/src/app/vendor/(portal)/settings/page.tsx b/src/app/vendor/(portal)/settings/page.tsx
+index d30fa0b..133267e 100755
+--- a/src/app/vendor/(portal)/settings/page.tsx
++++ b/src/app/vendor/(portal)/settings/page.tsx
+@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+ import { useVendorUser } from "@/app/vendor/(portal)/layout";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
++import { Label } from "@/components/ui/label";
+ import { Badge } from "@/components/ui/badge";
+ import { Skeleton } from "@/components/ui/skeleton";
+ import { Separator } from "@/components/ui/separator";
+@@ -54,6 +55,13 @@ interface VendorProfile {
+   email: string;
+   phone: string;
+   contactPerson?: string | null;
++  contactEmail1?: string | null;
++  contactPhone1?: string | null;
++  contactPerson2?: string | null;
++  contactEmail2?: string | null;
++  contactPhone2?: string | null;
++  companyName?: string | null;
++  companyRegNo?: string | null;
+   categories: string;
+   vendorType: string;
+   staffCount: number;
+@@ -68,7 +76,7 @@ interface VendorProfile {
+   updatedAt: string;
+ }
+ 
+-type EditSection = "phone" | "email" | "availability" | "contactPerson" | null;
++type EditSection = "phone" | "email" | "availability" | "contactPerson" | "contactPerson2" | null;
+ 
+ interface AvailabilityData {
+   workingDays: string[];
+@@ -318,6 +326,9 @@ export default function VendorSettingsPage() {
+   const [editWorkingHours, setEditWorkingHours] = useState("");
+   const [editHoursNotes, setEditHoursNotes] = useState("");
+   const [editContactPerson, setEditContactPerson] = useState("");
++  const [editCP2Name, setEditCP2Name] = useState("");
++  const [editCP2Email, setEditCP2Email] = useState("");
++  const [editCP2Phone, setEditCP2Phone] = useState("");
+ 
+   // Address dialog state
+   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
+@@ -326,9 +337,15 @@ export default function VendorSettingsPage() {
+   // Sync edit state when editing starts
+   const startEdit = (section: EditSection) => {
+     if (!profile) return;
++    const p = profile as Record<string, unknown>;
+     if (section === "phone") setEditPhone(profile.phone || "");
+     if (section === "email") setEditEmail(profile.email || "");
+-    if (section === "contactPerson") setEditContactPerson((profile as Record<string, unknown>).contactPerson as string || "");
++    if (section === "contactPerson") setEditContactPerson(p.contactPerson as string || "");
++    if (section === "contactPerson2") {
++      setEditCP2Name(p.contactPerson2 as string || "");
++      setEditCP2Email(p.contactEmail2 as string || "");
++      setEditCP2Phone(p.contactPhone2 as string || "");
++    }
+     if (section === "availability") {
+       try {
+         const avail = (profile.availability as AvailabilityData) || {};
+@@ -443,6 +460,30 @@ export default function VendorSettingsPage() {
+     },
+   });
+ 
++  // Contact Person 2 mutation
++  const saveCP2Mutation = useMutation({
++    mutationFn: async (data: { contactPerson2: string; contactEmail2?: string; contactPhone2?: string }) => {
++      const res = await fetch("/api/vendor/profile", {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(data),
++      });
++      if (!res.ok) {
++        const d = await res.json();
++        throw new Error(d.error || "Update failed");
++      }
++      return res.json();
++    },
++    onSuccess: () => {
++      toast({ title: "Contact person 2 updated" });
++      queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
++      setEditSection(null);
++    },
++    onError: (err) => {
++      toast({ title: "Update failed", description: err.message, variant: "destructive" });
++    },
++  });
++
+   // ── Vendor Addresses ──
+   const { data: addressesData } = useQuery<{ addresses: Address[] }>({
+     queryKey: ["vendor-addresses"],
+@@ -551,6 +592,8 @@ export default function VendorSettingsPage() {
+           </div>
+           <Separator className="bg-[var(--anna-border)]" />
+           <InfoRow icon={Shield} label="Type" value={profile.vendorType} />
++          <InfoRow icon={Building2} label="Company Name" value={profile.companyName || "Not set"} />
++          <InfoRow icon={Shield} label="Company Reg No." value={profile.companyRegNo || "Not set"} />
+           <InfoRow icon={Users} label="Staff" value={`${profile.staffCount} members`} />
+           <InfoRow icon={Calendar} label="Member Since" value={formatDate(profile.createdAt)} />
+           <InfoRow icon={Calendar} label="Last Updated" value={formatDate(profile.updatedAt)} />
+@@ -558,114 +601,174 @@ export default function VendorSettingsPage() {
+ 
+         {/* ── Contact Information ── */}
+         <SectionCard title="Contact Details" subtitle="Your phone and email for bookings" icon={Phone}>
+-          {/* Phone */}
+-          <EditableRow
+-            icon={Phone}
+-            label="Phone"
+-            value={profile.phone || "Not set"}
+-            isEditing={editSection === "phone"}
+-            onEdit={() => startEdit("phone")}
+-            editContent={
+-              <div className="flex items-center gap-2">
+-                <Input
+-                  value={editPhone}
+-                  onChange={(e) => setEditPhone(e.target.value)}
+-                  placeholder="+65 9000 0000"
+-                  className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs font-data"
+-                />
+-                <Button
+-                  size="sm"
+-                  onClick={() => savePhoneMutation.mutate(editPhone)}
+-                  disabled={savePhoneMutation.isPending || editPhone === profile.phone}
+-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+-                >
+-                  <Save size={12} />
+-                </Button>
+-                <Button
+-                  size="sm"
+-                  variant="ghost"
+-                  onClick={cancelEdit}
+-                  className="h-7 px-1 rounded-lg"
+-                >
+-                  <X size={12} />
+-                </Button>
++          {/* ── Contact Person 1 ── */}
++          <div className="space-y-3 rounded-xl border border-[var(--anna-border)] p-3 bg-[var(--anna-bg)] mb-4">
++            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
++              Contact Person 1
++            </p>
++            {/* Name */}
++            <EditableRow
++              icon={User}
++              label="Name"
++              value={profile.contactPerson || "Not set"}
++              isEditing={editSection === "contactPerson"}
++              onEdit={() => startEdit("contactPerson")}
++              editContent={
++                <div className="flex items-center gap-2">
++                  <Input
++                    value={editContactPerson}
++                    onChange={(e) => setEditContactPerson(e.target.value)}
++                    placeholder="e.g. John Lim"
++                    className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs"
++                  />
++                  <Button
++                    size="sm"
++                    onClick={() => saveContactPersonMutation.mutate(editContactPerson)}
++                    disabled={saveContactPersonMutation.isPending}
++                    className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
++                  >
++                    <Save size={12} />
++                  </Button>
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={cancelEdit}
++                    className="h-7 px-1 rounded-lg"
++                  >
++                    <X size={12} />
++                  </Button>
++                </div>
++              }
++            />
++            {/* Email (read-only, synced from ops) */}
++            <div className="flex items-center justify-between py-1.5">
++              <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
++                <Mail size={14} className="shrink-0" />
++                <span>Email</span>
+               </div>
+-            }
+-          />
+-
+-          {/* Email */}
+-          <EditableRow
+-            icon={Mail}
+-            label="Email"
+-            value={profile.email || "Not set"}
+-            isEditing={editSection === "email"}
+-            onEdit={() => startEdit("email")}
+-            editContent={
+-              <div className="flex items-center gap-2">
+-                <Input
+-                  value={editEmail}
+-                  onChange={(e) => setEditEmail(e.target.value)}
+-                  placeholder="ops@sparkclean.sg"
+-                  className="w-48 rounded-lg border-[var(--anna-border)] h-8 text-xs font-data"
+-                />
+-                <Button
+-                  size="sm"
+-                  onClick={() => saveEmailMutation.mutate(editEmail)}
+-                  disabled={saveEmailMutation.isPending || editEmail === profile.email}
+-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+-                >
+-                  <Save size={12} />
+-                </Button>
+-                <Button
+-                  size="sm"
+-                  variant="ghost"
+-                  onClick={cancelEdit}
+-                  className="h-7 px-1 rounded-lg"
+-                >
+-                  <X size={12} />
+-                </Button>
++              <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
++                {profile.contactEmail1 || profile.email || "Not set"}
++              </span>
++            </div>
++            <Separator className="bg-[var(--anna-border)]" />
++            {/* Phone (read-only, synced from ops) */}
++            <div className="flex items-center justify-between py-1.5">
++              <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
++                <Phone size={14} className="shrink-0" />
++                <span>Phone</span>
+               </div>
+-            }
+-          />
++              <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
++                {profile.contactPhone1 || profile.phone || "Not set"}
++              </span>
++            </div>
++          </div>
+ 
+-          {/* Contact Person */}
+-          <EditableRow
+-            icon={User}
+-            label="Contact Person"
+-            value={profile.contactPerson || "Not set"}
+-            isEditing={editSection === "contactPerson"}
+-            onEdit={() => startEdit("contactPerson")}
+-            editContent={
+-              <div className="flex items-center gap-2">
+-                <Input
+-                  value={editContactPerson}
+-                  onChange={(e) => setEditContactPerson(e.target.value)}
+-                  placeholder="e.g. John Lim"
+-                  className="w-36 rounded-lg border-[var(--anna-border)] h-8 text-xs"
+-                />
+-                <Button
+-                  size="sm"
+-                  onClick={() => saveContactPersonMutation.mutate(editContactPerson)}
+-                  disabled={saveContactPersonMutation.isPending}
+-                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+-                >
+-                  <Save size={12} />
+-                </Button>
+-                <Button
+-                  size="sm"
+-                  variant="ghost"
+-                  onClick={cancelEdit}
+-                  className="h-7 px-1 rounded-lg"
++          {/* ── Contact Person 2 (Optional) ── */}
++          <div className="space-y-3 rounded-xl border border-dashed border-[var(--anna-border)] p-3 bg-[var(--anna-bg)]">
++            <div className="flex items-center justify-between">
++              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
++                Contact Person 2 (Optional)
++              </p>
++              {editSection !== "contactPerson2" && (
++                <button
++                  onClick={() => startEdit("contactPerson2")}
++                  className="p-1 rounded-lg hover:bg-[var(--anna-sage-light)] transition-colors text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)]"
+                 >
+-                  <X size={12} />
+-                </Button>
++                  <Pencil size={12} />
++                </button>
++              )}
++            </div>
++            {editSection === "contactPerson2" ? (
++              <div className="space-y-2">
++                <div className="flex items-center gap-2">
++                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Name</Label>
++                  <Input
++                    value={editCP2Name}
++                    onChange={(e) => setEditCP2Name(e.target.value)}
++                    placeholder="e.g. Sarah Tan"
++                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
++                  />
++                </div>
++                <div className="flex items-center gap-2">
++                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Email</Label>
++                  <Input
++                    value={editCP2Email}
++                    onChange={(e) => setEditCP2Email(e.target.value)}
++                    placeholder="sarah@example.com"
++                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
++                  />
++                </div>
++                <div className="flex items-center gap-2">
++                  <Label className="text-[10px] text-[var(--anna-muted)] w-12 shrink-0">Phone</Label>
++                  <Input
++                    value={editCP2Phone}
++                    onChange={(e) => setEditCP2Phone(e.target.value)}
++                    placeholder="+65 9XXX XXXX"
++                    className="flex-1 rounded-lg border-[var(--anna-border)] h-8 text-xs"
++                  />
++                </div>
++                <div className="flex items-center gap-2 pt-1">
++                  <Button
++                    size="sm"
++                    onClick={() => saveCP2Mutation.mutate({
++                      contactPerson2: editCP2Name,
++                      contactEmail2: editCP2Email || undefined,
++                      contactPhone2: editCP2Phone || undefined,
++                    })}
++                    disabled={saveCP2Mutation.isPending}
++                    className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
++                  >
++                    <Save size={12} />
++                  </Button>
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={cancelEdit}
++                    className="h-7 px-1 rounded-lg"
++                  >
++                    <X size={12} />
++                  </Button>
++                </div>
+               </div>
+-            }
+-          />
++            ) : (
++              <>
++                <div className="flex items-center justify-between py-1.5">
++                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
++                    <User size={14} className="shrink-0" />
++                    <span>Name</span>
++                  </div>
++                  <span className="text-sm font-medium text-[var(--anna-slate)]">
++                    {(profile as Record<string, unknown>).contactPerson2 as string || "Not set"}
++                  </span>
++                </div>
++                <Separator className="bg-[var(--anna-border)]" />
++                <div className="flex items-center justify-between py-1.5">
++                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
++                    <Mail size={14} className="shrink-0" />
++                    <span>Email</span>
++                  </div>
++                  <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
++                    {(profile as Record<string, unknown>).contactEmail2 as string || "Not set"}
++                  </span>
++                </div>
++                <Separator className="bg-[var(--anna-border)]" />
++                <div className="flex items-center justify-between py-1.5">
++                  <div className="flex items-center gap-2 text-sm text-[var(--anna-muted)]">
++                    <Phone size={14} className="shrink-0" />
++                    <span>Phone</span>
++                  </div>
++                  <span className="text-sm font-medium text-[var(--anna-slate)] font-data">
++                    {(profile as Record<string, unknown>).contactPhone2 as string || "Not set"}
++                  </span>
++                </div>
++              </>
++            )}
++          </div>
++
+           <div className="mt-3 flex items-start gap-2 px-1">
+             <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
+             <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
+-              Phone must be a valid Singapore (+65) or Malaysia (+60) number. Email must be unique.
++              Phone must be a valid Singapore (+65) or Malaysia (+60) number. Email must be unique. Contact person 1 email and phone are synced from ops.
+             </p>
+           </div>
+         </SectionCard>
+-- 
+2.47.3
+

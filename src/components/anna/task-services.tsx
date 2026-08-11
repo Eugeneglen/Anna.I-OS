@@ -8,6 +8,7 @@ import {
   getCategoryLabel,
 } from "./category-icon";
 import { BookingForm } from "./booking-form";
+import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import {
   formatSgd,
   CATEGORY_DEFAULTS,
@@ -63,37 +64,57 @@ async function fetchJobTypes(category: ServiceCategory): Promise<ServiceJobType[
 function CategoryCard({
   category,
   onClick,
+  isActive,
 }: {
   category: ServiceCategory;
   onClick: () => void;
+  isActive: boolean;
 }) {
   const defaults = CATEGORY_DEFAULTS[category];
   return (
     <button
-      onClick={onClick}
+      onClick={isActive ? onClick : undefined}
+      disabled={!isActive}
       className={cn(
-        "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left w-full",
-        "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 hover:shadow-sm"
+        "relative flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left w-full",
+        isActive
+          ? "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 hover:shadow-sm"
+          : "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-50 cursor-not-allowed grayscale-[30%]"
       )}
     >
       <CategoryIcon category={category} size={22} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-[var(--anna-slate)]">
+          <span
+            className={cn(
+              "text-sm font-semibold",
+              isActive ? "text-[var(--anna-slate)]" : "text-[var(--anna-muted)]"
+            )}
+          >
             {getCategoryLabel(category)}
           </span>
-          <ChevronRight
-            size={16}
-            className="shrink-0 text-[var(--anna-muted)]"
-          />
+          {isActive && (
+            <ChevronRight
+              size={16}
+              className="shrink-0 text-[var(--anna-muted)]"
+            />
+          )}
         </div>
         <p className="text-xs text-[var(--anna-muted)] mt-0.5 line-clamp-1">
           {CATEGORY_DESCRIPTIONS[category]}
         </p>
         <span className="font-data text-[10px] text-[var(--anna-sage-dark)] mt-1 inline-block">
-          from {formatSgd(defaults.amount)}
+          {isActive ? `from ${formatSgd(defaults.amount)}` : "—"}
         </span>
       </div>
+      {!isActive && (
+        <Badge
+          variant="secondary"
+          className="absolute top-2.5 right-2.5 text-[9px] font-medium bg-[var(--anna-slate-light)]/60 text-[var(--anna-muted)] border-0 px-2 py-0.5 rounded-md"
+        >
+          Unavailable
+        </Badge>
+      )}
     </button>
   );
 }
@@ -228,6 +249,7 @@ export function TaskServices() {
 function ServicesBrowse() {
   const [view, setView] = useState<ViewState>({ mode: "browse" });
   const [searchQuery, setSearchQuery] = useState("");
+  const { isCategoryActive } = useDynamicPricing();
 
   // Fetch job types when viewing a category
   const activeCategory = view.mode === "category" ? view.category
@@ -313,6 +335,7 @@ function ServicesBrowse() {
             <CategoryCard
               key={cat}
               category={cat}
+              isActive={isCategoryActive(cat)}
               onClick={() => {
                 setSearchQuery("");
                 setView({ mode: "category", category: cat });

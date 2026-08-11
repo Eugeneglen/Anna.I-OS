@@ -7,10 +7,12 @@ interface PricingCategory {
   label: string;
   priceCents: number;
   icon: string;
+  isActive: boolean;
 }
 
 interface PricingData {
   categories: PricingCategory[];
+  activeCategories: string[];
   commissionRate: number;
   blendedJobValueCents: number;
 }
@@ -39,9 +41,19 @@ export function useDynamicPricing() {
     }
   }
 
+  // Build a set of active categories
+  const activeCategorySet = new Set<string>(data?.activeCategories ?? []);
+
   // Helper: get price for a category (dynamic > default)
   function getPrice(category: ServiceCategory): number {
     return priceMap[category] ?? CATEGORY_DEFAULTS[category]?.amount ?? 0;
+  }
+
+  // Helper: check if a category is active
+  // When data hasn't loaded yet, assume all categories are active (optimistic default)
+  function isCategoryActive(category: string): boolean {
+    if (!data) return true; // Not loaded yet — don't falsely mark as unavailable
+    return activeCategorySet.has(category);
   }
 
   // Commission rate (dynamic > default)
@@ -51,6 +63,8 @@ export function useDynamicPricing() {
     pricing: data,
     isLoading,
     getPrice,
+    isCategoryActive,
+    activeCategorySet,
     commissionRate,
     blendedJobValueCents: data?.blendedJobValueCents ?? 0,
   };

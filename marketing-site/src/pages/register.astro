@@ -1,0 +1,109 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+---
+
+<BaseLayout
+  title="Register — Anna.I"
+  description="Register your household with Anna.I."
+>
+  <section class="section">
+    <div class="container-content" style="max-width: 42rem;">
+      <div class="text-center mb-12 reveal">
+        <span class="badge mb-5">Get started</span>
+        <h1 class="text-fluid-3xl mb-4 text-balance">Register your household.</h1>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Tell us about your home and preferences. We will set up your account and match you with vetted vendors.
+        </p>
+      </div>
+
+      <div class="card reveal" style="padding: clamp(2rem, 1.5rem + 2vw, 3rem);">
+        <form id="lead-form" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label for="name" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Full name</label>
+            <input type="text" id="name" name="name" class="field" required placeholder="Your name" />
+          </div>
+          <div>
+            <label for="email" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Email</label>
+            <input type="email" id="email" name="email" class="field" required placeholder="you@example.com" />
+          </div>
+          <div>
+            <label for="phone" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Phone <span style="color: rgba(32,49,50,0.35); font-weight: 400;">(optional)</span></label>
+            <input type="tel" id="phone" name="phone" class="field" placeholder="+65 9123 4567" />
+          </div>
+          <div>
+            <label class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">I am registering as a</label>
+            <div style="display: flex; gap: 0.75rem;">
+              <label style="flex: 1; display: flex; align-items: center; gap: 0.5rem; padding: 0.875rem 1rem; border: 1.5px solid rgba(32,49,50,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--sage-500)'" onmouseout="this.style.borderColor='rgba(32,49,50,0.15)'">
+                <input type="radio" id="type-household" name="accountType" value="household" checked style="accent-color: var(--sage-600);" />
+                <span style="font-size: 0.9rem; font-weight: 500; color: var(--slate);">Household</span>
+              </label>
+              <label style="flex: 1; display: flex; align-items: center; gap: 0.5rem; padding: 0.875rem 1rem; border: 1.5px solid rgba(32,49,50,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--sage-500)'" onmouseout="this.style.borderColor='rgba(32,49,50,0.15)'">
+                <input type="radio" id="type-vendor" name="accountType" value="vendor" style="accent-color: var(--sage-600);" />
+                <span style="font-size: 0.9rem; font-weight: 500; color: var(--slate);">Vendor</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label for="postal" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Postal code <span style="color: rgba(32,49,50,0.35); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="postal" name="postal" class="field" placeholder="e.g. 238859" />
+          </div>
+          <div>
+            <label for="services" class="font-mono-label text-slate\/50" style="display: block; margin-bottom: 0.5rem;">Services you need</label>
+            <select id="services" name="services" class="field" required>
+              <option value="">Select a category</option>
+              <option value="cleaning">Cleaning</option>
+              <option value="laundry">Laundry</option>
+              <option value="aircon">Aircon Servicing</option>
+              <option value="handyman">Handyman</option>
+              <option value="multiple">Multiple categories</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">
+            Register
+            <Icon name="arrowRight" class="w-4 h-4" decorative />
+          </button>
+          <p id="form-status" style="font-size: 0.875rem; color: var(--sage-600); display: none;"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    var form = document.getElementById('lead-form');
+    var status = document.getElementById('form-status');
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (!status) return;
+      status.style.display = 'block';
+      status.textContent = 'Submitting...';
+      try {
+        var data = new FormData(form);
+        // Preserve XTransformPort so the POST reaches the marketing site API
+        var url = '/api/lead';
+        var port = new URLSearchParams(window.location.search).get('XTransformPort');
+        if (port) url += '?XTransformPort=' + port;
+        var res = await fetch(url, {
+          method: 'POST',
+          body: JSON.stringify(Object.fromEntries(data)),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          status.textContent = 'Thank you. We will be in touch within one business day.';
+          form.reset();
+        } else {
+          status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
+        }
+      } catch (err) {
+        status.textContent = 'Something went wrong. Please try again or email hello@annai.sg.';
+      }
+    });
+  })();
+</script>
+
+<style>
+  /* Icon size utilities are defined globally in global.css */
+</style>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
+import { emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 
 /**
  * POST /api/tasks/timeout-check
@@ -148,7 +149,7 @@ export async function POST() {
             })
 
             // Notify new vendor
-            await db.notification.create({
+            const timeoutVendorNotification = await db.notification.create({
               data: {
                 householdId: task.householdId,
                 recipientType: RecipientType.VENDOR,
@@ -162,6 +163,32 @@ export async function POST() {
                 referenceId: task.id,
               },
             })
+
+            // Real-time: push notification + dispatch event to vendor room
+            emitVendorNotification({
+              vendorId: nextVendor.vendor.id,
+              notificationId: timeoutVendorNotification.id,
+              eventType: NotificationEventType.TASK_DISPATCHED,
+              title: "New Booking Request",
+              body: `You have a new ${task.category.toLowerCase()} booking request. Please accept within ${VENDOR_ACCEPTANCE_TIMEOUT_MINUTES} minutes.`,
+              referenceType: "task",
+              referenceId: task.id,
+              householdId: task.householdId,
+              category: task.category,
+            }).catch(() => {})
+
+            const newBookingForEmit = await db.booking.findFirst({ where: { taskId: task.id, vendorId: nextVendor.vendor.id, status: "assigned" }, select: { id: true, scheduledStart: true } })
+            if (newBookingForEmit) {
+              emitTaskDispatched({
+                taskId: task.id,
+                bookingId: newBookingForEmit.id,
+                vendorId: nextVendor.vendor.id,
+                householdId: task.householdId,
+                category: task.category,
+                scheduledStart: newBookingForEmit.scheduledStart?.toISOString(),
+                responseDeadline: acceptTimeout.toISOString(),
+              }).catch(() => {})
+            }
 
             console.log(
               `[timeout] Auto-routed task ${task.id} to vendor ${nextVendor.vendor.name} (attempt ${matchAttempts + 1})`

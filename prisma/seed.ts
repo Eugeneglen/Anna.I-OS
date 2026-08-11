@@ -5,11 +5,17 @@
  * All sub-scripts share ONE PrismaClient via prisma/seed-db.ts
  * to avoid exhausting PostgreSQL connection limits.
  *
+ * SEED_VERSION — bump this string whenever seed data changes.
+ * ensure-db.ts compares this against the stored version in PlatformConfig.
+ * If they differ (or no version is stored), the seed is re-run.
+ *
  * Railway Console:
  *   npx prisma migrate deploy && npx prisma db seed
  */
 
 import { db } from "./seed-db";
+
+export const SEED_VERSION = "2025-07-12-v1";
 
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
@@ -37,6 +43,15 @@ async function main() {
   console.log("\n📦 [3/4] Seeding anomalies...");
   const { main: seedAnomalies } = await import("./seed-anomalies");
   await seedAnomalies();
+
+  // 4. Record seed version in PlatformConfig so ensure-db.ts can detect changes
+  console.log("\n📦 [4/4] Recording seed version...");
+  await db.platformConfig.upsert({
+    where: { key: "seed_version" },
+    update: { value: SEED_VERSION, label: "Current seed data version" },
+    create: { key: "seed_version", value: SEED_VERSION, label: "Current seed data version" },
+  });
+  console.log(`  ✅ Seed version recorded: ${SEED_VERSION}`);
 
   await db.$disconnect();
 

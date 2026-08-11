@@ -8,6 +8,7 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        fullName: true,
         email: true,
         phone: true,
         address: true,
@@ -17,6 +18,17 @@ export async function GET() {
         preferences: true,
         onboardingStep: true,
         createdAt: true,
+        updatedAt: true,
+        subscriptions: {
+          select: {
+            id: true,
+            tier: true,
+            status: true,
+            priceCents: true,
+          },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
       },
     })
     return NextResponse.json({ households })

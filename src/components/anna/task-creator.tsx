@@ -8,6 +8,7 @@ import { JobTypeSelector } from "./job-type-selector";
 import { QuoteBuilder } from "./quote-builder";
 import { MediaUploader, type UploadedFile } from "./media-uploader";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,7 +69,7 @@ export function TaskCreator() {
   const todayISO = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
 
   const [initialState] = useState(getInitialCategoryState);
-  const { getPrice } = useDynamicPricing();
+  const { getPrice, isCategoryActive } = useDynamicPricing();
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(initialState.category);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
@@ -215,21 +216,43 @@ export function TaskCreator() {
           Category
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => selectCategory(cat)}
-              className="flex flex-col items-center gap-3 p-4 rounded-2xl border-2 border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40 transition-all"
-            >
-              <CategoryIcon category={cat} size={24} />
-              <span className="text-sm font-semibold text-[var(--anna-slate)]">
-                {getCategoryLabel(cat)}
-              </span>
-              <span className="font-data text-xs text-[var(--anna-muted)]">
-                from {formatSgd(getPrice(cat))}
-              </span>
-            </button>
-          ))}
+          {CATEGORIES.map((cat) => {
+            const active = isCategoryActive(cat);
+            return (
+              <button
+                key={cat}
+                onClick={() => active && selectCategory(cat)}
+                disabled={!active}
+                className={cn(
+                  "relative flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all",
+                  active
+                    ? "border-[var(--anna-border)] bg-[var(--anna-white)] hover:border-[var(--anna-sage)]/40"
+                    : "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-50 cursor-not-allowed grayscale-[40%]"
+                )}
+              >
+                <CategoryIcon category={cat} size={24} />
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    active ? "text-[var(--anna-slate)]" : "text-[var(--anna-muted)]"
+                  )}
+                >
+                  {getCategoryLabel(cat)}
+                </span>
+                <span className="font-data text-xs text-[var(--anna-muted)]">
+                  {active ? `from ${formatSgd(getPrice(cat))}` : "—"}
+                </span>
+                {!active && (
+                  <Badge
+                    variant="secondary"
+                    className="absolute top-2 right-2 text-[9px] font-medium bg-[var(--anna-slate-light)]/60 text-[var(--anna-muted)] border-0 px-1.5 py-0.5 rounded-md"
+                  >
+                    Unavailable
+                  </Badge>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 

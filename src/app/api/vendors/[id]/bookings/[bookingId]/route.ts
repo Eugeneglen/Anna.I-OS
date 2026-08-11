@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { BOOKING_STATUS_TRANSITIONS, PLATFORM_COMMISSION_RATE, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { triggerAnomalyDetection } from "@/lib/notify"
-import { emitTaskStatusChanged, emitBookingStatusChanged } from "@/lib/events"
+import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
@@ -206,6 +206,7 @@ export async function PATCH(
         status: "accepted",
         previousStatus: booking.status,
         vendorName: undefined, // don't reveal in event
+        vendorId,
         householdId: task.householdId,
         category: task.category,
       }).catch(() => {})
@@ -367,7 +368,7 @@ export async function PATCH(
             })
 
             // Notify new vendor
-            await db.notification.create({
+            const rerouteVendorNotification = await db.notification.create({
               data: {
                 householdId: task.householdId,
                 recipientType: RecipientType.VENDOR,
@@ -381,6 +382,29 @@ export async function PATCH(
                 referenceId: task.id,
               },
             })
+
+            // Real-time: push notification + dispatch event to vendor room
+            emitVendorNotification({
+              vendorId: nextVendor.vendor.id,
+              notificationId: rerouteVendorNotification.id,
+              eventType: NotificationEventType.TASK_DISPATCHED,
+              title: "New Booking Request",
+              body: `You have a new ${task.category.toLowerCase()} booking request. Please accept within ${VENDOR_ACCEPTANCE_TIMEOUT_MINUTES} minutes.`,
+              referenceType: "task",
+              referenceId: task.id,
+              householdId: task.householdId,
+              category: task.category,
+            }).catch(() => {})
+
+            emitTaskDispatched({
+              taskId: task.id,
+              bookingId: newBooking.id,
+              vendorId: nextVendor.vendor.id,
+              householdId: task.householdId,
+              category: task.category,
+              scheduledStart: newBooking.scheduledStart?.toISOString(),
+              responseDeadline: new Date(now.getTime() + VENDOR_ACCEPTANCE_TIMEOUT_MINUTES * 60 * 1000).toISOString(),
+            }).catch(() => {})
 
             // Keep task in MATCHING (it was already MATCHING)
             console.log(`[match] Auto-routed task ${task.id} to next vendor ${nextVendor.vendor.name} (attempt ${matchAttempts + 1})`)

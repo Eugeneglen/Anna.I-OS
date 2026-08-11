@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { z } from "zod"
+import { getHouseholdSession } from "@/lib/household-auth"
 import { validateSgPhone } from "@/lib/phone-validation"
 import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code"
 
@@ -19,6 +20,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Auth guard — only the household's own members can update
+    const session = await getHouseholdSession()
+    if (!session || session.householdId !== (await params).id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { id } = await params
     const body = await request.json()
     const parsed = patchHouseholdSchema.parse(body)
@@ -46,6 +53,24 @@ export async function PATCH(
         )
       }
       parsed.postalCode = code
+    }
+
+    // Ensure household exists + email uniqueness check
+    const current = await db.household.findUnique({ where: { id } })
+    if (!current) {
+      return NextResponse.json({ error: "Household not found" }, { status: 404 })
+    }
+    if (parsed.email && parsed.email !== current.email) {
+      const emailTaken = await db.household.findUnique({
+        where: { email: parsed.email },
+        select: { id: true },
+      })
+      if (emailTaken) {
+        return NextResponse.json(
+          { error: "Email is already in use by another household" },
+          { status: 409 }
+        )
+      }
     }
 
     const household = await db.household.update({

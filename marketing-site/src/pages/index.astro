@@ -1,0 +1,343 @@
+---
+/**
+ * Anna.I Marketing — Home (/)
+ * ─────────────────────────────────────────────────────────────
+ * Sections:
+ *  1. Hero — headline, subhead, Register Now + See how it works
+ *  2. Problem framing — the real pain (juggling apps, no accountability)
+ *  3. From Manager to Approver — core narrative, before/after
+ *  4. Trust — milestone escrow, verified vendors, CASE stat
+ *  5. Services (#services anchor) — 4 canonical categories
+ *  6. How it works — 4-step flow
+ *  7. Final CTA band
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import CtaBand from '../components/CtaBand.astro';
+
+const orgSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Anna.I',
+  url: 'https://annai.sg',
+  description: 'The operating system for the modern household — AI-powered coordination of cleaning, laundry, aircon, and handyman services in Singapore.',
+  areaServed: 'SG',
+  email: 'hello@annai.sg',
+  slogan: 'The Operating System for the Modern Household',
+};
+
+const services = [
+  { icon: 'nodeCluster', name: 'Cleaning', desc: 'Recurring or one-off home cleaning, matched to your home type and preferences.' },
+  { icon: 'calendarRefresh', name: 'Laundry', desc: 'Pickup-and-delivery laundry and dry cleaning on a schedule that fits your week.' },
+  { icon: 'radarBurst', name: 'Aircon Servicing', desc: 'Quarterly maintenance, chemical wash, and gas top-ups from vetted technicians.' },
+  { icon: 'handSquiggle', name: 'Handyman', desc: 'Repairs, installations, mounting, and odd jobs — quoted before work begins.' },
+] as const;
+
+const steps = [
+  { n: '01', icon: 'brain', title: 'Tell Anna.I what your household needs', desc: 'Once. Your home type, schedule, preferences, and pain points — Anna.I remembers all of it.' },
+  { n: '02', icon: 'nodeCluster', title: 'Anna.I matches you with a vetted vendor', desc: 'Right category, right capacity, right time. No scrolling through listings or comparing quotes manually.' },
+  { n: '03', icon: 'eyeScope', title: 'Job gets done — verified by photo', desc: 'Payment stays in escrow and is released only when the work is confirmed complete. Accountability built in.' },
+  { n: '04', icon: 'calendarRefresh', title: 'Anna.I remembers for next time', desc: 'Your preferences carry forward. Each booking gets easier, not harder. The household becomes the approver, not the manager.' },
+] as const;
+---
+
+<BaseLayout
+  title="Anna.I — The Operating System for Your Household"
+  description="One place for cleaning, laundry, aircon, and handyman in Singapore. Anna.I remembers your preferences, coordinates your vendors, and holds them accountable — so you don't have to."
+  schema={orgSchema}
+>
+  {/* ═══ 1. HERO ═══ */}
+  <section class="section" style="padding-top: clamp(2rem, 1rem + 3vw, 4rem);">
+    <div class="container-content">
+      <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center;">
+        {/* Left: copy */}
+        <div class="reveal">
+          <span class="badge mb-6">
+            <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: var(--sage-deep);"></span>
+            Singapore · Home services, coordinated
+          </span>
+          <h1 class="text-fluid-4xl mb-5 text-balance">
+            Your home.<br />
+            <span class="text-sage-600">Managed.</span>
+          </h1>
+          <p class="text-fluid-lg text-slate\/70 max-w-xl mb-8 text-pretty">
+            One place for cleaning, laundry, aircon, and handyman — Anna.I remembers
+            your preferences, coordinates your vendors, and holds them accountable
+            so you don't have to.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <a href="/login" class="btn btn-primary" data-cta="hero-register">
+              Register Now
+              <Icon name="arrowRight" class="w-4 h-4" decorative />
+            </a>
+            <a href="/#how-it-works" class="btn btn-outline">
+              See how it works
+            </a>
+          </div>
+          <p class="font-mono-label text-slate\/40 mt-6">
+            No credit card required to register
+          </p>
+        </div>
+
+        {/* Right: scatter→grid illustration card */}
+        <div class="reveal">
+          <div class="card-cream" style="padding: clamp(2rem, 1rem + 3vw, 3.5rem);">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 1.5rem;">
+              <Icon name="knotScribbleSpiral" class="w-full h-12" />
+              <div style="text-align: center;">
+                <p class="font-mono-label text-slate\/50 mb-2">Chaos → Order</p>
+                <p class="text-sm text-slate\/60 max-w-xs text-pretty">
+                  Today you manage every vendor by hand. Anna.I turns that into a
+                  single, coordinated system you just approve.
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(32,49,50,0.1); width: 100%; justify-content: center;">
+                <Icon name="brain" class="w-6 h-6" />
+                <span class="text-sm font-medium text-slate\/70">Anna.I remembers your preferences</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 2. PROBLEM FRAMING ═══ */}
+  <section class="section" style="padding-top: clamp(1rem, 0.5rem + 2vw, 2rem);">
+    <div class="container-content">
+      <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
+        <div class="reveal">
+          <span class="badge badge-dark mb-5">The problem</span>
+          <h2 class="text-fluid-2xl mb-6 text-balance">
+            Managing a household today means juggling six apps and a mental load that never switches off.
+          </h2>
+          <Icon name="handSquiggle" class="w-10 h-10 mt-2" />
+        </div>
+        <div class="reveal">
+          <div class="card" style="padding: clamp(2rem, 1.5rem + 2vw, 3rem);">
+            <p class="text-fluid-lg text-slate leading-relaxed mb-5 text-pretty">
+              You've got Helpling for the cleaner. Kaodim for the handyman. A WhatsApp
+              thread with the aircon guy who replies three days late. A mental note to
+              reorder laundry pickup. And when something goes wrong — a no-show, a
+              half-finished job, a price that doubled mid-task — there's nobody holding
+              anyone accountable.
+            </p>
+            <p class="text-fluid-lg text-slate leading-relaxed text-pretty">
+              You're not a homeowner anymore. You're a project manager — for a project
+              that never ends, with vendors who don't talk to each other, and no system
+              of record for what was done, what was paid, and what you actually liked.
+            </p>
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(32,49,50,0.1); display: flex; align-items: center; gap: 0.75rem;">
+              <Icon name="scribble" class="w-6 h-6 text-slate\/40" />
+              <span class="font-mono-label text-slate\/50">That's the before.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 3. FROM MANAGER TO APPROVER ═══ */}
+  <section class="section" id="manager-to-approver">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+        <span class="badge mb-5">The shift</span>
+        <h2 class="text-fluid-3xl mb-4 text-balance">
+          From manager to approver.
+        </h2>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Today, the household manages every vendor interaction — scheduling, chasing,
+          verifying, remembering. Anna.I takes that on. You just approve.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        {/* Before */}
+        <div class="card reveal" style="border: 1.5px solid rgba(32,49,50,0.1);">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+            <Icon name="juggle" class="w-7 h-7 text-slate\/50" />
+            <div>
+              <p class="font-mono-label text-slate\/50">Before</p>
+              <h3 class="text-fluid-xl">You manage</h3>
+            </div>
+          </div>
+          <ul style="display: flex; flex-direction: column; gap: 0.75rem; color: rgba(32,49,50,0.7);">
+            <li style="display: flex; gap: 0.75rem;"><span style="color: rgba(32,49,50,0.3); font-family: monospace; font-size: 0.875rem; flex-shrink: 0;">—</span>Find and compare vendors for every category yourself</li>
+            <li style="display: flex; gap: 0.75rem;"><span style="color: rgba(32,49,50,0.3); font-family: monospace; font-size: 0.875rem; flex-shrink: 0;">—</span>Schedule around each vendor's availability, not yours</li>
+            <li style="display: flex; gap: 0.75rem;"><span style="color: rgba(32,49,50,0.3); font-family: monospace; font-size: 0.875rem; flex-shrink: 0;">—</span>Chase, remind, and re-explain your preferences every time</li>
+            <li style="display: flex; gap: 0.75rem;"><span style="color: rgba(32,49,50,0.3); font-family: monospace; font-size: 0.875rem; flex-shrink: 0;">—</span>Verify the work was done — and hope it was done right</li>
+            <li style="display: flex; gap: 0.75rem;"><span style="color: rgba(32,49,50,0.3); font-family: monospace; font-size: 0.875rem; flex-shrink: 0;">—</span>Pay upfront and dispute later if something goes wrong</li>
+          </ul>
+        </div>
+
+        {/* After */}
+        <div class="card-dark reveal" style="padding: clamp(1.5rem, 1rem + 1.5vw, 2.25rem);">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+            <Icon name="spiral" class="w-7 h-7 icon-on-dark" />
+            <div>
+              <p class="font-mono-label text-cream\/50">With Anna.I</p>
+              <h3 class="text-fluid-xl text-cream">You approve</h3>
+            </div>
+          </div>
+          <ul style="display: flex; flex-direction: column; gap: 0.75rem; color: rgba(249,248,243,0.75);">
+            <li style="display: flex; gap: 0.75rem;"><Icon name="check" class="w-4 h-4 icon-on-dark" decorative style="margin-top: 0.2rem;" /><span>Anna.I matches you with the right vetted vendor automatically</span></li>
+            <li style="display: flex; gap: 0.75rem;"><Icon name="check" class="w-4 h-4 icon-on-dark" decorative style="margin-top: 0.2rem;" /><span>Jobs are scheduled to fit your household, not the vendor's gaps</span></li>
+            <li style="display: flex; gap: 0.75rem;"><Icon name="check" class="w-4 h-4 icon-on-dark" decorative style="margin-top: 0.2rem;" /><span>Your preferences carry forward — no repeating yourself</span></li>
+            <li style="display: flex; gap: 0.75rem;"><Icon name="check" class="w-4 h-4 icon-on-dark" decorative style="margin-top: 0.2rem;" /><span>Photo verification confirms completion before payment</span></li>
+            <li style="display: flex; gap: 0.75rem;"><Icon name="check" class="w-4 h-4 icon-on-dark" decorative style="margin-top: 0.2rem;" /><span>Payment stays in escrow — released only on verified completion</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 4. TRUST SECTION ═══ */}
+  <section class="section" style="background: var(--white);">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+        <span class="badge mb-5">Why it's different</span>
+        <h2 class="text-fluid-3xl mb-4 text-balance">
+          Accountability, built into every job.
+        </h2>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          Prepayment losses are one of the most common consumer complaints in Singapore's
+          home-services sector. Anna.I is built to make that impossible.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        <div class="card reveal">
+          <Icon name="shieldLock" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Milestone escrow</h3>
+          <p class="text-slate\/70 text-pretty">
+            Your payment is held securely and released to the vendor only when the job is
+            verified complete — with photo proof. No chasing refunds for work that wasn't done.
+          </p>
+        </div>
+
+        <div class="card reveal">
+          <Icon name="fingerprint" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Verified vendor network</h3>
+          <p class="text-slate\/70 text-pretty">
+            Every vendor passes background checks and identity verification before joining.
+            Performance is tracked over time — not just one-off star ratings.
+          </p>
+        </div>
+
+        <div class="card reveal">
+          <Icon name="eyeScope" class="w-8 h-8 mb-4" />
+          <h3 class="text-fluid-xl mb-2">Photo-verified completion</h3>
+          <p class="text-slate\/70 text-pretty">
+            Vendors upload photo proof of completed work. You see it before payment releases.
+            It's the accountability layer home services has always been missing.
+          </p>
+        </div>
+      </div>
+
+      {/* CASE stat */}
+      <div class="mt-10 reveal">
+        <div class="card-cream" style="display: flex; flex-direction: column; gap: 1rem; align-items: flex-start;">
+          <div style="flex-shrink: 0;">
+            <p style="font-family: monospace; font-size: clamp(2rem, 1.5rem + 3vw, 2.5rem); font-weight: 800; color: var(--slate); letter-spacing: -0.03em;">S$8.6m</p>
+          </div>
+          <div style="flex: 1;">
+            <p class="text-slate\/80 text-pretty">
+              <strong class="text-slate">Prepayment losses filed with CASE Singapore</strong> in a
+              single recent year — across renovation, home services, and similar sectors.
+              It's the structural problem Anna.I's escrow model is designed to solve.
+            </p>
+            <p class="font-mono-label text-slate\/40 mt-2">Source: CASE Singapore</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 5. SERVICES ═══ */}
+  <section class="section" id="services">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+        <span class="badge mb-5">Services</span>
+        <h2 class="text-fluid-3xl mb-4 text-balance">
+          Four categories. One system.
+        </h2>
+        <p class="text-fluid-lg text-slate\/70 text-pretty">
+          The household essentials that eat your weekends — now coordinated through a
+          single place that remembers everything.
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        {services.map((s) => (
+          <div class="card reveal" style="transition: all 0.3s ease;">
+            <Icon name={s.icon} class="w-9 h-9 mb-4" />
+            <h3 class="text-fluid-xl mb-2">{s.name}</h3>
+            <p class="text-sm text-slate\/65 text-pretty">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 6. HOW IT WORKS ═══ */}
+  <section class="section" id="how-it-works" style="background: var(--white);">
+    <div class="container-content">
+      <div class="text-center max-w-2xl mx-auto mb-14 reveal">
+        <span class="badge mb-5">How it works</span>
+        <h2 class="text-fluid-3xl mb-4 text-balance">
+          Set it up once. Approve from there.
+        </h2>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr; gap: 1.25rem;">
+        {steps.map((step) => (
+          <div class="reveal">
+            <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem;">
+              <span style="font-family: monospace; font-size: 0.875rem; font-weight: 500; color: var(--sage-600); flex-shrink: 0;">{step.n}</span>
+            </div>
+            <Icon name={step.icon} class="w-8 h-8 mb-3" />
+            <h3 class="text-fluid-lg font-semibold mb-2 text-balance">{step.title}</h3>
+            <p class="text-sm text-slate\/65 text-pretty">{step.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Spiral — the "order" payoff */}
+      <div class="mt-14 reveal" style="display: flex; justify-content: center;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; color: rgba(32,49,50,0.4); flex-wrap: wrap; justify-content: center;">
+          <Icon name="juggle" class="w-6 h-6" />
+          <Icon name="arrowRight" class="w-4 h-4" />
+          <Icon name="scribble" class="w-6 h-6" />
+          <Icon name="arrowRight" class="w-4 h-4" />
+          <Icon name="spiral" class="w-6 h-6 text-slate" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ═══ 7. FINAL CTA ═══ */}
+  <CtaBand
+    eyebrow="Get started"
+    headline="Your home. Managed."
+    body="Tell Anna.I what your household needs once. We handle the rest — matching, scheduling, verifying, and remembering."
+    primaryLabel="Register Now"
+    secondaryLabel="See how it works"
+  />
+</BaseLayout>
+
+<style>
+  @media (min-width: 1024px) {
+    section:nth-of-type(1) > div > div { grid-template-columns: 7fr 5fr !important; }
+    section#manager-to-approver > div > div:last-child { grid-template-columns: 1fr 1fr !important; }
+    section:nth-of-type(4) > div > div:nth-child(2) { grid-template-columns: repeat(3, 1fr) !important; }
+    section#services > div > div:last-child { grid-template-columns: repeat(4, 1fr) !important; }
+    section#how-it-works > div > div:nth-child(2) { grid-template-columns: repeat(4, 1fr) !important; }
+    section:nth-of-type(2) > div > div { grid-template-columns: 5fr 7fr !important; }
+    .card-cream { flex-direction: row !important; align-items: center !important; }
+  }
+  @media (min-width: 768px) {
+    section:nth-of-type(4) > div > div:nth-child(2) { grid-template-columns: repeat(2, 1fr) !important; }
+    section#services > div > div:last-child { grid-template-columns: repeat(2, 1fr) !important; }
+    section#how-it-works > div > div:nth-child(2) { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+</style>

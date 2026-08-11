@@ -53,8 +53,8 @@ export function CategoryIcon({
   className = "",
   showLabel = false,
 }: CategoryIconProps) {
-  const Icon = iconMap[category];
-  const colors = colorMap[category];
+  const Icon = iconMap[category] || Sparkles;
+  const colors = colorMap[category] || colorMap.CLEANING;
   const label = getCategoryLabel(category);
 
   return (

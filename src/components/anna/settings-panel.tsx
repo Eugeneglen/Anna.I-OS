@@ -427,6 +427,7 @@ function EditableField({
   householdId,
   isMutating,
   mutate,
+  noIcon,
 }: {
   label: string;
   value: string;
@@ -435,6 +436,7 @@ function EditableField({
   householdId: string;
   isMutating: boolean;
   mutate: ReturnType<typeof useMutation>["mutate"];
+  noIcon?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -468,7 +470,7 @@ function EditableField({
 
   return (
     <div className="flex items-center gap-3">
-      <Icon size={14} className="text-[var(--anna-muted)] flex-shrink-0" />
+      {!noIcon && <Icon size={14} className="text-[var(--anna-muted)] flex-shrink-0" />}
       {editing ? (
         <div className="flex items-center gap-2 flex-1">
           <Input
@@ -886,7 +888,50 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {/* ── Addresses ── */}
+      {/* ── Household Address Details ── */}
+      <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-1">
+          Household Address
+        </h3>
+        <p className="text-[11px] text-[var(--anna-muted)] mb-4">
+          Your estate-level address and unit info used for service dispatch.
+        </p>
+        <div className="space-y-3.5 group">
+          <EditableField
+            label="Address / Estate"
+            value={household?.address || ""}
+            icon={MapPin}
+            fieldKey="address"
+            householdId={selectedHouseholdId}
+            isMutating={updateHousehold.isPending}
+            mutate={updateHousehold.mutate}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <EditableField
+              label="Postal Code"
+              value={household?.postalCode || ""}
+              icon={MapPin}
+              fieldKey="postalCode"
+              householdId={selectedHouseholdId}
+              isMutating={updateHousehold.isPending}
+              mutate={updateHousehold.mutate}
+              noIcon
+            />
+            <EditableField
+              label="Unit Number"
+              value={household?.unitNumber || ""}
+              icon={MapPin}
+              fieldKey="unitNumber"
+              householdId={selectedHouseholdId}
+              isMutating={updateHousehold.isPending}
+              mutate={updateHousehold.mutate}
+              noIcon
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Addresses (structured Address model) ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)] mb-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
