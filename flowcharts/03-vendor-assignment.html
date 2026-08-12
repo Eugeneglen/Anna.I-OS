@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text: #1E293B; --text-sub: #475569; --text-muted: #94A3B8;
+    --bg: #FFFFFF; --surface: #F8FAFC; --border: #E2E8F0;
+    --blue: #3B82F6; --green: #10B981; --amber: #F59E0B; --purple: #8B5CF6;
+    --red: #EF4444; --cyan: #06B6D4;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  #root { width: 920px; margin: 0 auto; padding: 48px 40px 32px; }
+
+  .chart-header { text-align: center; margin-bottom: 36px; }
+  .chart-title { font-size: 22px; font-weight: 700; color: var(--text); }
+  .chart-subtitle { font-size: 13px; color: var(--text-sub); margin-top: 6px; }
+  .chart-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; margin-bottom: 8px; }
+
+  .phase-group { background: var(--surface); border-radius: 12px; padding: 20px 24px; position: relative; }
+  .phase-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .phase-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .phase-title-text { font-size: 16px; font-weight: 700; }
+  .phase-steps { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; }
+  .phase-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid var(--border); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; line-height: 1.5; }
+  .step-api { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .step-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+
+  .branch-box { border-radius: 8px; padding: 12px 14px; margin-top: 8px; }
+  .branch-box.warn { background: #FFF7ED; border: 1.5px dashed #F59E0B; }
+  .branch-box.danger { background: #FEF2F2; border: 1.5px dashed #EF4444; }
+  .branch-box.success { background: #F0FDF4; border: 1.5px dashed #10B981; }
+  .branch-box.info { background: #EFF6FF; border: 1.5px dashed #3B82F6; }
+  .branch-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+  .branch-box.warn .branch-title { color: #92400E; }
+  .branch-box.danger .branch-title { color: #991B1B; }
+  .branch-box.success .branch-title { color: #065F46; }
+  .branch-box.info .branch-title { color: #1D4ED8; }
+  .branch-item { font-size: 12px; padding: 4px 0 4px 12px; margin-bottom: 4px; line-height: 1.5; }
+  .branch-box.warn .branch-item { color: #78350F; border-left: 2px solid #FCD34D; }
+  .branch-box.danger .branch-item { color: #7F1D1D; border-left: 2px solid #FCA5A5; }
+  .branch-box.success .branch-item { color: #065F46; border-left: 2px solid #6EE7B7; }
+  .branch-box.info .branch-item { color: #1E40AF; border-left: 2px solid #93C5FD; }
+  .branch-item:last-child { margin-bottom: 0; }
+
+  /* Scoring table */
+  .score-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  .score-table th { background: #F1F5F9; padding: 8px 12px; text-align: left; font-weight: 600; color: var(--text-sub); border-bottom: 2px solid var(--border); }
+  .score-table td { padding: 7px 12px; border-bottom: 1px solid #F1F5F9; color: var(--text); }
+  .score-table .score-val { font-weight: 700; color: #065F46; text-align: center; width: 60px; }
+  .score-table .score-pen { font-weight: 700; color: #991B1B; text-align: center; width: 60px; }
+  .score-table .score-desc { color: var(--text-sub); }
+
+  /* Phase colors */
+  .phase-1 { border-left: 4px solid #64748B; }
+  .phase-1 .phase-icon { background: #F1F5F9; color: #475569; }
+  .phase-1 .phase-title-text { color: #334155; }
+  .phase-1 .step-num { background: #F1F5F9; color: #475569; }
+
+  .phase-2 { border-left: 4px solid #3B82F6; }
+  .phase-2 .phase-icon { background: #DBEAFE; color: #2563EB; }
+  .phase-2 .phase-title-text { color: #1E40AF; }
+  .phase-2 .step-num { background: #DBEAFE; color: #1E40AF; }
+
+  .phase-3 { border-left: 4px solid #10B981; }
+  .phase-3 .phase-icon { background: #D1FAE5; color: #059669; }
+  .phase-3 .phase-title-text { color: #065F46; }
+  .phase-3 .step-num { background: #D1FAE5; color: #065F46; }
+
+  .phase-4 { border-left: 4px solid #EF4444; }
+  .phase-4 .phase-icon { background: #FEE2E2; color: #DC2626; }
+  .phase-4 .phase-title-text { color: #991B1B; }
+  .phase-4 .step-num { background: #FEE2E2; color: #991B1B; }
+
+  .phase-5 { border-left: 4px solid #F59E0B; }
+  .phase-5 .phase-icon { background: #FEF3C7; color: #D97706; }
+  .phase-5 .phase-title-text { color: #92400E; }
+  .phase-5 .step-num { background: #FEF3C7; color: #92400E; }
+
+  .phase-arrow { text-align: center; padding: 10px 0; color: var(--text-muted); font-size: 20px; line-height: 1; }
+  .phase-arrow .arrow-label { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+  /* Response grid */
+  .response-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .response-card { background: white; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+  .response-card .rc-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .response-card .rc-item { font-size: 11px; color: var(--text-sub); padding: 3px 0; line-height: 1.5; border-left: 2px solid; padding-left: 8px; margin-bottom: 3px; }
+  .response-card .rc-item:last-child { margin-bottom: 0; }
+  .rc-accept .rc-title { color: #065F46; }
+  .rc-accept .rc-item { border-color: #6EE7B7; }
+  .rc-reject .rc-title { color: #92400E; }
+  .rc-reject .rc-item { border-color: #FCD34D; }
+  .rc-timeout .rc-title { color: #991B1B; }
+  .rc-timeout .rc-item { border-color: #FCA5A5; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 28px; padding: 14px 20px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4B5563; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  .chart-footer { text-align: center; margin-top: 20px; font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-header">
+    <div class="chart-badge" style="background:#EFF6FF;color:#1D4ED8;">Vendor Operations</div>
+    <div class="chart-title">Vendor Assignment &amp; Matching Flow</div>
+    <div class="chart-subtitle">How vendors are scored, assigned, and how reassignment works</div>
+  </div>
+
+  <!-- PHASE 1: Vendor Scoring -->
+  <div class="phase-group phase-1">
+    <div class="phase-header">
+      <div class="phase-icon">🎯</div>
+      <div>
+        <div class="phase-title-text">Phase 1: Vendor Scoring (Routing Engine)</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">All ACTIVE vendors scored for the task's category</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">1</span>
+        <div class="step-content">
+          <div class="step-title">getSuggestedVendors(taskId)</div>
+          <div class="step-desc">Scores vendors using weighted algorithm. Top-scored vendor is selected for assignment.</div>
+          <div class="step-api">src/lib/routing.ts → GET /api/tasks/[id]/suggest-vendors</div>
+          <table class="score-table">
+            <thead>
+              <tr><th>Factor</th><th class="score-val">Score</th><th class="score-desc">Details</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Base Score</td><td class="score-val">+100</td><td class="score-desc">Every vendor starts here</td></tr>
+              <tr><td>Affinity (1st booking)</td><td class="score-val">+15</td><td class="score-desc">First booking with this household</td></tr>
+              <tr><td>Affinity (per additional)</td><td class="score-val">+5</td><td class="score-desc">Cap +30 total affinity bonus</td></tr>
+              <tr><td>Rating Bonus</td><td class="score-val">+avg×3</td><td class="score-desc">avgRating × 3, cap +15</td></tr>
+              <tr><td>Dispute Penalty</td><td class="score-pen">-20</td><td class="score-desc">Per dispute with this household</td></tr>
+              <tr><td>Reassignment Penalty</td><td class="score-pen">-5</td><td class="score-desc">Per reassignment event</td></tr>
+              <tr><td>Utilisation Penalty</td><td class="score-pen">-util×10</td><td class="score-desc">If &gt;50% daily capacity used</td></tr>
+              <tr><td>Zone Match Bonus</td><td class="score-val">+10</td><td class="score-desc">Postal code prefix match</td></tr>
+              <tr><td>Recent Completion Bonus</td><td class="score-val">+5</td><td class="score-desc">Last completed within 7 days</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow">↓<span class="arrow-label">Top Vendor Selected</span></div>
+
+  <!-- PHASE 2: Assignment -->
+  <div class="phase-group phase-2">
+    <div class="phase-header">
+      <div class="phase-icon">📨</div>
+      <div>
+        <div class="phase-title-text">Phase 2: Booking Assignment</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Booking created, vendor notified, timer starts</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">2</span>
+        <div class="step-content">
+          <div class="step-title">Booking Created <span class="step-tag" style="background:#FFF7ED;color:#92400E;">status: assigned</span></div>
+          <div class="step-desc">POST /api/tasks/[id]/dispatch creates Booking(status: "assigned"). Task → MATCHING. VendorHouseholdAffinity.bookingCount incremented. Vendor notified via TASK_DISPATCHED. Household sees "Searching for Provider".</div>
+          <div class="step-api">POST /api/tasks/[id]/dispatch</div>
+          <div class="branch-box warn">
+            <div class="branch-title">⏱ 15-Minute Acceptance Timer</div>
+            <div class="branch-item">acceptTimeoutAt = now + 15 minutes</div>
+            <div class="branch-item">POST /api/tasks/timeout-check (cron job monitors)</div>
+            <div class="branch-item">If expired → treated as rejection (Phase 4)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow">↓<span class="arrow-label">Vendor Responds</span></div>
+
+  <!-- PHASE 3: Vendor Response -->
+  <div class="phase-group phase-3">
+    <div class="phase-header">
+      <div class="phase-icon">👤</div>
+      <div>
+        <div class="phase-title-text">Phase 3: Vendor Response (3 Outcomes)</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Vendor accepts, rejects, or times out</div>
+      </div>
+    </div>
+    <div class="response-grid">
+      <div class="response-card rc-accept">
+        <div class="rc-title">✅ Accept</div>
+        <div class="rc-item">Booking: assigned → accepted</div>
+        <div class="rc-item">Task: MATCHING → ACCEPTED (or SCHEDULED)</div>
+        <div class="rc-item">Escrow CREATED (state: HELD)</div>
+        <div class="rc-item">Vendor identity revealed to household</div>
+        <div class="rc-item">→ Proceed to service execution</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:6px;font-family:monospace;">PATCH .../bookings/[id] (accept)</div>
+      </div>
+      <div class="response-card rc-reject">
+        <div class="rc-title">❌ Reject</div>
+        <div class="rc-item">Booking: assigned → cancelled</div>
+        <div class="rc-item">Task stays in MATCHING</div>
+        <div class="rc-item">No escrow created</div>
+        <div class="rc-item">matchAttempts incremented</div>
+        <div class="rc-item">→ Auto-re-route or escalate</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:6px;font-family:monospace;">PATCH .../bookings/[id] (reject)</div>
+      </div>
+      <div class="response-card rc-timeout">
+        <div class="rc-title">⏰ Timeout (15 min)</div>
+        <div class="rc-item">Booking: assigned → cancelled</div>
+        <div class="rc-item">Task stays in MATCHING</div>
+        <div class="rc-item">No escrow created</div>
+        <div class="rc-item">matchAttempts incremented</div>
+        <div class="rc-item">→ Auto-re-route or escalate</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:6px;font-family:monospace;">POST /api/tasks/timeout-check</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow">↓<span class="arrow-label">If Rejected / Timed Out</span></div>
+
+  <!-- PHASE 4: Reassignment -->
+  <div class="phase-group phase-4">
+    <div class="phase-header">
+      <div class="phase-icon">🔄</div>
+      <div>
+        <div class="phase-title-text">Phase 4: Auto-Re-Routing</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">System tries next vendor or escalates to ops</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">3</span>
+        <div class="step-content">
+          <div class="step-title">Reassignment Decision</div>
+          <div class="step-desc">After vendor rejection or timeout, the system checks how many match attempts have been made.</div>
+          <div class="branch-box danger">
+            <div class="branch-title">matchAttempts &lt; 5 (MAX_MATCH_ATTEMPTS)</div>
+            <div class="branch-item">New booking created for next-ranked vendor</div>
+            <div class="branch-item">15-minute timer restarts</div>
+            <div class="branch-item">→ Back to Phase 2</div>
+          </div>
+          <div class="branch-box warn">
+            <div class="branch-title">matchAttempts ≥ 5 OR no more vendors available</div>
+            <div class="branch-item">task.needsOpsIntervention = true</div>
+            <div class="branch-item">SYSTEM_ALERT notification created</div>
+            <div class="branch-item">→ Ops team manually intervenes (Phase 5)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow">↓<span class="arrow-label">If escalated</span></div>
+
+  <!-- PHASE 5: Ops Intervention -->
+  <div class="phase-group phase-5">
+    <div class="phase-header">
+      <div class="phase-icon">🛠️</div>
+      <div>
+        <div class="phase-title-text">Phase 5: Ops Intervention</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Manual handling when auto-matching fails</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">4</span>
+        <div class="step-content">
+          <div class="step-title">Ops Actions <span class="step-tag" style="background:#FEF2F2;color:#991B1B;">ADMIN/COORDINATOR</span></div>
+          <div class="step-desc">Ops team sees escalated tasks and can take action.</div>
+          <div class="branch-box info">
+            <div class="branch-title">Available Ops Actions</div>
+            <div class="branch-item">Cancel the booking + task (action: cancel)</div>
+            <div class="branch-item">Reschedule the booking (action: reschedule)</div>
+            <div class="branch-item">Update notes for context (action: update_notes)</div>
+            <div class="branch-item">Manually trigger re-dispatch if new vendors available</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Constants Summary -->
+  <div class="phase-group phase-1" style="margin-top:0;">
+    <div class="phase-header">
+      <div class="phase-icon">⚙️</div>
+      <div>
+        <div class="phase-title-text">Key Constants</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Configurable values in src/lib/constants.ts</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:20px;font-weight:700;color:#1E40AF;">15 min</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Vendor Acceptance Timeout</div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:20px;font-weight:700;color:#1E40AF;">5</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Max Match Attempts</div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:20px;font-weight:700;color:#1E40AF;">10%</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Platform Commission Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#D1FAE5;border:1px solid #10B981;"></div>Accept</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FEF3C7;border:1px solid #F59E0B;"></div>Reject / Timeout</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#DBEAFE;border:1px solid #3B82F6;"></div>Assignment</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FEE2E2;border:1px solid #EF4444;"></div>Escalation</div>
+  </div>
+
+  <div class="chart-footer">Anna.I Platform — Vendor Assignment Flow | Routing: 9 scoring factors | Max 5 match attempts</div>
+</div>
+</body>
+</html>

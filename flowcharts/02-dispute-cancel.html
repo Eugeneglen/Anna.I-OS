@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text: #1E293B; --text-sub: #475569; --text-muted: #94A3B8;
+    --bg: #FFFFFF; --surface: #F8FAFC; --border: #E2E8F0;
+    --blue: #3B82F6; --green: #10B981; --amber: #F59E0B; --purple: #8B5CF6;
+    --red: #EF4444; --cyan: #06B6D4;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  #root { width: 920px; margin: 0 auto; padding: 48px 40px 32px; }
+
+  .chart-header { text-align: center; margin-bottom: 36px; }
+  .chart-title { font-size: 22px; font-weight: 700; color: var(--text); }
+  .chart-subtitle { font-size: 13px; color: var(--text-sub); margin-top: 6px; }
+  .chart-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; margin-bottom: 8px; }
+
+  /* Phase groups */
+  .phase-group { background: var(--surface); border-radius: 12px; padding: 20px 24px; position: relative; }
+  .phase-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .phase-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .phase-title-text { font-size: 16px; font-weight: 700; }
+  .phase-steps { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; }
+  .phase-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid var(--border); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; line-height: 1.5; }
+  .step-api { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .step-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+  .state-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-top: 4px; }
+
+  /* Branch / Resolution paths */
+  .branch-box { border-radius: 8px; padding: 12px 14px; margin-top: 8px; }
+  .branch-box.warn { background: #FFF7ED; border: 1.5px dashed #F59E0B; }
+  .branch-box.danger { background: #FEF2F2; border: 1.5px dashed #EF4444; }
+  .branch-box.success { background: #F0FDF4; border: 1.5px dashed #10B981; }
+  .branch-box.info { background: #EFF6FF; border: 1.5px dashed #3B82F6; }
+  .branch-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+  .branch-box.warn .branch-title { color: #92400E; }
+  .branch-box.danger .branch-title { color: #991B1B; }
+  .branch-box.success .branch-title { color: #065F46; }
+  .branch-box.info .branch-title { color: #1D4ED8; }
+  .branch-item { font-size: 12px; padding: 4px 0 4px 12px; margin-bottom: 4px; line-height: 1.5; }
+  .branch-box.warn .branch-item { color: #78350F; border-left: 2px solid #FCD34D; }
+  .branch-box.danger .branch-item { color: #7F1D1D; border-left: 2px solid #FCA5A5; }
+  .branch-box.success .branch-item { color: #065F46; border-left: 2px solid #6EE7B7; }
+  .branch-box.info .branch-item { color: #1E40AF; border-left: 2px solid #93C5FD; }
+  .branch-item:last-child { margin-bottom: 0; }
+
+  /* Phase colors */
+  .phase-1 { border-left: 4px solid #EF4444; }
+  .phase-1 .phase-icon { background: #FEF2F2; color: #DC2626; }
+  .phase-1 .phase-title-text { color: #991B1B; }
+  .phase-1 .step-num { background: #FEF2F2; color: #991B1B; }
+
+  .phase-2 { border-left: 4px solid #F59E0B; }
+  .phase-2 .phase-icon { background: #FFFBEB; color: #D97706; }
+  .phase-2 .phase-title-text { color: #92400E; }
+  .phase-2 .step-num { background: #FFFBEB; color: #92400E; }
+
+  .phase-3 { border-left: 4px solid #10B981; }
+  .phase-3 .phase-icon { background: #F0FDF4; color: #059669; }
+  .phase-3 .phase-title-text { color: #065F46; }
+  .phase-3 .step-num { background: #F0FDF4; color: #065F46; }
+
+  .phase-4 { border-left: 4px solid #64748B; }
+  .phase-4 .phase-icon { background: #F1F5F9; color: #475569; }
+  .phase-4 .phase-title-text { color: #334155; }
+  .phase-4 .step-num { background: #F1F5F9; color: #475569; }
+
+  /* Arrow between phases */
+  .phase-arrow { text-align: center; padding: 10px 0; color: var(--text-muted); font-size: 20px; line-height: 1; }
+  .phase-arrow .arrow-label { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+  /* Resolution paths grid */
+  .resolution-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .resolution-card { background: white; border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+  .resolution-card .rc-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .resolution-card .rc-item { font-size: 11px; color: var(--text-sub); padding: 3px 0; line-height: 1.5; border-left: 2px solid; padding-left: 8px; margin-bottom: 3px; }
+  .resolution-card .rc-item:last-child { margin-bottom: 0; }
+  .rc-path-a .rc-title { color: #065F46; }
+  .rc-path-a .rc-item { border-color: #6EE7B7; }
+  .rc-path-b .rc-title { color: #1D4ED8; }
+  .rc-path-b .rc-item { border-color: #93C5FD; }
+  .rc-path-c .rc-title { color: #991B1B; }
+  .rc-path-c .rc-item { border-color: #FCA5A5; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 28px; padding: 14px 20px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4B5563; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  .chart-footer { text-align: center; margin-top: 20px; font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-header">
+    <div class="chart-badge" style="background:#FEF2F2;color:#DC2626;">Exception Flows</div>
+    <div class="chart-title">Dispute &amp; Cancellation Flow</div>
+    <div class="chart-subtitle">How disputes are raised, resolved, and how cancellations work</div>
+  </div>
+
+  <!-- PHASE 1: Dispute Trigger -->
+  <div class="phase-group phase-1">
+    <div class="phase-header">
+      <div class="phase-icon">⚠️</div>
+      <div>
+        <div class="phase-title-text">Phase 1: Dispute Raised</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Household can dispute from multiple task states</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">1</span>
+        <div class="step-content">
+          <div class="step-title">Dispute Trigger</div>
+          <div class="step-desc">Household raises a dispute with a reason (10–500 chars). Can be raised from: ACCEPTED, SCHEDULED, IN_PROGRESS, COMPLETED, or VERIFIED.</div>
+          <div class="step-api">PATCH /api/tasks/[id]/escrow (action: "dispute")</div>
+          <div class="branch-box danger">
+            <div class="branch-title">Immediate Effects</div>
+            <div class="branch-item">Task → DISPUTED</div>
+            <div class="branch-item">Escrow → DISPUTED (if escrow exists)</div>
+            <div class="branch-item">Active booking → cancelled (assigned/accepted/in_progress → cancelled)</div>
+            <div class="branch-item">HouseholdCategoryAutonomy: promotionPaused = true</div>
+            <div class="branch-item">Both household &amp; vendor notified (DISPUTE_RAISED)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow">↓<span class="arrow-label">3 Resolution Paths</span></div>
+
+  <!-- PHASE 2: Dispute Resolution -->
+  <div class="phase-group phase-2">
+    <div class="phase-header">
+      <div class="phase-icon">⚖️</div>
+      <div>
+        <div class="phase-title-text">Phase 2: Dispute Resolution</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Three possible outcomes for a disputed task</div>
+      </div>
+    </div>
+    <div class="resolution-grid">
+      <div class="resolution-card rc-path-a">
+        <div class="rc-title">✅ Path A: Household Resolves</div>
+        <div class="rc-item">POST /api/tasks/[id]/resolve-dispute</div>
+        <div class="rc-item">Escrow: DISPUTED → HELD</div>
+        <div class="rc-item">Task: DISPUTED → COMPLETED</div>
+        <div class="rc-item">promotionPaused = false</div>
+        <div class="rc-item">→ Can re-verify &amp; release escrow</div>
+      </div>
+      <div class="resolution-card rc-path-b">
+        <div class="rc-title">🛡️ Path B: Ops Dismisses</div>
+        <div class="rc-item">PATCH /api/ops/escrow/[id] (resolve_dismiss)</div>
+        <div class="rc-item">ADMIN/COORDINATOR role required</div>
+        <div class="rc-item">Escrow: DISPUTED → HELD</div>
+        <div class="rc-item">Task: DISPUTED → COMPLETED</div>
+        <div class="rc-item">Audit log created</div>
+      </div>
+      <div class="resolution-card rc-path-c">
+        <div class="rc-title">💰 Path C: Ops Refunds</div>
+        <div class="rc-item">PATCH /api/ops/escrow/[id] (resolve_refund)</div>
+        <div class="rc-item">ADMIN/COORDINATOR role required</div>
+        <div class="rc-item">Escrow: DISPUTED → REFUNDED</div>
+        <div class="rc-item">Task stays DISPUTED (no change)</div>
+        <div class="rc-item">promotionPaused = false (no penalty)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-arrow" style="margin-bottom:24px;">↓<span class="arrow-label">Separate from Disputes</span></div>
+
+  <!-- PHASE 3: Cancellation -->
+  <div class="phase-group phase-4">
+    <div class="phase-header">
+      <div class="phase-icon">🚫</div>
+      <div>
+        <div class="phase-title-text">Phase 3: Cancellation</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Three distinct cancellation scenarios</div>
+      </div>
+    </div>
+    <div class="phase-steps">
+      <div class="phase-step">
+        <span class="step-num">2</span>
+        <div class="step-content">
+          <div class="step-title">Ops Cancels Booking + Task <span class="step-tag" style="background:#FEF2F2;color:#991B1B;">ADMIN only</span></div>
+          <div class="step-desc">The ONLY way to reach TaskStatus.CANCELLED from non-predicted tasks. ADMIN role required. Works from any non-terminal state.</div>
+          <div class="step-api">PATCH /api/ops/bookings/[id] (action: "cancel")</div>
+          <div class="branch-box danger">
+            <div class="branch-title">Effects</div>
+            <div class="branch-item">Booking → cancelled</div>
+            <div class="branch-item">Task → CANCELLED</div>
+            <div class="branch-item">cancelReason saved</div>
+            <div class="branch-item">Audit log created</div>
+          </div>
+        </div>
+      </div>
+      <div class="phase-step">
+        <span class="step-num">3</span>
+        <div class="step-content">
+          <div class="step-title">Household Cancels Predicted Task</div>
+          <div class="step-desc">Only for PREDICTED tasks before lockAt. Sets cancelledAt + cancelReason. Task status stays PREDICTED (preserved for analytics). Excluded from task lists.</div>
+          <div class="step-api">POST /api/tasks/[id]/cancel-predictive</div>
+          <div class="branch-box warn">
+            <div class="branch-title">Soft-Delete Pattern</div>
+            <div class="branch-item">Status remains PREDICTED (not changed to CANCELLED)</div>
+            <div class="branch-item">cancelledAt IS NOT NULL marks it as deleted</div>
+          </div>
+        </div>
+      </div>
+      <div class="phase-step">
+        <span class="step-num">4</span>
+        <div class="step-content">
+          <div class="step-title">Vendor Rejection / Timeout <span class="step-tag" style="background:#FFF7ED;color:#92400E;">Effective Cancel</span></div>
+          <div class="step-desc">Vendor rejects or 15-min timeout expires. Booking → cancelled. Task stays in MATCHING state (not cancelled). Auto-re-routes to next vendor.</div>
+          <div class="step-api">PATCH .../bookings/[id] (reject) | POST /api/tasks/timeout-check</div>
+          <div class="branch-box info">
+            <div class="branch-title">Auto-Re-Routing Logic</div>
+            <div class="branch-item">matchAttempts &lt; 5 → try next vendor (new booking created)</div>
+            <div class="branch-item">matchAttempts ≥ 5 or no vendors → needsOpsIntervention: true</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Escrow State Summary -->
+  <div class="phase-group phase-3" style="margin-top:0;">
+    <div class="phase-header">
+      <div class="phase-icon">📊</div>
+      <div>
+        <div class="phase-title-text">Escrow State Machine Summary</div>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">4 possible escrow states</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:#334155;">HELD</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Created on vendor accept. Awaiting verification or dispute.</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">→ RELEASED or DISPUTED</div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:#065F46;">RELEASED</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">After household/ops release. Vendor gets paid (minus 10% commission).</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Terminal state</div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:#92400E;">DISPUTED</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Household raises dispute. Awaiting ops/household resolution.</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">→ HELD or REFUNDED</div>
+      </div>
+      <div style="background:white;border-radius:8px;padding:12px;border:1px solid var(--border);text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:#991B1B;">REFUNDED</div>
+        <div style="font-size:11px;color:var(--text-sub);margin-top:4px;">Ops upholds dispute. Full refund to household. Ledger state change only.</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Terminal state</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#FEF2F2;border:1px solid #EF4444;"></div>Dispute / Cancel</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FFFBEB;border:1px solid #F59E0B;"></div>Warning / Soft Cancel</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#F0FDF4;border:1px solid #10B981;"></div>Resolution</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#EFF6FF;border:1px solid #3B82F6;"></div>Info / Re-routing</div>
+  </div>
+
+  <div class="chart-footer">Anna.I Platform — Dispute &amp; Cancellation Flow | EscrowState: 4 states | Dispute resolution: 3 paths</div>
+</div>
+</body>
+</html>
