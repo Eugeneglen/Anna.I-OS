@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --text: #1a1a1a;
+    --text-sub: #4a5568;
+    --text-muted: #8896a6;
+    --bg: #FFFFFF;
+    --surface: #f7f9f7;
+    --border: #d8ddd8;
+    --sage: #6B8F71;
+    --sage-dark: #4a6e50;
+    --sage-light: #e8f0e9;
+    --sage-lighter: #f2f7f3;
+    --slate: #64748B;
+    --slate-light: #e2e8f0;
+    --connector: #94a8b0;
+    --amber-border: #d4943a;
+    --amber-bg: #fef8ee;
+    --red-border: #c06050;
+    --red-bg: #fdf2f0;
+    --green-border: #5a9e62;
+    --green-bg: #eef6ef;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    width: 1120px;
+    margin: 0 auto;
+    padding: 48px 40px 60px;
+  }
+
+  /* ─── Header ─── */
+  .page-header {
+    text-align: center;
+    margin-bottom: 52px;
+  }
+  .page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--sage-dark);
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .page-header .subtitle {
+    font-size: 15px;
+    color: var(--slate);
+    font-weight: 400;
+  }
+  .header-divider {
+    width: 60px;
+    height: 3px;
+    background: var(--sage);
+    border-radius: 2px;
+    margin: 16px auto 0;
+  }
+
+  /* ─── Chart Section ─── */
+  .chart-section {
+    margin-bottom: 64px;
+  }
+  .chart-section:last-child {
+    margin-bottom: 0;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--sage-light);
+  }
+  .section-header .section-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    background: var(--sage);
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-header .section-desc {
+    font-size: 13px;
+    color: var(--slate);
+    font-weight: 400;
+    margin-left: auto;
+  }
+
+  /* ─── Phase Group (Layout C) ─── */
+  .phase-group {
+    background: var(--sage-lighter);
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 0;
+    border: 1px solid #e0e8e1;
+    overflow: hidden;
+  }
+  .phase-title {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #dce4dd;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .phase-title .phase-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .phase-content {
+    padding: 16px 20px;
+  }
+
+  /* ─── Phase Steps ─── */
+  .phase-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .phase-step {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text);
+    padding: 10px 14px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .phase-step .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .phase-step .step-label {
+    font-weight: 500;
+    color: var(--text);
+  }
+  .phase-step .step-detail {
+    font-size: 12px;
+    color: var(--slate);
+    margin-left: 2px;
+  }
+  .phase-step .status-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .status-created { background: #e8f0e9; color: #4a6e50; }
+  .status-accepted { background: #e8f0e9; color: #4a6e50; }
+  .status-progress { background: #e0ecf0; color: #3a6e7a; }
+  .status-completed { background: #e0ecf0; color: #3a6e7a; }
+  .status-verified { background: #eef6ef; color: #3a7040; }
+  .status-paid { background: #eef6ef; color: #3a7040; }
+  .status-disputed { background: #fdf2f0; color: #a04030; }
+  .status-cancelled { background: #f5f3f0; color: #7a6a5a; }
+  .status-refunded { background: #fdf2f0; color: #a04030; }
+
+  /* ─── Phase Connector Arrows ─── */
+  .phase-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 36px;
+    position: relative;
+  }
+  .phase-arrow::before {
+    content: '';
+    display: block;
+    width: 2px;
+    height: 100%;
+    background: var(--sage);
+    opacity: 0.3;
+  }
+  .phase-arrow::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--sage);
+    opacity: 0.5;
+  }
+
+  /* ─── Happy Path Phase Color Scheme (sage progression) ─── */
+  .hp-phase-1 { border-left: 4px solid #8faf94; }
+  .hp-phase-1 .phase-title { background: #edf4ee; color: #3d5e43; }
+  .hp-phase-1 .phase-num { background: #d4e5d6; color: #3d5e43; }
+  .hp-phase-1 .step-num { background: #e0ebe1; color: #4a6e50; }
+
+  .hp-phase-2 { border-left: 4px solid #7da683; }
+  .hp-phase-2 .phase-title { background: #e6efe7; color: #345638; }
+  .hp-phase-2 .phase-num { background: #c8ddd9; color: #345638; }
+  .hp-phase-2 .step-num { background: #d5e4d7; color: #3d5e43; }
+
+  .hp-phase-3 { border-left: 4px solid #6B8F71; }
+  .hp-phase-3 .phase-title { background: #dfeae1; color: #2a4a30; }
+  .hp-phase-3 .phase-num { background: #bcd2be; color: #2a4a30; }
+  .hp-phase-3 .step-num { background: #cadcc; color: #345638; }
+
+  .hp-phase-4 { border-left: 4px solid #5c7e63; }
+  .hp-phase-4 .phase-title { background: #d8e4da; color: #224028; }
+  .hp-phase-4 .phase-num { background: #b0c8b3; color: #224028; }
+  .hp-phase-4 .step-num { background: #bdd3bf; color: #2a4a30; }
+
+  .hp-phase-5 { border-left: 4px solid #4e6f55; }
+  .hp-phase-5 .phase-title { background: #d2ded4; color: #1c3620; }
+  .hp-phase-5 .phase-num { background: #a4bda7; color: #1c3620; }
+  .hp-phase-5 .step-num { background: #b0c8b2; color: #224028; }
+
+  .hp-phase-6 { border-left: 4px solid #406047; }
+  .hp-phase-6 .phase-title { background: #ccd8ce; color: #162c1a; }
+  .hp-phase-6 .phase-num { background: #98b29b; color: #162c1a; }
+  .hp-phase-6 .step-num { background: #a4bda6; color: #1c3620; }
+
+  /* ─── Exception Phase Color Scheme (slate progression) ─── */
+  .ex-phase-1 { border-left: 4px solid #8a9ba5; }
+  .ex-phase-1 .phase-title { background: #edf1f3; color: #3a4e5a; }
+  .ex-phase-1 .phase-num { background: #d4dde2; color: #3a4e5a; }
+  .ex-phase-1 .step-num { background: #e0e7eb; color: #4a5e6a; }
+
+  .ex-phase-2 { border-left: 4px solid #7a8d98; }
+  .ex-phase-2 .phase-title { background: #e5eaed; color: #2e4350; }
+  .ex-phase-2 .phase-num { background: #c7d4da; color: #2e4350; }
+  .ex-phase-2 .step-num { background: #d5dfe4; color: #3a4e5a; }
+
+  .ex-phase-3 { border-left: 4px solid #6a7f8b; }
+  .ex-phase-3 .phase-title { background: #dde3e7; color: #243846; }
+  .ex-phase-3 .phase-num { background: #bac9d1; color: #243846; }
+  .ex-phase-3 .step-num { background: #cad7dd; color: #2e4350; }
+
+  .ex-phase-4 { border-left: 4px solid #5a717e; }
+  .ex-phase-4 .phase-title { background: #d5dce1; color: #1a2e3c; }
+  .ex-phase-4 .phase-num { background: #adbfc8; color: #1a2e3c; }
+  .ex-phase-4 .step-num { background: #bfcdd5; color: #243846; }
+
+  /* ─── Exception-specific nodes ─── */
+  .phase-step.exception-warn {
+    border-color: #e0c9a0;
+    background: #fffcf5;
+  }
+  .phase-step.exception-error {
+    border-color: #d4a8a0;
+    background: #fef8f6;
+  }
+  .phase-step.exception-resolve {
+    border-color: #a0c8a8;
+    background: #f5faf6;
+  }
+
+  /* ─── Branch Layout for Exception flows ─── */
+  .branch-container {
+    display: flex;
+    gap: 16px;
+    padding-left: 32px;
+    margin-top: 4px;
+  }
+  .branch {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .branch-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--slate);
+    margin-bottom: 4px;
+    padding-left: 2px;
+  }
+  .branch-arrow-down {
+    text-align: center;
+    color: var(--sage);
+    font-size: 14px;
+    padding: 2px 0;
+    opacity: 0.5;
+  }
+
+  /* ─── Legend ─── */
+  .flow-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 40px;
+    padding: 14px 24px;
+    background: #f8faf8;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--slate);
+  }
+  .legend-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1.5px solid;
+  }
+
+  /* ─── Input source tags ─── */
+  .source-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .source-tag {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #eef2ee;
+    color: #4a6e50;
+    border: 1px solid #d4e0d6;
+  }
+  .source-tag.highlight {
+    background: #e8f0e9;
+    color: #3a5e40;
+    border-color: #b8ccb9;
+  }
+
+  /* ─── Note callout ─── */
+  .note-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fef9e8;
+    border: 1px solid #e8dba8;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #6a5a30;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .note-callout .note-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    margin-top: 1px;
+  }
+
+  /* ─── Two-column step row ─── */
+  .steps-row {
+    display: flex;
+    gap: 12px;
+  }
+  .steps-row .phase-step {
+    flex: 1;
+  }
+</style>
+</head>
+<body>
+<div id="root">
+
+  <!-- ─── Page Header ─── -->
+  <div class="page-header">
+    <h1>Anna.I Booking Flow</h1>
+    <div class="subtitle">Task Lifecycle &amp; Exception Handling</div>
+    <div class="header-divider"></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- FLOWCHART 1: Task Lifecycle — Happy Path                -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="chart-section">
+    <div class="section-header">
+      <div class="section-badge">1</div>
+      <h2>Task Lifecycle — Happy Path</h2>
+      <span class="section-desc">Main flow from creation to payment</span>
+    </div>
+
+    <!-- Phase 1: CREATION -->
+    <div class="phase-group hp-phase-1">
+      <div class="phase-title">
+        <span class="phase-num">1</span>
+        CREATION
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">1</span>
+            <span>
+              <span class="step-label">Task Created</span>
+              <span class="status-tag status-created">CREATED</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">2</span>
+            <span>
+              <span class="step-detail">Input Sources:</span>
+              <div class="source-tags">
+                <span class="source-tag">AI Chat</span>
+                <span class="source-tag">Manual Form</span>
+                <span class="source-tag highlight">Predictive (L4+)</span>
+                <span class="source-tag">Rebook</span>
+              </div>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 2: MATCHING -->
+    <div class="phase-group hp-phase-2">
+      <div class="phase-title">
+        <span class="phase-num">2</span>
+        MATCHING
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">3</span>
+            <span>
+              <span class="step-label">Dispatch</span>
+              <span class="step-detail">Auto-Dispatch (L3+) or Manual Dispatch</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">4</span>
+            <span>
+              <span class="step-label">Vendor Routing</span>
+              <span class="step-detail">Score-based matching algorithm</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">5</span>
+            <span>
+              <span class="step-label">Booking Created</span>
+              <span class="step-detail">Vendor assigned to task</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">6</span>
+            <span>
+              <span class="step-label">15-min Accept Timer</span>
+              <span class="step-detail">Countdown begins for vendor response</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 3: ACCEPTANCE -->
+    <div class="phase-group hp-phase-3">
+      <div class="phase-title">
+        <span class="phase-num">3</span>
+        ACCEPTANCE
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">7</span>
+            <span>
+              <span class="step-label">Vendor Accepts</span>
+              <span class="step-detail">Vendor confirms the booking</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">8</span>
+            <span>
+              <span class="step-label">Escrow Held</span>
+              <span class="step-detail">10% commission held in escrow</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">9</span>
+            <span>
+              <span class="step-label">Status Transition</span>
+              <span class="step-detail">Task moves to </span>
+              <span class="status-tag status-accepted">ACCEPTED</span>
+              <span class="step-detail"> or </span>
+              <span class="status-tag status-created">SCHEDULED</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 4: SERVICE -->
+    <div class="phase-group hp-phase-4">
+      <div class="phase-title">
+        <span class="phase-num">4</span>
+        SERVICE
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">10</span>
+            <span>
+              <span class="step-label">Work Begins</span>
+              <span class="step-detail">Vendor starts the service</span>
+              <span class="status-tag status-progress">IN_PROGRESS</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">11</span>
+            <span>
+              <span class="step-label">Work Completed</span>
+              <span class="step-detail">Vendor finishes the service</span>
+              <span class="status-tag status-completed">COMPLETED</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">12</span>
+            <span>
+              <span class="step-label">Photos Uploaded</span>
+              <span class="step-detail">Before &amp; after photos submitted</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 5: VERIFICATION -->
+    <div class="phase-group hp-phase-5">
+      <div class="phase-title">
+        <span class="phase-num">5</span>
+        VERIFICATION
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">13</span>
+            <span>
+              <span class="step-label">Household Verifies Photos</span>
+              <span class="step-detail">Visual confirmation of completed work</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">14</span>
+            <span>
+              <span class="step-label">Autonomy Level Checked</span>
+              <span class="step-detail">Eligible for level promotion?</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">15</span>
+            <span>
+              <span class="step-label">Task Verified</span>
+              <span class="status-tag status-verified">VERIFIED</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Phase 6: PAYMENT -->
+    <div class="phase-group hp-phase-6">
+      <div class="phase-title">
+        <span class="phase-num">6</span>
+        PAYMENT
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step">
+            <span class="step-num">16</span>
+            <span>
+              <span class="step-label">Household Releases Escrow</span>
+              <span class="step-detail">Funds unlocked from escrow</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">17</span>
+            <span>
+              <span class="step-label">Vendor Payout</span>
+              <span class="step-detail">90% disbursed to vendor</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">18</span>
+            <span>
+              <span class="step-label">Escrow Released</span>
+              <span class="status-tag status-paid">ESCROW_RELEASED</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">19</span>
+            <span>
+              <span class="step-label">Predictive Re-booking Triggered</span>
+              <span class="step-detail">L4+ households: automated next booking</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <!-- FLOWCHART 2: Exception Flows                            -->
+  <!-- ════════════════════════════════════════════════════════ -->
+  <div class="chart-section">
+    <div class="section-header">
+      <div class="section-badge">2</div>
+      <h2>Exception Flows</h2>
+      <span class="section-desc">Dispute, cancellation, timeout &amp; reassignment</span>
+    </div>
+
+    <!-- Exception: DISPUTE FLOW -->
+    <div class="phase-group ex-phase-1">
+      <div class="phase-title">
+        <span class="phase-num">A</span>
+        DISPUTE FLOW
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step exception-warn">
+            <span class="step-num">1</span>
+            <span>
+              <span class="step-label">Household Raises Dispute</span>
+              <span class="step-detail">From </span>
+              <span class="status-tag status-progress">IN_PROGRESS</span>
+              <span class="status-tag status-accepted">ACCEPTED</span>
+              <span class="status-tag status-created">SCHEDULED</span>
+              <span class="status-tag status-completed">COMPLETED</span>
+              <span class="status-tag status-verified">VERIFIED</span>
+            </span>
+          </div>
+          <div class="phase-step exception-error">
+            <span class="step-num">2</span>
+            <span>
+              <span class="step-label">Escrow Status</span>
+              <span class="status-tag status-disputed">DISPUTED</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">3</span>
+            <span>
+              <span class="step-label">Resolution Paths</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Branch: Resolve vs Refund -->
+        <div class="branch-container">
+          <div class="branch">
+            <div class="branch-label">a) Resolve (Dismiss)</div>
+            <div class="phase-step exception-resolve">
+              <span class="step-num">a</span>
+              <span>
+                <span class="step-label">Dispute Dismissed</span>
+                <span class="step-detail">Household or ops dismisses</span>
+              </span>
+            </div>
+            <div class="phase-step exception-resolve">
+              <span class="step-num">b</span>
+              <span>
+                <span class="step-label">Back to COMPLETED</span>
+                <span class="status-tag status-completed">COMPLETED</span>
+              </span>
+            </div>
+            <div class="phase-step exception-resolve">
+              <span class="step-num">c</span>
+              <span>
+                <span class="step-label">Escrow → HELD</span>
+                <span class="step-detail">Payment resumes normal flow</span>
+              </span>
+            </div>
+          </div>
+          <div class="branch">
+            <div class="branch-label">b) Refund (Upheld)</div>
+            <div class="phase-step exception-error">
+              <span class="step-num">a</span>
+              <span>
+                <span class="step-label">Ops Upholds Dispute</span>
+                <span class="step-detail">Evidence supports household claim</span>
+              </span>
+            </div>
+            <div class="phase-step exception-error">
+              <span class="step-num">b</span>
+              <span>
+                <span class="step-label">Stays DISPUTED</span>
+                <span class="status-tag status-disputed">DISPUTED</span>
+              </span>
+            </div>
+            <div class="phase-step exception-error">
+              <span class="step-num">c</span>
+              <span>
+                <span class="step-label">Escrow → REFUNDED</span>
+                <span class="status-tag status-refunded">REFUNDED</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Exception: CANCELLATION FLOW -->
+    <div class="phase-group ex-phase-2">
+      <div class="phase-title">
+        <span class="phase-num">B</span>
+        CANCELLATION FLOW
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step exception-warn">
+            <span class="step-num">1</span>
+            <span>
+              <span class="step-label">Ops Cancels</span>
+              <span class="step-detail">Any non-terminal booking</span>
+              <span class="status-tag status-cancelled">CANCELLED</span>
+            </span>
+          </div>
+          <div class="phase-step exception-warn">
+            <span class="step-num">2</span>
+            <span>
+              <span class="step-label">Household Cancels Predicted Task</span>
+              <span class="step-detail">Predicted task with </span>
+              <code style="font-size:12px;background:#f0f2f0;padding:1px 6px;border-radius:3px;">cancelledAt</code>
+              <span class="step-detail"> timestamp</span>
+              <span class="status-tag status-cancelled">PREDICTED</span>
+            </span>
+          </div>
+          <div class="phase-step exception-warn">
+            <span class="step-num">3</span>
+            <span>
+              <span class="step-label">Vendor Decline / Rejection</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Branch: under 5 vs 5 attempts -->
+        <div class="branch-container">
+          <div class="branch">
+            <div class="branch-label">matchAttempts &lt; 5</div>
+            <div class="phase-step exception-resolve">
+              <span class="step-num">a</span>
+              <span>
+                <span class="step-label">Auto Re-route</span>
+                <span class="step-detail">Stays in MATCHING phase</span>
+              </span>
+            </div>
+          </div>
+          <div class="branch">
+            <div class="branch-label">matchAttempts = 5</div>
+            <div class="phase-step exception-error">
+              <span class="step-num">b</span>
+              <span>
+                <span class="step-label">Escalate to Ops</span>
+                <span class="step-detail">Flag: </span>
+                <code style="font-size:12px;background:#fdf2f0;padding:1px 6px;border-radius:3px;color:#a04030;">needsOpsIntervention</code>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Exception: TIMEOUT FLOW -->
+    <div class="phase-group ex-phase-3">
+      <div class="phase-title">
+        <span class="phase-num">C</span>
+        TIMEOUT FLOW
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step exception-warn">
+            <span class="step-num">1</span>
+            <span>
+              <span class="step-label">15-min Accept Timer Expires</span>
+              <span class="step-detail">Vendor did not respond in time</span>
+            </span>
+          </div>
+          <div class="phase-step exception-error">
+            <span class="step-num">2</span>
+            <span>
+              <span class="step-label">Auto-Cancel Booking</span>
+              <span class="step-detail">Booking is automatically cancelled</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">3</span>
+            <span>
+              <span class="step-label">Re-route or Escalate</span>
+              <span class="step-detail">Same logic as vendor rejection</span>
+            </span>
+          </div>
+          <div class="note-callout">
+            <span class="note-icon">ℹ</span>
+            <span>Follows the same re-routing / escalation logic as the Cancellation Flow vendor rejection path (matchAttempts threshold).</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow"></div>
+
+    <!-- Exception: REASSIGNMENT -->
+    <div class="phase-group ex-phase-4">
+      <div class="phase-title">
+        <span class="phase-num">D</span>
+        REASSIGNMENT
+      </div>
+      <div class="phase-content">
+        <div class="phase-steps">
+          <div class="phase-step exception-warn">
+            <span class="step-num">1</span>
+            <span>
+              <span class="step-label">Booking Cancelled</span>
+              <span class="step-detail">No active bookings remain for the task</span>
+            </span>
+          </div>
+          <div class="phase-step">
+            <span class="step-num">2</span>
+            <span>
+              <span class="step-label">Task Resets to MATCHING</span>
+              <span class="step-detail">Status reverts; new vendor search begins</span>
+            </span>
+          </div>
+          <div class="phase-step exception-resolve">
+            <span class="step-num">3</span>
+            <span>
+              <span class="step-label">New Vendor Search</span>
+              <span class="step-detail">Excluding previously tried vendors from the candidate pool</span>
+            </span>
+          </div>
+          <div class="note-callout">
+            <span class="note-icon">ℹ</span>
+            <span>Previously attempted vendors are excluded from future matching to avoid repeated failures and improve dispatch efficiency.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ─── Legend ─── -->
+  <div class="flow-legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#6B8F71;background:#e8f0e9;"></div>
+      Normal Step
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#d4943a;background:#fef8ee;"></div>
+      Warning / Exception Trigger
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#c06050;background:#fdf2f0;"></div>
+      Error / Failure Path
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#5a9e62;background:#eef6ef;"></div>
+      Resolution / Recovery
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="border-color:#64748B;background:#e2e8f0;"></div>
+      Status Tag
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
