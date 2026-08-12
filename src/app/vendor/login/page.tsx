@@ -219,9 +219,27 @@ export default function VendorLoginPage() {
                     </code>
                   </div>
                   <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">MICRO</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      bookings@coolair.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
                     <span className="text-[var(--anna-slate-light)]">SME</span>
                     <code className="font-data text-[var(--anna-sage-dark)]">
                       hello@freshwash.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">SME</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      support@fixit.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">SME</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      ops@greensweep.sg / vendor123
                     </code>
                   </div>
                 </div>

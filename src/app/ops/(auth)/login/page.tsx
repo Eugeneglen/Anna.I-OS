@@ -230,13 +230,49 @@ export default function OpsLoginPage() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[var(--anna-slate-light)]">COORD</span>
                     <code className="font-data text-[var(--anna-sage-dark)]">
-                      ops@annai.sg / anna1234
+                      ops@annai.sg / vendor123
                     </code>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[var(--anna-slate-light)]">ANALYST</span>
                     <code className="font-data text-[var(--anna-sage-dark)]">
                       analyst@annai.sg / anna1234
+                    </code>
+                  </div>
+                </div>
+
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-1.5 mt-3">
+                  Vendors <span className="normal-case font-normal">(vendor portal)</span>
+                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">MICRO</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      ops@sparkclean.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">MICRO</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      bookings@coolair.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">SME</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      hello@freshwash.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">SME</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      support@fixit.sg / vendor123
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)]">SME</span>
+                    <code className="font-data text-[var(--anna-sage-dark)]">
+                      ops@greensweep.sg / vendor123
                     </code>
                   </div>
                 </div>
