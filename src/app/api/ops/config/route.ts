@@ -5,6 +5,15 @@ import { logAction } from "@/lib/audit-log";
 import { CATEGORIES, ACTIVE_CATEGORIES, PLATFORM_COMMISSION_RATE, MAX_AUTONOMY_LEVEL, CATEGORY_CYCLES_PER_LEVEL } from "@/lib/constants";
 import { CATEGORY_DEFAULTS, ServiceJobType as ServiceJobTypeT } from "@/lib/types";
 
+// ── README keys & labels for the Autonomy tab ──
+const README_KEYS = ["readme_autonomy_levels", "readme_threshold_guide", "readme_api_automation"] as const;
+
+const README_LABELS: Record<string, string> = {
+  readme_autonomy_levels: "Guide: Autonomy Levels Overview",
+  readme_threshold_guide: "Guide: Threshold Configuration",
+  readme_api_automation: "Guide: API & Automation",
+};
+
 function toLabel(name: string) {
   return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -106,6 +115,15 @@ export async function GET() {
       ? Math.round(activePricing.reduce((sum, c) => sum + c.activePriceCents, 0) / activePricing.length)
       : 0;
 
+    // ── Fetch READMEs ──
+    const readmeRows = await db.platformConfig.findMany({
+      where: { key: { in: [...README_KEYS] } },
+    });
+    const readmes: Record<string, string> = {};
+    for (const row of readmeRows) {
+      readmes[row.key] = row.value;
+    }
+
     return NextResponse.json({
       categories,
       jobTypes,
@@ -114,6 +132,7 @@ export async function GET() {
       maxLevel: MAX_AUTONOMY_LEVEL,
       categoryPricing,
       blendedJobValueCents,
+      readmes,
     });
   } catch (error) {
     console.error("[/api/ops/config GET]", error);
@@ -330,6 +349,27 @@ export async function POST(req: NextRequest) {
         metadata: { name: slug, label: toLabel(slug), isActive },
       });
       return NextResponse.json({ success: true, category: { name: slug, label: toLabel(slug), isActive } });
+
+    } else if (action === "save_readme") {
+      const { key, content } = body as { key: string; content: string };
+      if (!README_KEYS.includes(key as any)) {
+        return NextResponse.json({ error: "Invalid readme key" }, { status: 400 });
+      }
+      const label = README_LABELS[key] || `Guide: ${key}`;
+      await db.platformConfig.upsert({
+        where: { key },
+        create: { key, value: content, label },
+        update: { value: content },
+      });
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "config.save_readme",
+        entityType: "PlatformConfig",
+        entityId: key,
+        metadata: { key, contentLength: content.length },
+      });
+      return NextResponse.json({ success: true });
 
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });

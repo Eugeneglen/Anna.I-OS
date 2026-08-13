@@ -22,6 +22,9 @@ import { ThresholdsTab } from "@/components/ops/config/thresholds-tab";
 import { JobTypeEditDialog } from "@/components/ops/job-type-edit-dialog";
 import type { ServiceJobType } from "@/lib/types";
 
+// README keys for the Autonomy tab
+const README_KEYS = ["readme_autonomy_levels", "readme_threshold_guide", "readme_api_automation"] as const;
+
 export default function ConfigPage() {
   const user = useOpsUser();
   const qc = useQueryClient();
@@ -57,6 +60,7 @@ export default function ConfigPage() {
   const jobTypes = data?.jobTypes || [];
   const thresholds = data?.thresholds || [];
   const categoryPricing = data?.categoryPricing || [];
+  const readmes: Record<string, string> = data?.readmes || {};
   const effectiveCommission = data?.commissionRate ?? PLATFORM_COMMISSION_RATE;
   const isAdmin = user?.role === "ADMIN";
 
@@ -182,6 +186,25 @@ export default function ConfigPage() {
   const hasPriceChanges = localPriceEdits !== null || localCommission !== null;
   const hasThresholdChanges = localEdits !== null;
 
+  // ── README save mutation ──
+  const readmeMutation = useMutation({
+    mutationFn: async ({ key, content }: { key: string; content: string }) => {
+      const res = await fetch("/api/ops/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_readme", key, content }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops-config"] });
+      toast.success("Guide updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -290,6 +313,10 @@ export default function ConfigPage() {
             onSave={saveThresholds}
             hasChanges={hasThresholdChanges}
             isPending={configMutation.isPending}
+            isAdmin={isAdmin}
+            readmes={readmes}
+            onSaveReadme={(key, content) => readmeMutation.mutate({ key, content })}
+            isSavingReadme={readmeMutation.isPending}
           />
         </TabsContent>
       </Tabs>
