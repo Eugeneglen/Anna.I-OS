@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --text: #1E293B; --text-sub: #475569; --text-muted: #94A3B8;
+    --bg: #FFFFFF; --surface: #F8FAFC; --border: #E2E8F0;
+    --blue: #3B82F6; --green: #10B981; --amber: #F59E0B; --purple: #8B5CF6;
+    --red: #EF4444; --cyan: #06B6D4;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  #root { width: 900px; margin: 0 auto; padding: 48px 40px 32px; }
+
+  .chart-header { text-align: center; margin-bottom: 36px; }
+  .chart-title { font-size: 22px; font-weight: 700; color: var(--text); }
+  .chart-subtitle { font-size: 13px; color: var(--text-sub); margin-top: 6px; }
+  .chart-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; margin-bottom: 8px; }
+
+  .flow-container { position: relative; }
+
+  /* Phase groups */
+  .phase-group { background: var(--surface); border-radius: 12px; padding: 20px 24px; margin-bottom: 0; position: relative; }
+  .phase-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .phase-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .phase-title-text { font-size: 16px; font-weight: 700; }
+  .phase-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+  .phase-steps { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; }
+  .phase-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid var(--border); }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .step-desc { font-size: 12px; color: var(--text-sub); margin-top: 2px; line-height: 1.5; }
+  .step-api { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .step-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+
+  .state-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-top: 4px; }
+
+  /* Phase color scheme — same-hue blue-gray */
+  .phase-1 { border-left: 4px solid #94A3B8; }
+  .phase-1 .phase-icon { background: #F1F5F9; color: #64748B; }
+  .phase-1 .phase-title-text { color: #334155; }
+  .phase-1 .step-num { background: #F1F5F9; color: #475569; }
+
+  .phase-2 { border-left: 4px solid #7B8FA3; }
+  .phase-2 .phase-icon { background: #E8EDF3; color: #5B7A99; }
+  .phase-2 .phase-title-text { color: #2D4156; }
+  .phase-2 .step-num { background: #E2E8F0; color: #475569; }
+
+  .phase-3 { border-left: 4px solid #6B809A; }
+  .phase-3 .phase-icon { background: #DBEAFE; color: #4A6B8A; }
+  .phase-3 .phase-title-text { color: #283C52; }
+  .phase-3 .step-num { background: #DBEAFE; color: #283C52; }
+
+  .phase-4 { border-left: 4px solid #5B7590; }
+  .phase-4 .phase-icon { background: #D0D9E4; color: #3A5C7A; }
+  .phase-4 .phase-title-text { color: #23364D; }
+  .phase-4 .step-num { background: #D0D9E4; color: #23364D; }
+
+  .phase-5 { border-left: 4px solid #4B6A87; }
+  .phase-5 .phase-icon { background: #C7D2E0; color: #2B5473; }
+  .phase-5 .phase-title-text { color: #1E3048; }
+  .phase-5 .step-num { background: #C7D2E0; color: #1E3048; }
+
+  .phase-6 { border-left: 4px solid #3B5F7D; }
+  .phase-6 .phase-icon { background: #BFC9D8; color: #1B4A68; }
+  .phase-6 .phase-title-text { color: #192A3E; }
+  .phase-6 .step-num { background: #BFC9D8; color: #192A3E; }
+
+  .phase-7 { border-left: 4px solid #2B5473; }
+  .phase-7 .phase-icon { background: #B0BCCF; color: #163F5E; }
+  .phase-7 .phase-title-text { color: #142536; }
+  .phase-7 .step-num { background: #B0BCCF; color: #142536; }
+
+  /* Arrow between phases */
+  .phase-arrow { text-align: center; padding: 10px 0; color: var(--text-muted); font-size: 20px; line-height: 1; }
+  .phase-arrow .arrow-label { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+  /* Branch box */
+  .branch-box { background: #FFFBEB; border: 1.5px dashed #F59E0B; border-radius: 8px; padding: 12px 14px; margin-top: 8px; }
+  .branch-title { font-size: 12px; font-weight: 600; color: #92400E; margin-bottom: 6px; }
+  .branch-item { font-size: 12px; color: #78350F; padding: 4px 0 4px 12px; border-left: 2px solid #FCD34D; margin-bottom: 4px; line-height: 1.5; }
+  .branch-item:last-child { margin-bottom: 0; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 28px; padding: 14px 20px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4B5563; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* Footer */
+  .chart-footer { text-align: center; margin-top: 20px; font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="chart-header">
+    <div class="chart-badge" style="background:#EFF6FF;color:#1D4ED8;">Anna.I Platform</div>
+    <div class="chart-title">Booking Lifecycle — Happy Path</div>
+    <div class="chart-subtitle">From task creation to escrow release and rebooking</div>
+  </div>
+
+  <div class="flow-container">
+
+    <!-- PHASE 1: Task Creation -->
+    <div class="phase-group phase-1">
+      <div class="phase-header">
+        <div class="phase-icon">📋</div>
+        <div>
+          <div class="phase-title-text">Phase 1: Task Creation</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Household initiates a service request</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">1</span>
+          <div class="step-content">
+            <div class="step-title">PREDICTED <span class="step-tag" style="background:#F0FDF4;color:#065F46;">L4+ only</span></div>
+            <div class="step-desc">Auto-created by predictive scheduler after prior escrow release. Learns household's recurring cycle pattern.</div>
+            <div class="step-api">POST /api/predictive/lock → locks to CREATED after lockAt</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <span class="step-num">2</span>
+          <div class="step-content">
+            <div class="step-title">CREATED <span class="state-chip" style="background:#EFF6FF;color:#1D4ED8;">TaskStatus.CREATED</span></div>
+            <div class="step-desc">Household manually creates task, or PREDICTED task locks (past lockAt). Quotation linked if from quote.</div>
+            <div class="step-api">POST /api/tasks | POST /api/predictive/lock</div>
+            <div class="branch-box">
+              <div class="branch-title">⚡ Autonomy Check</div>
+              <div class="branch-item">L3+ autonomy → auto-match fires immediately → skip to Phase 2</div>
+              <div class="branch-item">L1–L2 → household manually clicks "Start Matching"</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Dispatch / Auto-Match</span></div>
+
+    <!-- PHASE 2: Matching -->
+    <div class="phase-group phase-2">
+      <div class="phase-header">
+        <div class="phase-icon">🔍</div>
+        <div>
+          <div class="phase-title-text">Phase 2: Matching &amp; Dispatch</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Vendor routing engine scores and assigns</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">3</span>
+          <div class="step-content">
+            <div class="step-title">MATCHING <span class="state-chip" style="background:#FFF7ED;color:#92400E;">TaskStatus.MATCHING</span></div>
+            <div class="step-desc">Routing engine scores all ACTIVE vendors. Top vendor gets a Booking(status: assigned). Household sees "Searching for Provider" (vendor identity hidden).</div>
+            <div class="step-api">POST /api/tasks/[id]/dispatch | GET /api/tasks/[id]/suggest-vendors</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <span class="step-num">4</span>
+          <div class="step-content">
+            <div class="step-title">Booking Created <span class="state-chip" style="background:#FFF7ED;color:#92400E;">assigned</span></div>
+            <div class="step-desc">Booking created with status "assigned". acceptTimeoutAt = now + 15 min. VendorHouseholdAffinity.bookingCount incremented.</div>
+            <div class="step-api">PATCH /api/vendors/[id]/bookings/[bookingId]</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Vendor Accepts (within 15 min)</span></div>
+
+    <!-- PHASE 3: Vendor Acceptance -->
+    <div class="phase-group phase-3">
+      <div class="phase-header">
+        <div class="phase-icon">✅</div>
+        <div>
+          <div class="phase-title-text">Phase 3: Vendor Acceptance</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Vendor accepts the booking, escrow is held</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">5</span>
+          <div class="step-content">
+            <div class="step-title">ACCEPTED / SCHEDULED <span class="state-chip" style="background:#F0FDF4;color:#065F46;">TaskStatus.ACCEPTED</span></div>
+            <div class="step-desc">Vendor clicks Accept. Booking → "accepted". Task → ACCEPTED (no scheduledStart) or SCHEDULED (has scheduledStart). Vendor identity revealed to household.</div>
+            <div class="step-api">PATCH /api/vendors/[id]/bookings/[bookingId] (action: accept)</div>
+            <div class="branch-box">
+              <div class="branch-title">💰 Escrow Created Here</div>
+              <div class="branch-item">Escrow record created with state: HELD</div>
+              <div class="branch-item">Amount = task.amountCents</div>
+              <div class="branch-item">Commission = 10% (PLATFORM_COMMISSION_RATE)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Vendor Starts Work</span></div>
+
+    <!-- PHASE 4: Service Execution -->
+    <div class="phase-group phase-4">
+      <div class="phase-header">
+        <div class="phase-icon">🔧</div>
+        <div>
+          <div class="phase-title-text">Phase 4: Service Execution</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Vendor performs the service</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">6</span>
+          <div class="step-content">
+            <div class="step-title">IN_PROGRESS <span class="state-chip" style="background:#FEF3C7;color:#92400E;">TaskStatus.IN_PROGRESS</span></div>
+            <div class="step-desc">Vendor clicks "Start Work". Booking → "in_progress". actualStart recorded. Anomaly detection triggered. Household notified.</div>
+            <div class="step-api">PATCH .../bookings/[id] (action: start)</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <span class="step-num">7</span>
+          <div class="step-content">
+            <div class="step-title">COMPLETED <span class="state-chip" style="background:#F0FDF4;color:#065F46;">TaskStatus.COMPLETED</span></div>
+            <div class="step-desc">Vendor marks complete (with optional completionNotes). Booking → "completed". actualEnd + completedAt recorded. Verification photos uploaded.</div>
+            <div class="step-api">PATCH .../bookings/[id] (action: complete) | POST .../bookings/[id]/photos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Household Verifies Photos</span></div>
+
+    <!-- PHASE 5: Verification -->
+    <div class="phase-group phase-5">
+      <div class="phase-header">
+        <div class="phase-icon">📸</div>
+        <div>
+          <div class="phase-title-text">Phase 5: Verification</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Household approves work quality</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">8</span>
+          <div class="step-content">
+            <div class="step-title">VERIFIED <span class="state-chip" style="background:#EFF6FF;color:#1D4ED8;">TaskStatus.VERIFIED</span></div>
+            <div class="step-desc">Household approves verification photos. All unverified photos marked verified. Autonomy promotion check runs (level-up possible).</div>
+            <div class="step-api">POST /api/tasks/[id]/verify</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Release Escrow</span></div>
+
+    <!-- PHASE 6: Escrow Release -->
+    <div class="phase-group phase-6">
+      <div class="phase-header">
+        <div class="phase-icon">💳</div>
+        <div>
+          <div class="phase-title-text">Phase 6: Escrow Release</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Payment released to vendor</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">9</span>
+          <div class="step-content">
+            <div class="step-title">ESCROW_RELEASED <span class="state-chip" style="background:#DCFCE7;color:#166534;">TaskStatus.ESCROW_RELEASED</span></div>
+            <div class="step-desc">Household clicks "Release Escrow" or Ops releases. Escrow → RELEASED. Task → ESCROW_RELEASED. REBOOKING_PROMPT notification sent.</div>
+            <div class="step-api">PATCH /api/tasks/[id]/escrow (release) | PATCH /api/ops/escrow/[id] (release)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase-arrow">↓<span class="arrow-label">Rebooking Prompt</span></div>
+
+    <!-- PHASE 7: Rebooking -->
+    <div class="phase-group phase-7">
+      <div class="phase-header">
+        <div class="phase-icon">🔄</div>
+        <div>
+          <div class="phase-title-text">Phase 7: Rebooking</div>
+          <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">Cycle repeats for recurring services</div>
+        </div>
+      </div>
+      <div class="phase-steps">
+        <div class="phase-step">
+          <span class="step-num">10</span>
+          <div class="step-content">
+            <div class="step-title">New Task Created <span class="step-tag" style="background:#EFF6FF;color:#1D4ED8;">Cycle</span></div>
+            <div class="step-desc">Household rebooks → new CREATED task (cloned). L4+ households: predictive scheduler auto-creates PREDICTED task based on learned cycle → back to Phase 1.</div>
+            <div class="step-api">POST /api/tasks/[id]/rebook</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#EFF6FF;border:1px solid #3B82F6;"></div>Task State</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FFF7ED;border:1px solid #F59E0B;"></div>Matching</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#F0FDF4;border:1px solid #10B981;"></div>Completion</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FFFBEB;border:1px dashed #F59E0B;"></div>Branch / Note</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#DCFCE7;border:1px solid #10B981;"></div>Payment</div>
+  </div>
+
+  <div class="chart-footer">Anna.I Platform — Booking Lifecycle Flow | TaskStatus: 11 states | Booking status: 5 states</div>
+</div>
+</body>
+</html>

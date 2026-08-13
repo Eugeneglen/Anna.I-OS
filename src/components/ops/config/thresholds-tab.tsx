@@ -2,26 +2,49 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save } from "lucide-react";
+import { Save, Zap, Settings2, Plug } from "lucide-react";
 import {
   AUTONOMY_LEVEL_NAMES,
   MAX_AUTONOMY_LEVEL,
 } from "@/lib/constants";
+import { EditableReadme } from "./editable-readme";
 
 // ============================================================
 // Anna.I — Ops Config: Thresholds (Autonomy) Tab
 // ============================================================
 // Editor grid of `cyclesRequired` values per category × autonomy level.
-// The category row list is derived from the `thresholds` payload (the
-// same payload the page uses to seed `edits`), so the grid stays in
-// lock-step with whatever categories the backend reports thresholds for.
-// Each cell is a controlled number Input bound to `edits[cat-level]`.
-//
-// Note: the original monolithic page did NOT gate the "Save All" button
-// by `isAdmin` (unlike the pricing tab), so this component preserves
-// that behaviour — the button is always rendered. The `isAdmin` flag is
-// therefore not part of this component's contract.
+// Below the grid, shows 3 editable README sections that Ops admins
+// can update to keep documentation current.
 // ============================================================
+
+interface ReadmeData {
+  key: string;
+  title: string;
+  icon: React.ReactNode;
+  content: string;
+  defaultCollapsed: boolean;
+}
+
+const README_DEFS: Omit<ReadmeData, "content">[] = [
+  {
+    key: "readme_autonomy_levels",
+    title: "Autonomy Levels",
+    icon: <Zap className="h-3.5 w-3.5" />,
+    defaultCollapsed: false,
+  },
+  {
+    key: "readme_threshold_guide",
+    title: "Threshold Configuration",
+    icon: <Settings2 className="h-3.5 w-3.5" />,
+    defaultCollapsed: true,
+  },
+  {
+    key: "readme_api_automation",
+    title: "API & Automation",
+    icon: <Plug className="h-3.5 w-3.5" />,
+    defaultCollapsed: true,
+  },
+];
 
 interface ThresholdsTabProps {
   thresholds: Record<string, unknown>[];
@@ -30,6 +53,10 @@ interface ThresholdsTabProps {
   onSave: () => void;
   hasChanges: boolean;
   isPending: boolean;
+  isAdmin?: boolean;
+  readmes?: Record<string, string>;
+  onSaveReadme?: (key: string, content: string) => void;
+  isSavingReadme?: boolean;
 }
 
 export function ThresholdsTab({
@@ -39,6 +66,10 @@ export function ThresholdsTab({
   onSave,
   hasChanges,
   isPending,
+  isAdmin = true,
+  readmes = {},
+  onSaveReadme,
+  isSavingReadme = false,
 }: ThresholdsTabProps) {
   const uniqueCats = [
     ...new Set(
@@ -47,7 +78,8 @@ export function ThresholdsTab({
   ];
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 space-y-4">
+      {/* Threshold Grid */}
       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
@@ -128,10 +160,30 @@ export function ThresholdsTab({
           </table>
         </div>
       </div>
-      <p className="mt-3 text-xs text-[var(--anna-muted)]">
+      <p className="text-xs text-[var(--anna-muted)]">
         Number of verified booking cycles required before a household can be
         promoted to each autonomy level.
       </p>
+
+      {/* Editable README Sections */}
+      <div className="space-y-3 pt-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] px-1">
+          Documentation & Guides
+        </h3>
+        {README_DEFS.map((def) => (
+          <EditableReadme
+            key={def.key}
+            readmeKey={def.key}
+            title={def.title}
+            icon={def.icon}
+            content={readmes[def.key] || ""}
+            isAdmin={isAdmin}
+            isSaving={isSavingReadme}
+            onSave={onSaveReadme || (() => {})}
+            defaultCollapsed={def.defaultCollapsed}
+          />
+        ))}
+      </div>
     </div>
   );
 }
