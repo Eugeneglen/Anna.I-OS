@@ -494,6 +494,9 @@ function JobDetailView({
   const isCancelled = booking.status === "cancelled";
   const actionsDisabled = isCompleted || isCancelled;
   const canAddAddon = ["assigned", "accepted", "in_progress"].includes(booking.status);
+  const approvedAddonsTotal = addons
+    .filter((a) => a.status === "approved")
+    .reduce((sum, a) => sum + a.amountCents, 0);
 
   // ── Fetch addons ──
   const fetchAddons = useCallback(async () => {
@@ -685,12 +688,39 @@ function JobDetailView({
           <StatusTimeline status={booking.status} />
         </div>
 
-        {/* Amount */}
-        <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 flex items-center justify-between">
-          <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
-          <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-            {formatSgd(booking.amountCents)}
-          </span>
+        {/* Amount — with approved addon breakdown */}
+        <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
+            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+              {formatSgd(booking.amountCents + approvedAddonsTotal)}
+            </span>
+          </div>
+          {approvedAddonsTotal > 0 && (
+            <div className="border-t border-[var(--anna-border)]/40 pt-2 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+                Includes Approved Add-ons
+              </p>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[var(--anna-slate-light)]">Original service</span>
+                <span className="font-data font-medium">{formatSgd(booking.amountCents)}</span>
+              </div>
+              {addons
+                .filter((a) => a.status === "approved")
+                .map((a) => (
+                  <div key={a.id} className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--anna-slate-light)] truncate max-w-[60%]">{a.description}</span>
+                    <span className="font-data font-medium text-[var(--anna-sage-dark)]">+{formatSgd(a.amountCents)}</span>
+                  </div>
+                ))}
+              <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
+                <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
+                  {formatSgd(booking.amountCents + approvedAddonsTotal)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Details Card */}

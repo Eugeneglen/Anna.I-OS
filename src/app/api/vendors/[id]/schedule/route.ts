@@ -98,6 +98,14 @@ export async function GET(
             contact: true,
           },
         },
+        addons: {
+          select: {
+            id: true,
+            description: true,
+            amountCents: true,
+            status: true,
+          },
+        },
       },
     })
 
@@ -123,6 +131,11 @@ export async function GET(
       verificationPhotoCount: b.verificationPhotos.length,
       verificationPhotos: b.verificationPhotos,
       assignedStaff: b.assignedStaff,
+      // Approved addon total for dynamic amount calculation
+      approvedAddonsTotal: (b.addons || [])
+        .filter((a) => a.status === "approved")
+        .reduce((sum, a) => sum + a.amountCents, 0),
+      addons: b.addons || [],
       // Task-level status and escrow info for dispute awareness
       taskStatus: b.task.status,
       taskDisputedAt: b.task.disputedAt,

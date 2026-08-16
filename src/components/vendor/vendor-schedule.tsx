@@ -47,6 +47,9 @@ export interface VendorScheduleItem {
   verificationPhotoCount: number;
   verificationPhotos?: { id: string; fileUrl: string; thumbnailUrl?: string | null; uploadedBy: string; isVerified: boolean }[];
   assignedStaff?: { id: string; name: string; role: string; contact?: string | null } | null;
+  // Approved addon total for dynamic amount calculation
+  approvedAddonsTotal: number;
+  addons?: { id: string; description: string; amountCents: number; status: string }[];
   // Task-level status and escrow for dispute awareness
   taskStatus?: string | null;
   taskDisputedAt?: string | null;
@@ -242,8 +245,13 @@ function BookingCard({
       <div className="flex items-center justify-between pt-3 border-t border-[var(--anna-border)]">
         <div className="flex items-center gap-3">
           <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-            {formatSgd(item.amountCents)}
+            {formatSgd(item.amountCents + (item.approvedAddonsTotal || 0))}
           </span>
+          {(item.approvedAddonsTotal || 0) > 0 && (
+            <span className="text-[10px] text-[var(--anna-sage-dark)] bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-md">
+              incl. {formatSgd(item.approvedAddonsTotal || 0)} addons
+            </span>
+          )}
           {/* Show assigned staff for all vendor types */}
           {item.assignedStaff && (
             <span className="text-[10px] text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-2 py-0.5 rounded-md flex items-center gap-1">
