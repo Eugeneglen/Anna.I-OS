@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { VendorType } from "@prisma/client"
 
 const assignStaffSchema = z.object({
   staffId: z.string().min(1),
@@ -26,27 +25,20 @@ export async function PATCH(
 
     const { staffId } = parsed.data
 
-    // Verify vendor is SME
+    // Verify vendor exists
     const vendor = await db.vendor.findUnique({
       where: { id: vendorId },
-      select: { id: true, vendorType: true },
+      select: { id: true },
     })
 
     if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
     }
 
-    if (vendor.vendorType !== VendorType.SME) {
-      return NextResponse.json(
-        { error: "Staff assignment is only available for SME vendors" },
-        { status: 403 }
-      )
-    }
-
     // Verify booking belongs to this vendor
     const booking = await db.booking.findUnique({
       where: { id: bookingId },
-      select: { id: true, vendorId: true },
+      select: { id: true, vendorId: true, status: true },
     })
 
     if (!booking) {
@@ -60,10 +52,19 @@ export async function PATCH(
       )
     }
 
-    // Verify staff belongs to this vendor
+    // Allow staff assignment on assigned, accepted, or in_progress bookings
+    const allowedStatuses = ["assigned", "accepted", "in_progress"]
+    if (!allowedStatuses.includes(booking.status)) {
+      return NextResponse.json(
+        { error: "Cannot assign staff to a completed or cancelled booking" },
+        { status: 409 }
+      )
+    }
+
+    // Verify staff belongs to this vendor and is active
     const staff = await db.vendorStaff.findUnique({
       where: { id: staffId },
-      select: { id: true, vendorId: true, name: true, role: true, isActive: true },
+      select: { id: true, vendorId: true, name: true, role: true, contact: true, isActive: true },
     })
 
     if (!staff || staff.vendorId !== vendorId) {

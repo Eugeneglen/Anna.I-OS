@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -45,6 +52,7 @@ import {
   Wallet,
   Loader2,
   Copy,
+  UserPlus,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -57,6 +65,17 @@ interface VendorTaskDetailProps {
   onAction: (bookingId: string, action: string, payload?: string) => void;
   isActionPending?: boolean;
   vendorId: string;
+  /** Called after staff assignment succeeds — parent should refetch schedule */
+  onStaffAssigned?: () => void;
+}
+
+// ─── Types for staff picker ──────────────────────────────
+
+interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+  isActive: boolean;
 }
 
 // ─── Status badge styles ──────────────────────────────────
@@ -138,21 +157,102 @@ function VendorTaskDetailContent({
   onAction,
   isActionPending,
   vendorId,
+  onStaffAssigned,
 }: {
   booking: VendorScheduleItem;
   vendorInfo: VendorInfo;
   onAction: (bookingId: string, action: string) => void;
   isActionPending: boolean;
   vendorId: string;
+  onStaffAssigned?: () => void;
 }) {
   const actionConfig = getActionConfig(booking.status);
   const action = actionConfig.primary;
   const secondaryAction = actionConfig.secondary;
   const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
   const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
+
+  // Can assign/reassign staff when booking is assigned, accepted, or in_progress
+  const canAssignStaff = ["assigned", "accepted", "in_progress"].includes(booking.status);
+
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+
+  // Staff assignment state
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  const [isAssigningStaff, setIsAssigningStaff] = useState(false);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+
+  // Fetch vendor's staff list for the picker
+  useEffect(() => {
+    if (!vendorId || !canAssignStaff) return;
+
+    let cancelled = false;
+    setIsLoadingStaff(true);
+
+    (async () => {
+      try {
+        const res = await fetch("/api/vendor/staff");
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) {
+          const members: StaffMember[] = (json.staff ?? []).map((s: { id: string; name: string; role: string; isActive: boolean }) => ({
+            id: s.id,
+            name: s.name,
+            role: s.role,
+            isActive: s.isActive,
+          }));
+          setStaffList(members);
+        }
+      } catch {
+        // Silently fail — staff list is non-critical
+      } finally {
+        if (!cancelled) setIsLoadingStaff(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [vendorId, canAssignStaff]);
+
+  // When a booking already has staff, pre-select them
+  useEffect(() => {
+    if (booking.assignedStaff) {
+      setSelectedStaffId(booking.assignedStaff.id);
+    } else {
+      setSelectedStaffId("");
+    }
+  }, [booking.assignedStaff]);
+
+  const handleAssignStaff = async () => {
+    if (!selectedStaffId || isAssigningStaff) return;
+    setIsAssigningStaff(true);
+
+    try {
+      const res = await fetch(
+        `/api/vendors/${vendorId}/bookings/${booking.id}/assign-staff`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ staffId: selectedStaffId }),
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error || "Failed to assign staff");
+        return;
+      }
+      const json = await res.json();
+      const staffName = json.booking?.assignedStaff?.name || "Staff";
+      toast.success(`${staffName} assigned to this job`);
+      onStaffAssigned?.();
+    } catch {
+      toast.error("Failed to assign staff");
+    } finally {
+      setIsAssigningStaff(false);
+    }
+  };
 
   const handleShare = async () => {
     if (isSharing) return;
@@ -176,6 +276,8 @@ function VendorTaskDetailContent({
       setIsSharing(false);
     }
   };
+
+  const activeStaff = staffList.filter((s) => s.isActive);
 
   return (
     <div className="p-6 space-y-6 anna-fade-in">
@@ -352,8 +454,110 @@ function VendorTaskDetailContent({
         </div>
       </div>
 
-      {/* Assigned staff — visible for both MICRO & SME vendors */}
-      {booking.assignedStaff && (
+      {/* ── Staff Assignment Section ── */}
+      {canAssignStaff && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            <UserPlus size={12} className="inline mr-1" />
+            Assign Staff
+          </h4>
+          <div className="bg-[var(--anna-bg)] rounded-2xl p-4 space-y-3">
+            {activeStaff.length === 0 ? (
+              <div className="text-center py-2">
+                <p className="text-xs text-[var(--anna-muted)]">
+                  No staff members in your roster.
+                </p>
+                <p className="text-[10px] text-[var(--anna-muted)] mt-1">
+                  Add staff from the Staff Roster page first.
+                </p>
+              </div>
+            ) : (
+              <>
+                <Select
+                  value={selectedStaffId}
+                  onValueChange={setSelectedStaffId}
+                  disabled={isLoadingStaff || isAssigningStaff}
+                >
+                  <SelectTrigger className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] h-10 text-sm">
+                    <SelectValue placeholder={isLoadingStaff ? "Loading staff…" : "Select a staff member"} />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {/* Un-assign option */}
+                    {booking.assignedStaff && (
+                      <SelectItem value="__unassign__" className="text-[var(--anna-muted)]">
+                        <span className="italic">— Remove assignment —</span>
+                      </SelectItem>
+                    )}
+                    {activeStaff.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-[var(--anna-sage-light)] flex items-center justify-center">
+                            <User size={10} className="text-[var(--anna-sage-dark)]" />
+                          </div>
+                          <span>{staff.name}</span>
+                          {staff.role !== "staff" && (
+                            <span className="text-[10px] text-[var(--anna-muted)]">
+                              ({staff.role})
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedStaffId === "__unassign__") {
+                      // Un-assign: send empty body (we'll handle in API)
+                      setSelectedStaffId("");
+                      toast.success("Staff removed from this job");
+                      onStaffAssigned?.();
+                      return;
+                    }
+                    handleAssignStaff();
+                  }}
+                  disabled={!selectedStaffId || selectedStaffId === booking.assignedStaff?.id || isAssigningStaff || isLoadingStaff}
+                  className="rounded-xl h-9 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
+                >
+                  {isAssigningStaff ? (
+                    <Loader2 size={12} className="mr-1.5 animate-spin" />
+                  ) : (
+                    <UserPlus size={12} className="mr-1.5" />
+                  )}
+                  {booking.assignedStaff && selectedStaffId === booking.assignedStaff.id
+                    ? "Current Assignment"
+                    : booking.assignedStaff
+                      ? "Reassign Staff"
+                      : "Assign Staff"}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Assigned staff info (read-only badge, visible after assignment) */}
+      {booking.assignedStaff && canAssignStaff && (
+        <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3 flex items-center gap-2 border border-[var(--anna-sage)]/15">
+          <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+            <User size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[var(--anna-slate)]">
+              {booking.assignedStaff.name}
+            </p>
+            <p className="text-[10px] text-[var(--anna-muted)]">
+              Currently assigned to this job
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Assigned staff — completed/cancelled bookings (read-only display) */}
+      {!canAssignStaff && booking.assignedStaff && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Assigned Staff
@@ -366,23 +570,25 @@ function VendorTaskDetailContent({
               {booking.assignedStaff.name}
             </span>
           </div>
-          {["accepted", "in_progress"].includes(booking.status) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              disabled={isSharing}
-              className="mt-2 rounded-xl h-8 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
-            >
-              {isSharing ? (
-                <Loader2 size={12} className="mr-1.5 animate-spin" />
-              ) : (
-                <Copy size={12} className="mr-1.5" />
-              )}
-              {shareUrl ? "Copy Link" : "Share Job Link"}
-            </Button>
-          )}
         </div>
+      )}
+
+      {/* Share Job Link — visible when staff is assigned + booking is accepted/in_progress */}
+      {booking.assignedStaff && ["accepted", "in_progress"].includes(booking.status) && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleShare}
+          disabled={isSharing}
+          className="w-full rounded-xl h-10 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
+        >
+          {isSharing ? (
+            <Loader2 size={12} className="mr-1.5 animate-spin" />
+          ) : (
+            <Copy size={12} className="mr-1.5" />
+          )}
+          {shareUrl ? "Copy Link Again" : "Share Job Link via WhatsApp"}
+        </Button>
       )}
 
       {/* Photo upload (Before / After) */}
@@ -548,6 +754,7 @@ export function VendorTaskDetail({
   onAction,
   isActionPending = false,
   vendorId,
+  onStaffAssigned,
 }: VendorTaskDetailProps) {
   const isMobile = useIsMobile();
 
@@ -562,6 +769,7 @@ export function VendorTaskDetail({
             onAction={onAction}
             isActionPending={isActionPending}
             vendorId={vendorId}
+            onStaffAssigned={onStaffAssigned}
           />
         </div>
       )}
@@ -581,6 +789,7 @@ export function VendorTaskDetail({
                 onAction={onAction}
                 isActionPending={isActionPending}
                 vendorId={vendorId}
+                onStaffAssigned={onStaffAssigned}
               />
             )}
           </SheetContent>

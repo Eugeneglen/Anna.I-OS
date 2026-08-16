@@ -496,6 +496,11 @@ export default function VendorSchedulePage() {
         }}
         isActionPending={actionMutation.isPending}
         vendorId={vendorId}
+        onStaffAssigned={() => {
+          // Refetch schedule + dashboard to pick up the staff assignment
+          queryClient.invalidateQueries({ queryKey: ["vendor-dashboard", vendorId] });
+          queryClient.invalidateQueries({ queryKey: ["vendor-schedule", vendorId] });
+        }}
       />
 
       {/* Complete Work Dialog */}

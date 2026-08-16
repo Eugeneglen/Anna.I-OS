@@ -13,7 +13,8 @@ export async function GET(
       include: {
         task: {
           include: {
-            household: { select: { address: true } },
+            household: { select: { name: true, address: true, unitNumber: true } },
+            jobType: { select: { name: true, description: true } },
           },
         },
         vendor: {
@@ -21,12 +22,14 @@ export async function GET(
             name: true,
             companyName: true,
             avatarUrl: true,
+            phone: true,
           },
         },
         assignedStaff: {
           select: {
             name: true,
             role: true,
+            contact: true,
           },
         },
       },
@@ -45,14 +48,23 @@ export async function GET(
         status: booking.status,
         scheduledStart: booking.scheduledStart,
         scheduledEnd: booking.scheduledEnd,
+        actualStart: booking.actualStart,
+        actualEnd: booking.actualEnd,
         category: booking.task.category,
         instructions: booking.task.instructions,
+        amountCents: booking.task.amountCents,
         taskStatus: booking.task.status,
         address: booking.task.household?.address || null,
+        unitNumber: booking.task.household?.unitNumber || null,
+        householdName: booking.task.household?.name || null,
+        serviceName: booking.task.jobType?.name || null,
+        serviceDescription: booking.task.jobType?.description || null,
         vendorName: booking.vendor.companyName || booking.vendor.name,
         vendorLogo: booking.vendor.avatarUrl || null,
+        vendorPhone: booking.vendor.phone || null,
         staffName: booking.assignedStaff?.name || null,
         staffRole: booking.assignedStaff?.role || null,
+        staffContact: booking.assignedStaff?.contact || null,
       },
     });
   } catch (error) {

@@ -249,8 +249,8 @@ function BookingCard({
           <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
             {formatSgd(item.amountCents)}
           </span>
-          {/* SME: show assigned staff */}
-          {vendor.vendorType === "SME" && item.assignedStaff && (
+          {/* Show assigned staff for all vendor types */}
+          {item.assignedStaff && (
             <span className="text-[10px] text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-2 py-0.5 rounded-md flex items-center gap-1">
               <User size={10} />
               {item.assignedStaff.name}
