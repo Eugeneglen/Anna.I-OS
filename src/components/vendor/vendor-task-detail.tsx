@@ -308,6 +308,11 @@ function VendorTaskDetailContent({
     }
   };
 
+  // Helper: build the share URL using the browser's own origin so it
+  // always matches what the user can actually reach (works in sandbox,
+  // reverse-proxy, and production environments alike).
+  const buildShareUrl = (token: string) => `${window.location.origin}/j/${token}`;
+
   // Generate share link (called once, then cached in state)
   const handleGenerateLink = async () => {
     if (isSharing) return;
@@ -319,7 +324,7 @@ function VendorTaskDetailContent({
       );
       if (!res.ok) return;
       const json = await res.json();
-      const url: string = json.shareUrl;
+      const url: string = buildShareUrl(json.token);
       setShareUrl(url);
       setShareGenerated(true);
     } catch {
@@ -341,7 +346,7 @@ function VendorTaskDetailContent({
         );
         if (!res.ok) return;
         const json = await res.json();
-        url = json.shareUrl;
+        url = buildShareUrl(json.token);
         setShareUrl(url);
         setShareGenerated(true);
       } catch {
@@ -390,7 +395,7 @@ function VendorTaskDetailContent({
         );
         if (!res.ok) return;
         const json = await res.json();
-        url = json.shareUrl;
+        url = buildShareUrl(json.token);
         setShareUrl(url);
         setShareGenerated(true);
       } catch {
