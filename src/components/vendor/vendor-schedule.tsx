@@ -46,7 +46,7 @@ export interface VendorScheduleItem {
   address: string;
   verificationPhotoCount: number;
   verificationPhotos?: { id: string; fileUrl: string; thumbnailUrl?: string | null; uploadedBy: string; isVerified: boolean }[];
-  assignedStaff?: { id: string; name: string; role: string } | null;
+  assignedStaff?: { id: string; name: string; role: string; contact?: string | null } | null;
   // Task-level status and escrow for dispute awareness
   taskStatus?: string | null;
   taskDisputedAt?: string | null;

@@ -53,7 +53,7 @@ interface TodayJob {
   householdName: string;
   address: string;
   unitNumber?: string | null;
-  assignedStaff?: { id: string; name: string } | null;
+  assignedStaff?: { id: string; name: string; contact?: string | null } | null;
 }
 
 interface DashboardResponse {
@@ -450,7 +450,7 @@ export default function VendorSchedulePage() {
                             address: job.address,
                             verificationPhotoCount: 0,
                             assignedStaff: job.assignedStaff
-                              ? { id: job.assignedStaff.id, name: job.assignedStaff.name, role: "staff" }
+                              ? { id: job.assignedStaff.id, name: job.assignedStaff.name, role: "staff", contact: job.assignedStaff.contact }
                               : null,
                           });
                           setSelectedVendor(vendorInfo);

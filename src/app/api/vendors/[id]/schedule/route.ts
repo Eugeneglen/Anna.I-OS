@@ -95,6 +95,7 @@ export async function GET(
             id: true,
             name: true,
             role: true,
+            contact: true,
           },
         },
       },

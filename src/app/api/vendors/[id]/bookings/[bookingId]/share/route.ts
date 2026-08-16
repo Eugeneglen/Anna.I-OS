@@ -29,7 +29,7 @@ export async function POST(
       const existing = await db.booking.findUnique({
         where: { id: bookingId },
         include: {
-          assignedStaff: { select: { id: true, name: true, role: true } },
+          assignedStaff: { select: { id: true, name: true, role: true, contact: true } },
           task: { select: { id: true, category: true } },
         },
       });
@@ -51,7 +51,7 @@ export async function POST(
         sharedAt: new Date(),
       },
       include: {
-        assignedStaff: { select: { id: true, name: true, role: true } },
+        assignedStaff: { select: { id: true, name: true, role: true, contact: true } },
         task: { select: { id: true, category: true } },
       },
     });

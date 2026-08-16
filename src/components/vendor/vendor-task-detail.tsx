@@ -53,6 +53,10 @@ import {
   Loader2,
   Copy,
   UserPlus,
+  Send,
+  Link2,
+  Phone,
+  MessageSquare,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -176,6 +180,7 @@ function VendorTaskDetailContent({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+  const [shareGenerated, setShareGenerated] = useState(false);
 
   // Staff assignment state
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -252,7 +257,8 @@ function VendorTaskDetailContent({
     }
   };
 
-  const handleShare = async () => {
+  // Generate share link (called once, then cached in state)
+  const handleGenerateLink = async () => {
     if (isSharing) return;
     setIsSharing(true);
     try {
@@ -264,15 +270,85 @@ function VendorTaskDetailContent({
       const json = await res.json();
       const url: string = json.shareUrl;
       setShareUrl(url);
-      await navigator.clipboard.writeText(url);
-      toast.success(
-        `Link copied! Share it with ${booking.assignedStaff!.name}`
-      );
+      setShareGenerated(true);
     } catch {
       toast.error("Failed to generate share link");
     } finally {
       setIsSharing(false);
     }
+  };
+
+  // Send job link via WhatsApp
+  const handleSendWhatsApp = async () => {
+    let url = shareUrl;
+    if (!url) {
+      // Generate link first
+      try {
+        const res = await fetch(
+          `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+          { method: "POST" }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        url = json.shareUrl;
+        setShareUrl(url);
+        setShareGenerated(true);
+      } catch {
+        toast.error("Failed to generate share link");
+        return;
+      }
+    }
+
+    const staffContact = booking.assignedStaff?.contact;
+    const staffName = booking.assignedStaff?.name;
+    // Build WhatsApp message
+    const message = encodeURIComponent(
+      `Hi ${staffName}, here's your job link:\n\n${url}\n\nPlease check the job details and arrive at the scheduled time.`
+    );
+
+    if (staffContact) {
+      // Clean phone number: remove spaces, dashes, parentheses, leading + or 0
+      let phone = staffContact.replace(/[\s\-()]/g, "");
+      if (phone.startsWith("+") && !phone.startsWith("+65")) {
+        phone = phone.substring(1);
+      }
+      if (phone.startsWith("0")) {
+        phone = "65" + phone.substring(1);
+      }
+      if (!phone.startsWith("+") && !phone.startsWith("65") && phone.length === 8) {
+        phone = "65" + phone;
+      }
+      const waPhone = phone.startsWith("+") ? phone.substring(1) : phone;
+      window.open(`https://wa.me/${waPhone}?text=${message}`, "_blank");
+    } else {
+      // No phone — just copy the link
+      await navigator.clipboard.writeText(url);
+      toast.success("No phone on file — link copied to clipboard");
+    }
+    toast.success(`Job link sent to ${staffName} via WhatsApp`);
+  };
+
+  // Copy link to clipboard
+  const handleCopyLink = async () => {
+    let url = shareUrl;
+    if (!url) {
+      try {
+        const res = await fetch(
+          `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+          { method: "POST" }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        url = json.shareUrl;
+        setShareUrl(url);
+        setShareGenerated(true);
+      } catch {
+        toast.error("Failed to generate share link");
+        return;
+      }
+    }
+    await navigator.clipboard.writeText(url);
+    toast.success("Job link copied to clipboard");
   };
 
   const activeStaff = staffList.filter((s) => s.isActive);
@@ -571,22 +647,92 @@ function VendorTaskDetailContent({
         </div>
       )}
 
-      {/* Share Job Link — visible when staff is assigned + booking is accepted/in_progress */}
+      {/* ── Send Job Link to Staff ── visible when staff is assigned + booking is accepted */}
       {booking.assignedStaff && booking.status === "accepted" && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleShare}
-          disabled={isSharing}
-          className="w-full rounded-xl h-10 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
-        >
-          {isSharing ? (
-            <Loader2 size={12} className="mr-1.5 animate-spin" />
-          ) : (
-            <Copy size={12} className="mr-1.5" />
-          )}
-          {shareUrl ? "Copy Link Again" : "Share Job Link via WhatsApp"}
-        </Button>
+        <div className="bg-[var(--anna-sage-light)]/20 rounded-2xl border border-[var(--anna-sage)]/20 overflow-hidden">
+          <div className="px-4 py-3 bg-[var(--anna-sage)]/10">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center">
+                <Send size={13} className="text-white" />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-[var(--anna-sage-dark)]">
+                  Send Job Link to Staff
+                </h4>
+                <p className="text-[10px] text-[var(--anna-sage-dark)]/70">
+                  Share the job details with {booking.assignedStaff.name}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+            {/* Staff info */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0">
+                <User size={15} className="text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                  {booking.assignedStaff.name}
+                </p>
+                {booking.assignedStaff.contact && (
+                  <p className="text-xs text-[var(--anna-muted)] flex items-center gap-1">
+                    <Phone size={10} />
+                    {booking.assignedStaff.contact}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSendWhatsApp}
+                disabled={isSharing}
+                className="flex-1 rounded-xl h-10 text-xs bg-[#25D366] hover:bg-[#1EBE57] text-white font-semibold"
+              >
+                {isSharing ? (
+                  <Loader2 size={13} className="mr-1.5 animate-spin" />
+                ) : (
+                  <MessageSquare size={13} className="mr-1.5" />
+                )}
+                WhatsApp
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyLink}
+                disabled={isSharing}
+                className="flex-1 rounded-xl h-10 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)] font-medium"
+              >
+                <Link2 size={13} className="mr-1.5" />
+                Copy Link
+              </Button>
+            </div>
+
+            {/* Generated link preview */}
+            {shareGenerated && shareUrl && (
+              <div className="bg-[var(--anna-bg)] rounded-lg px-3 py-2 flex items-center gap-2">
+                <Link2 size={11} className="text-[var(--anna-muted)] flex-shrink-0" />
+                <p className="text-[10px] text-[var(--anna-muted)] truncate flex-1 font-mono">
+                  {shareUrl}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareUrl);
+                    toast.success("Link copied");
+                  }}
+                >
+                  <Copy size={10} />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Photo upload (Before / After) */}

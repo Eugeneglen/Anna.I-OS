@@ -45,7 +45,7 @@ export async function GET() {
               household: { select: { name: true, address: true, unitNumber: true } },
             },
           },
-          assignedStaff: { select: { id: true, name: true } },
+          assignedStaff: { select: { id: true, name: true, contact: true } },
         },
         orderBy: { scheduledStart: "asc" },
       }),
@@ -134,7 +134,7 @@ export async function GET() {
       householdName: b.task.household.name,
       address: b.task.household.address,
       unitNumber: b.task.household.unitNumber,
-      assignedStaff: b.assignedStaff ? { id: b.assignedStaff.id, name: b.assignedStaff.name } : null,
+      assignedStaff: b.assignedStaff ? { id: b.assignedStaff.id, name: b.assignedStaff.name, contact: b.assignedStaff.contact } : null,
     }));
 
     return NextResponse.json({
