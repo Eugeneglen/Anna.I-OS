@@ -26,6 +26,10 @@ export async function GET(
                 status: true,
               },
             },
+            addons: true,
+            assignedStaff: {
+              select: { id: true, name: true, role: true, contact: true },
+            },
           },
         },
         verificationPhotos: true,

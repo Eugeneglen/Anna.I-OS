@@ -578,6 +578,96 @@ export function BookingDetailSheet({
                   </>
                 )}
 
+                {/* ── Booking Add-ons ── */}
+                {(() => {
+                  const bookingAddons = (booking?.addons as Array<{
+                    id: string;
+                    description: string;
+                    amountCents: number;
+                    status: string;
+                    createdAt: string;
+                    approvedAt?: string | null;
+                    rejectedAt?: string | null;
+                  }>) || [];
+                  if (bookingAddons.length === 0) return null;
+                  const approvedTotal = bookingAddons
+                    .filter((a) => a.status === "approved")
+                    .reduce((sum, a) => sum + a.amountCents, 0);
+                  const baseAmount = task?.amountCents as number || 0;
+                  return (
+                    <>
+                      <Separator />
+                      <section>
+                        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-3 flex items-center gap-1.5">
+                          <DollarSign size={12} />
+                          Add-on Charges
+                          <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-[var(--anna-bg)] px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                            {bookingAddons.length}
+                          </span>
+                        </h4>
+                        <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] p-4 space-y-3">
+                          {/* Addon list */}
+                          <div className="space-y-2">
+                            {bookingAddons.map((addon) => (
+                              <div key={addon.id} className="flex items-center justify-between">
+                                <div className="flex-1 min-w-0 mr-3">
+                                  <p className="text-xs text-[var(--anna-slate)] truncate">{addon.description}</p>
+                                  <p className="text-[10px] text-[var(--anna-muted)]">
+                                    {addon.status === "pending"
+                                      ? "Awaiting approval"
+                                      : addon.status === "approved"
+                                        ? `Approved ${addon.approvedAt ? formatDateTime(addon.approvedAt) : ""}`
+                                        : `Rejected ${addon.rejectedAt ? formatDateTime(addon.rejectedAt) : ""}`}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Badge
+                                    variant="secondary"
+                                    className={cn(
+                                      "text-[9px] px-1.5 py-0 h-5 border-0",
+                                      addon.status === "pending"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : addon.status === "approved"
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-red-100 text-red-600"
+                                    )}
+                                  >
+                                    {addon.status}
+                                  </Badge>
+                                  <span className="text-xs font-bold text-[var(--anna-slate)] font-data">
+                                    {formatSgd(addon.amountCents)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Total breakdown */}
+                          {approvedTotal > 0 && (
+                            <>
+                              <Separator />
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-[var(--anna-muted)]">Base amount</span>
+                                  <span className="font-data">{formatSgd(baseAmount)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-[var(--anna-muted)]">Approved add-ons</span>
+                                  <span className="font-data text-emerald-700">+{formatSgd(approvedTotal)}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs pt-1 border-t border-[var(--anna-border)]">
+                                  <span className="font-semibold text-[var(--anna-slate)]">Total</span>
+                                  <span className="font-data font-bold text-[var(--anna-slate)]">{formatSgd(baseAmount + approvedTotal)}</span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </section>
+                    </>
+                  );
+                })()}
+
                 <Separator />
 
                 {/* ── Escrow Section ── */}
