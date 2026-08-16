@@ -81,6 +81,9 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   ANOMALY_VERIFICATION_MISSING: "Anomaly: No Verify",
   ANOMALY_RATING_DROP: "Anomaly: Rating Drop",
   ANOMALY_ESCROW_DISPUTED: "Anomaly: Escrow",
+  ADDON_REQUESTED: "Addon Requested",
+  ADDON_APPROVED: "Addon Approved",
+  ADDON_REJECTED: "Addon Rejected",
 };
 
 export default function NotificationsPage() {

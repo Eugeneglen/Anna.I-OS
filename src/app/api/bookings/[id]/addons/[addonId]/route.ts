@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getHouseholdSession } from "@/lib/household-auth";
+import {
+  NotificationChannel,
+  NotificationEventType,
+  NotificationStatus,
+  RecipientType,
+} from "@prisma/client";
 
 const patchAddonSchema = z.object({
   action: z.enum(["approve", "reject"]),
@@ -93,6 +99,55 @@ export async function PATCH(
         approvedById: session.memberId,
         approvedAt: action === "approve" ? now : null,
         rejectedAt: action === "reject" ? now : null,
+      },
+    });
+
+    // ── Notify vendor about the approval/rejection ──
+    const amountStr = `SGD $${(addon.amountCents / 100).toFixed(2)}`;
+    const isApproved = action === "approve";
+
+    // Fetch household name for vendor notification context
+    const household = await db.household.findUnique({
+      where: { id: addon.booking.task.householdId },
+      select: { name: true },
+    });
+
+    const householdName = household?.name || "Customer";
+
+    await db.notification.create({
+      data: {
+        householdId: addon.booking.task.householdId,
+        vendorId: addon.booking.vendorId,
+        recipientType: RecipientType.VENDOR,
+        channel: NotificationChannel.WEB_PUSH,
+        eventType: isApproved
+          ? NotificationEventType.ADDON_APPROVED
+          : NotificationEventType.ADDON_REJECTED,
+        title: isApproved
+          ? `Addon Approved — ${amountStr}`
+          : `Addon Rejected — ${amountStr}`,
+        body: isApproved
+          ? `${householdName} has approved the additional charge: "${addon.description}"`
+          : `${householdName} has rejected the additional charge: "${addon.description}"`,
+        status: NotificationStatus.PENDING,
+        referenceType: "booking",
+        referenceId: bookingId,
+      },
+    });
+
+    // Also update the member's original addon notification status to READ
+    await db.notification.updateMany({
+      where: {
+        householdId: addon.booking.task.householdId,
+        recipientType: RecipientType.HOUSEHOLD_MEMBER,
+        eventType: NotificationEventType.ADDON_REQUESTED,
+        referenceType: "task",
+        referenceId: addon.booking.taskId,
+        status: NotificationStatus.PENDING,
+      },
+      data: {
+        status: NotificationStatus.READ,
+        readAt: now,
       },
     });
 

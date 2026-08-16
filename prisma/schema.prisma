@@ -118,6 +118,9 @@ enum NotificationEventType {
   VENDOR_ACCEPTED
   VENDOR_SCHEDULED
   VENDOR_REJECTED
+  ADDON_REQUESTED
+  ADDON_APPROVED
+  ADDON_REJECTED
 }
 
 enum NotificationStatus {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCheck, CheckCircle2, AlertTriangle, Wallet, Clock, ShieldCheck, XCircle, Sparkles, RotateCcw } from "lucide-react";
+import { Bell, CheckCheck, CheckCircle2, AlertTriangle, Wallet, Clock, ShieldCheck, XCircle, Sparkles, RotateCcw, ReceiptText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,21 @@ const EVENT_STYLES: Record<string, { icon: React.ElementType; color: string; bg:
     icon: Sparkles,
     color: "text-[var(--anna-sage-dark)]",
     bg: "bg-[var(--anna-sage-light)]/30 border-[var(--anna-sage)]/15",
+  },
+  ADDON_APPROVED: {
+    icon: CheckCircle2,
+    color: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-800/30",
+  },
+  ADDON_REJECTED: {
+    icon: XCircle,
+    color: "text-red-500 dark:text-red-400",
+    bg: "bg-red-50 dark:bg-red-900/20 border-red-200/50 dark:border-red-800/30",
+  },
+  ADDON_REQUESTED: {
+    icon: ReceiptText,
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-900/20 border-amber-200/50 dark:border-amber-800/30",
   },
 };
 

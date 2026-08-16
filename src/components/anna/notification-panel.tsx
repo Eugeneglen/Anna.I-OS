@@ -34,7 +34,10 @@ import {
   HourglassIcon,
   TrendingDown,
   Landmark,
-  ArrowRight,
+  Receipt,
+  CheckCircle,
+  XCircle,
+  ReceiptText,
 } from "lucide-react";
 import type { Task } from "@/lib/types";
 
@@ -72,6 +75,9 @@ const EVENT_ICONS: Record<string, React.ElementType> = {
   ANOMALY_VERIFICATION_MISSING: Camera,
   ANOMALY_RATING_DROP: TrendingDown,
   ANOMALY_ESCROW_DISPUTED: Landmark,
+  ADDON_REQUESTED: ReceiptText,
+  ADDON_APPROVED: CheckCircle,
+  ADDON_REJECTED: XCircle,
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -96,7 +102,16 @@ const EVENT_COLORS: Record<string, string> = {
   ANOMALY_VERIFICATION_MISSING: "text-orange-600 dark:text-orange-400",
   ANOMALY_RATING_DROP: "text-orange-500 dark:text-orange-400",
   ANOMALY_ESCROW_DISPUTED: "text-red-700 dark:text-red-400",
+  ADDON_REQUESTED: "text-amber-600 dark:text-amber-400",
+  ADDON_APPROVED: "text-emerald-600 dark:text-emerald-400",
+  ADDON_REJECTED: "text-red-500 dark:text-red-400",
 };
+
+/** Event types that have an inline action button */
+const ACTIONABLE_EVENTS = new Set([
+  "REBOOKING_PROMPT",
+  "ADDON_REQUESTED",
+]);
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -186,6 +201,16 @@ export function NotificationPanel() {
       return;
     }
 
+    // Addon requested → close panel and open task detail where addon banner is
+    if (n.eventType === "ADDON_REQUESTED" && n.referenceType === "task" && n.referenceId) {
+      setNotificationPanelOpen(false);
+      setActiveTab("activity");
+      setTimeout(() => {
+        openTaskDetail({ id: n.referenceId } as Task);
+      }, 100);
+      return;
+    }
+
     // Anomaly notifications with a task reference → Activity tab + task detail
     if ((n.referenceType === "task" || n.referenceType === "anomaly") && n.referenceId) {
       setNotificationPanelOpen(false);
@@ -225,6 +250,15 @@ export function NotificationPanel() {
           }
         })
         .catch(() => {});
+    }
+
+    // Addon requested → navigate to task detail for approval
+    if (n.eventType === "ADDON_REQUESTED" && n.referenceType === "task" && n.referenceId) {
+      setNotificationPanelOpen(false);
+      setActiveTab("activity");
+      setTimeout(() => {
+        openTaskDetail({ id: n.referenceId } as Task);
+      }, 100);
     }
   }
 
@@ -351,6 +385,8 @@ function NotificationListContent({
               const Icon = EVENT_ICONS[n.eventType] || Bell;
               const colorClass = EVENT_COLORS[n.eventType] || "text-[var(--anna-muted)]";
               const isUnread = n.status === "PENDING";
+              const isAddonRequested = n.eventType === "ADDON_REQUESTED";
+              const isAddonResolved = n.eventType === "ADDON_APPROVED" || n.eventType === "ADDON_REJECTED";
 
               return (
                 <button
@@ -363,7 +399,11 @@ function NotificationListContent({
                 >
                   <div className={cn(
                     "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5",
-                    isUnread ? "bg-[var(--anna-white)] shadow-sm" : "bg-[var(--anna-bg)]"
+                    isAddonRequested && isUnread
+                      ? "bg-amber-100 dark:bg-amber-900/30"
+                      : isAddonResolved && isUnread
+                        ? "bg-emerald-100 dark:bg-emerald-900/30"
+                        : isUnread ? "bg-[var(--anna-white)] shadow-sm" : "bg-[var(--anna-bg)]"
                   )}>
                     <Icon size={14} className={colorClass} />
                   </div>
@@ -376,7 +416,10 @@ function NotificationListContent({
                         {n.title}
                       </p>
                       {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-[var(--anna-sage-dark)] flex-shrink-0 mt-1.5" />
+                        <span className={cn(
+                          "w-2 h-2 rounded-full flex-shrink-0 mt-1.5",
+                          isAddonRequested ? "bg-amber-500" : "bg-[var(--anna-sage-dark)]"
+                        )} />
                       )}
                     </div>
                     <p className="text-xs text-[var(--anna-muted)] mt-0.5 line-clamp-2">
@@ -385,6 +428,34 @@ function NotificationListContent({
                     <p className="text-[10px] text-[var(--anna-muted)] mt-1 font-data">
                       {formatRelativeTime(n.createdAt)}
                     </p>
+
+                    {/* ── Addon: Review & Approve button ── */}
+                    {isAddonRequested && onNotificationAction && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNotificationAction(n);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                      >
+                        <Receipt size={11} />
+                        Review &amp; Approve
+                      </button>
+                    )}
+
+                    {/* ── Addon resolved: show status badge ── */}
+                    {n.eventType === "ADDON_APPROVED" && (
+                      <span className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <CheckCircle size={10} /> Approved
+                      </span>
+                    )}
+                    {n.eventType === "ADDON_REJECTED" && (
+                      <span className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                        <XCircle size={10} /> Rejected
+                      </span>
+                    )}
+
                     {/* Action button for rebooking prompt */}
                     {n.eventType === "REBOOKING_PROMPT" && onNotificationAction && (
                       <button

@@ -74,7 +74,7 @@ export async function POST(
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
       include: {
-        task: { select: { id: true, householdId: true } },
+        task: { select: { id: true, householdId: true, category: true } },
         vendor: { select: { id: true, name: true, companyName: true } },
       },
     });
@@ -133,7 +133,7 @@ export async function POST(
     // ── Notify household members about the new charge ──
     const householdId = booking.task.householdId;
     const vendorName = booking.vendor.companyName || booking.vendor.name;
-    const amountStr = `$${(amountCents / 100).toFixed(2)}`;
+    const amountStr = `SGD $${(amountCents / 100).toFixed(2)}`;
 
     const members = await db.familyMember.findMany({
       where: { householdId },
@@ -141,20 +141,22 @@ export async function POST(
     });
 
     if (members.length > 0) {
-      const notifBody = `${vendorName} staff has submitted an additional charge: "${description}" for ${amountStr}. Please review and approve or reject.`;
+      // Title shows price prominently, body shows description
+      const notifTitle = `Additional Charge — ${amountStr}`;
+      const notifBody = `${vendorName}: ${description}`;
 
       await db.notification.createMany({
         data: members.map((m) => ({
           householdId,
           recipientType: RecipientType.HOUSEHOLD_MEMBER,
           memberId: m.id,
-          channel: NotificationChannel.WHATSAPP,
-          eventType: NotificationEventType.SYSTEM_ALERT,
-          title: "Additional Charge Request",
+          channel: NotificationChannel.WEB_PUSH,
+          eventType: NotificationEventType.ADDON_REQUESTED,
+          title: notifTitle,
           body: notifBody,
           status: NotificationStatus.PENDING,
-          referenceType: "booking",
-          referenceId: booking.id,
+          referenceType: "task",
+          referenceId: booking.task.id,
         })),
       });
     }
