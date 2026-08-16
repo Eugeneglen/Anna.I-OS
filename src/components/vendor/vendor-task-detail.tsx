@@ -352,8 +352,8 @@ function VendorTaskDetailContent({
         </div>
       </div>
 
-      {/* SME: assigned staff */}
-      {vendorInfo.vendorType === "SME" && booking.assignedStaff && (
+      {/* Assigned staff — visible for both MICRO & SME vendors */}
+      {booking.assignedStaff && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Assigned Staff
