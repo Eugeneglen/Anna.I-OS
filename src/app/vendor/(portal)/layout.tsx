@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   CalendarDays,
+  CalendarRange,
   Wallet,
   Settings,
   Menu,
@@ -73,6 +74,7 @@ export function useVendorLive() {
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/vendor/", icon: LayoutDashboard, exact: true },
   { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays },
+  { label: "Calendar", href: "/vendor/calendar", icon: CalendarRange },
   { label: "Earnings", href: "/vendor/earnings", icon: Wallet },
   { label: "Staff Roster", href: "/vendor/staff-roster", icon: Users },
   { label: "Settings", href: "/vendor/settings", icon: Settings },
