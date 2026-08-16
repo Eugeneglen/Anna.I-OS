@@ -1064,7 +1064,7 @@ export default function VendorSettingsPage() {
             onSubmit={createAddressMutation.mutate}
             submitLabel={editingAddress ? "Update Address" : "Add Address"}
             loading={createAddressMutation.isPending}
-            showPropertyTypeSelector={true}
+            showPropertyTypeSelector={false}
             showLabel={true}
           />
         </DialogContent>
