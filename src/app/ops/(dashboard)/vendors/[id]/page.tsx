@@ -16,10 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 import { CATEGORIES } from "@/lib/constants";
@@ -94,8 +93,6 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
     status: data.status,
   }));
   const [dirty, setDirty] = useState(false);
-  const [newStaffName, setNewStaffName] = useState("");
-  const [newStaffContact, setNewStaffContact] = useState("");
 
   const addresses: Address[] = Array.isArray(data.addresses)
     ? (data.addresses as Address[])
@@ -153,48 +150,6 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
     });
   }
 
-  const staffMutation = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
-      const res = await fetch(`/api/ops/vendors/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed");
-      return result;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ops-vendor", id] });
-      setNewStaffName("");
-      setNewStaffContact("");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  function addStaff() {
-    if (!newStaffName || !newStaffContact) return;
-    staffMutation.mutate({
-      staff: {
-        action: "add",
-        data: { name: newStaffName, contact: newStaffContact },
-      },
-    });
-  }
-
-  function removeStaff(staffId: string) {
-    staffMutation.mutate({
-      staff: { action: "remove", data: { id: staffId } },
-    });
-  }
-
-  function toggleStaff(staffId: string, isActive: boolean) {
-    staffMutation.mutate({
-      staff: { action: "toggle", data: { id: staffId, isActive } },
-    });
-  }
-
-  const staff = (data?.staff as Record<string, unknown>[]) || [];
   const zonesStr = Array.isArray(form.zones)
     ? (form.zones as string[]).join(", ")
     : "";
@@ -485,91 +440,6 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
               className={inputCls}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Staff Card */}
-      <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
-        <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-            Staff Roster
-          </h3>
-          <span className="font-data text-[10px] text-[var(--anna-muted)] bg-[var(--anna-sage-light)] px-1.5 py-0.5 rounded-md">
-            {staff.length}
-          </span>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
-              <Label className={labelCls}>Name</Label>
-              <Input
-                placeholder="Staff name"
-                value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div className="flex-1 space-y-1">
-              <Label className={labelCls}>Contact</Label>
-              <Input
-                placeholder="Phone or email"
-                value={newStaffContact}
-                onChange={(e) => setNewStaffContact(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={addStaff}
-              disabled={
-                !newStaffName ||
-                !newStaffContact ||
-                staffMutation.isPending
-              }
-              className="rounded-xl border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add
-            </Button>
-          </div>
-          <Separator className="bg-[var(--anna-border)]" />
-          {staff.length === 0 ? (
-            <p className="text-sm text-[var(--anna-muted)] text-center py-6">
-              No staff members yet
-            </p>
-          ) : (
-            <div className="space-y-1 max-h-60 overflow-y-auto anna-scroll">
-              {staff.map((s: Record<string, unknown>) => (
-                <div
-                  key={s.id as string}
-                  className="flex items-center gap-3 py-2 px-2 rounded-xl hover:bg-[var(--anna-sage-light)]/30 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
-                      {s.name as string}
-                    </p>
-                    <p className="text-xs text-[var(--anna-muted)]">
-                      {s.contact as string}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={s.isActive as boolean}
-                    onCheckedChange={(v) =>
-                      toggleStaff(s.id as string, v)
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-[var(--anna-error)] hover:bg-red-50"
-                    onClick={() => removeStaff(s.id as string)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
