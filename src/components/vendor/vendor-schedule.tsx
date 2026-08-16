@@ -50,6 +50,8 @@ export interface VendorScheduleItem {
   // Approved addon total for dynamic amount calculation
   approvedAddonsTotal: number;
   addons?: { id: string; description: string; amountCents: number; status: string }[];
+  // Customer-uploaded attachments from household
+  customerAttachments?: { id: string; fileType: string; fileUrl: string; thumbnailUrl?: string | null; fileName: string }[];
   // Task-level status and escrow for dispute awareness
   taskStatus?: string | null;
   taskDisputedAt?: string | null;

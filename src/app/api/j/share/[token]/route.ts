@@ -15,6 +15,7 @@ export async function GET(
           include: {
             household: { select: { name: true, address: true, unitNumber: true } },
             jobType: { select: { name: true, description: true } },
+            attachments: { select: { id: true, fileType: true, fileUrl: true, thumbnailUrl: true, fileName: true } },
           },
         },
         vendor: {
@@ -65,6 +66,8 @@ export async function GET(
         staffName: booking.assignedStaff?.name || null,
         staffRole: booking.assignedStaff?.role || null,
         staffContact: booking.assignedStaff?.contact || null,
+        // Customer-uploaded attachments (photos/videos from household)
+        customerAttachments: booking.task.attachments || [],
       },
     });
   } catch (error) {

@@ -41,6 +41,7 @@ import {
   Receipt,
   Plus,
   DollarSign,
+  Film,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -67,6 +68,7 @@ interface ShareBooking {
   staffName: string | null;
   staffRole: string | null;
   staffContact: string | null;
+  customerAttachments?: { id: string; fileType: string; fileUrl: string; thumbnailUrl?: string | null; fileName: string }[];
 }
 
 interface ShareData {
@@ -895,6 +897,56 @@ function JobDetailView({
             </div>
           )}
         </div>
+
+        {/* ── Customer Attachments (photos/videos from household) ── */}
+        {booking.customerAttachments && booking.customerAttachments.length > 0 && (
+          <div className="bg-[var(--anna-bg)] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              <ImageIcon size={12} />
+              Customer Attachments
+              <span className="ml-1 text-[9px] font-data text-[var(--anna-muted)] bg-white px-1.5 py-0.5 rounded-md border border-[var(--anna-border)]">
+                {booking.customerAttachments.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {booking.customerAttachments.map((att) =>
+                att.fileType === "PHOTO" ? (
+                  <a
+                    key={att.id}
+                    href={att.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] group hover:border-[var(--anna-sage)]/50 transition-colors"
+                  >
+                    <img
+                      src={att.thumbnailUrl || att.fileUrl}
+                      alt={att.fileName}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-1 left-1">
+                      <span className="text-[8px] font-bold px-1 py-0 h-4 rounded flex items-center bg-[var(--anna-sage)] text-white">
+                        Customer
+                      </span>
+                    </div>
+                  </a>
+                ) : (
+                  <a
+                    key={att.id}
+                    href={att.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="aspect-square rounded-xl border border-[var(--anna-border)] bg-white flex flex-col items-center justify-center gap-1 p-2 hover:border-[var(--anna-sage)]/50 transition-colors"
+                  >
+                    <Film size={18} className="text-[var(--anna-muted)]" />
+                    <span className="text-[9px] text-[var(--anna-muted)] text-center line-clamp-2">
+                      {att.fileName}
+                    </span>
+                  </a>
+                )
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Work Photos Section ── */}
         {!isCancelled && (

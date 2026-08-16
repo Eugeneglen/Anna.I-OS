@@ -57,6 +57,7 @@ import {
   Link2,
   Phone,
   MessageSquare,
+  Film,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -571,6 +572,56 @@ function VendorTaskDetailContent({
           </div>
         </div>
       </div>
+
+      {/* Customer-uploaded attachments (photos/videos) */}
+      {b.customerAttachments && b.customerAttachments.length > 0 && (
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+            <ImageIcon size={12} className="inline mr-1" />
+            Customer Attachments
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            {b.customerAttachments.map((att) =>
+              att.fileType === "PHOTO" ? (
+                <a
+                  key={att.id}
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] group hover:border-[var(--anna-sage)]/50 transition-colors"
+                >
+                  <img
+                    src={att.thumbnailUrl || att.fileUrl}
+                    alt={att.fileName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = "0.3";
+                    }}
+                  />
+                  <div className="absolute top-1 left-1">
+                    <Badge className="text-[8px] px-1 py-0 h-4 border-0 bg-[var(--anna-sage)] text-white">
+                      Customer
+                    </Badge>
+                  </div>
+                </a>
+              ) : (
+                <a
+                  key={att.id}
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="aspect-square rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] flex flex-col items-center justify-center gap-1 p-2 hover:border-[var(--anna-sage)]/50 transition-colors"
+                >
+                  <Film size={18} className="text-[var(--anna-muted)]" />
+                  <span className="text-[9px] text-[var(--anna-muted)] text-center line-clamp-2">
+                    {att.fileName}
+                  </span>
+                </a>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Scheduled / Actual times */}
       <div>

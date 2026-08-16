@@ -85,6 +85,9 @@ export async function GET(
               },
               take: 1,
             },
+            attachments: {
+              select: { id: true, fileType: true, fileUrl: true, thumbnailUrl: true, fileName: true },
+            },
           },
         },
         verificationPhotos: {
@@ -136,6 +139,8 @@ export async function GET(
         .filter((a) => a.status === "approved")
         .reduce((sum, a) => sum + a.amountCents, 0),
       addons: b.addons || [],
+      // Customer-uploaded attachments (photos/videos from household)
+      customerAttachments: b.task.attachments || [],
       // Task-level status and escrow info for dispute awareness
       taskStatus: b.task.status,
       taskDisputedAt: b.task.disputedAt,
