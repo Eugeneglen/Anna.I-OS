@@ -13,6 +13,8 @@ export async function GET(
     const statusParam = searchParams.get("status")
     const fromParam = searchParams.get("from")
     const toParam = searchParams.get("to")
+    const categoryParam = searchParams.get("category")
+    const searchParam = searchParams.get("search")
 
     // Parse comma-separated status filter
     const statuses = statusParam
@@ -50,6 +52,23 @@ export async function GET(
       if (from) scheduledFilter.gte = from
       if (to) scheduledFilter.lte = to
       where.scheduledStart = scheduledFilter
+    }
+
+    if (categoryParam) {
+      where.task = { ...where.task as Record<string, unknown>, category: categoryParam }
+    }
+
+    if (searchParam) {
+      where.task = {
+        ...where.task as Record<string, unknown>,
+        household: {
+          ...((where.task as Record<string, unknown>)?.household as Record<string, unknown> ?? {}),
+          OR: [
+            { name: { contains: searchParam, mode: "insensitive" } },
+            { address: { contains: searchParam, mode: "insensitive" } },
+          ],
+        },
+      }
     }
 
     // Fetch bookings with task details and photo counts
@@ -147,10 +166,25 @@ export async function GET(
       escrow: b.task.escrowEntries[0] ?? null,
     }))
 
+    // Count by status for filter pills (computed on unfiltered data)
+    const allBookings = await db.booking.findMany({
+      where: { vendorId: id },
+      select: { status: true },
+    })
+    const statusCounts = allBookings.reduce<Record<string, number>>((acc, b) => {
+      acc[b.status] = (acc[b.status] || 0) + 1
+      return acc
+    }, {})
+    const statusCountsArr = Object.entries(statusCounts).map(([status, count]) => ({
+      status,
+      count,
+    }))
+
     return NextResponse.json({
       vendor,
       schedule,
       total: schedule.length,
+      statusCounts: statusCountsArr,
     })
   } catch (error) {
     console.error("GET /api/vendors/[id]/schedule error:", error)

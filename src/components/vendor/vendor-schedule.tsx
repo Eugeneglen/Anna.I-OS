@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +21,11 @@ import {
   AlertTriangle,
   ShieldCheck,
   Wallet,
+  Search,
+  Filter,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ACTIVE_CATEGORIES } from "@/lib/constants";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -78,6 +81,7 @@ interface VendorScheduleResponse {
   vendor: VendorInfo;
   schedule: VendorScheduleItem[];
   total: number;
+  statusCounts: { status: string; count: number }[];
 }
 
 interface VendorScheduleProps {
@@ -88,15 +92,15 @@ interface VendorScheduleProps {
 
 // ─── Fetcher ─────────────────────────────────────────────
 
-async function fetchVendorSchedule(vendorId: string): Promise<VendorScheduleResponse> {
-  const res = await fetch(`/api/vendors/${vendorId}/schedule`);
+async function fetchVendorSchedule(vendorId: string, queryParams?: string): Promise<VendorScheduleResponse> {
+  const res = await fetch(`/api/vendors/${vendorId}/schedule${queryParams ? `?${queryParams}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch vendor schedule");
   return res.json();
 }
 
 // ─── Booking status helpers ──────────────────────────────
 
-type BookingTab = "upcoming" | "completed";
+type BookingTab = "all" | "upcoming" | "completed";
 
 function getBookingTab(status: string): BookingTab {
   if (status === "completed" || status === "cancelled") return "completed";
@@ -320,13 +324,30 @@ function ScheduleSkeleton() {
 // ─── Main Component ──────────────────────────────────────
 
 export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }: VendorScheduleProps) {
-  const [activeTab, setActiveTab] = useState<BookingTab>("upcoming");
+  const [activeTab, setActiveTab] = useState<BookingTab>("all");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Build query params for API
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (statusFilter) params.set("status", statusFilter);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    return params.toString();
+  }, [search, statusFilter, categoryFilter, fromDate, toDate]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["vendor-schedule", vendorId],
-    queryFn: () => fetchVendorSchedule(vendorId),
+    queryKey: ["vendor-schedule", vendorId, queryParams],
+    queryFn: () => fetchVendorSchedule(vendorId, queryParams),
     enabled: !!vendorId,
   });
 
@@ -362,106 +383,175 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
 
   const vendor = data?.vendor;
   const schedule = data?.schedule ?? [];
+  const statusCounts = data?.statusCounts ?? [];
 
-  const grouped = useMemo(() => {
-    const result = { upcoming: [], completed: [] } as Record<
-      BookingTab,
-      VendorScheduleItem[]
-    >;
-    for (const item of schedule) {
-      result[getBookingTab(item.status)].push(item);
+  // Client-side grouping based on active tab
+  const displayed = useMemo(() => {
+    if (activeTab === "all") return schedule;
+    return schedule.filter((item) => getBookingTab(item.status) === activeTab);
+  }, [schedule, activeTab]);
+
+  // Count active filters for badge
+  const activeFilterCount = [categoryFilter, fromDate, toDate].filter(Boolean).length;
+
+  function clearFilters() {
+    setCategoryFilter("");
+    setFromDate("");
+    setToDate("");
+  }
+
+  // When status pill is clicked, sync with statusFilter
+  const handleStatusPill = (status: string) => {
+    if (status === statusFilter) {
+      setStatusFilter("");
+    } else {
+      setStatusFilter(status);
     }
-    // Sort each group by scheduledStart ascending
-    for (const key of Object.keys(result) as BookingTab[]) {
-      result[key].sort(
-        (a, b) =>
-          new Date(a.scheduledStart).getTime() -
-          new Date(b.scheduledStart).getTime()
-      );
-    }
-    return result;
-  }, [schedule]);
+  };
 
   if (isLoading) return <ScheduleSkeleton />;
 
   return (
     <div>
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as BookingTab)}
-        className="w-full"
-      >
-        <div className="px-4 lg:px-6">
-          <TabsList className="bg-[var(--anna-bg)] rounded-xl p-1 w-full sm:w-auto">
-            <TabsTrigger
-              value="upcoming"
-              className="rounded-lg text-xs data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-white"
-            >
-              Upcoming
-              {grouped.upcoming.length > 0 && (
-                <span className="ml-1.5 font-data text-[10px] bg-[var(--anna-sage-light)] data-[state=active]:bg-white/20 px-1.5 py-0.5 rounded-md text-[var(--anna-muted)] data-[state=active]:text-white/80">
-                  {grouped.upcoming.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="completed"
-              className="rounded-lg text-xs data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-white"
-            >
-              Completed
-              {grouped.completed.length > 0 && (
-                <span className="ml-1.5 font-data text-[10px] bg-[var(--anna-sage-light)] data-[state=active]:bg-white/20 px-1.5 py-0.5 rounded-md text-[var(--anna-muted)] data-[state=active]:text-white/80">
-                  {grouped.completed.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+      {/* Header with search + filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base font-bold text-[var(--anna-slate)]">
+            All Bookings
+          </h3>
+          <p className="text-xs text-[var(--anna-muted)] mt-0.5">
+            <span className="font-data">{displayed.length}</span> shown
+          </p>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--anna-muted)]" />
+            <Input
+              placeholder="Search household, address..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 w-60 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className={cn(
+              "rounded-xl border-[var(--anna-border)] relative",
+              showFilters && "bg-[var(--anna-sage-light)] border-[var(--anna-sage)]/30"
+            )}
+          >
+            <Filter size={14} className="mr-1.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1.5 w-4 h-4 rounded-full bg-[var(--anna-sage-dark)] text-white text-[10px] font-data flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
 
-        <TabsContent value="upcoming" className="mt-4">
-          {grouped.upcoming.length === 0 ? (
-            <EmptyState tab="upcoming" />
-          ) : (
-            <div className="space-y-2 px-4 lg:px-6 max-h-96 overflow-y-auto anna-scroll">
-              {grouped.upcoming.map((item) => (
-                <BookingCard
-                  key={item.id}
-                  item={item}
-                  vendor={vendor!}
-                  onAction={(bid, a) => {
-                    if (a === "complete" && onRequestComplete) {
-                      onRequestComplete(bid, item.verificationPhotoCount, item.category);
-                    } else {
-                      updateMutation.mutate({ bookingId: bid, action: a });
-                    }
-                  }}
-                  onSelect={() => onSelectBooking(item, vendor!)}
-                  isPending={updateMutation.isPending}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
+      {/* Status Pills */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 mb-3">
+        {(["all", ...statusCounts.map((s) => s.status)] as string[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => handleStatusPill(s === "all" ? "" : s)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+              (s === "all" && !statusFilter) || statusFilter === s
+                ? "bg-[var(--anna-sage-dark)] text-white"
+                : "bg-[var(--anna-white)] text-[var(--anna-slate-light)] border border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]/50"
+            )}
+          >
+            {s === "all" ? "All" : s.replace(/_/g, " ")}
+            {s !== "all" && statusCounts.find((sc) => sc.status === s) && (
+              <span className="font-data text-[10px] opacity-70">
+                {statusCounts.find((sc) => sc.status === s)!.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
-        <TabsContent value="completed" className="mt-4">
-          {grouped.completed.length === 0 ? (
-            <EmptyState tab="completed" />
-          ) : (
-            <div className="space-y-2 px-4 lg:px-6 max-h-96 overflow-y-auto anna-scroll">
-              {grouped.completed.map((item) => (
-                <BookingCard
-                  key={item.id}
-                  item={item}
-                  vendor={vendor!}
-                  onAction={() => {}}
-                  onSelect={() => onSelectBooking(item, vendor!)}
-                  isPending={false}
-                />
-              ))}
+      {/* Expandable Filters */}
+      {showFilters && (
+        <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4 space-y-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] block mb-1.5">
+                Category
+              </label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm px-3 py-2 text-[var(--anna-slate)] focus:outline-none focus:ring-1 focus:ring-[var(--anna-sage)]/30"
+              >
+                <option value="">All Categories</option>
+                {ACTIVE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
+                ))}
+              </select>
             </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] block mb-1.5">
+                From
+              </label>
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] block mb-1.5">
+                To
+              </label>
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm"
+              />
+            </div>
+          </div>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-[var(--anna-sage-dark)] hover:underline"
+            >
+              Clear all filters
+            </button>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
+
+      {/* Booking list */}
+      {displayed.length === 0 ? (
+        <EmptyState tab={activeTab} />
+      ) : (
+        <div className="space-y-2 px-4 lg:px-6 max-h-96 overflow-y-auto anna-scroll">
+          {displayed.map((item) => (
+            <BookingCard
+              key={item.id}
+              item={item}
+              vendor={vendor!}
+              onAction={(bid, a) => {
+                if (a === "complete" && onRequestComplete) {
+                  onRequestComplete(bid, item.verificationPhotoCount, item.category);
+                } else {
+                  updateMutation.mutate({ bookingId: bid, action: a });
+                }
+              }}
+              onSelect={() => onSelectBooking(item, vendor!)}
+              isPending={updateMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
