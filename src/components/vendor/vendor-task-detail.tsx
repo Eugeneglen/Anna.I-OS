@@ -168,19 +168,29 @@ function VendorTaskDetailContent({
   vendorId: string;
   onStaffAssigned?: () => void;
 }) {
-  const actionConfig = getActionConfig(booking.status);
+  // Local mutable copy of booking — updated optimistically after staff assignment
+  // so that the Send Job Link section appears immediately without a re-fetch
+  const [localBooking, setLocalBooking] = useState<VendorScheduleItem>(booking);
+  const b = localBooking; // shorthand
+
+  const actionConfig = getActionConfig(b.status);
   const action = actionConfig.primary;
   const secondaryAction = actionConfig.secondary;
-  const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
-  const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
+  const showPhotoUpload = b.status === "in_progress" || b.status === "completed";
+  const isDisputed = b.taskStatus === "DISPUTED" || b.escrow?.state === "DISPUTED";
 
   // Can assign/reassign staff when booking is assigned or accepted
-  const canAssignStaff = ["assigned", "accepted"].includes(booking.status);
+  const canAssignStaff = ["assigned", "accepted"].includes(b.status);
 
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareGenerated, setShareGenerated] = useState(false);
+
+  // Sync localBooking when the parent prop changes (e.g. re-open after refetch)
+  useEffect(() => {
+    setLocalBooking(booking);
+  }, [booking]);
 
   // Staff assignment state
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -221,12 +231,12 @@ function VendorTaskDetailContent({
 
   // When a booking already has staff, pre-select them
   useEffect(() => {
-    if (booking.assignedStaff) {
-      setSelectedStaffId(booking.assignedStaff.id);
+    if (b.assignedStaff) {
+      setSelectedStaffId(b.assignedStaff.id);
     } else {
       setSelectedStaffId("");
     }
-  }, [booking.assignedStaff]);
+  }, [b.assignedStaff]);
 
   const handleAssignStaff = async () => {
     if (!selectedStaffId || isAssigningStaff) return;
@@ -234,7 +244,7 @@ function VendorTaskDetailContent({
 
     try {
       const res = await fetch(
-        `/api/vendors/${vendorId}/bookings/${booking.id}/assign-staff`,
+        `/api/vendors/${vendorId}/bookings/${b.id}/assign-staff`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -249,6 +259,14 @@ function VendorTaskDetailContent({
       const json = await res.json();
       const staffName = json.booking?.assignedStaff?.name || "Staff";
       toast.success(`${staffName} assigned to this job`);
+
+      // Optimistically update local state so the Send Job Link section appears immediately
+      const assignedStaff = json.booking?.assignedStaff
+        ? { id: json.booking.assignedStaff.id, name: json.booking.assignedStaff.name, role: json.booking.assignedStaff.role || "staff", contact: json.booking.assignedStaff.contact ?? null }
+        : null;
+      setLocalBooking((prev) => ({ ...prev, assignedStaff }));
+      setSelectedStaffId(assignedStaff?.id || "");
+
       onStaffAssigned?.();
     } catch {
       toast.error("Failed to assign staff");
@@ -263,7 +281,7 @@ function VendorTaskDetailContent({
     setIsSharing(true);
     try {
       const res = await fetch(
-        `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+        `/api/vendors/${vendorId}/bookings/${b.id}/share`,
         { method: "POST" }
       );
       if (!res.ok) return;
@@ -285,7 +303,7 @@ function VendorTaskDetailContent({
       // Generate link first
       try {
         const res = await fetch(
-          `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+          `/api/vendors/${vendorId}/bookings/${b.id}/share`,
           { method: "POST" }
         );
         if (!res.ok) return;
@@ -299,8 +317,8 @@ function VendorTaskDetailContent({
       }
     }
 
-    const staffContact = booking.assignedStaff?.contact;
-    const staffName = booking.assignedStaff?.name;
+    const staffContact = b.assignedStaff?.contact;
+    const staffName = b.assignedStaff?.name;
     // Build WhatsApp message
     const message = encodeURIComponent(
       `Hi ${staffName}, here's your job link:\n\n${url}\n\nPlease check the job details and arrive at the scheduled time.`
@@ -334,7 +352,7 @@ function VendorTaskDetailContent({
     if (!url) {
       try {
         const res = await fetch(
-          `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+          `/api/vendors/${vendorId}/bookings/${b.id}/share`,
           { method: "POST" }
         );
         if (!res.ok) return;
@@ -358,18 +376,18 @@ function VendorTaskDetailContent({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <CategoryIcon category={booking.category} size={20} />
+          <CategoryIcon category={b.category} size={20} />
           <div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
-              {getCategoryLabel(booking.category)}
+              {getCategoryLabel(b.category)}
             </h2>
           </div>
         </div>
         <Badge
           variant="outline"
-          className={cn("text-[10px] px-2 py-0.5 font-medium", STATUS_STYLES[booking.status])}
+          className={cn("text-[10px] px-2 py-0.5 font-medium", STATUS_STYLES[b.status])}
         >
-          {STATUS_LABELS[booking.status] ?? booking.status}
+          {STATUS_LABELS[b.status] ?? b.status}
         </Badge>
       </div>
 
@@ -387,29 +405,29 @@ function VendorTaskDetailContent({
               </p>
             </div>
           </div>
-          {booking.escrow?.disputeReason && (
+          {b.escrow?.disputeReason && (
             <div className="bg-[var(--anna-error)]/5 rounded-xl p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-error)]/70 mb-1">Household&apos;s Reason</p>
-              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{booking.escrow.disputeReason}</p>
+              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{b.escrow.disputeReason}</p>
             </div>
           )}
-          {booking.escrow?.disputeResolution && (
+          {b.escrow?.disputeResolution && (
             <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]/70 mb-1">Resolution</p>
-              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{booking.escrow.disputeResolution}</p>
+              <p className="text-xs text-[var(--anna-slate)] leading-relaxed">{b.escrow.disputeResolution}</p>
             </div>
           )}
           <div className="flex items-center justify-between text-[10px] text-[var(--anna-muted)]">
-            <span>Escrow: {formatSgd(booking.escrow?.amountCents ?? 0)} — <span className="text-[var(--anna-error)] font-medium">Frozen</span></span>
-            {booking.taskDisputedAt && (
-              <span>Disputed {formatDate(booking.taskDisputedAt)}</span>
+            <span>Escrow: {formatSgd(b.escrow?.amountCents ?? 0)} — <span className="text-[var(--anna-error)] font-medium">Frozen</span></span>
+            {b.taskDisputedAt && (
+              <span>Disputed {formatDate(b.taskDisputedAt)}</span>
             )}
           </div>
         </div>
       )}
 
       {/* ── Escrow Status Section (non-disputed) ── */}
-      {!isDisputed && booking.escrow && (
+      {!isDisputed && b.escrow && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             <Wallet size={12} className="inline mr-1" />
@@ -422,28 +440,28 @@ function VendorTaskDetailContent({
                 variant="outline"
                 className={cn(
                   "text-[10px] px-2 py-0.5 font-medium",
-                  booking.escrow.state === "RELEASED"
+                  b.escrow.state === "RELEASED"
                     ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20"
-                    : booking.escrow.state === "REFUNDED"
+                    : b.escrow.state === "REFUNDED"
                       ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20"
                       : "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20"
                 )}
               >
-                {booking.escrow.state === "RELEASED" ? (
+                {b.escrow.state === "RELEASED" ? (
                   <><ShieldCheck size={10} className="mr-1" />Released</>
-                ) : booking.escrow.state === "HELD" ? (
+                ) : b.escrow.state === "HELD" ? (
                   <><Clock size={10} className="mr-1" />Held</>
-                ) : booking.escrow.state === "REFUNDED" ? (
+                ) : b.escrow.state === "REFUNDED" ? (
                   <><Wallet size={10} className="mr-1" />Refunded</>
                 ) : (
-                  booking.escrow.state
+                  b.escrow.state
                 )}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-[var(--anna-muted)]">Your Payout</span>
               <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-                {formatSgd(booking.escrow.vendorPayoutCents)}
+                {formatSgd(b.escrow.vendorPayoutCents)}
               </span>
             </div>
           </div>
@@ -454,18 +472,18 @@ function VendorTaskDetailContent({
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 flex items-center justify-between">
         <span className="text-sm text-[var(--anna-slate-light)]">Job Amount</span>
         <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-          {formatSgd(booking.amountCents)}
+          {formatSgd(b.amountCents)}
         </span>
       </div>
 
       {/* Instructions */}
-      {booking.instructions && (
+      {b.instructions && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Instructions
           </h4>
           <p className="text-sm text-[var(--anna-slate)] leading-relaxed bg-[var(--anna-bg)] rounded-xl p-4">
-            {booking.instructions}
+            {b.instructions}
           </p>
         </div>
       )}
@@ -479,12 +497,12 @@ function VendorTaskDetailContent({
           <div className="flex items-center gap-2">
             <User size={14} className="text-[var(--anna-muted)]" />
             <span className="text-sm font-medium text-[var(--anna-slate)]">
-              {booking.householdName}
+              {b.householdName}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
             <MapPin size={12} />
-            <span>{booking.address}</span>
+            <span>{b.address}</span>
           </div>
         </div>
       </div>
@@ -498,30 +516,30 @@ function VendorTaskDetailContent({
           <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
             <CalendarDays size={12} />
             <span>
-              Scheduled: {formatDate(booking.scheduledStart)}{" "}
-              {formatTime(booking.scheduledStart)}
+              Scheduled: {formatDate(b.scheduledStart)}{" "}
+              {formatTime(b.scheduledStart)}
             </span>
           </div>
-          {booking.scheduledEnd && (
+          {b.scheduledEnd && (
             <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)] pl-5">
-              &ndash; {formatTime(booking.scheduledEnd)}
+              &ndash; {formatTime(b.scheduledEnd)}
             </div>
           )}
-          {booking.actualStart && (
+          {b.actualStart && (
             <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
               <Clock size={12} />
               <span>
-                Actual start: {formatDate(booking.actualStart)}{" "}
-                {formatTime(booking.actualStart)}
+                Actual start: {formatDate(b.actualStart)}{" "}
+                {formatTime(b.actualStart)}
               </span>
             </div>
           )}
-          {booking.actualEnd && (
+          {b.actualEnd && (
             <div className="flex items-center gap-2 text-xs text-[var(--anna-muted)]">
               <Clock size={12} />
               <span>
-                Actual end: {formatDate(booking.actualEnd)}{" "}
-                {formatTime(booking.actualEnd)}
+                Actual end: {formatDate(b.actualEnd)}{" "}
+                {formatTime(b.actualEnd)}
               </span>
             </div>
           )}
@@ -557,7 +575,7 @@ function VendorTaskDetailContent({
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {/* Un-assign option */}
-                    {booking.assignedStaff && (
+                    {b.assignedStaff && (
                       <SelectItem value="__unassign__" className="text-[var(--anna-muted)]">
                         <span className="italic">— Remove assignment —</span>
                       </SelectItem>
@@ -593,7 +611,7 @@ function VendorTaskDetailContent({
                     }
                     handleAssignStaff();
                   }}
-                  disabled={!selectedStaffId || selectedStaffId === booking.assignedStaff?.id || isAssigningStaff || isLoadingStaff}
+                  disabled={!selectedStaffId || selectedStaffId === b.assignedStaff?.id || isAssigningStaff || isLoadingStaff}
                   className="rounded-xl h-9 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
                 >
                   {isAssigningStaff ? (
@@ -601,9 +619,9 @@ function VendorTaskDetailContent({
                   ) : (
                     <UserPlus size={12} className="mr-1.5" />
                   )}
-                  {booking.assignedStaff && selectedStaffId === booking.assignedStaff.id
+                  {b.assignedStaff && selectedStaffId === b.assignedStaff.id
                     ? "Current Assignment"
-                    : booking.assignedStaff
+                    : b.assignedStaff
                       ? "Reassign Staff"
                       : "Assign Staff"}
                 </Button>
@@ -614,14 +632,14 @@ function VendorTaskDetailContent({
       )}
 
       {/* Assigned staff info (read-only badge, visible after assignment) */}
-      {booking.assignedStaff && canAssignStaff && (
+      {b.assignedStaff && canAssignStaff && (
         <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3 flex items-center gap-2 border border-[var(--anna-sage)]/15">
           <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
             <User size={14} className="text-white" />
           </div>
           <div>
             <p className="text-sm font-medium text-[var(--anna-slate)]">
-              {booking.assignedStaff.name}
+              {b.assignedStaff.name}
             </p>
             <p className="text-[10px] text-[var(--anna-muted)]">
               Currently assigned to this job
@@ -631,7 +649,7 @@ function VendorTaskDetailContent({
       )}
 
       {/* Assigned staff — completed/cancelled bookings (read-only display) */}
-      {!canAssignStaff && booking.assignedStaff && (
+      {!canAssignStaff && b.assignedStaff && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Assigned Staff
@@ -641,14 +659,14 @@ function VendorTaskDetailContent({
               <User size={14} className="text-[var(--anna-sage-dark)]" />
             </div>
             <span className="text-sm font-medium text-[var(--anna-slate)]">
-              {booking.assignedStaff.name}
+              {b.assignedStaff.name}
             </span>
           </div>
         </div>
       )}
 
       {/* ── Send Job Link to Staff ── visible when staff is assigned + booking is accepted */}
-      {booking.assignedStaff && booking.status === "accepted" && (
+      {b.assignedStaff && b.status === "accepted" && (
         <div className="bg-[var(--anna-sage-light)]/20 rounded-2xl border border-[var(--anna-sage)]/20 overflow-hidden">
           <div className="px-4 py-3 bg-[var(--anna-sage)]/10">
             <div className="flex items-center gap-2">
@@ -660,7 +678,7 @@ function VendorTaskDetailContent({
                   Send Job Link to Staff
                 </h4>
                 <p className="text-[10px] text-[var(--anna-sage-dark)]/70">
-                  Share the job details with {booking.assignedStaff.name}
+                  Share the job details with {b.assignedStaff.name}
                 </p>
               </div>
             </div>
@@ -673,12 +691,12 @@ function VendorTaskDetailContent({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                  {booking.assignedStaff.name}
+                  {b.assignedStaff.name}
                 </p>
-                {booking.assignedStaff.contact && (
+                {b.assignedStaff.contact && (
                   <p className="text-xs text-[var(--anna-muted)] flex items-center gap-1">
                     <Phone size={10} />
-                    {booking.assignedStaff.contact}
+                    {b.assignedStaff.contact}
                   </p>
                 )}
               </div>
@@ -742,22 +760,22 @@ function VendorTaskDetailContent({
             Work Photos
           </h4>
           <VendorPhotoUpload
-            bookingId={booking.id}
+            bookingId={b.id}
             vendorId={vendorId}
-            existingPhotos={booking.verificationPhotos}
+            existingPhotos={b.verificationPhotos}
           />
         </div>
       )}
 
       {/* Verification photo gallery — shows persisted photos from DB */}
-      {booking.verificationPhotos && booking.verificationPhotos.length > 0 && !showPhotoUpload && (
+      {b.verificationPhotos && b.verificationPhotos.length > 0 && !showPhotoUpload && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             <ImageIcon size={12} className="inline mr-1" />
             Submitted Photos
           </h4>
           <div className="grid grid-cols-3 gap-2">
-            {booking.verificationPhotos.map((photo) => (
+            {b.verificationPhotos.map((photo) => (
               <div
                 key={photo.id}
                 className="relative aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)]"
@@ -788,7 +806,7 @@ function VendorTaskDetailContent({
       )}
 
       {/* Vendor Completion Notes (shown for completed bookings) */}
-      {booking.completionNotes && (
+      {b.completionNotes && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             <FileText size={12} className="inline mr-1" />
@@ -796,20 +814,20 @@ function VendorTaskDetailContent({
           </h4>
           <div className="bg-gradient-to-br from-[var(--anna-sage-light)]/30 to-[var(--anna-bg)] rounded-2xl p-4 border border-[var(--anna-sage)]/15">
             <p className="text-sm text-[var(--anna-slate)] leading-relaxed whitespace-pre-wrap">
-              {booking.completionNotes}
+              {b.completionNotes}
             </p>
           </div>
         </div>
       )}
 
       {/* Rating (read-only) */}
-      {booking.rating && (
+      {b.rating && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Customer Rating
           </h4>
           <div className="bg-[var(--anna-bg)] rounded-2xl p-4">
-            <RatingDisplay rating={booking.rating} comment={booking.ratingComment} />
+            <RatingDisplay rating={b.rating} comment={b.ratingComment} />
           </div>
         </div>
       )}
@@ -821,7 +839,7 @@ function VendorTaskDetailContent({
         <div className="space-y-2">
           {action && (
             <Button
-              onClick={() => onAction(booking.id, action.action)}
+              onClick={() => onAction(b.id, action.action)}
               disabled={isActionPending}
               className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-11 text-sm font-semibold"
             >
@@ -839,7 +857,7 @@ function VendorTaskDetailContent({
                 if (secondaryAction.action === "reject") {
                   setRejectDialogOpen(true);
                 } else {
-                  onAction(booking.id, secondaryAction.action);
+                  onAction(b.id, secondaryAction.action);
                 }
               }}
               disabled={isActionPending}
@@ -865,7 +883,7 @@ function VendorTaskDetailContent({
             <AlertDialogTitle>Decline this job?</AlertDialogTitle>
             <AlertDialogDescription>
               The booking will be cancelled and automatically re-routed to the next
-              available provider for the {getCategoryLabel(booking.category).toLowerCase()} task.
+              available provider for the {getCategoryLabel(b.category).toLowerCase()} task.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -873,7 +891,7 @@ function VendorTaskDetailContent({
             <AlertDialogCancel className="rounded-xl">Keep Job</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                onAction(booking.id, "reject");
+                onAction(b.id, "reject");
                 setRejectDialogOpen(false);
               }}
               className="bg-[var(--anna-error)] hover:bg-red-600 text-white rounded-xl"
