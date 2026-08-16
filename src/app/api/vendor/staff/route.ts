@@ -2,7 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getVendorSession } from "@/lib/vendor-auth";
-import { logAction } from "@/lib/audit-log";
+
+// Vendor-initiated audit log (raw insert to bypass OpsUser FK constraint)
+async function vendorAuditLog(params: {
+  userId: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await db.$executeRawUnsafe(
+      `INSERT INTO AuditLog (id, userId, userName, action, entityType, entityId, metadata, createdAt)
+       VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      params.userId,
+      params.userName,
+      params.action,
+      params.entityType,
+      params.entityId ?? null,
+      params.metadata ? JSON.stringify(params.metadata) : null
+    );
+  } catch (err) {
+    console.warn("[vendor audit] failed to write audit log:", err);
+  }
+}
 
 // ── GET: List vendor's staff ──
 export async function GET() {
@@ -60,7 +84,7 @@ export async function POST(request: Request) {
       },
     });
 
-    await logAction({
+    await vendorAuditLog({
       userId: session.vendorId,
       userName: session.name,
       action: "vendor.staff.add",
@@ -116,7 +140,7 @@ export async function PATCH(request: Request) {
       data: { isActive: parsed.data.isActive },
     });
 
-    await logAction({
+    await vendorAuditLog({
       userId: session.vendorId,
       userName: session.name,
       action: "vendor.staff.toggle",
@@ -170,7 +194,7 @@ export async function DELETE(request: Request) {
       where: { id: parsed.data.id, vendorId: session.vendorId },
     });
 
-    await logAction({
+    await vendorAuditLog({
       userId: session.vendorId,
       userName: session.name,
       action: "vendor.staff.remove",

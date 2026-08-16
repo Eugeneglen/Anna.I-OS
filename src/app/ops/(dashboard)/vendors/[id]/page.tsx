@@ -89,7 +89,6 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
     staffCount: data.staffCount,
     dailyCapacity: data.dailyCapacity,
     categories: parseJsonField(data.categories),
-    zones: parseJsonField(data.zones),
     status: data.status,
   }));
   const [dirty, setDirty] = useState(false);
@@ -145,14 +144,9 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
       categories: form.categories,
       staffCount: form.staffCount,
       dailyCapacity: form.dailyCapacity,
-      zones: form.zones,
       status: form.status,
     });
   }
-
-  const zonesStr = Array.isArray(form.zones)
-    ? (form.zones as string[]).join(", ")
-    : "";
 
   return (
     <div className="space-y-4 max-w-3xl pb-20 md:pb-0 anna-fade-in">
@@ -298,22 +292,6 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
                 </label>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className={labelCls}>Zones (comma-separated)</Label>
-            <Input
-              value={zonesStr}
-              onChange={(e) =>
-                updateField(
-                  "zones",
-                  e.target.value
-                    .split(",")
-                    .map((z) => z.trim())
-                    .filter(Boolean)
-                )
-              }
-              className={inputCls}
-            />
           </div>
           {dirty && (
             <Button
