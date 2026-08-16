@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ import {
   ShieldCheck,
   Wallet,
   Loader2,
+  Copy,
 } from "lucide-react";
 
 // ─── Props ────────────────────────────────────────────────
@@ -149,6 +151,31 @@ function VendorTaskDetailContent({
   const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
   const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleShare = async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const res = await fetch(
+        `/api/vendors/${vendorId}/bookings/${booking.id}/share`,
+        { method: "POST" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const url: string = json.shareUrl;
+      setShareUrl(url);
+      await navigator.clipboard.writeText(url);
+      toast.success(
+        `Link copied! Share it with ${booking.assignedStaff!.name}`
+      );
+    } catch {
+      toast.error("Failed to generate share link");
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 anna-fade-in">
@@ -339,6 +366,22 @@ function VendorTaskDetailContent({
               {booking.assignedStaff.name}
             </span>
           </div>
+          {["accepted", "in_progress"].includes(booking.status) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShare}
+              disabled={isSharing}
+              className="mt-2 rounded-xl h-8 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
+            >
+              {isSharing ? (
+                <Loader2 size={12} className="mr-1.5 animate-spin" />
+              ) : (
+                <Copy size={12} className="mr-1.5" />
+              )}
+              {shareUrl ? "Copy Link" : "Share Job Link"}
+            </Button>
+          )}
         </div>
       )}
 

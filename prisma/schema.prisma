@@ -377,6 +377,8 @@ model Booking {
   acceptedAt       DateTime?
   completedAt      DateTime?
   cancelledAt      DateTime?
+  shareToken       String?   @unique  // SME: shareable link for assigned staff
+  sharedAt         DateTime?           // when share token was generated
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
