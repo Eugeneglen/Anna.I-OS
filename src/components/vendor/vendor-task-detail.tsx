@@ -350,8 +350,8 @@ function VendorTaskDetailContent({
       }
     }
 
-    const staffContact = b.assignedStaff?.contact;
-    const staffName = b.assignedStaff?.name;
+    const staffContact = assignedStaffInfo?.contact ?? b.assignedStaff?.contact;
+    const staffName = assignedStaffInfo?.name ?? b.assignedStaff?.name;
     // Build WhatsApp message
     const message = encodeURIComponent(
       `Hi ${staffName}, here's your job link:\n\n${url}\n\nPlease check the job details and arrive at the scheduled time.`
@@ -687,8 +687,8 @@ function VendorTaskDetailContent({
           </div>
 
           {/* ── GREEN CARD: Send Job Link to Staff ── */}
-          {/* Appears right below assigned staff when staff is set + booking is accepted */}
-          {b.status === "accepted" && assignedStaffInfo && (
+          {/* Appears right below assigned staff whenever staff is assigned */}
+          {(assignedStaffInfo || b.assignedStaff) && (
             <div className="rounded-2xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[#f0fdf4]/60 to-[var(--anna-sage-light)]/20 overflow-hidden">
               <div className="px-4 py-3 bg-[var(--anna-sage)]/10">
                 <div className="flex items-center gap-2">
@@ -700,7 +700,7 @@ function VendorTaskDetailContent({
                       Send Job Link to Staff
                     </h4>
                     <p className="text-[10px] text-[var(--anna-sage-dark)]/70">
-                      Share the job details with {assignedStaffInfo.name}
+                      Share the job details with {(assignedStaffInfo ?? b.assignedStaff)!.name}
                     </p>
                   </div>
                 </div>
@@ -713,12 +713,12 @@ function VendorTaskDetailContent({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                      {assignedStaffInfo.name}
+                      {(assignedStaffInfo ?? b.assignedStaff)!.name}
                     </p>
-                    {assignedStaffInfo.contact && (
+                    {(assignedStaffInfo ?? b.assignedStaff)!.contact && (
                       <p className="text-xs text-[var(--anna-muted)] flex items-center gap-1">
                         <Phone size={10} />
-                        {assignedStaffInfo.contact}
+                        {(assignedStaffInfo ?? b.assignedStaff)!.contact}
                       </p>
                     )}
                   </div>
