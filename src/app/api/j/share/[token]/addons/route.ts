@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import {
+  NotificationChannel,
+  NotificationEventType,
+  NotificationStatus,
+  RecipientType,
+} from "@prisma/client";
 
 const createAddonSchema = z.object({
   description: z
@@ -67,7 +73,10 @@ export async function POST(
     // ── Authenticate via shareToken ──
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
-      select: { id: true, vendorId: true, status: true },
+      include: {
+        task: { select: { id: true, householdId: true } },
+        vendor: { select: { id: true, name: true, companyName: true } },
+      },
     });
 
     if (!booking) {
@@ -120,6 +129,35 @@ export async function POST(
         createdAt: true,
       },
     });
+
+    // ── Notify household members about the new charge ──
+    const householdId = booking.task.householdId;
+    const vendorName = booking.vendor.companyName || booking.vendor.name;
+    const amountStr = `$${(amountCents / 100).toFixed(2)}`;
+
+    const members = await db.familyMember.findMany({
+      where: { householdId },
+      select: { id: true },
+    });
+
+    if (members.length > 0) {
+      const notifBody = `${vendorName} staff has submitted an additional charge: "${description}" for ${amountStr}. Please review and approve or reject.`;
+
+      await db.notification.createMany({
+        data: members.map((m) => ({
+          householdId,
+          recipientType: RecipientType.HOUSEHOLD_MEMBER,
+          memberId: m.id,
+          channel: NotificationChannel.WHATSAPP,
+          eventType: NotificationEventType.SYSTEM_ALERT,
+          title: "Additional Charge Request",
+          body: notifBody,
+          status: NotificationStatus.PENDING,
+          referenceType: "booking",
+          referenceId: booking.id,
+        })),
+      });
+    }
 
     return NextResponse.json({ addon }, { status: 201 });
   } catch (error) {
