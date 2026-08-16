@@ -1,12 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   CalendarDays,
   MapPin,
@@ -21,6 +32,12 @@ import {
   Phone,
   CheckCircle2,
   Circle,
+  Camera,
+  Upload,
+  ImageIcon,
+  CheckCircle,
+  Loader2,
+  Receipt,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -53,6 +70,19 @@ interface ShareData {
   booking: ShareBooking;
 }
 
+interface UploadedPhoto {
+  fileUrl: string;
+  type: string;
+}
+
+interface Addon {
+  id: string;
+  description: string;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+}
+
 // ─── Status styles ─────────────────────────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
@@ -69,6 +99,18 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: "In Progress",
   completed: "Completed",
   cancelled: "Cancelled",
+};
+
+const ADDON_STATUS_STYLES: Record<string, string> = {
+  pending: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
+  approved: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
+  rejected: "bg-[var(--anna-error)]/15 text-[var(--anna-error)] border-[var(--anna-error)]/20",
+};
+
+const ADDON_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending Approval",
+  approved: "Approved",
+  rejected: "Rejected",
 };
 
 // ─── Status timeline steps ─────────────────────────────────
@@ -262,17 +304,272 @@ function InfoRow({
   );
 }
 
+// ─── Photo Upload Zone ──────────────────────────────────────
+
+function PhotoUploadZone({
+  label,
+  type,
+  disabled,
+  isUploading,
+  onFiles,
+  uploadedPhotos,
+}: {
+  label: string;
+  type: "before" | "after";
+  disabled: boolean;
+  isUploading: boolean;
+  onFiles: (files: FileList) => void;
+  uploadedPhotos: UploadedPhoto[];
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+        <Camera size={12} />
+        {label}
+      </div>
+
+      {/* Upload trigger */}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled || isUploading}
+        className={cn(
+          "w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-colors min-h-[88px]",
+          isUploading
+            ? "border-[var(--anna-sage)]/40 bg-[var(--anna-sage-light)]/30 cursor-wait"
+            : disabled
+              ? "border-[var(--anna-border)] bg-[var(--anna-bg)]/50 cursor-not-allowed opacity-50"
+              : "border-[var(--anna-border)] bg-[var(--anna-bg)] hover:border-[var(--anna-sage)]/40 hover:bg-[var(--anna-sage-light)]/20 cursor-pointer"
+        )}
+      >
+        {isUploading ? (
+          <>
+            <Loader2 size={20} className="text-[var(--anna-sage)] animate-spin" />
+            <span className="text-xs text-[var(--anna-sage-dark)] font-medium">
+              Uploading...
+            </span>
+          </>
+        ) : (
+          <>
+            <Upload size={20} className="text-[var(--anna-muted)]" />
+            <span className="text-xs text-[var(--anna-muted)]">
+              Tap to upload photos
+            </span>
+            <span className="text-[9px] text-[var(--anna-muted)]/60">
+              JPEG, PNG, WebP — max 5MB each
+            </span>
+          </>
+        )}
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            onFiles(e.target.files);
+          }
+          e.target.value = "";
+        }}
+        className="hidden"
+      />
+
+      {/* Photo thumbnails grid */}
+      {uploadedPhotos.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {uploadedPhotos.map((photo, idx) => (
+            <div
+              key={`${photo.fileUrl}-${idx}`}
+              className="aspect-square rounded-xl overflow-hidden border border-[var(--anna-border)] bg-[var(--anna-bg)]"
+            >
+              <img
+                src={photo.fileUrl}
+                alt={`${type} work photo ${idx + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page Component ──────────────────────────────────
+
+export default function StaffJobViewPage() {
+  const params = useParams<{ token: string }>();
+  const [data, setData] = useState<ShareData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchBooking = useCallback(async () => {
+    if (!params.token) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/j/share/${params.token}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Failed to load job details");
+        setData(null);
+        return;
+      }
+      const json = await res.json();
+      setData(json);
+      setError(null);
+    } catch {
+      setError("Network error. Please check your connection.");
+      setData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [params.token]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchBooking();
+  }, [fetchBooking]);
+
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchBooking();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchBooking]);
+
+  // Loading state (initial load)
+  if (!data && !error) {
+    return <LoadingSkeleton />;
+  }
+
+  // Error state
+  if (error && !data) {
+    return <ErrorState message={error} />;
+  }
+
+  // Success state
+  if (data) {
+    return <JobDetailView data={data} isLoading={isLoading} token={params.token} />;
+  }
+
+  return null;
+}
+
 // ─── Job Detail View ──────────────────────────────────────
 
 function JobDetailView({
   data,
   isLoading,
+  token,
 }: {
   data: ShareData;
   isLoading: boolean;
+  token: string;
 }) {
   const { booking } = data;
   const ref = `#ANN-${booking.id.slice(0, 8).toUpperCase()}`;
+
+  const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [addonsLoading, setAddonsLoading] = useState(true);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState("");
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState<string | null>(null);
+
+  const isAccepted = booking.status === "accepted" || booking.status === "in_progress";
+  const isCompleted = booking.status === "completed";
+  const isCancelled = booking.status === "cancelled";
+  const actionsDisabled = isCompleted || isCancelled;
+
+  // ── Fetch addons ──
+  useEffect(() => {
+    async function loadAddons() {
+      setAddonsLoading(true);
+      try {
+        const res = await fetch(`/api/j/share/${token}/addons`);
+        if (res.ok) {
+          const json = await res.json();
+          setAddons(json.addons || []);
+        }
+      } catch {
+        // Silently fail — addons are non-critical
+      } finally {
+        setAddonsLoading(false);
+      }
+    }
+    loadAddons();
+  }, [token]);
+
+  // ── Photo upload handler ──
+  const handlePhotoUpload = useCallback(
+    async (type: "before" | "after", files: FileList) => {
+      if (files.length === 0) return;
+      setPhotoUploading(type);
+      try {
+        const formData = new FormData();
+        formData.append("type", type);
+        for (let i = 0; i < files.length; i++) {
+          formData.append(`file${i}`, files[i]);
+        }
+
+        const res = await fetch(`/api/j/share/${token}/photos`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || "Upload failed");
+        }
+
+        const uploadData = await res.json();
+        const newPhotos: UploadedPhoto[] = uploadData.photos.map(
+          (p: { fileUrl: string }) => ({ fileUrl: p.fileUrl, type })
+        );
+        setUploadedPhotos((prev) => [...prev, ...newPhotos]);
+        toast.success(
+          `${type === "before" ? "Before" : "After"}: ${uploadData.count} photo(s) uploaded`
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to upload photos");
+      } finally {
+        setPhotoUploading(null);
+      }
+    },
+    [token]
+  );
+
+  // ── Complete work handler ──
+  const handleComplete = async () => {
+    setIsCompleting(true);
+    try {
+      const res = await fetch(`/api/j/share/${token}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completionNotes: completionNotes || undefined }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to complete work");
+      }
+      toast.success("Work completed successfully!");
+      setCompleteDialogOpen(false);
+      // Refresh page to show updated status
+      window.location.reload();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to complete work"
+      );
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -453,6 +750,160 @@ function JobDetailView({
           </div>
         )}
 
+        {/* ── Addons Section (read-only) ── */}
+        {!addonsLoading && addons.length > 0 && (
+          <div className="bg-[var(--anna-bg)] rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              <Receipt size={12} />
+              Additional Charges
+            </div>
+
+            <div className="space-y-2">
+              {addons.map((addon) => (
+                <div
+                  key={addon.id}
+                  className="bg-white rounded-xl p-3.5 space-y-2 border border-[var(--anna-border)]"
+                >
+                  <p className="text-sm text-[var(--anna-slate)] leading-relaxed">
+                    {addon.description}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+                      {formatSgd(addon.amountCents)}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] px-2 py-0.5 font-medium",
+                        ADDON_STATUS_STYLES[addon.status]
+                      )}
+                    >
+                      {ADDON_STATUS_LABELS[addon.status] ?? addon.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Work Photos Section ── */}
+        {!isCancelled && (
+          <div className="bg-[var(--anna-bg)] rounded-2xl p-5 space-y-5">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              <ImageIcon size={12} />
+              Work Photos
+            </div>
+
+            {/* Before Work upload zone */}
+            <PhotoUploadZone
+              label="Before Work"
+              type="before"
+              disabled={actionsDisabled}
+              isUploading={photoUploading === "before"}
+              onFiles={(files) => handlePhotoUpload("before", files)}
+              uploadedPhotos={uploadedPhotos.filter((p) => p.type === "before")}
+            />
+
+            {/* After Work upload zone */}
+            <PhotoUploadZone
+              label="After Work"
+              type="after"
+              disabled={actionsDisabled}
+              isUploading={photoUploading === "after"}
+              onFiles={(files) => handlePhotoUpload("after", files)}
+              uploadedPhotos={uploadedPhotos.filter((p) => p.type === "after")}
+            />
+          </div>
+        )}
+
+        {/* ── Complete Work Button ── */}
+        {isAccepted && (
+          <Button
+            onClick={() => setCompleteDialogOpen(true)}
+            disabled={isCompleting}
+            className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-2xl h-12 text-sm font-semibold"
+          >
+            {isCompleting ? (
+              <>
+                <Loader2 size={16} className="mr-2 animate-spin" />
+                Completing...
+              </>
+            ) : (
+              <>
+                <CheckCircle size={16} className="mr-2" />
+                Complete Work
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Completed confirmation */}
+        {isCompleted && (
+          <div className="bg-[var(--anna-success)]/10 border border-[var(--anna-success)]/20 rounded-2xl p-4 flex items-center gap-3">
+            <CheckCircle2 size={20} className="text-[var(--anna-success)]" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                Work Completed
+              </p>
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                The household has been notified. Thank you!
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Complete Work Dialog */}
+        <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-[var(--anna-slate)]">
+                Complete Work
+              </DialogTitle>
+              <DialogDescription className="text-[var(--anna-muted)]">
+                Mark this job as complete. You can optionally add completion notes for the household.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <Textarea
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value.slice(0, 1000))}
+                placeholder="Add any notes about the completed work (optional)..."
+                className="min-h-[100px] text-sm resize-none rounded-xl"
+                maxLength={1000}
+              />
+              <p className="text-[10px] text-[var(--anna-muted)] text-right">
+                {completionNotes.length}/1000
+              </p>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setCompleteDialogOpen(false)}
+                className="rounded-xl flex-1 sm:flex-none"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleComplete}
+                disabled={isCompleting}
+                className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl flex-1 sm:flex-none"
+              >
+                {isCompleting ? (
+                  <>
+                    <Loader2 size={14} className="mr-1.5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Confirm Complete"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Auto-refresh indicator */}
         <div className="flex items-center justify-center gap-1.5 text-[10px] text-[var(--anna-muted)]">
           <RefreshCw
@@ -476,65 +927,4 @@ function JobDetailView({
       </div>
     </div>
   );
-}
-
-// ─── Main Page Component ──────────────────────────────────
-
-export default function StaffJobViewPage() {
-  const params = useParams<{ token: string }>();
-  const [data, setData] = useState<ShareData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const fetchBooking = useCallback(async () => {
-    if (!params.token) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/j/share/${params.token}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Failed to load job details");
-        setData(null);
-        return;
-      }
-      const json = await res.json();
-      setData(json);
-      setError(null);
-    } catch {
-      setError("Network error. Please check your connection.");
-      setData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [params.token]);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchBooking();
-  }, [fetchBooking]);
-
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchBooking();
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchBooking]);
-
-  // Loading state (initial load)
-  if (!data && !error) {
-    return <LoadingSkeleton />;
-  }
-
-  // Error state
-  if (error && !data) {
-    return <ErrorState message={error} />;
-  }
-
-  // Success state
-  if (data) {
-    return <JobDetailView data={data} isLoading={isLoading} />;
-  }
-
-  return null;
 }

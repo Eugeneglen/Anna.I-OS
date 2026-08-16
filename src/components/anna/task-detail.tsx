@@ -27,12 +27,13 @@ import {
   type TaskStatus,
   type VendorSuggestion,
 } from "@/lib/types";
-import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle, Pencil } from "lucide-react";
+import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, ThumbsDown, RefreshCw, AlertTriangle, ArrowRight, Zap, Trophy, ImageIcon, Film, RotateCcw, X, Sparkles, Brain, Eye, Loader2, CheckCircle2, FileText, XCircle, Pencil, Receipt, Wallet } from "lucide-react";
 import { RaiseDisputeDialog } from "./raise-dispute-dialog";
 import { EditPredictedDialog } from "./edit-predicted-dialog";
 import { WithErrorBoundary } from "@/components/error-boundary";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 async function fetchTask(taskId: string): Promise<Task> {
   const res = await fetch(`/api/tasks/${taskId}`);
@@ -46,6 +47,21 @@ async function fetchVendorSuggestions(taskId: string): Promise<VendorSuggestion[
   if (!res.ok) throw new Error("Failed to fetch vendor suggestions");
   const data = await res.json();
   return data.suggestions || [];
+}
+
+interface BookingAddonData {
+  id: string;
+  description: string;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+}
+
+async function fetchBookingAddons(bookingId: string): Promise<BookingAddonData[]> {
+  const res = await fetch(`/api/bookings/${bookingId}/addons`);
+  if (!res.ok) throw new Error("Failed to fetch addons");
+  const data = await res.json();
+  return data.addons || [];
 }
 
 const actionButtons: Record<
@@ -314,6 +330,57 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
+  // ── Addon approval/rejection ──
+  const addonBookingId = task?.bookings?.[0]?.id;
+  const showAddonBanner = task
+    ? (["ACCEPTED", "SCHEDULED", "IN_PROGRESS"] as TaskStatus[]).includes(task.status)
+    : false;
+
+  const { data: bookingAddonsData, isLoading: addonsLoading } = useQuery({
+    queryKey: ["booking-addons", addonBookingId],
+    queryFn: () => fetchBookingAddons(addonBookingId!),
+    enabled: !!addonBookingId && showAddonBanner,
+  });
+
+  const addonActionMutation = useMutation({
+    mutationFn: async ({
+      addonId,
+      action,
+    }: {
+      addonId: string;
+      action: "approve" | "reject";
+    }) => {
+      if (!addonBookingId) throw new Error("No booking found");
+      const res = await fetch(`/api/bookings/${addonBookingId}/addons/${addonId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to update addon");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      const msg =
+        variables.action === "approve"
+          ? "Additional charge approved"
+          : "Additional charge rejected";
+      toast.success(msg);
+      queryClient.invalidateQueries({ queryKey: ["booking-addons", addonBookingId] });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update addon"
+      );
+    },
+  });
+
+  const pendingAddons = (bookingAddonsData || []).filter((a) => a.status === "pending");
+
   // Rating mutation (standalone — no status transition)
   const ratingMutation = useMutation({
     mutationFn: async ({ bookingId, rating, comment }: { bookingId: string; rating: number; comment?: string }) => {
@@ -483,6 +550,77 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
           </p>
         </div>
       )}
+
+      {/* ── Addon Approval Banner ── */}
+      {showAddonBanner && !addonsLoading && pendingAddons.length > 0 ? (
+        <div className="rounded-2xl border-2 border-[var(--anna-warning)]/30 bg-gradient-to-br from-[var(--anna-warning)]/5 to-[var(--anna-bg)] p-4 space-y-3 anna-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[var(--anna-warning)]/15 flex items-center justify-center">
+              <Receipt size={16} className="text-[var(--anna-warning)]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                Additional Charges Pending
+              </p>
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                The service provider has requested additional charges. Please review.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {pendingAddons.map((addon) => (
+              <div
+                key={addon.id}
+                className="bg-white/80 rounded-xl p-3.5 space-y-3 border border-[var(--anna-warning)]/20"
+              >
+                <p className="text-sm text-[var(--anna-slate)] leading-relaxed">
+                  {addon.description}
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Wallet size={12} className="text-[var(--anna-muted)]" />
+                    <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+                      {formatSgd(addon.amountCents)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        addonActionMutation.mutate({
+                          addonId: addon.id,
+                          action: "reject",
+                        })
+                      }
+                      disabled={addonActionMutation.isPending}
+                      className="rounded-lg text-xs h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    >
+                      <XCircle size={12} className="mr-1" />
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        addonActionMutation.mutate({
+                          addonId: addon.id,
+                          action: "approve",
+                        })
+                      }
+                      disabled={addonActionMutation.isPending}
+                      className="rounded-lg text-xs h-8 px-3 bg-[var(--anna-success)] hover:bg-[var(--anna-success)]/90 text-white"
+                    >
+                      <CheckCircle size={12} className="mr-1" />
+                      Approve
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Attachments (Photos & Videos) */}
       {task.attachments && task.attachments.length > 0 && (

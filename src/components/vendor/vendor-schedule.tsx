@@ -91,18 +91,16 @@ async function fetchVendorSchedule(vendorId: string): Promise<VendorScheduleResp
 
 // ─── Booking status helpers ──────────────────────────────
 
-type BookingTab = "upcoming" | "in_progress" | "completed";
+type BookingTab = "upcoming" | "completed";
 
 function getBookingTab(status: string): BookingTab {
   if (status === "completed" || status === "cancelled") return "completed";
-  if (status === "in_progress") return "in_progress";
   return "upcoming";
 }
 
 const BOOKING_STATUS_STYLES: Record<string, string> = {
   assigned: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
   accepted: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
-  in_progress: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   completed: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   cancelled: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
 };
@@ -110,7 +108,6 @@ const BOOKING_STATUS_STYLES: Record<string, string> = {
 const BOOKING_STATUS_LABELS: Record<string, string> = {
   assigned: "Assigned",
   accepted: "Accepted",
-  in_progress: "In Progress",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -124,8 +121,6 @@ function getActionForStatus(status: string): {
     case "assigned":
       return { label: "Accept", icon: ThumbsUp, action: "accept" };
     case "accepted":
-      return { label: "Start", icon: Play, action: "start" };
-    case "in_progress":
       return { label: "Complete", icon: CheckCircle, action: "complete" };
     default:
       return null;
@@ -282,8 +277,7 @@ function BookingCard({
 
 function EmptyState({ tab }: { tab: string }) {
   const messages: Record<string, { title: string; sub: string }> = {
-    upcoming: { title: "No upcoming bookings", sub: "New assignments will appear here" },
-    in_progress: { title: "No active jobs", sub: "Accepted bookings will show here when started" },
+    upcoming: { title: "No upcoming jobs", sub: "New assignments will appear here" },
     completed: { title: "No completed jobs yet", sub: "Finished work will appear here" },
   };
   const msg = messages[tab] ?? messages.upcoming;
@@ -360,7 +354,7 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
   const schedule = data?.schedule ?? [];
 
   const grouped = useMemo(() => {
-    const result = { upcoming: [], in_progress: [], completed: [] } as Record<
+    const result = { upcoming: [], completed: [] } as Record<
       BookingTab,
       VendorScheduleItem[]
     >;
@@ -401,17 +395,6 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
               )}
             </TabsTrigger>
             <TabsTrigger
-              value="in_progress"
-              className="rounded-lg text-xs data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-white"
-            >
-              In Progress
-              {grouped.in_progress.length > 0 && (
-                <span className="ml-1.5 font-data text-[10px] bg-[var(--anna-sage-light)] data-[state=active]:bg-white/20 px-1.5 py-0.5 rounded-md text-[var(--anna-muted)] data-[state=active]:text-white/80">
-                  {grouped.in_progress.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
               value="completed"
               className="rounded-lg text-xs data-[state=active]:bg-[var(--anna-sage)] data-[state=active]:text-white"
             >
@@ -431,31 +414,6 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
           ) : (
             <div className="space-y-2 px-4 lg:px-6 max-h-96 overflow-y-auto anna-scroll">
               {grouped.upcoming.map((item) => (
-                <BookingCard
-                  key={item.id}
-                  item={item}
-                  vendor={vendor!}
-                  onAction={(bid, a) => {
-                    if (a === "complete" && onRequestComplete) {
-                      onRequestComplete(bid, item.verificationPhotoCount, item.category);
-                    } else {
-                      updateMutation.mutate({ bookingId: bid, action: a });
-                    }
-                  }}
-                  onSelect={() => onSelectBooking(item, vendor!)}
-                  isPending={updateMutation.isPending}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="in_progress" className="mt-4">
-          {grouped.in_progress.length === 0 ? (
-            <EmptyState tab="in_progress" />
-          ) : (
-            <div className="space-y-2 px-4 lg:px-6 max-h-96 overflow-y-auto anna-scroll">
-              {grouped.in_progress.map((item) => (
                 <BookingCard
                   key={item.id}
                   item={item}

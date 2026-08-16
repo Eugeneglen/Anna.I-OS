@@ -71,8 +71,7 @@ export const MAX_AUTONOMY_LEVEL = 5
 /** Valid booking status transitions */
 export const BOOKING_STATUS_TRANSITIONS: Record<string, string[]> = {
   assigned: ['accepted', 'cancelled'],
-  accepted: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  accepted: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }

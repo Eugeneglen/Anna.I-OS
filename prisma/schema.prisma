@@ -205,6 +205,7 @@ model FamilyMember {
 
   household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   notifications Notification[]
+  approvedAddons BookingAddon[] @relation("AddonApprover")
 }
 
 model Vendor {
@@ -243,6 +244,7 @@ model Vendor {
   featureOverrides VendorFeatureOverride[]
   notifications  Notification[]
   addresses       Address[]
+  createdAddons   BookingAddon[] @relation("AddonCreator")
 }
 
 // ======================== ADDRESSES ========================
@@ -387,6 +389,7 @@ model Booking {
   assignedStaff      VendorStaff?      @relation(fields: [assignedStaffId], references: [id])
   verificationPhotos VerificationPhoto[]
   escrowEntries     EscrowLedger[]
+  addons            BookingAddon[]
 }
 
 // ======================== VERIFICATION ========================
@@ -397,7 +400,7 @@ model VerificationPhoto {
   bookingId        String
   fileUrl          String
   thumbnailUrl     String?
-  uploadedBy       String   // "vendor" | "household"
+  uploadedBy       String   // "vendor:before" | "vendor:after" | "staff:before" | "staff:after"
   isVerified       Boolean  @default(false)
   verifiedBy       String?  // memberId who verified
   verifiedAt       DateTime?
@@ -406,6 +409,28 @@ model VerificationPhoto {
 
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// ======================== AD-HOC CHARGES ========================
+// Staff/vendor can add additional charges during a job (e.g., gas top-up).
+// The user (household) receives a notification and must approve before work proceeds.
+
+model BookingAddon {
+  id           String   @id @default(cuid())
+  bookingId    String
+  description  String                         // e.g., "Gas top-up for air-con unit"
+  amountCents  Int                             // additional charge in cents
+  status       String   @default("pending")    // pending | approved | rejected
+  addedById    String?                         // vendorId who added the charge
+  approvedById  String?                         // memberId who approved/rejected
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  addedBy    Vendor?       @relation("AddonCreator", fields: [addedById], references: [id])
+  approvedBy FamilyMember? @relation("AddonApprover", fields: [approvedById], references: [id])
 }
 
 // ======================== ESCROW ========================

@@ -8,13 +8,12 @@ import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
-  start: "in_progress",
   complete: "completed",
   reject: "cancelled",
 }
 
 const patchVendorBookingSchema = z.object({
-  action: z.enum(["accept", "start", "complete", "reject"]),
+  action: z.enum(["accept", "complete", "reject"]),
   completionNotes: z.string().max(1000).optional(),
 })
 
@@ -70,11 +69,6 @@ export async function PATCH(
 
     if (action === "accept") {
       updateData.acceptedAt = now
-    }
-
-    if (action === "start") {
-      updateData.actualStart = now
-      updateData.acceptedAt = booking.acceptedAt ?? now
     }
 
     if (action === "complete") {
@@ -215,44 +209,7 @@ export async function PATCH(
     }
 
     // ────────────────────────────────────────────────
-    // START: Vendor begins work → IN_PROGRESS
-    // ────────────────────────────────────────────────
-    if (action === "start") {
-      await db.task.update({
-        where: { id: booking.taskId },
-        data: { status: TaskStatus.IN_PROGRESS, inProgressAt: now },
-      })
-
-      // Notify household: vendor en route
-      const members = await db.familyMember.findMany({
-        where: { householdId: booking.task.householdId },
-        select: { id: true },
-      })
-
-      for (const member of members) {
-        await db.notification.create({
-          data: {
-            householdId: booking.task.householdId,
-            recipientType: RecipientType.HOUSEHOLD_MEMBER,
-            memberId: member.id,
-            channel: NotificationChannel.WHATSAPP,
-            eventType: NotificationEventType.VENDOR_EN_ROUTE,
-            title: "Vendor En Route",
-            body: `Your service provider has started working on your ${booking.task.category.toLowerCase()} task.`,
-            status: NotificationStatus.PENDING,
-            referenceType: "booking",
-            referenceId: booking.id,
-          },
-        })
-      }
-
-      triggerAnomalyDetection(booking.task.householdId)
-
-      return NextResponse.json({ booking: updatedBooking })
-    }
-
-    // ────────────────────────────────────────────────
-    // COMPLETE: Vendor finishes → COMPLETED
+    // COMPLETE: Vendor finishes → COMPLETED (works from accepted)
     // ────────────────────────────────────────────────
     if (action === "complete") {
       await db.task.update({

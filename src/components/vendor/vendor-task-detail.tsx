@@ -113,8 +113,6 @@ function getActionConfig(status: string): ActionConfig {
         secondary: { label: "Decline", icon: ThumbsDown, action: "reject", destructive: true },
       };
     case "accepted":
-      return { primary: { label: "Start Work", icon: Play, action: "start" } };
-    case "in_progress":
       return { primary: { label: "Mark Complete", icon: CheckCircle, action: "complete" } };
     default:
       return { primary: null };
@@ -172,8 +170,8 @@ function VendorTaskDetailContent({
   const showPhotoUpload = booking.status === "in_progress" || booking.status === "completed";
   const isDisputed = booking.taskStatus === "DISPUTED" || booking.escrow?.state === "DISPUTED";
 
-  // Can assign/reassign staff when booking is assigned, accepted, or in_progress
-  const canAssignStaff = ["assigned", "accepted", "in_progress"].includes(booking.status);
+  // Can assign/reassign staff when booking is assigned or accepted
+  const canAssignStaff = ["assigned", "accepted"].includes(booking.status);
 
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -574,7 +572,7 @@ function VendorTaskDetailContent({
       )}
 
       {/* Share Job Link — visible when staff is assigned + booking is accepted/in_progress */}
-      {booking.assignedStaff && ["accepted", "in_progress"].includes(booking.status) && (
+      {booking.assignedStaff && booking.status === "accepted" && (
         <Button
           variant="outline"
           size="sm"
