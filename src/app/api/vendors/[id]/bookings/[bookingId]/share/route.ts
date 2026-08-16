@@ -1,13 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
 
 export async function POST(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; bookingId: string }> }
 ) {
   try {
     const { id: vendorId, bookingId } = await params;
+
+    // Derive origin from request headers (works behind reverse proxies / Caddy gateway)
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "localhost:3000";
+    const origin = `${proto}://${host}`;
 
     // Verify booking exists and belongs to this vendor
     const booking = await db.booking.findUnique({
@@ -30,7 +35,7 @@ export async function POST(
       });
 
       return NextResponse.json({
-        shareUrl: `https://annai.sg/j/${booking.shareToken}`,
+        shareUrl: `${origin}/j/${booking.shareToken}`,
         token: booking.shareToken,
         booking: existing,
       });
@@ -52,7 +57,7 @@ export async function POST(
     });
 
     return NextResponse.json({
-      shareUrl: `https://annai.sg/j/${token}`,
+      shareUrl: `${origin}/j/${token}`,
       token,
       booking: updated,
     });
