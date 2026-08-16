@@ -9,10 +9,14 @@ export async function POST(
   try {
     const { id: vendorId, bookingId } = await params;
 
-    // Derive origin from request headers (works behind reverse proxies / Caddy gateway)
+    // Derive origin: prefer explicit env var, then fall back to request headers
+    // In sandbox/reverse-proxy environments the host header may be an internal
+    // hostname that the staff member cannot reach, so NEXT_PUBLIC_APP_URL
+    // (or APP_URL for server-only) takes precedence.
+    const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
     const proto = request.headers.get("x-forwarded-proto") || "https";
     const host = request.headers.get("host") || "localhost:3000";
-    const origin = `${proto}://${host}`;
+    const origin = configured ? configured.replace(/\/$/, "") : `${proto}://${host}`;
 
     // Verify booking exists and belongs to this vendor
     const booking = await db.booking.findUnique({

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,8 @@ import {
   CheckCircle,
   Loader2,
   Receipt,
+  Plus,
+  DollarSign,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -481,30 +484,36 @@ function JobDetailView({
   const [completionNotes, setCompletionNotes] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
   const [photoUploading, setPhotoUploading] = useState<string | null>(null);
+  const [addonDialogOpen, setAddonDialogOpen] = useState(false);
+  const [addonDescription, setAddonDescription] = useState("");
+  const [addonAmount, setAddonAmount] = useState("");
+  const [isCreatingAddon, setIsCreatingAddon] = useState(false);
 
   const isAccepted = booking.status === "accepted" || booking.status === "in_progress";
   const isCompleted = booking.status === "completed";
   const isCancelled = booking.status === "cancelled";
   const actionsDisabled = isCompleted || isCancelled;
+  const canAddAddon = ["assigned", "accepted", "in_progress"].includes(booking.status);
 
   // ── Fetch addons ──
-  useEffect(() => {
-    async function loadAddons() {
-      setAddonsLoading(true);
-      try {
-        const res = await fetch(`/api/j/share/${token}/addons`);
-        if (res.ok) {
-          const json = await res.json();
-          setAddons(json.addons || []);
-        }
-      } catch {
-        // Silently fail — addons are non-critical
-      } finally {
-        setAddonsLoading(false);
+  const fetchAddons = useCallback(async () => {
+    setAddonsLoading(true);
+    try {
+      const res = await fetch(`/api/j/share/${token}/addons`);
+      if (res.ok) {
+        const json = await res.json();
+        setAddons(json.addons || []);
       }
+    } catch {
+      // Silently fail — addons are non-critical
+    } finally {
+      setAddonsLoading(false);
     }
-    loadAddons();
   }, [token]);
+
+  useEffect(() => {
+    fetchAddons();
+  }, [fetchAddons]);
 
   // ── Photo upload handler ──
   const handlePhotoUpload = useCallback(
@@ -568,6 +577,54 @@ function JobDetailView({
       );
     } finally {
       setIsCompleting(false);
+    }
+  };
+
+  // ── Create addon handler ──
+  const handleCreateAddon = async () => {
+    const desc = addonDescription.trim();
+    const amountStr = addonAmount.trim();
+
+    if (!desc) {
+      toast.error("Please describe the additional work");
+      return;
+    }
+
+    // Parse amount: allow formats like "15", "15.00", "$15", "15.50"
+    const numericAmount = parseFloat(amountStr.replace(/[$,]/g, ""));
+    if (isNaN(numericAmount) || numericAmount < 0.5) {
+      toast.error("Please enter a valid amount (minimum $0.50)");
+      return;
+    }
+
+    setIsCreatingAddon(true);
+    try {
+      const res = await fetch(`/api/j/share/${token}/addons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: desc,
+          amountCents: Math.round(numericAmount * 100),
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to add charge");
+      }
+
+      toast.success("Additional charge submitted — awaiting customer approval");
+      setAddonDialogOpen(false);
+      setAddonDescription("");
+      setAddonAmount("");
+      // Refresh addons list
+      await fetchAddons();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to add charge"
+      );
+    } finally {
+      setIsCreatingAddon(false);
     }
   };
 
@@ -750,14 +807,36 @@ function JobDetailView({
           </div>
         )}
 
-        {/* ── Addons Section (read-only) ── */}
-        {!addonsLoading && addons.length > 0 && (
-          <div className="bg-[var(--anna-bg)] rounded-2xl p-5 space-y-3">
+        {/* ── Additional Charges Section ── */}
+        <div className="bg-[var(--anna-bg)] rounded-2xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
               <Receipt size={12} />
               Additional Charges
             </div>
+            {canAddAddon && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setAddonDialogOpen(true)}
+                className="text-[11px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)] hover:text-[var(--anna-sage-dark)] h-7 px-2 font-medium"
+              >
+                <Plus size={13} className="mr-1" />
+                Add Charge
+              </Button>
+            )}
+          </div>
 
+          {addonsLoading ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 size={14} className="animate-spin text-[var(--anna-muted)]" />
+              <span className="text-xs text-[var(--anna-muted)]">Loading...</span>
+            </div>
+          ) : addons.length === 0 ? (
+            <p className="text-xs text-[var(--anna-muted)] py-1">
+              No additional charges yet.
+            </p>
+          ) : (
             <div className="space-y-2">
               {addons.map((addon) => (
                 <div
@@ -784,8 +863,8 @@ function JobDetailView({
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ── Work Photos Section ── */}
         {!isCancelled && (
@@ -898,6 +977,91 @@ function JobDetailView({
                   </>
                 ) : (
                   "Confirm Complete"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Add Additional Charge Dialog ── */}
+        <Dialog open={addonDialogOpen} onOpenChange={setAddonDialogOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-[var(--anna-slate)]">
+                Add Additional Charge
+              </DialogTitle>
+              <DialogDescription className="text-[var(--anna-muted)]">
+                Submit an ad-hoc charge for extra work performed. The customer will review and approve or reject this charge.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--anna-slate)]">
+                  Description of additional work
+                </label>
+                <Textarea
+                  value={addonDescription}
+                  onChange={(e) =>
+                    setAddonDescription(e.target.value.slice(0, 500))
+                  }
+                  placeholder="e.g., Deep cleaning of oven interior, replaced worn-out filter..."
+                  className="min-h-[80px] text-sm resize-none rounded-xl"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-[var(--anna-muted)] text-right">
+                  {addonDescription.length}/500
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--anna-slate)] flex items-center gap-1.5">
+                  <DollarSign size={12} className="text-[var(--anna-muted)]" />
+                  Charge Amount (SGD)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--anna-muted)] font-medium">
+                    $
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={addonAmount}
+                    onChange={(e) => setAddonAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="pl-7 rounded-xl text-sm font-data"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAddonDialogOpen(false);
+                  setAddonDescription("");
+                  setAddonAmount("");
+                }}
+                className="rounded-xl flex-1 sm:flex-none"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateAddon}
+                disabled={isCreatingAddon || !addonDescription.trim() || !addonAmount.trim()}
+                className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl flex-1 sm:flex-none"
+              >
+                {isCreatingAddon ? (
+                  <>
+                    <Loader2 size={14} className="mr-1.5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Receipt size={14} className="mr-1.5" />
+                    Submit Charge
+                  </>
                 )}
               </Button>
             </DialogFooter>
