@@ -380,7 +380,21 @@ async function _main() {
       data: { vendorId: IDS.vendors.greensweep, name, contact: `${name.toLowerCase().replace(/ /g, '.')}@greensweep.sg`, role: 'staff' },
     })
   }
-  console.log('✅ 30 vendor staff created (3 SME × ~10 staff)')
+  // SparkClean Pro (MICRO — needs staff too)
+  const sparkcleanStaff = ['Maria S.', 'Linda W.', 'Ravi M.', 'Amy T.', 'Kevin L.']
+  for (const name of sparkcleanStaff) {
+    await db.vendorStaff.create({
+      data: { vendorId: IDS.vendors.sparkclean, name, contact: `${name.toLowerCase().replace(/ /g, '.')}@sparkclean.sg`, role: 'staff' },
+    })
+  }
+  // CoolAir Services (MICRO — needs staff too)
+  const coolairStaff = ['Zain A.', 'Bala K.', 'Hassan R.']
+  for (const name of coolairStaff) {
+    await db.vendorStaff.create({
+      data: { vendorId: IDS.vendors.coolair, name, contact: `${name.toLowerCase().replace(/ /g, '.')}@coolair.sg`, role: 'staff' },
+    })
+  }
+  console.log('✅ 40 vendor staff created (5 vendors × ~8 staff)')
 
   // ============ 4c. PLANS & FEATURES (data model only) ============
   const plans = [
