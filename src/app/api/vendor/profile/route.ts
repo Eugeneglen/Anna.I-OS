@@ -13,6 +13,7 @@ const ALLOWED_PATCH_FIELDS = [
   "contactEmail2",
   "contactPhone2",
   "availability",    // JSON: { workingDays, workingHours, notes }
+  "zones",            // JSON array of zone strings
 ] as const;
 
 // Fields that require ops approval — reject vendor attempts
@@ -24,7 +25,6 @@ const OPS_ONLY_FIELDS = [
   "dailyCapacity",
   "maxTasksPerDay",
   "maxTasksPerWeek",
-  "zones",
   "status",
   "verificationData",
 ] as const;
@@ -152,6 +152,18 @@ export async function PATCH(req: NextRequest) {
           );
         }
       }
+    }
+
+    // Validate zones structure if changing — must be array of strings
+    if ("zones" in updateData && updateData.zones !== null) {
+      if (!Array.isArray(updateData.zones)) {
+        return NextResponse.json(
+          { error: "zones must be an array of strings" },
+          { status: 400 }
+        );
+      }
+      const cleaned = (updateData.zones as unknown[]).map((z) => String(z).trim()).filter(Boolean);
+      updateData.zones = JSON.stringify(cleaned);
     }
 
     const vendor = await db.vendor.update({

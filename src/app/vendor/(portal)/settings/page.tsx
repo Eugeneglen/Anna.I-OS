@@ -73,7 +73,7 @@ interface VendorProfile {
   updatedAt: string;
 }
 
-type EditSection = "phone" | "email" | "availability" | "contactPerson" | "contactPerson2" | null;
+type EditSection = "phone" | "email" | "availability" | "contactPerson" | "contactPerson2" | "zones" | null;
 
 interface AvailabilityData {
   workingDays: string[];
@@ -326,6 +326,7 @@ export default function VendorSettingsPage() {
   const [editCP2Name, setEditCP2Name] = useState("");
   const [editCP2Email, setEditCP2Email] = useState("");
   const [editCP2Phone, setEditCP2Phone] = useState("");
+  const [editZonesStr, setEditZonesStr] = useState("");
 
   // Sync edit state when editing starts
   const startEdit = (section: EditSection) => {
@@ -349,6 +350,14 @@ export default function VendorSettingsPage() {
         setEditWorkingDays(["Mon", "Tue", "Wed", "Thu", "Fri"]);
         setEditWorkingHours("08:00-18:00");
         setEditHoursNotes("");
+      }
+    }
+    if (section === "zones") {
+      try {
+        const z = JSON.parse(profile.zones);
+        setEditZonesStr(Array.isArray(z) ? z.join(", ") : "");
+      } catch {
+        setEditZonesStr("");
       }
     }
     setEditSection(section);
@@ -469,6 +478,30 @@ export default function VendorSettingsPage() {
     },
     onSuccess: () => {
       toast({ title: "Contact person 2 updated" });
+      queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
+      setEditSection(null);
+    },
+    onError: (err) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Zones mutation
+  const saveZonesMutation = useMutation({
+    mutationFn: async (zones: string[]) => {
+      const res = await fetch("/api/vendor/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zones }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Update failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Service zones updated" });
       queryClient.invalidateQueries({ queryKey: ["vendor-profile"] });
       setEditSection(null);
     },
@@ -715,26 +748,74 @@ export default function VendorSettingsPage() {
           </div>
         </SectionCard>
 
-        {/* ── Service Zones (read-only) ── */}
+        {/* ── Service Zones (editable) ── */}
         <SectionCard title="Service Zones" subtitle="Areas where you accept bookings" icon={MapPin}>
-          {zones.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {zones.map((zone) => (
-                <div key={zone} className="flex items-center gap-1.5 bg-[var(--anna-sage-light)] rounded-lg px-3 py-1.5">
-                  <MapPin size={12} className="text-[var(--anna-sage-dark)]" />
-                  <span className="text-xs font-medium text-[var(--anna-sage-dark)]">{zone}</span>
-                </div>
-              ))}
+          {editSection === "zones" ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-medium text-[var(--anna-muted)] uppercase tracking-wider mb-2">
+                  Zones (comma-separated)
+                </p>
+                <Input
+                  value={editZonesStr}
+                  onChange={(e) => setEditZonesStr(e.target.value)}
+                  placeholder="e.g. Tampines, Bedok, Pasir Ris"
+                  className="rounded-lg border-[var(--anna-border)] h-9 text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const parsed = editZonesStr.split(",").map((z) => z.trim()).filter(Boolean);
+                      if (parsed.length > 0) saveZonesMutation.mutate(parsed);
+                    }
+                  }}
+                />
+                <p className="text-[10px] text-[var(--anna-muted)] mt-1">Separate multiple zones with commas</p>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const parsed = editZonesStr.split(",").map((z) => z.trim()).filter(Boolean);
+                    if (parsed.length > 0) saveZonesMutation.mutate(parsed);
+                  }}
+                  disabled={saveZonesMutation.isPending}
+                  className="h-7 px-2 rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+                >
+                  <Save size={12} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={cancelEdit}
+                  className="h-7 px-1 rounded-lg"
+                >
+                  <X size={12} />
+                </Button>
+              </div>
             </div>
           ) : (
-            <p className="text-xs text-[var(--anna-muted)] py-2">No zones configured</p>
+            <div className="space-y-3">
+              {zones.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {zones.map((zone) => (
+                    <div key={zone} className="flex items-center gap-1.5 bg-[var(--anna-sage-light)] rounded-lg px-3 py-1.5">
+                      <MapPin size={12} className="text-[var(--anna-sage-dark)]" />
+                      <span className="text-xs font-medium text-[var(--anna-sage-dark)]">{zone}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--anna-muted)] py-2">No zones configured</p>
+              )}
+              <Button
+                onClick={() => startEdit("zones")}
+                variant="outline"
+                className="mt-1 rounded-xl h-8 text-xs"
+              >
+                <Pencil size={12} className="mr-1.5" />
+                Edit Zones
+              </Button>
+            </div>
           )}
-          <div className="mt-3 flex items-start gap-2 px-1">
-            <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
-            <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
-              Contact ops to update your service zones.
-            </p>
-          </div>
         </SectionCard>
 
         {/* ── Working Hours & Availability ── */}
