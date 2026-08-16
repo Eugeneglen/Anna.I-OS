@@ -428,33 +428,37 @@ export default function VendorSchedulePage() {
                         key={job.id}
                         job={job}
                         vendor={vendorInfo}
-                        onClick={() => {
-                          // Navigate to schedule tab with this job selected
-                          // Convert TodayJob to VendorScheduleItem
-                          setSelectedBooking({
-                            id: job.id,
-                            status: job.status,
-                            scheduledStart: job.scheduledStart,
-                            scheduledEnd: job.scheduledEnd,
-                            actualStart: null,
-                            actualEnd: null,
-                            acceptedAt: null,
-                            completedAt: null,
-                            cancelledAt: null,
-                            rating: null,
-                            ratingComment: null,
-                            category: job.category,
-                            instructions: job.instructions,
-                            amountCents: job.amountCents,
-                            householdName: job.householdName,
-                            address: job.address,
-                            verificationPhotoCount: 0,
-                            assignedStaff: job.assignedStaff
-                              ? { id: job.assignedStaff.id, name: job.assignedStaff.name, role: "staff", contact: job.assignedStaff.contact }
-                              : null,
-                          });
-                          setSelectedVendor(vendorInfo);
-                          setDetailOpen(true);
+                        onClick={async () => {
+                          // Switch to "All Bookings" tab and open detail with
+                          // full data from schedule API (includes customerAttachments,
+                          // addons, escrow, verificationPhotos, etc.)
+                          setActiveTab("schedule");
+                          const cached = queryClient.getQueryData<{ schedule: VendorScheduleItem[] }>(["vendor-schedule", vendorId]);
+                          if (cached?.schedule) {
+                            const fullBooking = cached.schedule.find((b) => b.id === job.id);
+                            if (fullBooking) {
+                              setSelectedBooking(fullBooking);
+                              setSelectedVendor(vendorInfo);
+                              setDetailOpen(true);
+                            }
+                          } else {
+                            // Schedule data not cached — fetch it now
+                            try {
+                              const res = await fetch(`/api/vendors/${vendorId}/schedule`);
+                              if (res.ok) {
+                                const data = await res.json() as { schedule: VendorScheduleItem[]; vendor: VendorInfo };
+                                queryClient.setQueryData(["vendor-schedule", vendorId], data);
+                                const fullBooking = data.schedule.find((b) => b.id === job.id);
+                                if (fullBooking) {
+                                  setSelectedBooking(fullBooking);
+                                  setSelectedVendor(vendorInfo);
+                                  setDetailOpen(true);
+                                }
+                              }
+                            } catch {
+                              // Silent fail — user can still click from All Bookings tab
+                            }
+                          }
                         }}
                       />
                     ))}
