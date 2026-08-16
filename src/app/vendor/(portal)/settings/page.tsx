@@ -786,9 +786,6 @@ export default function VendorSettingsPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
-                        {PROPERTY_TYPE_LABELS[addr.propertyType as keyof typeof PROPERTY_TYPE_LABELS] || addr.propertyType}
-                      </span>
                       {addr.isDefault && (
                         <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[var(--anna-success)]/15 text-[var(--anna-success)]">
                           Default
@@ -850,6 +847,28 @@ export default function VendorSettingsPage() {
               </Button>
             </div>
           )}
+        </SectionCard>
+
+        {/* ── Service Zones (read-only) ── */}
+        <SectionCard title="Service Zones" subtitle="Areas where you accept bookings" icon={MapPin}>
+          {zones.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {zones.map((zone) => (
+                <div key={zone} className="flex items-center gap-1.5 bg-[var(--anna-sage-light)] rounded-lg px-3 py-1.5">
+                  <MapPin size={12} className="text-[var(--anna-sage-dark)]" />
+                  <span className="text-xs font-medium text-[var(--anna-sage-dark)]">{zone}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--anna-muted)] py-2">No zones configured</p>
+          )}
+          <div className="mt-3 flex items-start gap-2 px-1">
+            <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
+            <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
+              Contact ops to update your service zones.
+            </p>
+          </div>
         </SectionCard>
 
         {/* ── Working Hours & Availability ── */}
@@ -1009,27 +1028,6 @@ export default function VendorSettingsPage() {
           </div>
         </SectionCard>
 
-        {/* ── Service Zones (read-only) ── */}
-        <SectionCard title="Service Zones" subtitle="Areas where you accept bookings" icon={MapPin}>
-          {zones.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {zones.map((zone) => (
-                <div key={zone} className="flex items-center gap-1.5 bg-[var(--anna-sage-light)] rounded-lg px-3 py-1.5">
-                  <MapPin size={12} className="text-[var(--anna-sage-dark)]" />
-                  <span className="text-xs font-medium text-[var(--anna-sage-dark)]">{zone}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-[var(--anna-muted)] py-2">No zones configured</p>
-          )}
-          <div className="mt-3 flex items-start gap-2 px-1">
-            <AlertCircle size={13} className="text-[var(--anna-muted)] shrink-0 mt-0.5" />
-            <p className="text-[10px] text-[var(--anna-muted)] leading-relaxed">
-              Contact ops to update your service zones.
-            </p>
-          </div>
-        </SectionCard>
       </div>
 
       {/* ── Address Dialog ── */}
