@@ -168,8 +168,14 @@ function VendorTaskDetailContent({
   vendorId: string;
   onStaffAssigned?: (staffInfo: { id: string; name: string; role: string; contact?: string | null }) => void;
 }) {
-  // Local mutable copy of booking — updated optimistically after staff assignment
-  // so that the Send Job Link section appears immediately without a re-fetch
+  // We track the currently assigned staff separately from the booking prop,
+  // because the parent may not always have up-to-date assignedStaff data.
+  // This state is set from: (1) the booking prop on mount, (2) after a successful API assignment.
+  const [assignedStaffInfo, setAssignedStaffInfo] = useState<
+    { id: string; name: string; role: string; contact?: string | null } | null
+  >(booking.assignedStaff ?? null);
+
+  // We still need a local copy of booking for the status (updated optimistically on accept/complete)
   const [localBooking, setLocalBooking] = useState<VendorScheduleItem>(booking);
   const b = localBooking; // shorthand
 
@@ -187,21 +193,29 @@ function VendorTaskDetailContent({
   const [isSharing, setIsSharing] = useState(false);
   const [shareGenerated, setShareGenerated] = useState(false);
 
-  // Sync localBooking when the parent prop changes (e.g. re-open after refetch).
-  // Use a functional updater to preserve optimistic staff assignment if parent
-  // hasn't caught up yet (e.g. after accept action, parent may not have assignedStaff).
-  // Only preserve optimistic updates when it's the SAME booking (by id).
+  // Sync localBooking + assignedStaffInfo when the parent prop changes.
+  // When a DIFFERENT booking is opened, reset everything.  When the SAME
+  // booking gets a fresh prop (e.g. after refetch), update status but keep
+  // our local staff assignment if the parent hasn't caught up yet.
   useEffect(() => {
     setLocalBooking((prev) => {
-      // Different booking opened — reset entirely, don't carry over stale data
       if (prev.id !== booking.id) {
+        // Different booking — full reset
         return booking;
       }
-      // Same booking — merge, preserving optimistic staff assignment
-      return {
-        ...booking,
-        assignedStaff: booking.assignedStaff ?? prev.assignedStaff ?? null,
-      };
+      // Same booking — keep optimistic staff if parent is stale
+      return { ...booking, assignedStaff: booking.assignedStaff ?? prev.assignedStaff ?? null };
+    });
+    // Also sync assignedStaffInfo from the fresh prop (if it has staff)
+    setAssignedStaffInfo((prev) => {
+      if (prev === null && booking.assignedStaff) {
+        return booking.assignedStaff;
+      }
+      // Different booking → reset
+      if (prev && prev.id !== booking.assignedStaff?.id && booking.assignedStaff) {
+        return booking.assignedStaff;
+      }
+      return prev;
     });
   }, [booking]);
 
@@ -242,14 +256,17 @@ function VendorTaskDetailContent({
     return () => { cancelled = true; };
   }, [vendorId, canAssignStaff]);
 
-  // When a booking already has staff, pre-select them
+  // When a booking already has staff, pre-select them in dropdown.
+  // Uses assignedStaffInfo which is our reliable local state.
   useEffect(() => {
-    if (b.assignedStaff) {
+    if (assignedStaffInfo) {
+      setSelectedStaffId(assignedStaffInfo.id);
+    } else if (b.assignedStaff) {
       setSelectedStaffId(b.assignedStaff.id);
     } else {
       setSelectedStaffId("");
     }
-  }, [b.assignedStaff]);
+  }, [assignedStaffInfo, b.assignedStaff]);
 
   const handleAssignStaff = async () => {
     if (!selectedStaffId || isAssigningStaff) return;
@@ -273,14 +290,17 @@ function VendorTaskDetailContent({
       const staffName = json.booking?.assignedStaff?.name || "Staff";
       toast.success(`${staffName} assigned to this job`);
 
-      // Optimistically update local state so the Send Job Link section appears immediately
+      // Build staff info from API response (or fall back to dropdown selection)
       const assignedStaff = json.booking?.assignedStaff
         ? { id: json.booking.assignedStaff.id, name: json.booking.assignedStaff.name, role: json.booking.assignedStaff.role || "staff", contact: json.booking.assignedStaff.contact ?? null }
-        : null;
-      setLocalBooking((prev) => ({ ...prev, assignedStaff }));
-      setSelectedStaffId(assignedStaff?.id || "");
+        : { id: selectedStaffId, name: staffList.find(s => s.id === selectedStaffId)?.name || "Staff", role: "staff", contact: staffList.find(s => s.id === selectedStaffId)?.contact || null };
 
-      onStaffAssigned?.(assignedStaff ?? { id: selectedStaffId, name: "Staff", role: "staff" });
+      // Update BOTH states so the green card appears immediately
+      setAssignedStaffInfo(assignedStaff);
+      setLocalBooking((prev) => ({ ...prev, assignedStaff }));
+      setSelectedStaffId(assignedStaff.id);
+
+      onStaffAssigned?.(assignedStaff);
     } catch {
       toast.error("Failed to assign staff");
     } finally {
@@ -588,7 +608,7 @@ function VendorTaskDetailContent({
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {/* Un-assign option */}
-                    {b.assignedStaff && (
+                    {assignedStaffInfo && (
                       <SelectItem value="__unassign__" className="text-[var(--anna-muted)]">
                         <span className="italic">— Remove assignment —</span>
                       </SelectItem>
@@ -618,13 +638,15 @@ function VendorTaskDetailContent({
                     if (selectedStaffId === "__unassign__") {
                       // Un-assign: send empty body (we'll handle in API)
                       setSelectedStaffId("");
+                      setAssignedStaffInfo(null);
+                      setLocalBooking((prev) => ({ ...prev, assignedStaff: null }));
                       toast.success("Staff removed from this job");
                       onStaffAssigned?.({ id: "", name: "", role: "staff" });
                       return;
                     }
                     handleAssignStaff();
                   }}
-                  disabled={!selectedStaffId || selectedStaffId === b.assignedStaff?.id || isAssigningStaff || isLoadingStaff}
+                  disabled={!selectedStaffId || selectedStaffId === (assignedStaffInfo ?? b.assignedStaff)?.id || isAssigningStaff || isLoadingStaff}
                   className="rounded-xl h-9 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)]"
                 >
                   {isAssigningStaff ? (
@@ -632,9 +654,9 @@ function VendorTaskDetailContent({
                   ) : (
                     <UserPlus size={12} className="mr-1.5" />
                   )}
-                  {b.assignedStaff && selectedStaffId === b.assignedStaff.id
+                  {assignedStaffInfo && selectedStaffId === assignedStaffInfo.id
                     ? "Current Assignment"
-                    : b.assignedStaff
+                    : assignedStaffInfo
                       ? "Reassign Staff"
                       : "Assign Staff"}
                 </Button>
@@ -644,25 +666,119 @@ function VendorTaskDetailContent({
         </div>
       )}
 
-      {/* Assigned staff info (read-only badge, visible after assignment) */}
-      {b.assignedStaff && canAssignStaff && (
-        <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3 flex items-center gap-2 border border-[var(--anna-sage)]/15">
-          <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
-            <User size={14} className="text-white" />
+      {/* ── Assigned Staff Info (read-only badge) + Send Job Link ── */}
+      {/* Shown as a combined block right after the staff picker.  Uses
+         assignedStaffInfo (our reliable local state) instead of b.assignedStaff
+         which may be null if the parent prop is stale. */}
+      {(assignedStaffInfo || b.assignedStaff) && canAssignStaff && (
+        <>
+          <div className="bg-[var(--anna-sage-light)]/30 rounded-xl p-3 flex items-center gap-2 border border-[var(--anna-sage)]/15">
+            <div className="w-8 h-8 rounded-full bg-[var(--anna-sage)] flex items-center justify-center">
+              <User size={14} className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[var(--anna-slate)]">
+                {(assignedStaffInfo ?? b.assignedStaff)!.name}
+              </p>
+              <p className="text-[10px] text-[var(--anna-muted)]">
+                Currently assigned to this job
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-[var(--anna-slate)]">
-              {b.assignedStaff.name}
-            </p>
-            <p className="text-[10px] text-[var(--anna-muted)]">
-              Currently assigned to this job
-            </p>
-          </div>
-        </div>
+
+          {/* ── GREEN CARD: Send Job Link to Staff ── */}
+          {/* Appears right below assigned staff when staff is set + booking is accepted */}
+          {b.status === "accepted" && assignedStaffInfo && (
+            <div className="rounded-2xl border-2 border-[var(--anna-sage)]/30 bg-gradient-to-br from-[#f0fdf4]/60 to-[var(--anna-sage-light)]/20 overflow-hidden">
+              <div className="px-4 py-3 bg-[var(--anna-sage)]/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center">
+                    <Send size={13} className="text-white" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-[var(--anna-sage-dark)]">
+                      Send Job Link to Staff
+                    </h4>
+                    <p className="text-[10px] text-[var(--anna-sage-dark)]/70">
+                      Share the job details with {assignedStaffInfo.name}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Staff info */}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0">
+                    <User size={15} className="text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                      {assignedStaffInfo.name}
+                    </p>
+                    {assignedStaffInfo.contact && (
+                      <p className="text-xs text-[var(--anna-muted)] flex items-center gap-1">
+                        <Phone size={10} />
+                        {assignedStaffInfo.contact}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleSendWhatsApp}
+                    disabled={isSharing}
+                    className="flex-1 rounded-xl h-10 text-xs bg-[#25D366] hover:bg-[#1EBE57] text-white font-semibold"
+                  >
+                    {isSharing ? (
+                      <Loader2 size={13} className="mr-1.5 animate-spin" />
+                    ) : (
+                      <MessageSquare size={13} className="mr-1.5" />
+                    )}
+                    WhatsApp
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    disabled={isSharing}
+                    className="flex-1 rounded-xl h-10 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)] font-medium"
+                  >
+                    <Link2 size={13} className="mr-1.5" />
+                    Copy Link
+                  </Button>
+                </div>
+
+                {/* Generated link preview */}
+                {shareGenerated && shareUrl && (
+                  <div className="bg-[var(--anna-bg)] rounded-lg px-3 py-2 flex items-center gap-2">
+                    <Link2 size={11} className="text-[var(--anna-muted)] flex-shrink-0" />
+                    <p className="text-[10px] text-[var(--anna-muted)] truncate flex-1 font-mono">
+                      {shareUrl}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+                      onClick={() => {
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success("Link copied");
+                      }}
+                    >
+                      <Copy size={10} />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Assigned staff — completed/cancelled bookings (read-only display) */}
-      {!canAssignStaff && b.assignedStaff && (
+      {!canAssignStaff && (assignedStaffInfo || b.assignedStaff) && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
             Assigned Staff
@@ -672,96 +788,8 @@ function VendorTaskDetailContent({
               <User size={14} className="text-[var(--anna-sage-dark)]" />
             </div>
             <span className="text-sm font-medium text-[var(--anna-slate)]">
-              {b.assignedStaff.name}
+              {(assignedStaffInfo ?? b.assignedStaff)!.name}
             </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Send Job Link to Staff ── visible when staff is assigned + booking is accepted */}
-      {b.assignedStaff && b.status === "accepted" && (
-        <div className="bg-[var(--anna-sage-light)]/20 rounded-2xl border border-[var(--anna-sage)]/20 overflow-hidden">
-          <div className="px-4 py-3 bg-[var(--anna-sage)]/10">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-[var(--anna-sage)] flex items-center justify-center">
-                <Send size={13} className="text-white" />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-[var(--anna-sage-dark)]">
-                  Send Job Link to Staff
-                </h4>
-                <p className="text-[10px] text-[var(--anna-sage-dark)]/70">
-                  Share the job details with {b.assignedStaff.name}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="p-4 space-y-3">
-            {/* Staff info */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[var(--anna-sage)] flex items-center justify-center flex-shrink-0">
-                <User size={15} className="text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                  {b.assignedStaff.name}
-                </p>
-                {b.assignedStaff.contact && (
-                  <p className="text-xs text-[var(--anna-muted)] flex items-center gap-1">
-                    <Phone size={10} />
-                    {b.assignedStaff.contact}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleSendWhatsApp}
-                disabled={isSharing}
-                className="flex-1 rounded-xl h-10 text-xs bg-[#25D366] hover:bg-[#1EBE57] text-white font-semibold"
-              >
-                {isSharing ? (
-                  <Loader2 size={13} className="mr-1.5 animate-spin" />
-                ) : (
-                  <MessageSquare size={13} className="mr-1.5" />
-                )}
-                WhatsApp
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyLink}
-                disabled={isSharing}
-                className="flex-1 rounded-xl h-10 text-xs border-[var(--anna-border)] hover:bg-[var(--anna-sage-light)] font-medium"
-              >
-                <Link2 size={13} className="mr-1.5" />
-                Copy Link
-              </Button>
-            </div>
-
-            {/* Generated link preview */}
-            {shareGenerated && shareUrl && (
-              <div className="bg-[var(--anna-bg)] rounded-lg px-3 py-2 flex items-center gap-2">
-                <Link2 size={11} className="text-[var(--anna-muted)] flex-shrink-0" />
-                <p className="text-[10px] text-[var(--anna-muted)] truncate flex-1 font-mono">
-                  {shareUrl}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
-                  onClick={() => {
-                    navigator.clipboard.writeText(shareUrl);
-                    toast.success("Link copied");
-                  }}
-                >
-                  <Copy size={10} />
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       )}
