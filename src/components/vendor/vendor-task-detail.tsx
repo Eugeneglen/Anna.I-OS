@@ -69,8 +69,8 @@ interface VendorTaskDetailProps {
   onAction: (bookingId: string, action: string, payload?: string) => void;
   isActionPending?: boolean;
   vendorId: string;
-  /** Called after staff assignment succeeds — parent should refetch schedule */
-  onStaffAssigned?: () => void;
+  /** Called after staff assignment succeeds — parent should refetch schedule + update selectedBooking */
+  onStaffAssigned?: (staffInfo: { id: string; name: string; role: string; contact?: string | null }) => void;
 }
 
 // ─── Types for staff picker ──────────────────────────────
@@ -166,7 +166,7 @@ function VendorTaskDetailContent({
   onAction: (bookingId: string, action: string) => void;
   isActionPending: boolean;
   vendorId: string;
-  onStaffAssigned?: () => void;
+  onStaffAssigned?: (staffInfo: { id: string; name: string; role: string; contact?: string | null }) => void;
 }) {
   // Local mutable copy of booking — updated optimistically after staff assignment
   // so that the Send Job Link section appears immediately without a re-fetch
@@ -187,9 +187,22 @@ function VendorTaskDetailContent({
   const [isSharing, setIsSharing] = useState(false);
   const [shareGenerated, setShareGenerated] = useState(false);
 
-  // Sync localBooking when the parent prop changes (e.g. re-open after refetch)
+  // Sync localBooking when the parent prop changes (e.g. re-open after refetch).
+  // Use a functional updater to preserve optimistic staff assignment if parent
+  // hasn't caught up yet (e.g. after accept action, parent may not have assignedStaff).
+  // Only preserve optimistic updates when it's the SAME booking (by id).
   useEffect(() => {
-    setLocalBooking(booking);
+    setLocalBooking((prev) => {
+      // Different booking opened — reset entirely, don't carry over stale data
+      if (prev.id !== booking.id) {
+        return booking;
+      }
+      // Same booking — merge, preserving optimistic staff assignment
+      return {
+        ...booking,
+        assignedStaff: booking.assignedStaff ?? prev.assignedStaff ?? null,
+      };
+    });
   }, [booking]);
 
   // Staff assignment state
@@ -267,7 +280,7 @@ function VendorTaskDetailContent({
       setLocalBooking((prev) => ({ ...prev, assignedStaff }));
       setSelectedStaffId(assignedStaff?.id || "");
 
-      onStaffAssigned?.();
+      onStaffAssigned?.(assignedStaff ?? { id: selectedStaffId, name: "Staff", role: "staff" });
     } catch {
       toast.error("Failed to assign staff");
     } finally {
@@ -606,7 +619,7 @@ function VendorTaskDetailContent({
                       // Un-assign: send empty body (we'll handle in API)
                       setSelectedStaffId("");
                       toast.success("Staff removed from this job");
-                      onStaffAssigned?.();
+                      onStaffAssigned?.({ id: "", name: "", role: "staff" });
                       return;
                     }
                     handleAssignStaff();

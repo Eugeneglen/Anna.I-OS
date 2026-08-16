@@ -496,7 +496,20 @@ export default function VendorSchedulePage() {
         }}
         isActionPending={actionMutation.isPending}
         vendorId={vendorId}
-        onStaffAssigned={() => {
+        onStaffAssigned={(staffInfo) => {
+          // Update selectedBooking with the staff info so that optimistic
+          // updates (e.g. after accept) preserve the assignedStaff field.
+          setSelectedBooking((prev) => {
+            if (!prev) return prev;
+            if (!staffInfo.id) {
+              // Un-assign case
+              return { ...prev, assignedStaff: null };
+            }
+            return {
+              ...prev,
+              assignedStaff: { id: staffInfo.id, name: staffInfo.name, role: staffInfo.role, contact: staffInfo.contact ?? null },
+            };
+          });
           // Refetch schedule + dashboard to pick up the staff assignment
           queryClient.invalidateQueries({ queryKey: ["vendor-dashboard", vendorId] });
           queryClient.invalidateQueries({ queryKey: ["vendor-schedule", vendorId] });
