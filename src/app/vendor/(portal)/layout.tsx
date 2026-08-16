@@ -30,6 +30,7 @@ import {
   CreditCard,
   Camera,
   Clock,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VendorAiChat } from "@/components/vendor/vendor-ai-chat";
@@ -73,6 +74,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/vendor/", icon: LayoutDashboard, exact: true },
   { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays },
   { label: "Earnings", href: "/vendor/earnings", icon: Wallet },
+  { label: "Staff Roster", href: "/vendor/staff-roster", icon: Users },
   { label: "Settings", href: "/vendor/settings", icon: Settings },
 ];
 
