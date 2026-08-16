@@ -55,6 +55,8 @@ interface BookingAddonData {
   amountCents: number;
   status: string;
   createdAt: string;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
 }
 
 async function fetchBookingAddons(bookingId: string): Promise<BookingAddonData[]> {
@@ -332,14 +334,16 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
   // ── Addon approval/rejection ──
   const addonBookingId = task?.bookings?.[0]?.id;
+  // Show addon banner when task has a booking and is in any active state
   const showAddonBanner = task
-    ? (["ACCEPTED", "SCHEDULED", "IN_PROGRESS"] as TaskStatus[]).includes(task.status)
+    ? (["ACCEPTED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "VERIFIED", "ESCROW_RELEASED"] as TaskStatus[]).includes(task.status)
     : false;
 
   const { data: bookingAddonsData, isLoading: addonsLoading } = useQuery({
     queryKey: ["booking-addons", addonBookingId],
     queryFn: () => fetchBookingAddons(addonBookingId!),
     enabled: !!addonBookingId && showAddonBanner,
+    refetchInterval: 10_000,
   });
 
   const addonActionMutation = useMutation({
@@ -357,20 +361,21 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         body: JSON.stringify({ action }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to update addon");
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Failed to update addon");
       }
       return res.json();
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       const msg =
         variables.action === "approve"
-          ? "Additional charge approved"
+          ? "Additional charge approved ✓"
           : "Additional charge rejected";
       toast.success(msg);
       queryClient.invalidateQueries({ queryKey: ["booking-addons", addonBookingId] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", selectedHouseholdId] });
     },
     onError: (err) => {
       toast.error(
@@ -379,7 +384,12 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
-  const pendingAddons = (bookingAddonsData || []).filter((a) => a.status === "pending");
+  const allAddons = bookingAddonsData || [];
+  const pendingAddons = allAddons.filter((a) => a.status === "pending");
+  const approvedAddons = allAddons.filter((a) => a.status === "approved");
+  const rejectedAddons = allAddons.filter((a) => a.status === "rejected");
+  const approvedAddonsTotal = approvedAddons.reduce((sum, a) => sum + a.amountCents, 0);
+  const hasAddons = allAddons.length > 0;
 
   // Rating mutation (standalone — no status transition)
   const ratingMutation = useMutation({
@@ -531,12 +541,33 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         </div>
       )}
 
-      {/* Amount */}
-      <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 flex items-center justify-between">
-        <span className="text-sm text-[var(--anna-slate-light)]">Task Amount</span>
-        <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-          {formatSgd(task.amountCents)}
-        </span>
+      {/* Amount — with addon breakdown */}
+      <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
+          <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+            {formatSgd(task.amountCents)}
+          </span>
+        </div>
+        {approvedAddonsTotal > 0 && (
+          <div className="border-t border-[var(--anna-border)]/40 pt-2 space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Includes Approved Add-ons
+            </p>
+            {approvedAddons.map((a) => (
+              <div key={a.id} className="flex items-center justify-between text-xs">
+                <span className="text-[var(--anna-slate-light)] truncate max-w-[60%]">{a.description}</span>
+                <span className="font-data font-medium text-[var(--anna-sage-dark)]">+{formatSgd(a.amountCents)}</span>
+              </div>
+            ))}
+            <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
+              <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
+              <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
+                {formatSgd(task.amountCents)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Instructions */}
@@ -551,74 +582,133 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         </div>
       )}
 
-      {/* ── Addon Approval Banner ── */}
-      {showAddonBanner && !addonsLoading && pendingAddons.length > 0 ? (
+      {/* ── Addon Section: Pending + Resolved ── */}
+      {showAddonBanner && !addonsLoading && hasAddons ? (
         <div className="rounded-2xl border-2 border-[var(--anna-warning)]/30 bg-gradient-to-br from-[var(--anna-warning)]/5 to-[var(--anna-bg)] p-4 space-y-3 anna-fade-in">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[var(--anna-warning)]/15 flex items-center justify-center">
-              <Receipt size={16} className="text-[var(--anna-warning)]" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                Additional Charges Pending
-              </p>
-              <p className="text-[10px] text-[var(--anna-muted)]">
-                The service provider has requested additional charges. Please review.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {pendingAddons.map((addon) => (
-              <div
-                key={addon.id}
-                className="bg-white/80 rounded-xl p-3.5 space-y-3 border border-[var(--anna-warning)]/20"
-              >
-                <p className="text-sm text-[var(--anna-slate)] leading-relaxed">
-                  {addon.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Wallet size={12} className="text-[var(--anna-muted)]" />
-                    <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-                      {formatSgd(addon.amountCents)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        addonActionMutation.mutate({
-                          addonId: addon.id,
-                          action: "reject",
-                        })
-                      }
-                      disabled={addonActionMutation.isPending}
-                      className="rounded-lg text-xs h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                      <XCircle size={12} className="mr-1" />
-                      Reject
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        addonActionMutation.mutate({
-                          addonId: addon.id,
-                          action: "approve",
-                        })
-                      }
-                      disabled={addonActionMutation.isPending}
-                      className="rounded-lg text-xs h-8 px-3 bg-[var(--anna-success)] hover:bg-[var(--anna-success)]/90 text-white"
-                    >
-                      <CheckCircle size={12} className="mr-1" />
-                      Approve
-                    </Button>
-                  </div>
+          {/* Pending addons — actionable */}
+          {pendingAddons.length > 0 && (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[var(--anna-warning)]/15 flex items-center justify-center">
+                  <Receipt size={16} className="text-[var(--anna-warning)]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                    Additional Charges Pending
+                  </p>
+                  <p className="text-[10px] text-[var(--anna-muted)]">
+                    The service provider has requested additional charges. Please review.
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+
+              <div className="space-y-2">
+                {pendingAddons.map((addon) => (
+                  <div
+                    key={addon.id}
+                    className="bg-white/80 rounded-xl p-3.5 space-y-3 border border-[var(--anna-warning)]/20"
+                  >
+                    <p className="text-sm text-[var(--anna-slate)] leading-relaxed">
+                      {addon.description}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Wallet size={12} className="text-[var(--anna-muted)]" />
+                        <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+                          {formatSgd(addon.amountCents)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            addonActionMutation.mutate({
+                              addonId: addon.id,
+                              action: "reject",
+                            })
+                          }
+                          disabled={addonActionMutation.isPending}
+                          className="rounded-lg text-xs h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <XCircle size={12} className="mr-1" />
+                          Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            addonActionMutation.mutate({
+                              addonId: addon.id,
+                              action: "approve",
+                            })
+                          }
+                          disabled={addonActionMutation.isPending}
+                          className="rounded-lg text-xs h-8 px-3 bg-[var(--anna-success)] hover:bg-[var(--anna-success)]/90 text-white"
+                        >
+                          {addonActionMutation.isPending ? (
+                            <Loader2 size={12} className="mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle size={12} className="mr-1" />
+                          )}
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Approved addons */}
+          {approvedAddons.length > 0 && (
+            <div className={cn("space-y-2", pendingAddons.length > 0 && "pt-2 border-t border-[var(--anna-border)]/30")}>
+              {pendingAddons.length === 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                    <CheckCircle size={16} className="text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-[var(--anna-slate)]">
+                    Approved Additional Charges
+                  </p>
+                </div>
+              )}
+              {approvedAddons.map((addon) => (
+                <div
+                  key={addon.id}
+                  className="bg-emerald-50/50 dark:bg-emerald-900/10 rounded-xl p-3 border border-emerald-200/40 dark:border-emerald-800/30 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                    <span className="text-sm text-[var(--anna-slate)] truncate">{addon.description}</span>
+                  </div>
+                  <span className="font-data text-sm font-semibold text-emerald-700 dark:text-emerald-400 flex-shrink-0 ml-2">
+                    {formatSgd(addon.amountCents)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Rejected addons */}
+          {rejectedAddons.length > 0 && (
+            <div className={cn("space-y-2", (pendingAddons.length > 0 || approvedAddons.length > 0) && "pt-2 border-t border-[var(--anna-border)]/30")}>
+              {rejectedAddons.map((addon) => (
+                <div
+                  key={addon.id}
+                  className="bg-red-50/30 dark:bg-red-900/10 rounded-xl p-3 border border-red-200/30 dark:border-red-800/20 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <XCircle size={14} className="text-red-500 dark:text-red-400 flex-shrink-0" />
+                    <span className="text-sm text-[var(--anna-muted)] line-through truncate">{addon.description}</span>
+                  </div>
+                  <span className="font-data text-sm text-[var(--anna-muted)] line-through flex-shrink-0 ml-2">
+                    {formatSgd(addon.amountCents)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
 

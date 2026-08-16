@@ -49,6 +49,8 @@ export async function GET(
         amountCents: true,
         status: true,
         createdAt: true,
+        approvedAt: true,
+        rejectedAt: true,
       },
       orderBy: { createdAt: "asc" },
     });

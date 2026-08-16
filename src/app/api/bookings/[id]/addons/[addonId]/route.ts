@@ -50,8 +50,10 @@ export async function PATCH(
             vendorId: true,
             task: {
               select: {
+                id: true,
                 householdId: true,
                 category: true,
+                amountCents: true,
               },
             },
           },
@@ -92,19 +94,60 @@ export async function PATCH(
 
     // ── Update addon ──
     const now = new Date();
+    const isApproved = action === "approve";
+
     const updatedAddon = await db.bookingAddon.update({
       where: { id: addonId },
       data: {
-        status: action === "approve" ? "approved" : "rejected",
+        status: isApproved ? "approved" : "rejected",
         approvedById: session.memberId,
-        approvedAt: action === "approve" ? now : null,
-        rejectedAt: action === "reject" ? now : null,
+        approvedAt: isApproved ? now : null,
+        rejectedAt: !isApproved ? now : null,
       },
     });
 
+    // ── When approved: update task total + create addon escrow ──
+    let newTotalCents = addon.booking.task.amountCents;
+    if (isApproved) {
+      // Sum all approved addons for this booking
+      const approvedAddons = await db.bookingAddon.findMany({
+        where: {
+          bookingId,
+          status: "approved",
+        },
+        select: { amountCents: true },
+      });
+
+      const addonTotalCents = approvedAddons.reduce((sum, a) => sum + a.amountCents, 0);
+      const baseAmountCents = addon.booking.task.amountCents;
+      newTotalCents = baseAmountCents + addonTotalCents;
+
+      // Update task amount to reflect the new total
+      await db.task.update({
+        where: { id: addon.booking.taskId },
+        data: { amountCents: newTotalCents },
+      });
+
+      // Create a new EscrowLedger entry for the addon amount
+      const commissionRate = 10.0;
+      const addonCommissionCents = Math.round(addon.amountCents * commissionRate / 100);
+      const addonVendorPayoutCents = addon.amountCents - addonCommissionCents;
+
+      await db.escrowLedger.create({
+        data: {
+          taskId: addon.booking.taskId,
+          bookingId,
+          amountCents: addon.amountCents,
+          state: "HELD",
+          commissionRate,
+          commissionCents: addonCommissionCents,
+          vendorPayoutCents: addonVendorPayoutCents,
+        },
+      });
+    }
+
     // ── Notify vendor about the approval/rejection ──
     const amountStr = `SGD $${(addon.amountCents / 100).toFixed(2)}`;
-    const isApproved = action === "approve";
 
     // Fetch household name for vendor notification context
     const household = await db.household.findUnique({
@@ -127,7 +170,7 @@ export async function PATCH(
           ? `Addon Approved — ${amountStr}`
           : `Addon Rejected — ${amountStr}`,
         body: isApproved
-          ? `${householdName} has approved the additional charge: "${addon.description}"`
+          ? `${householdName} has approved the additional charge: "${addon.description}". New total: SGD $${(newTotalCents / 100).toFixed(2)}`
           : `${householdName} has rejected the additional charge: "${addon.description}"`,
         status: NotificationStatus.PENDING,
         referenceType: "booking",
@@ -151,7 +194,10 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ addon: updatedAddon });
+    return NextResponse.json({
+      addon: updatedAddon,
+      newTotalCents: isApproved ? newTotalCents : undefined,
+    });
   } catch (error) {
     console.error(
       "PATCH /api/bookings/[id]/addons/[addonId] error:",
