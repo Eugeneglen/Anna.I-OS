@@ -106,7 +106,7 @@ export async function PATCH(
       },
     });
 
-    // ── When approved: update task total + create addon escrow ──
+    // ── When approved: create addon escrow entry ──
     let newTotalCents = addon.booking.task.amountCents;
     if (isApproved) {
       // Sum all approved addons for this booking
@@ -121,12 +121,6 @@ export async function PATCH(
       const addonTotalCents = approvedAddons.reduce((sum, a) => sum + a.amountCents, 0);
       const baseAmountCents = addon.booking.task.amountCents;
       newTotalCents = baseAmountCents + addonTotalCents;
-
-      // Update task amount to reflect the new total
-      await db.task.update({
-        where: { id: addon.booking.taskId },
-        data: { amountCents: newTotalCents },
-      });
 
       // Create a new EscrowLedger entry for the addon amount
       const commissionRate = 10.0;

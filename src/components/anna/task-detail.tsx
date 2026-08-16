@@ -334,10 +334,8 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
   // ── Addon approval/rejection ──
   const addonBookingId = task?.bookings?.[0]?.id;
-  // Show addon banner when task has a booking and is in any active state
-  const showAddonBanner = task
-    ? (["ACCEPTED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "VERIFIED", "ESCROW_RELEASED"] as TaskStatus[]).includes(task.status)
-    : false;
+  // Show addon banner whenever there's a booking — addons can exist at any task stage
+  const showAddonBanner = !!addonBookingId;
 
   const { data: bookingAddonsData, isLoading: addonsLoading } = useQuery({
     queryKey: ["booking-addons", addonBookingId],
@@ -546,7 +544,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
           <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-            {formatSgd(task.amountCents)}
+            {formatSgd(task.amountCents + approvedAddonsTotal)}
           </span>
         </div>
         {approvedAddonsTotal > 0 && (
@@ -554,6 +552,10 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
               Includes Approved Add-ons
             </p>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--anna-slate-light)]">Original service</span>
+              <span className="font-data font-medium">{formatSgd(task.amountCents)}</span>
+            </div>
             {approvedAddons.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-xs">
                 <span className="text-[var(--anna-slate-light)] truncate max-w-[60%]">{a.description}</span>
@@ -563,7 +565,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
               <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
-                {formatSgd(task.amountCents)}
+                {formatSgd(task.amountCents + approvedAddonsTotal)}
               </span>
             </div>
           </div>
@@ -810,7 +812,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
               <div className="flex items-center gap-2 text-xs">
                 <ShieldCheck size={12} className="text-[var(--anna-sage-dark)]" />
                 <span className="text-[var(--anna-sage-dark)]">
-                  Escrow: {formatSgd(task.amountCents)} held securely
+                  Escrow: {formatSgd(task.amountCents + approvedAddonsTotal)} held securely
                 </span>
               </div>
             )}
