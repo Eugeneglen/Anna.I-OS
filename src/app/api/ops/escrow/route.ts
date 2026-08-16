@@ -45,10 +45,10 @@ export async function GET(req: NextRequest) {
       where: { status: "DISPUTED" },
     });
 
-    // ── Pending release tasks (VERIFIED with HELD escrow) ──
+    // ── Pending release tasks (VERIFIED or ESCROW_RELEASED with HELD escrow) ──
     const pendingReleaseCount = await db.task.count({
       where: {
-        status: "VERIFIED",
+        status: { in: ["VERIFIED", "ESCROW_RELEASED"] },
         escrowEntries: { some: { state: EscrowState.HELD } },
       },
     });
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     // ── Pending release tasks details ──
     const pendingReleaseTasks = await db.task.findMany({
       where: {
-        status: "VERIFIED",
+        status: { in: ["VERIFIED", "ESCROW_RELEASED"] },
         escrowEntries: { some: { state: EscrowState.HELD } },
       },
       take: 10,

@@ -36,7 +36,7 @@ export function PendingReleaseCard({
               {(task.category as string)?.replace(/_/g, " ")}
             </span>
             <Badge variant="secondary" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-              VERIFIED
+              {(task.status as string)?.replace(/_/g, " ") || "VERIFIED"}
             </Badge>
           </div>
           <p className="text-sm font-medium text-[var(--anna-slate)] mt-1.5 truncate">

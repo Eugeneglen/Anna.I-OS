@@ -321,12 +321,13 @@ export function BookingDetailSheet({
   // Determine which actions to show
   const canRelease =
     escrowState === "HELD" &&
-    (taskStatus === "VERIFIED" || taskStatus === "COMPLETED");
+    (taskStatus === "VERIFIED" || taskStatus === "COMPLETED" || taskStatus === "ESCROW_RELEASED");
   const canDispute =
     escrowState === "HELD" &&
     (taskStatus === "COMPLETED" ||
       taskStatus === "IN_PROGRESS" ||
-      taskStatus === "VERIFIED");
+      taskStatus === "VERIFIED" ||
+      taskStatus === "ESCROW_RELEASED");
   const isDisputed = escrowState === "DISPUTED";
 
   return (

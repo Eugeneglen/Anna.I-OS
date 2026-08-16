@@ -75,9 +75,9 @@ export async function PATCH(
         );
       }
 
-      if (task.status !== TaskStatus.VERIFIED && task.status !== TaskStatus.COMPLETED) {
+      if (task.status !== TaskStatus.VERIFIED && task.status !== TaskStatus.COMPLETED && task.status !== TaskStatus.ESCROW_RELEASED) {
         return NextResponse.json(
-          { error: `Task must be VERIFIED or COMPLETED to release escrow — current status is ${task.status}` },
+          { error: `Task must be VERIFIED, COMPLETED, or ESCROW_RELEASED to release escrow — current status is ${task.status}` },
           { status: 409 }
         );
       }
