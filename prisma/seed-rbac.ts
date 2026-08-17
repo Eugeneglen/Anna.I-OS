@@ -6,7 +6,7 @@
  * Usage:  bun run prisma/seed-rbac.ts
  */
 
-import { db } from "@/lib/db";
+import { db } from "./seed-db";
 
 // ─── Permission definitions ────────────────────────────────────────
 
@@ -302,9 +302,13 @@ async function main() {
   console.log("\n✅ RBAC seed complete.\n");
 }
 
-main()
-  .catch((e) => {
-    console.error("❌ RBAC seed failed:", e);
-    process.exit(1);
-  })
-  .finally(() => db.$disconnect());
+if (require.main === module) {
+  main()
+    .catch((e) => {
+      console.error("❌ RBAC seed failed:", e);
+      process.exit(1);
+    })
+    .finally(() => db.$disconnect());
+}
+
+export default main;
