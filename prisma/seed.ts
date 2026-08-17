@@ -15,7 +15,7 @@
 
 import { db } from "./seed-db";
 
-export const SEED_VERSION = "2025-07-12-v1";
+export const SEED_VERSION = "2025-08-17-v2";
 
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
@@ -24,28 +24,33 @@ async function main() {
 
   await db.$connect();
 
-  // 0. Ops users (no dependencies — must exist for /ops login)
-  console.log("📦 [0/4] Seeding ops users...");
+  // 0. RBAC — roles, permissions, role-permission mappings, migrate existing users
+  console.log("📦 [0/5] Seeding RBAC (roles, permissions, user migration)...");
+  const seedRbac = (await import("./seed-rbac")).default;
+  await seedRbac();
+
+  // 1. Ops users (no dependencies — must exist for /ops login)
+  console.log("📦 [1/5] Seeding ops users...");
   const { main: seedOps } = await import("./seed-ops");
   await seedOps();
 
-  // 1. Service job types (no dependencies)
-  console.log("📦 [1/3] Seeding service job types...");
+  // 2. Service job types (no dependencies)
+  console.log("📦 [2/5] Seeding service job types...");
   const { main: seedJobTypes } = await import("./seed-job-types");
   await seedJobTypes();
 
-  // 2. Households, members, vendors, tasks, bookings
-  console.log("\n📦 [2/4] Seeding households & demo data...");
+  // 3. Households, members, vendors, tasks, bookings
+  console.log("\n📦 [3/5] Seeding households & demo data...");
   const { main: seedDemo } = await import("./seed-demo");
   await seedDemo();
 
-  // 3. Anomalies (depends on households + tasks from step 2)
-  console.log("\n📦 [3/4] Seeding anomalies...");
+  // 4. Anomalies (depends on households + tasks from step 3)
+  console.log("\n📦 [4/5] Seeding anomalies...");
   const { main: seedAnomalies } = await import("./seed-anomalies");
   await seedAnomalies();
 
-  // 4. Record seed version in PlatformConfig so ensure-db.ts can detect changes
-  console.log("\n📦 [4/4] Recording seed version...");
+  // 5. Record seed version in PlatformConfig so ensure-db.ts can detect changes
+  console.log("\n📦 [5/5] Recording seed version...");
   await db.platformConfig.upsert({
     where: { key: "seed_version" },
     update: { value: SEED_VERSION, label: "Current seed data version" },

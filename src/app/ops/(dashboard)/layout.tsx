@@ -407,7 +407,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const can = useCallback(
     (module: string, action: string) => {
       const perms = user?.permissions;
-      if (!perms) return false;
+      // Legacy fallback: if no permissions loaded yet or role not migrated, grant all access
+      // This ensures sidebar nav is always visible even before RBAC migration completes
+      if (!perms || perms.length === 0) return true;
       return perms.includes(`${module}:${action}`);
     },
     [user]
