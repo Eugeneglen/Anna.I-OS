@@ -1,5 +1,5 @@
 # ============================================================
-# Anna.I — Production Dockerfile for Railway
+# Anna.I — Production Dockerfile for Railway (v2)
 #
 # CRITICAL: schema.prisma in the repo uses provider = "sqlite"
 # for local dev. This Dockerfile auto-converts it to
