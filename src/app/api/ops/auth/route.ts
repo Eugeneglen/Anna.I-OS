@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!user.isActive) {
+      console.warn(`[/api/ops/auth] Account deactivated: ${email} isActive=${user.isActive} roleId=${user.roleId}`);
+      return NextResponse.json(
+        { error: "Account is deactivated" },
+        { status: 403 }
+      );
+    }
+
     // ── Self-heal: if passwordHash is null (new column from schema push),
     //    hash the incoming password and persist it.                       ──
     let passwordHash = user.passwordHash;
@@ -48,11 +56,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Resolve role info: prefer Role table, fall back to legacy enum
+    let roleId: string | undefined;
+    let roleName: string | undefined;
+    if (user.roleId) {
+      const role = await db.role.findUnique({ where: { id: user.roleId } });
+      if (role) {
+        roleId = role.id;
+        roleName = role.name;
+      }
+    }
+    if (!roleId) {
+      // Map legacy enum to role table as fallback
+      const legacyMap: Record<string, string> = {
+        ADMIN: "super_admin",
+        COORDINATOR: "coordinator",
+        ANALYST: "data_analyst",
+      };
+      const slug = legacyMap[user.role] || "coordinator";
+      const role = await db.role.findUnique({ where: { slug } });
+      if (role) {
+        roleId = role.id;
+        roleName = role.name;
+        // Auto-migrate: attach roleId to user for future logins
+        await db.opsUser.update({
+          where: { id: user.id },
+          data: { roleId: role.id },
+        });
+      }
+    }
+
     const token = await createOpsToken({
       id: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
+      roleId,
+      roleName,
     });
 
     await db.opsUser.update({
@@ -62,7 +102,14 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       success: true,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        roleId,
+        roleName,
+      },
     });
 
     res.cookies.set("ops_token", token, {

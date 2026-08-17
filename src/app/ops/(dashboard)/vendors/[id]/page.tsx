@@ -71,7 +71,8 @@ const labelCls = "text-xs font-medium text-[var(--anna-slate)]";
 function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const user = useOpsUser();
+  const opsCtx = useOpsUser();
+  const user = opsCtx?.user;
   const qc = useQueryClient();
   const isAdmin = user?.role === "ADMIN";
 

@@ -26,7 +26,8 @@ import type { ServiceJobType } from "@/lib/types";
 const README_KEYS = ["readme_autonomy_levels", "readme_threshold_guide", "readme_api_automation"] as const;
 
 export default function ConfigPage() {
-  const user = useOpsUser();
+  const opsCtx = useOpsUser();
+  const user = opsCtx?.user;
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({

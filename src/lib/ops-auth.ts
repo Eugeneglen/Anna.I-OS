@@ -7,8 +7,10 @@ const secret = new TextEncoder().encode(JWT_SECRET);
 export interface OpsSession {
   userId: string;
   email: string;
-  role: string;
+  role: string; // legacy, keep for backward compat
   name: string;
+  roleId?: string; // new RBAC
+  roleName?: string; // new RBAC
 }
 
 export async function getOpsSession(): Promise<OpsSession | null> {
@@ -28,13 +30,18 @@ export async function createOpsToken(user: {
   email: string;
   role: string;
   name: string;
+  roleId?: string;
+  roleName?: string;
 }): Promise<string> {
-  return new SignJWT({
+  const payload: Record<string, string> = {
     userId: user.id,
     email: user.email,
     role: user.role,
     name: user.name,
-  })
+  };
+  if (user.roleId) payload.roleId = user.roleId;
+  if (user.roleName) payload.roleName = user.roleName;
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("8h")
     .setIssuedAt()

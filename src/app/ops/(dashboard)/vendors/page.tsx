@@ -54,7 +54,8 @@ function formatCategories(catsJson: string) {
 }
 
 export default function VendorsPage() {
-  const user = useOpsUser();
+  const opsCtx = useOpsUser();
+  const user = opsCtx?.user;
   const router = useRouter();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");

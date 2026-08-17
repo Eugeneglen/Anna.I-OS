@@ -26,6 +26,8 @@ import {
   ArrowRight,
   Wallet,
   CreditCard,
+  Shield,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OpsAiChat } from "@/components/ops/ops-ai-chat";
@@ -36,9 +38,18 @@ interface OpsUser {
   name: string;
   email: string;
   role: string;
+  roleId?: string;
+  roleName?: string;
+  permissions?: string[];
 }
 
-const OpsUserContext = createContext<OpsUser | null>(null);
+interface OpsUserContextType {
+  user: OpsUser;
+  can: (module: string, action: string) => boolean;
+  refreshSession: () => Promise<void>;
+}
+
+const OpsUserContext = createContext<OpsUserContextType | null>(null);
 export function useOpsUser() {
   return useContext(OpsUserContext);
 }
@@ -60,17 +71,19 @@ export function useLiveEvents() {
   return useContext(LiveContext);
 }
 
-const NAV_ITEMS = [
-  { label: "Analytics", href: "/ops/analytics", icon: BarChart3, active: true },
-  { label: "Bookings", href: "/ops/bookings", icon: Calendar, active: true },
-  { label: "Households", href: "/ops/households", icon: Home, active: true },
-  { label: "Vendors", href: "/ops/vendors", icon: Users, active: true },
-  { label: "Escrow", href: "/ops/escrow", icon: Wallet, active: true },
-  { label: "Config", href: "/ops/config", icon: Settings, active: true },
-  { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true },
-  { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true },
-  { label: "Anomalies", href: "/ops/anomalies", icon: AlertTriangle, active: true },
-  { label: "Subscriptions", href: "/ops/subscriptions", icon: CreditCard, active: true },
+const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; active: boolean; permission?: string }[] = [
+  { label: "Analytics", href: "/ops/analytics", icon: BarChart3, active: true, permission: "analytics:view" },
+  { label: "Bookings", href: "/ops/bookings", icon: Calendar, active: true, permission: "bookings:view" },
+  { label: "Households", href: "/ops/households", icon: Home, active: true, permission: "households:view" },
+  { label: "Vendors", href: "/ops/vendors", icon: Users, active: true, permission: "vendors:view" },
+  { label: "Escrow", href: "/ops/escrow", icon: Wallet, active: true, permission: "escrow:view" },
+  { label: "Config", href: "/ops/config", icon: Settings, active: true, permission: "config:view" },
+  { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true, permission: "autonomy:view" },
+  { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true, permission: "notifications:view" },
+  { label: "Anomalies", href: "/ops/anomalies", icon: AlertTriangle, active: true, permission: "anomalies:view" },
+  { label: "Subscriptions", href: "/ops/subscriptions", icon: CreditCard, active: true, permission: "subscriptions:view" },
+  { label: "User Management", href: "/ops/users", icon: Shield, active: true, permission: "users:view" },
+  { label: "Role Management", href: "/ops/roles", icon: Shield, active: true, permission: "roles:view" },
 ];
 
 function RoleBadge({ role }: { role: string }) {
@@ -93,6 +106,14 @@ function SidebarNav() {
   const pathname = usePathname();
   const router = useRouter();
   const live = useLiveEvents();
+  const opsCtx = useOpsUser();
+  const can = opsCtx?.can;
+
+  // Filter nav items by permission
+  const visibleNavItems = NAV_ITEMS.filter((item) => {
+    if (!item.permission || !can) return item.active;
+    return item.active && can(item.permission.split(":")[0], item.permission.split(":")[1]);
+  });
 
   async function handleLogout() {
     await fetch("/api/ops/auth", { method: "DELETE" });
@@ -128,7 +149,7 @@ function SidebarNav() {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto anna-scroll">
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.active && pathname.startsWith(item.href);
           const showBadge = item.label === "Anomalies" && live.activeAnomalyCount > 0;
@@ -173,7 +194,8 @@ function SidebarNav() {
 }
 
 function UserSection({ onLogout }: { onLogout: () => void }) {
-  const user = useOpsUser();
+  const opsCtx = useOpsUser();
+  const user = opsCtx?.user;
   if (!user) return null;
   const initials = user.name
     .split(" ")
@@ -351,6 +373,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     onEvent: handleEvent,
   });
 
+  const refreshSession = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["ops-session"] });
+  }, [queryClient]);
+
   const {
     data: user,
     isLoading,
@@ -359,18 +385,33 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   } = useQuery<OpsUser | null>({
     queryKey: ["ops-session"],
     queryFn: async () => {
-      const res = await fetch("/api/ops/session");
+      const res = await fetch("/api/ops/auth/me");
       if (res.status === 401) {
         window.location.replace("/ops/login");
         return null;
       }
       if (!res.ok) return null;
       const data = await res.json();
-      return data.user as OpsUser;
+      const u = data.user as OpsUser;
+      return {
+        ...u,
+        roleName: data.role?.name || u.role,
+        roleId: data.role?.id || undefined,
+        permissions: data.permissions || [],
+      };
     },
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
+
+  const can = useCallback(
+    (module: string, action: string) => {
+      const perms = user?.permissions;
+      if (!perms) return false;
+      return perms.includes(`${module}:${action}`);
+    },
+    [user]
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -431,7 +472,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <LiveContext.Provider value={liveContextValue}>
-      <OpsUserContext.Provider value={user}>
+      <OpsUserContext.Provider value={{ user: user!, can, refreshSession }}>
         <div className="min-h-screen flex bg-[var(--anna-bg)]">
           {/* Desktop Sidebar */}
           <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">

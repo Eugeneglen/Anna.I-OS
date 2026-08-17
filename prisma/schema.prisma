@@ -710,15 +710,62 @@ enum OpsRole {
   ANALYST
 }
 
+// ======================== RBAC MODELS ========================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  level       Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           OpsUser[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  module      String
+  action      String
+  description String   @default("")
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([module, action])
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
 model OpsUser {
   id           String     @id @default(cuid())
   name         String
   email        String     @unique
   role         OpsRole    @default(COORDINATOR)
+  roleId       String?
+  isActive     Boolean    @default(true)
+  updatedBy    String?
   passwordHash String
   createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt @default(now())
   lastLoginAt  DateTime?
 
+  roleRel   Role?      @relation(fields: [roleId], references: [id])
   auditLogs AuditLog[]
 }
 
