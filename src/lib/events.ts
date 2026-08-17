@@ -44,6 +44,7 @@ function getSocket(): Socket | null {
     connecting = true;
     try {
       socket = io(OPS_EVENTS_URL, {
+        path: "/",
         transports: ["websocket"],
         reconnection: true,
         reconnectionAttempts: 5,
