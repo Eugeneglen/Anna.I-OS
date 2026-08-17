@@ -62,16 +62,17 @@ function runPrismaPush() {
   try {
     execSync("npx prisma db push --accept-data-loss --skip-generate", {
       cwd: PROJECT_ROOT,
-      stdio: "pipe",
-      timeout: 30_000,
+      stdio: "inherit",
+      timeout: 60_000,
     });
     console.log("  [2/4] ✅ Schema synced");
   } catch (err: any) {
     const stderr = err?.stderr?.toString() || "";
-    // `prisma db push` exits 0 even when "already in sync" — any non-zero is real
+    const stdout = err?.stdout?.toString() || "";
+    const output = (stderr || stdout).slice(-500);
     console.error("  [2/4] ❌ prisma db push FAILED:");
-    console.error(stderr);
-    throw new Error(`prisma db push failed: ${stderr.slice(-200)}`);
+    console.error(output);
+    throw new Error(`prisma db push failed: ${output}`);
   }
 }
 
@@ -80,8 +81,8 @@ function runPrismaGenerate() {
   try {
     execSync("npx prisma generate", {
       cwd: PROJECT_ROOT,
-      stdio: "pipe",
-      timeout: 30_000,
+      stdio: "inherit",
+      timeout: 60_000,
     });
     console.log("  [3/4] ✅ Client regenerated");
   } catch (err: any) {
@@ -108,22 +109,26 @@ async function checkSeed() {
     });
     const storedVersion = stored?.value ?? null;
 
-    // Also check if tables are completely empty (first-ever boot)
-    const [householdCount, opsUserCount, jobTypeCount] = await Promise.all([
+    // Check if core tables are completely empty (first-ever boot)
+    const [householdCount, opsUserCount, jobTypeCount, roleCount] = await Promise.all([
       seedDb.household.count(),
       seedDb.opsUser.count(),
       seedDb.serviceJobType.count(),
+      seedDb.role.count(),
     ]);
     const isEmpty = householdCount === 0 || opsUserCount === 0 || jobTypeCount === 0;
+    const rbacMissing = roleCount === 0; // RBAC tables not seeded yet
 
-    const needsSeed = isEmpty || storedVersion !== codeVersion;
+    const needsSeed = isEmpty || rbacMissing || storedVersion !== codeVersion;
 
     if (isEmpty) {
       console.log(`  [4/4] Database empty (${householdCount} households, ${opsUserCount} ops, ${jobTypeCount} jobs) — seeding...`);
+    } else if (rbacMissing) {
+      console.log(`  [4/4] RBAC tables empty (${roleCount} roles) — re-seeding to create permissions/roles...`);
     } else if (storedVersion !== codeVersion) {
       console.log(`  [4/4] Seed version mismatch: stored='${storedVersion}' code='${codeVersion}' — re-seeding...`);
     } else {
-      console.log(`  [4/4] ✅ Seed data up-to-date (v${codeVersion}) — skipping`);
+      console.log(`  [4/4] ✅ Seed data up-to-date (v${codeVersion}, ${roleCount} roles) — skipping`);
       return;
     }
 
