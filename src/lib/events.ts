@@ -8,7 +8,22 @@
 
 import { io, Socket } from "socket.io-client";
 
-const OPS_EVENTS_URL = process.env.OPS_EVENTS_URL || "http://localhost:3004";
+// ─────────────────────────────────────────────────────────────
+// Feature gate: only connect when OPS_EVENTS_URL is explicitly set.
+// When not configured (e.g. Railway without ops-events service),
+// the module disables itself silently — no retry storms, no log spam.
+// ─────────────────────────────────────────────────────────────
+
+const EVENTS_DISABLED = !process.env.OPS_EVENTS_URL;
+
+if (EVENTS_DISABLED && typeof window === "undefined") {
+  console.log(
+    "[events] ops-events is DISABLED — OPS_EVENTS_URL is not set. " +
+    "Event emissions will be no-ops. Set OPS_EVENTS_URL to the ops-events service URL to enable real-time WebSocket events."
+  );
+}
+
+const OPS_EVENTS_URL = process.env.OPS_EVENTS_URL!; // only read when EVENTS_DISABLED is false
 
 // ─────────────────────────────────────────────────────────────
 // Singleton socket.io client connection
@@ -22,6 +37,7 @@ let connecting = false;
 const pendingEmits: OpsEventPayload[] = [];
 
 function getSocket(): Socket | null {
+  if (EVENTS_DISABLED) return null;
   if (socket?.connected) return socket;
 
   if (!socket && !connecting) {
@@ -72,7 +88,8 @@ function getSocket(): Socket | null {
 
 // Eagerly initiate the connection on module load so the first emit doesn't
 // have to wait for a connection round-trip. Safe to call multiple times.
-if (typeof window === "undefined") {
+// Only runs when OPS_EVENTS_URL is explicitly configured.
+if (typeof window === "undefined" && !EVENTS_DISABLED) {
   // Server-side only — don't run on the client bundle
   getSocket();
 }
@@ -92,6 +109,9 @@ export interface OpsEventPayload {
 // ─────────────────────────────────────────────────────────────
 
 export async function emitOpsEvent(event: OpsEventPayload): Promise<void> {
+  // When ops-events is disabled, silently drop all events (no-op).
+  if (EVENTS_DISABLED) return;
+
   const s = getSocket();
 
   const payload = {

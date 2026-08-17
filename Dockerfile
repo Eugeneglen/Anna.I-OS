@@ -15,7 +15,10 @@
 # ============================================================
 
 FROM node:20-slim AS base
-RUN npm install -g bun
+RUN npm install -g bun && \
+    apt-get update && \
+    apt-get install -y openssl libssl3 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # ── Stage 1: Install dependencies ────────────────────────────
@@ -41,7 +44,10 @@ RUN cp -r .next/static .next/standalone/.next/ && \
 
 # ── Stage 3: Production runtime ──────────────────────────────
 FROM node:20-slim AS runner
-RUN npm install -g bun
+RUN npm install -g bun && \
+    apt-get update && \
+    apt-get install -y openssl libssl3 --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 
