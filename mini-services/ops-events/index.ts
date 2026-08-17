@@ -239,6 +239,7 @@ setTimeout(() => {
 // Start server
 // ─────────────────────────────────────────────────────────────
 
-httpServer.listen(3004, () => {
-  console.log(`[ops-events] Listening on ${3004}`);
+const PORT = process.env.PORT || 3004;
+httpServer.listen(PORT, () => {
+  console.log(`[ops-events] Listening on ${PORT}`);
 });
