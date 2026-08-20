@@ -23,7 +23,6 @@ import {
   Wifi,
   WifiOff,
   X,
-  ArrowRight,
   CheckCircle2,
   AlertTriangle,
   AlertCircle,
@@ -32,6 +31,9 @@ import {
   Camera,
   Clock,
   Users,
+  Shield,
+  UserCog,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VendorAiChat } from "@/components/vendor/vendor-ai-chat";
@@ -43,15 +45,30 @@ import {
   getVendorEventToastVariant,
 } from "@/hooks/use-vendor-events";
 
+interface VendorRole {
+  id: string;
+  name: string;
+  slug: string;
+  level: number;
+}
+
 interface VendorUser {
   id: string;
   name: string;
   email: string;
   vendorType: string;
   status: string;
+  roleId: string | null;
+  role: VendorRole | null;
 }
 
-const VendorUserContext = createContext<VendorUser | null>(null);
+interface VendorUserContextType {
+  user: VendorUser;
+  role: VendorRole | null;
+  can: (module: string, action: string) => boolean;
+}
+
+const VendorUserContext = createContext<VendorUserContextType | null>(null);
 export function useVendorUser() {
   return useContext(VendorUserContext);
 }
@@ -71,13 +88,15 @@ export function useVendorLive() {
   return useContext(VendorLiveContext);
 }
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; exact?: boolean; permission?: string }[] = [
   { label: "Dashboard", href: "/vendor/", icon: LayoutDashboard, exact: true },
-  { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays },
-  { label: "Calendar", href: "/vendor/calendar", icon: CalendarRange },
-  { label: "Earnings", href: "/vendor/earnings", icon: Wallet },
-  { label: "Staff Roster", href: "/vendor/staff-roster", icon: Users },
-  { label: "Settings", href: "/vendor/settings", icon: Settings },
+  { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays, permission: "v_schedule:view" },
+  { label: "Calendar", href: "/vendor/calendar", icon: CalendarRange, permission: "v_calendar:view" },
+  { label: "Earnings", href: "/vendor/earnings", icon: Wallet, permission: "v_earnings:view" },
+  { label: "Staff Roster", href: "/vendor/staff-roster", icon: Users, permission: "v_staff:view" },
+  { label: "Settings", href: "/vendor/settings", icon: Settings, permission: "v_settings:view" },
+  { label: "User Management", href: "/vendor/users", icon: UserCog, permission: "v_users:view" },
+  { label: "Role Management", href: "/vendor/roles", icon: Shield, permission: "v_roles:view" },
 ];
 
 // Live indicator for the sidebar — shows WebSocket connection status
@@ -135,6 +154,14 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const live = useVendorLive();
+  const vendorCtx = useVendorUser();
+  const can = vendorCtx?.can;
+
+  // Filter nav items by permission
+  const visibleNavItems = NAV_ITEMS.filter((item) => {
+    if (!item.permission || !can) return true;
+    return can(item.permission.split(":")[0], item.permission.split(":")[1]);
+  });
 
   async function handleLogout() {
     await fetch("/api/vendor/auth", { method: "DELETE" });
@@ -167,7 +194,7 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto anna-scroll">
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.exact
             ? pathname === item.href || pathname === "/vendor"
@@ -220,7 +247,8 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
 }
 
 function UserSection({ onLogout }: { onLogout: () => void }) {
-  const user = useVendorUser();
+  const ctx = useVendorUser();
+  const user = ctx?.user;
   if (!user) return null;
   const initials = user.name
     .split(" ")
@@ -243,7 +271,7 @@ function UserSection({ onLogout }: { onLogout: () => void }) {
           variant="secondary"
           className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
         >
-          {user.vendorType}
+          {ctx?.role?.name || user.vendorType}
         </Badge>
       </div>
       <Button
@@ -365,7 +393,6 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     queryFn: async () => {
       const res = await fetch("/api/vendor/session");
       if (res.status === 401) {
-        // Use hard redirect as fallback — router.push may not fire inside queryFn
         window.location.replace("/vendor/login");
         return null;
       }
@@ -377,15 +404,47 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     staleTime: 5 * 60 * 1000,
   });
 
+  // Extract permissions from session for RBAC
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [vendorRole, setVendorRole] = useState<VendorRole | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    // Fetch full session to get permissions
+    (async () => {
+      try {
+        const res = await fetch("/api/vendor/session");
+        if (res.ok) {
+          const data = await res.json();
+          setPermissions(data.permissions || []);
+          if (data.role) {
+            setVendorRole({
+              id: data.role.id,
+              name: data.role.name,
+              slug: data.role.slug,
+              level: data.role.level,
+            });
+          }
+        }
+      } catch { /* non-critical */ }
+    })();
+  }, [user?.id]);
+
+  const can = useCallback(
+    (module: string, action: string) => {
+      // Legacy fallback: if no permissions loaded, grant all access
+      if (!permissions || permissions.length === 0) return true;
+      return permissions.includes(`${module}:${action}`);
+    },
+    [permissions]
+  );
+
   // ── Real-time event handler: invalidate React Query caches + show toasts ──
   const handleVendorEvent = useCallback((event: VendorEvent) => {
-    // Always invalidate notifications (new vendor notification arrived)
     if (event.type === "vendor:notification") {
       queryClient.invalidateQueries({ queryKey: ["vendor-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["vendor-notifications-count"] });
     }
-
-    // Booking/task changes → invalidate dashboard + schedule
     if (
       event.type.startsWith("booking") ||
       event.type.startsWith("task") ||
@@ -394,24 +453,20 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
       queryClient.invalidateQueries({ queryKey: ["vendor-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] });
     }
-
-    // Escrow changes → invalidate earnings
     if (event.type.startsWith("escrow")) {
       queryClient.invalidateQueries({ queryKey: ["vendor-earnings"] });
     }
-
-    // Show toast for all events (dedup by event timestamp in the toast component)
     setLatestToast(event);
     setToastKey((k) => k + 1);
   }, [queryClient]);
 
-  // Connect to ops-events WebSocket as a vendor client (only when user is loaded)
+  // Connect to ops-events WebSocket as a vendor client
   const { isConnected } = useVendorEvents(user?.id || null, {
     enabled: !!user?.id,
     onEvent: handleVendorEvent,
   });
 
-  // Redirect on error or when session fetch returned null (unauthenticated)
+  // Redirect on error or when session fetch returned null
   useEffect(() => {
     mounted.current = true;
     if (isError || (!isLoading && !user && mounted.current)) {
@@ -419,12 +474,10 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     }
   }, [isError, error, isLoading, user]);
 
-  // Safety timeout: if loading takes more than 8s, force redirect to login
+  // Safety timeout
   useEffect(() => {
-    if (!isLoading && !user) return; // already handled above
-    const timer = setTimeout(() => {
-      setTimedOut(true);
-    }, 8000);
+    if (!isLoading && !user) return;
+    const timer = setTimeout(() => { setTimedOut(true); }, 8000);
     return () => clearTimeout(timer);
   }, [isLoading, user]);
 
@@ -465,7 +518,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
 
   return (
     <VendorLiveContext.Provider value={liveContextValue}>
-      <VendorUserContext.Provider value={user}>
+      <VendorUserContext.Provider value={{ user: user!, role: vendorRole, can }}>
         <div className="min-h-screen flex bg-[var(--anna-bg)]">
           {/* Desktop Sidebar */}
           <aside className="hidden md:flex md:w-60 lg:w-64 md:flex-col border-r border-[var(--anna-border)] bg-[var(--anna-white)]">
@@ -499,7 +552,6 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* Mobile live indicator */}
                 <div className={cn(
                   "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium",
                   isConnected ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"

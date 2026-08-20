@@ -239,6 +239,8 @@ model Vendor {
   zones           String // JSON array of estate zone strings
   avatarUrl       String?    // relative path e.g. /avatars/vendors/xxx.jpg
   passwordHash     String?     // vendor portal login (null = ops-managed, no self-serve access)
+  roleId          String?     // FK → Role (vendor RBAC)
+  roleRel         Role?        @relation("VendorRole", fields: [roleId], references: [id])
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -725,6 +727,7 @@ model Role {
   updatedAt   DateTime @updatedAt
 
   users           OpsUser[]
+  vendors         Vendor[]  @relation("VendorRole")
   rolePermissions RolePermission[]
 
   @@map("roles")
