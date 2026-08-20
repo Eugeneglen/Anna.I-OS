@@ -32,7 +32,11 @@ function perm(mod: string, actions: string[]) {
 
 const VENDOR_ROLE_DEFS = [
   {
-    name: "Super Admin", slug: "vendor_admin", description: "Full vendor portal control — users, roles & all modules", level: 4,
+    name: "Super Admin", slug: "vendor_super_admin", description: "Controls user management, role management & all vendor modules", level: 5,
+    permissions: VENDOR_PERMISSIONS.map((p) => `${p.module}:${p.action}`),
+  },
+  {
+    name: "Vendor Admin", slug: "vendor_admin", description: "Full vendor portal control — all permissions", level: 4,
     permissions: VENDOR_PERMISSIONS.map((p) => `${p.module}:${p.action}`),
   },
   {
@@ -64,7 +68,7 @@ async function ensureVendorRbac() {
   const vendorRoleCount = await db.role.count({
     where: { slug: { startsWith: "vendor_" } },
   });
-  if (vendorRoleCount >= 3) {
+  if (vendorRoleCount >= 4) {
     vendorSelfHealed = true;
     return;
   }
@@ -106,10 +110,10 @@ async function ensureVendorRbac() {
     }
   }
 
-  // Assign vendors without roleId to vendor_admin
-  const vendorAdminId = roleIds["vendor_admin"];
-  if (vendorAdminId) {
-    await db.vendor.updateMany({ where: { roleId: null }, data: { roleId: vendorAdminId } });
+  // Assign vendors without roleId to Super Admin
+  const superAdminId = roleIds["vendor_super_admin"];
+  if (superAdminId) {
+    await db.vendor.updateMany({ where: { roleId: null }, data: { roleId: superAdminId } });
   }
 
   console.log("[ensureVendorRbac] ✅ Vendor RBAC self-heal complete.");

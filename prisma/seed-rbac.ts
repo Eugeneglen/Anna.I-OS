@@ -252,8 +252,15 @@ const VENDOR_PERMISSIONS: PermDef[] = [
 const VENDOR_ROLE_DEFS: RoleDef[] = [
   {
     name: "Super Admin",
+    slug: "vendor_super_admin",
+    description: "Controls user management, role management & all vendor modules",
+    level: 5,
+    permissions: VENDOR_PERMISSIONS.map((p) => `${p.module}:${p.action}`),
+  },
+  {
+    name: "Vendor Admin",
     slug: "vendor_admin",
-    description: "Full vendor portal control — users, roles & all modules",
+    description: "Full vendor portal control — all permissions",
     level: 4,
     permissions: VENDOR_PERMISSIONS.map((p) => `${p.module}:${p.action}`),
   },
@@ -286,7 +293,7 @@ const VENDOR_ROLE_DEFS: RoleDef[] = [
   },
 ];
 
-// Legacy vendor emails to assign vendor_admin role
+// Legacy vendor emails to assign Super Admin role
 const VENDOR_ADMIN_EMAILS = [
   "ops@sparkclean.sg",
   "hello@freshwash.sg",
@@ -435,10 +442,10 @@ async function main() {
   }
   console.log(`  ✅ Migrated ${migrated} users, ${skipped} already done/skipped.\n`);
 
-  // ── 5. Assign legacy vendors to vendor_admin role ────────────
-  console.log("  Assigning legacy vendors to vendor_admin role…");
-  const vendorAdminRoleId = roleIds["vendor_admin"];
-  if (vendorAdminRoleId) {
+  // ── 5. Assign legacy vendors to Super Admin role ────────────
+  console.log("  Assigning legacy vendors to Super Admin role…");
+  const vendorSuperAdminId = roleIds["vendor_super_admin"];
+  if (vendorSuperAdminId) {
     let vendorMigrated = 0;
     for (const email of VENDOR_ADMIN_EMAILS) {
       const vendor = await db.vendor.findUnique({ where: { email }, select: { id: true, roleId: true } });
@@ -450,13 +457,13 @@ async function main() {
         console.log(`    ⏭️  Vendor ${email} already has roleId — skipping`);
         continue;
       }
-      await db.vendor.update({ where: { id: vendor.id }, data: { roleId: vendorAdminRoleId } });
+      await db.vendor.update({ where: { id: vendor.id }, data: { roleId: vendorSuperAdminId } });
       vendorMigrated++;
-      console.log(`    ✅ Vendor ${email} → vendor_admin`);
+      console.log(`    ✅ Vendor ${email} → Super Admin`);
     }
-    console.log(`  ✅ ${vendorMigrated} vendors assigned vendor_admin.\n`);
+    console.log(`  ✅ ${vendorMigrated} vendors assigned Super Admin.\n`);
   } else {
-    console.warn("  ⚠️  vendor_admin role not found — skipping vendor assignment.\n");
+    console.warn("  ⚠️  vendor_super_admin role not found — skipping vendor assignment.\n");
   }
 
   // ── Summary ───────────────────────────────────────────────────
