@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { db } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 // ═════════════════════════════════════════════════════
 // GET /api/vendor/users — List vendor staff (scoped to this vendor)
@@ -51,6 +52,7 @@ export async function GET() {
 const createStaffSchema = z.object({
   name: z.string().min(1, "Name is required"),
   contact: z.string().min(1, "Contact is required"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
   roleId: z.string().optional(),
 });
 
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, contact, roleId } = parsed.data;
+    const { name, contact, password, roleId } = parsed.data;
 
     // Validate role belongs to vendor scope if provided
     if (roleId) {
@@ -85,6 +87,7 @@ export async function POST(req: NextRequest) {
         vendorId: session.vendorId,
         name,
         contact,
+        passwordHash: password ? bcrypt.hashSync(password, 10) : null,
         roleId: roleId || null,
       },
       include: { roleRel: { select: { id: true, name: true, slug: true, level: true } } },

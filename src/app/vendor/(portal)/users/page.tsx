@@ -155,6 +155,7 @@ export default function VendorUsersPage() {
   const [formName, setFormName] = useState("");
   const [formContact, setFormContact] = useState("");
   const [formRoleId, setFormRoleId] = useState("");
+  const [formPassword, setFormPassword] = useState("");
   const [formError, setFormError] = useState("");
 
   // ── Data fetching ──
@@ -261,6 +262,7 @@ export default function VendorUsersPage() {
     setFormName("");
     setFormContact("");
     setFormRoleId("");
+    setFormPassword("");
     setFormError("");
     setSheetOpen(true);
   }
@@ -287,11 +289,13 @@ export default function VendorUsersPage() {
 
     if (editingUser) {
       const body: Record<string, unknown> = { name: formName, contact: formContact };
-      if (formRoleId) body.roleId = formRoleId;
+      if (formPassword) body.password = formPassword;
+    if (formRoleId) body.roleId = formRoleId;
       updateMutation.mutate({ id: editingUser.id, body });
     } else {
       const body: Record<string, string> = { name: formName, contact: formContact };
-      if (formRoleId) body.roleId = formRoleId;
+      if (formPassword) body.password = formPassword;
+    if (formRoleId) body.roleId = formRoleId;
       createMutation.mutate(body);
     }
   }
@@ -497,6 +501,17 @@ export default function VendorUsersPage() {
                 value={formContact}
                 onChange={(e) => setFormContact(e.target.value)}
                 placeholder="Phone or email"
+                className="rounded-xl border-[var(--anna-border)] text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-[var(--anna-slate)]">Password</Label>
+              <Input
+                type="password"
+                value={formPassword}
+                onChange={(e) => setFormPassword(e.target.value)}
+                placeholder="Min 6 characters (optional)"
                 className="rounded-xl border-[var(--anna-border)] text-sm"
               />
             </div>
