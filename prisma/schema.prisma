@@ -595,7 +595,9 @@ model VendorStaff {
   vendorId  String
   name      String
   contact   String  // phone or email
-  role      String   @default("staff") // staff | manager | owner (future RBAC)
+  role      String   @default("staff") // staff | manager | owner (legacy label)
+  roleId    String?  // FK → Role (vendor RBAC)
+  roleRel   Role?     @relation("VendorStaffRole", fields: [roleId], references: [id])
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -728,6 +730,7 @@ model Role {
 
   users           OpsUser[]
   vendors         Vendor[]  @relation("VendorRole")
+  vendorStaff     VendorStaff[] @relation("VendorStaffRole")
   rolePermissions RolePermission[]
 
   @@map("roles")
