@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  LayoutDashboard,
   CalendarDays,
   CalendarRange,
   Wallet,
@@ -88,6 +89,7 @@ export function useVendorLive() {
 }
 
 const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; exact?: boolean; permission?: string }[] = [
+    { label: "Dashboard", href: "/vendor/", icon: LayoutDashboard, exact: true },
     { label: "Schedule", href: "/vendor/schedule", icon: CalendarDays, permission: "v_schedule:view" },
   { label: "Calendar", href: "/vendor/calendar", icon: CalendarRange, permission: "v_calendar:view" },
   { label: "Earnings", href: "/vendor/earnings", icon: Wallet, permission: "v_earnings:view" },
