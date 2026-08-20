@@ -4,7 +4,7 @@ import { useVendorUser } from "@/app/vendor/(portal)/layout";
 import { VendorEarnings } from "@/components/vendor/vendor-earnings";
 
 export default function VendorEarningsPage() {
-  const user = useVendorUser();
+  const user = useVendorUser()?.user;
   const vendorId = user?.id ?? "";
 
   if (!vendorId) return null;

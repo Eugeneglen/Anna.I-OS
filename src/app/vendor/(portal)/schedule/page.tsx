@@ -183,7 +183,8 @@ function DashboardSkeleton() {
 // ─── Main Page ─────────────────────────────────────────
 
 export default function VendorSchedulePage() {
-  const user = useVendorUser();
+  const vendorCtx = useVendorUser();
+  const user = vendorCtx?.user;
   const vendorId = user?.id ?? "";
   const queryClient = useQueryClient();
   const { toast } = useToast();

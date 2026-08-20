@@ -301,7 +301,7 @@ function InfoRow({
 // ─── Main Page ──────────────────────────────────────────
 
 export default function VendorSettingsPage() {
-  const user = useVendorUser();
+  const user = useVendorUser()?.user;
   const queryClient = useQueryClient();
 
   const { data: profile, isLoading } = useQuery<VendorProfile>({
