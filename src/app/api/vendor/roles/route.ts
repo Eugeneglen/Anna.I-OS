@@ -71,7 +71,20 @@ async function ensureVendorRbac() {
   const vendorRoleCount = await db.role.count({
     where: { slug: { startsWith: "vendor_" } },
   });
+  // Always ensure current vendor has a role (legacy vendors may have null roleId)
   if (vendorRoleCount >= 4) {
+    try {
+      const superAdmin = await db.role.findUnique({ where: { slug: "vendor_super_admin" } });
+      if (superAdmin) {
+        const unassigned = await db.vendor.count({ where: { roleId: null } });
+        if (unassigned > 0) {
+          await db.vendor.updateMany({ where: { roleId: null }, data: { roleId: superAdmin.id } });
+          console.log(`[ensureVendorRbac] Assigned Super Admin to ${unassigned} legacy vendors`);
+        }
+      }
+    } catch (e) {
+      console.error("[ensureVendorRbac] Legacy vendor assignment error:", e);
+    }
     vendorSelfHealed = true;
     return;
   }
