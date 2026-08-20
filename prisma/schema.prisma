@@ -38,6 +38,7 @@ enum TaskStatus {
   VERIFIED
   ESCROW_RELEASED
   DISPUTED
+  DISPUTE_CLOSED
   CANCELLED
 }
 
@@ -45,6 +46,7 @@ enum EscrowState {
   HELD
   RELEASED
   DISPUTED
+  DISPUTE_CLOSED
   REFUNDED
 }
 
