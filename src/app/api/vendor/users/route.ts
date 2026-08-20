@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { db } from "@/lib/db";
-import bcrypt from "bcryptjs";
+import * as bcrypt from "bcryptjs";
 
 // ═════════════════════════════════════════════════════
 // GET /api/vendor/users — List vendor staff (scoped to this vendor)
@@ -22,19 +22,15 @@ export async function GET() {
       },
     });
 
-    // Count staff per role for userCount
-    const roleCounts: Record<string, number> = {};
-    for (const s of staff) {
-      if (s.roleId) roleCounts[s.roleId] = (roleCounts[s.roleId] || 0) + 1;
-    }
-
     return NextResponse.json({
       users: staff.map((s) => ({
         id: s.id,
         name: s.name,
+        email: s.email,
         contact: s.contact,
         role: s.role,
         roleId: s.roleId,
+        hasPassword: !!s.passwordHash,
         isActive: s.isActive,
         createdAt: s.createdAt,
         roleRel: s.roleRel,
@@ -52,7 +48,8 @@ export async function GET() {
 const createStaffSchema = z.object({
   name: z.string().min(1, "Name is required"),
   contact: z.string().min(1, "Contact is required"),
-  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  email: z.string().email("Invalid email").optional(),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
   roleId: z.string().optional(),
 });
 
@@ -72,7 +69,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, contact, password, roleId } = parsed.data;
+    const { name, contact, email, password, roleId } = parsed.data;
+
+    // If email provided, check uniqueness within vendor
+    if (email) {
+      const existing = await db.vendorStaff.findFirst({
+        where: { vendorId: session.vendorId, email },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: { email: ["A staff member with this email already exists"] } },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Email requires password for login capability
+    if (email && !password) {
+      return NextResponse.json(
+        { error: { password: ["Password is required when email is provided (for login)"] } },
+        { status: 400 }
+      );
+    }
 
     // Validate role belongs to vendor scope if provided
     if (roleId) {
@@ -87,6 +105,7 @@ export async function POST(req: NextRequest) {
         vendorId: session.vendorId,
         name,
         contact,
+        email: email || null,
         passwordHash: password ? bcrypt.hashSync(password, 10) : null,
         roleId: roleId || null,
       },

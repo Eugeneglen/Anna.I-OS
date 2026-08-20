@@ -38,9 +38,11 @@ interface RoleItem {
 interface UserItem {
   id: string;
   name: string;
+  email: string | null;
   contact: string;
   role: string;
   roleId: string | null;
+  hasPassword: boolean;
   isActive: boolean;
   createdAt: string;
   roleRel: { id: string; name: string; slug: string; level: number } | null;
@@ -154,8 +156,10 @@ export default function VendorUsersPage() {
   // Form state
   const [formName, setFormName] = useState("");
   const [formContact, setFormContact] = useState("");
-  const [formRoleId, setFormRoleId] = useState("");
+  const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
+  const [showFormPassword, setShowFormPassword] = useState(false);
+  const [formRoleId, setFormRoleId] = useState("");
   const [formError, setFormError] = useState("");
 
   // ── Data fetching ──
@@ -261,8 +265,10 @@ export default function VendorUsersPage() {
     setEditingUser(null);
     setFormName("");
     setFormContact("");
-    setFormRoleId("");
+    setFormEmail("");
     setFormPassword("");
+    setShowFormPassword(false);
+    setFormRoleId("");
     setFormError("");
     setSheetOpen(true);
   }
@@ -271,6 +277,9 @@ export default function VendorUsersPage() {
     setEditingUser(user);
     setFormName(user.name);
     setFormContact(user.contact);
+    setFormEmail(user.email || "");
+    setFormPassword("");
+    setShowFormPassword(false);
     setFormRoleId(user.roleId || "");
     setFormError("");
     setSheetOpen(true);
@@ -286,16 +295,29 @@ export default function VendorUsersPage() {
     setFormError("");
     if (!formName.trim()) { setFormError("Name is required"); return; }
     if (!formContact.trim()) { setFormError("Contact is required"); return; }
+    if (formEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail)) {
+      setFormError("Invalid email format");
+      return;
+    }
+    if (formEmail.trim() && !formPassword && !editingUser) {
+      setFormError("Password is required when email is provided (for login)");
+      return;
+    }
+    if (formPassword && formPassword.length < 8) {
+      setFormError("Password must be at least 8 characters");
+      return;
+    }
 
     if (editingUser) {
       const body: Record<string, unknown> = { name: formName, contact: formContact };
-      if (formPassword) body.password = formPassword;
-    if (formRoleId) body.roleId = formRoleId;
+      if (formRoleId) body.roleId = formRoleId;
+      if (formPassword) (body as Record<string, string>).password = formPassword;
       updateMutation.mutate({ id: editingUser.id, body });
     } else {
       const body: Record<string, string> = { name: formName, contact: formContact };
+      if (formRoleId) body.roleId = formRoleId;
+      if (formEmail.trim()) body.email = formEmail.trim();
       if (formPassword) body.password = formPassword;
-    if (formRoleId) body.roleId = formRoleId;
       createMutation.mutate(body);
     }
   }
@@ -398,9 +420,14 @@ export default function VendorUsersPage() {
                     roleName={u.roleRel?.name || null}
                     slug={u.roleRel?.slug || u.role.toLowerCase()}
                   />
+                  {u.hasPassword && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Login enabled
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-[var(--anna-muted)] truncate mt-0.5">
-                  {u.contact}
+                  {u.email || u.contact}
                 </p>
               </div>
 
@@ -496,24 +523,61 @@ export default function VendorUsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">Contact</Label>
+              <Label className="text-xs font-medium text-[var(--anna-slate)]">Contact (Phone)</Label>
               <Input
                 value={formContact}
                 onChange={(e) => setFormContact(e.target.value)}
-                placeholder="Phone or email"
+                placeholder="Phone number"
                 className="rounded-xl border-[var(--anna-border)] text-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[var(--anna-slate)]">Password</Label>
+              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+                Login Email
+                <span className="ml-1 text-[var(--anna-muted)] font-normal">(optional — enables staff login)</span>
+              </Label>
               <Input
-                type="password"
-                value={formPassword}
-                onChange={(e) => setFormPassword(e.target.value)}
-                placeholder="Min 6 characters (optional)"
+                type="email"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                placeholder="staff@company.com"
                 className="rounded-xl border-[var(--anna-border)] text-sm"
+                disabled={!!editingUser}
               />
+              {editingUser && (
+                <p className="text-[10px] text-[var(--anna-muted)]">Email cannot be changed after creation</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-[var(--anna-slate)]">
+                Password
+                {!editingUser && formEmail && <span className="text-red-500 ml-1">*</span>}
+              </Label>
+              <div className="relative">
+                <Input
+                  type={showFormPassword ? "text" : "password"}
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  placeholder={editingUser ? "Leave blank to keep current" : "Min. 8 characters"}
+                  className="rounded-xl border-[var(--anna-border)] text-sm pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowFormPassword(!showFormPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] cursor-pointer"
+                >
+                  {showFormPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+              {!editingUser && formEmail && !formPassword && (
+                <p className="text-[10px] text-red-500">Required when email is provided</p>
+              )}
             </div>
 
             <div className="space-y-1.5">

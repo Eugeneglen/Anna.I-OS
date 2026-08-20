@@ -38,7 +38,6 @@ enum TaskStatus {
   VERIFIED
   ESCROW_RELEASED
   DISPUTED
-  DISPUTE_CLOSED
   CANCELLED
 }
 
@@ -46,7 +45,6 @@ enum EscrowState {
   HELD
   RELEASED
   DISPUTED
-  DISPUTE_CLOSED
   REFUNDED
 }
 
@@ -240,7 +238,6 @@ model Vendor {
   avatarUrl       String?    // relative path e.g. /avatars/vendors/xxx.jpg
   passwordHash     String?     // vendor portal login (null = ops-managed, no self-serve access)
   roleId          String?     // FK → Role (vendor RBAC)
-  roleRel         Role?        @relation("VendorRole", fields: [roleId], references: [id])
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -252,6 +249,7 @@ model Vendor {
   notifications  Notification[]
   addresses       Address[]
   createdAddons   BookingAddon[] @relation("AddonCreator")
+  roleRel         Role?        @relation("VendorRole", fields: [roleId], references: [id])
 }
 
 // ======================== ADDRESSES ========================
@@ -591,22 +589,24 @@ model Quotation {
 // ======================== VENDOR STAFF (SME Roster) ========================
 
 model VendorStaff {
-  id        String   @id @default(cuid())
-  vendorId  String
-  name      String
-  contact   String  // phone or email
-  role      String   @default("staff") // staff | manager | owner (legacy label)
-  roleId    String?  // FK → Role (vendor RBAC)
-  roleRel   Role?     @relation("VendorStaffRole", fields: [roleId], references: [id])
-  passwordHash    String?     // staff login password (bcrypt)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  vendorId     String
+  name         String
+  email        String?  // staff login email (unique within vendor)
+  contact      String   // phone or email (display)
+  role         String   @default("staff") // staff | manager | owner (legacy label)
+  roleId       String?  // FK → Role (vendor RBAC)
+  passwordHash String?  // bcrypt hash — null = no self-serve login
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   vendor  Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   bookings Booking[]
+  roleRel Role?     @relation("VendorStaffRole", fields: [roleId], references: [id])
 
   @@index([vendorId])
+  @@unique([vendorId, email])
 }
 
 // ======================== VENDOR ENTITLEMENT & PLANS ========================
@@ -730,7 +730,7 @@ model Role {
   updatedAt   DateTime @updatedAt
 
   users           OpsUser[]
-  vendors         Vendor[]  @relation("VendorRole")
+  vendors         Vendor[]     @relation("VendorRole")
   vendorStaff     VendorStaff[] @relation("VendorStaffRole")
   rolePermissions RolePermission[]
 
