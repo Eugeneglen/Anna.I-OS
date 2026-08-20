@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,7 @@ import {
   Users,
   Key,
   Star,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVendorUser } from "@/app/vendor/(portal)/layout";
@@ -246,14 +247,24 @@ function PermissionsDialog({
   onOpenChange,
   role,
   modules,
+  canEdit,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   role: RoleItem;
   modules: ModuleInfo[];
+  canEdit: boolean;
+  onSaved?: () => void;
 }) {
-  const isEditable = !role.isSystem;
-  const [selected, setSelected] = useState<Set<string>>(new Set(role.permissions));
+  const isEditable = canEdit;
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset selected when role changes or data loads
+  useEffect(() => {
+    setSelected(new Set(role.permissions));
+  }, [role.id]);
 
   // Fetch full permission details for this role
   const { data: rolePermsData } = useQuery({
@@ -279,8 +290,35 @@ function PermissionsDialog({
     return s;
   }, [rolePermissions]);
 
-  // Use the fetched permSet for the display
-  const displaySet = rolePermissions.length > 0 ? permSet : selected;
+  // Use the fetched permSet when available, then switch to local edits
+  const displaySet = rolePermissions.length > 0 && !isEditable
+    ? permSet
+    : selected;
+
+  // Track if user has made changes
+  const hasChanges = isEditable && (
+    displaySet.size !== permSet.size ||
+    [...displaySet].some((k) => !permSet.has(k))
+  );
+
+  // Save handler
+  async function handleSave() {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/vendor/roles/${role.id}/permissions`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: Array.from(selected) }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      onSaved?.();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Failed to save permissions:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   // Collect all unique actions across all modules
   const allActions = useMemo(() => {
@@ -314,8 +352,8 @@ function PermissionsDialog({
           </DialogTitle>
           <DialogDescription>
             {isEditable
-              ? "Toggle permissions to grant or revoke access for this role."
-              : "View the permissions assigned to this system role."}
+              ? "Toggle permissions to grant or revoke access, then save."
+              : "View the permissions assigned to this role."}
           </DialogDescription>
         </DialogHeader>
 
@@ -407,12 +445,26 @@ function PermissionsDialog({
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats + Save */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-[var(--anna-muted)]">
               <span className="font-data text-[var(--anna-slate)]">{displaySet.size}</span>{" "}
-              permissions assigned
+              permissions selected
+              {hasChanges && (
+                <span className="ml-2 text-amber-600 font-medium">({displaySet.size > permSet.size ? "+" : ""}{displaySet.size - permSet.size} changed)</span>
+              )}
             </p>
+            {isEditable && (
+              <Button
+                size="sm"
+                className="rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white text-xs font-medium"
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving && <Loader2 size={12} className="mr-1.5 animate-spin" />}
+                Save Changes
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
@@ -425,6 +477,7 @@ function PermissionsDialog({
 export default function VendorRolesPage() {
   const vendorCtx = useVendorUser();
   const can = vendorCtx?.can;
+  const queryClient = useQueryClient();
 
   // Permission dialog state
   const [permDialogOpen, setPermDialogOpen] = useState(false);
@@ -526,8 +579,7 @@ export default function VendorRolesPage() {
       {!isLoading && roles.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {roles.map((role) => {
-            const canEdit =
-              !!can?.("v_roles", "edit") && !role.isSystem;
+            const canEdit = !!can?.("v_roles", "edit");
 
             const isCurrentUserRole = vendorCtx?.role?.id === role.id;
 
@@ -553,6 +605,10 @@ export default function VendorRolesPage() {
           onOpenChange={setPermDialogOpen}
           role={permTargetRole}
           modules={modules}
+          canEdit={!!can?.("v_roles", "edit")}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["vendor-roles-all"] });
+          }}
         />
       )}
     </div>
