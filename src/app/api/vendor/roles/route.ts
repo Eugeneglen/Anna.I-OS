@@ -24,6 +24,9 @@ const VENDOR_PERMISSIONS = [
   { module: "v_users", action: "assign" },
   { module: "v_roles", action: "view" }, { module: "v_roles", action: "edit" },
   { module: "v_roles", action: "assign" },
+  { module: "vendors", action: "view" }, { module: "vendors", action: "create" },
+  { module: "vendors", action: "edit" }, { module: "vendors", action: "delete" },
+  { module: "vendors", action: "export" },
 ];
 
 function perm(mod: string, actions: string[]) {

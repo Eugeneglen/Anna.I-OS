@@ -247,6 +247,13 @@ const VENDOR_PERMISSIONS: PermDef[] = [
   { module: "v_roles", action: "view", description: "View vendor roles" },
   { module: "v_roles", action: "edit", description: "Edit vendor role permissions" },
   { module: "v_roles", action: "assign", description: "Assign roles to vendor staff" },
+
+  // vendors: 5 (shared module — vendor self-management)
+  { module: "vendors", action: "view", description: "View vendor profiles" },
+  { module: "vendors", action: "create", description: "Create vendor profiles" },
+  { module: "vendors", action: "edit", description: "Edit vendor profiles" },
+  { module: "vendors", action: "delete", description: "Delete vendor profiles" },
+  { module: "vendors", action: "export", description: "Export vendor data" },
 ];
 
 const VENDOR_ROLE_DEFS: RoleDef[] = [
