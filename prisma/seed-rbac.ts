@@ -199,13 +199,109 @@ const ROLE_MIGRATION: Record<string, string> = {
   ANALYST: "data_analyst",
 };
 
+// ─── Vendor RBAC permissions (v_ prefix) ────────────────────────────
+
+const VENDOR_PERMISSIONS: PermDef[] = [
+  // v_schedule: 4
+  { module: "v_schedule", action: "view", description: "View schedule" },
+  { module: "v_schedule", action: "edit", description: "Edit schedule" },
+  { module: "v_schedule", action: "create", description: "Create schedule entries" },
+  { module: "v_schedule", action: "delete", description: "Delete schedule entries" },
+
+  // v_calendar: 2
+  { module: "v_calendar", action: "view", description: "View calendar" },
+  { module: "v_calendar", action: "edit", description: "Edit calendar" },
+
+  // v_earnings: 4
+  { module: "v_earnings", action: "view", description: "View earnings" },
+  { module: "v_earnings", action: "export", description: "Export earnings" },
+  { module: "v_earnings", action: "edit", description: "Edit earnings" },
+  { module: "v_earnings", action: "dispute", description: "Dispute earnings" },
+
+  // v_staff: 4
+  { module: "v_staff", action: "view", description: "View staff roster" },
+  { module: "v_staff", action: "create", description: "Add staff" },
+  { module: "v_staff", action: "edit", description: "Edit staff" },
+  { module: "v_staff", action: "delete", description: "Remove staff" },
+
+  // v_bookings: 5
+  { module: "v_bookings", action: "view", description: "View bookings" },
+  { module: "v_bookings", action: "accept", description: "Accept bookings" },
+  { module: "v_bookings", action: "reject", description: "Reject bookings" },
+  { module: "v_bookings", action: "complete", description: "Complete bookings" },
+  { module: "v_bookings", action: "cancel", description: "Cancel bookings" },
+
+  // v_settings: 3
+  { module: "v_settings", action: "view", description: "View settings" },
+  { module: "v_settings", action: "edit", description: "Edit settings" },
+  { module: "v_settings", action: "configure", description: "Configure vendor profile" },
+
+  // v_users: 5
+  { module: "v_users", action: "view", description: "View vendor users" },
+  { module: "v_users", action: "create", description: "Add vendor users" },
+  { module: "v_users", action: "edit", description: "Edit vendor users" },
+  { module: "v_users", action: "delete", description: "Remove vendor users" },
+  { module: "v_users", action: "assign", description: "Assign roles to vendor users" },
+
+  // v_roles: 3
+  { module: "v_roles", action: "view", description: "View vendor roles" },
+  { module: "v_roles", action: "edit", description: "Edit vendor role permissions" },
+  { module: "v_roles", action: "assign", description: "Assign roles to vendor staff" },
+];
+
+const VENDOR_ROLE_DEFS: RoleDef[] = [
+  {
+    name: "Super Admin",
+    slug: "vendor_admin",
+    description: "Full vendor portal control — users, roles & all modules",
+    level: 4,
+    permissions: VENDOR_PERMISSIONS.map((p) => `${p.module}:${p.action}`),
+  },
+  {
+    name: "Vendor Manager",
+    slug: "vendor_manager",
+    description: "Manage day-to-day operations — schedule, staff, bookings, earnings",
+    level: 3,
+    permissions: [
+      ...perm("v_schedule", ["view", "edit", "create", "delete"]),
+      ...perm("v_calendar", ["view", "edit"]),
+      ...perm("v_earnings", ["view", "export"]),
+      ...perm("v_staff", ["view", "create", "edit"]),
+      ...perm("v_bookings", ["view", "accept", "reject", "complete"]),
+      ...perm("v_settings", ["view"]),
+      ...perm("v_users", ["view"]),
+      ...perm("v_roles", ["view"]),
+    ],
+  },
+  {
+    name: "Vendor Staff",
+    slug: "vendor_staff_role",
+    description: "Basic access — view schedule, calendar, and own bookings",
+    level: 1,
+    permissions: [
+      ...perm("v_schedule", ["view"]),
+      ...perm("v_calendar", ["view"]),
+      ...perm("v_bookings", ["view"]),
+    ],
+  },
+];
+
+// Legacy vendor emails to assign vendor_admin role
+const VENDOR_ADMIN_EMAILS = [
+  "ops@sparkclean.sg",
+  "hello@freshwash.sg",
+  "bookings@coolair.sg",
+  "support@fixit.sg",
+  "ops@greensweep.sg",
+];
+
 // ─── Main ──────────────────────────────────────────────────────────
 
 async function main() {
   console.log("🔄 Seeding RBAC data…\n");
 
   // ── 1. Upsert all permissions ─────────────────────────────────
-  console.log(`  Creating ${PERMISSIONS.length} permissions…`);
+  console.log(`  Creating ${PERMISSIONS.length} ops permissions…`);
   let permCount = 0;
   for (const p of PERMISSIONS) {
     await db.permission.upsert({
@@ -215,10 +311,23 @@ async function main() {
     });
     permCount++;
   }
-  console.log(`  ✅ ${permCount} permissions upserted.\n`);
+  console.log(`  ✅ ${permCount} ops permissions upserted.\n`);
 
-  // ── 2. Upsert all roles ───────────────────────────────────────
-  console.log(`  Creating ${ROLES.length} system roles…`);
+  // ── 1b. Upsert vendor permissions ─────────────────────────────
+  console.log(`  Creating ${VENDOR_PERMISSIONS.length} vendor permissions…`);
+  let vPermCount = 0;
+  for (const p of VENDOR_PERMISSIONS) {
+    await db.permission.upsert({
+      where: { module_action: { module: p.module, action: p.action } },
+      update: { description: p.description },
+      create: { module: p.module, action: p.action, description: p.description },
+    });
+    vPermCount++;
+  }
+  console.log(`  ✅ ${vPermCount} vendor permissions upserted.\n`);
+
+  // ── 2. Upsert all ops roles ───────────────────────────────────
+  console.log(`  Creating ${ROLES.length} ops system roles…`);
   const roleIds: Record<string, string> = {};
   for (const r of ROLES) {
     const role = await db.role.upsert({
@@ -237,14 +346,32 @@ async function main() {
   }
   console.log("");
 
-  // ── 3. Upsert role-permission mappings ────────────────────────
-  console.log("  Assigning permissions to roles…");
+  // ── 2b. Upsert vendor roles ───────────────────────────────────
+  console.log(`  Creating ${VENDOR_ROLE_DEFS.length} vendor roles…`);
+  for (const r of VENDOR_ROLE_DEFS) {
+    const role = await db.role.upsert({
+      where: { slug: r.slug },
+      update: { name: r.name, description: r.description, level: r.level, isSystem: true },
+      create: {
+        name: r.name,
+        slug: r.slug,
+        description: r.description,
+        level: r.level,
+        isSystem: true,
+      },
+    });
+    roleIds[r.slug] = role.id;
+    console.log(`    ✅ ${r.slug} (id: ${role.id})`);
+  }
+  console.log("");
+
+  // ── 3. Upsert ops role-permission mappings ────────────────────
+  console.log("  Assigning ops permissions to roles…");
   let rpCount = 0;
   for (const r of ROLES) {
     const roleId = roleIds[r.slug];
     for (const key of r.permissions) {
       const [module, action] = key.split(":");
-      // Find the permission id
       const permRecord = await db.permission.findUnique({
         where: { module_action: { module, action } },
         select: { id: true },
@@ -262,7 +389,33 @@ async function main() {
     }
     console.log(`    ✅ ${r.slug}: ${r.permissions.length} permissions assigned`);
   }
-  console.log(`  ✅ ${rpCount} role-permission pairs upserted.\n`);
+  console.log(`  ✅ ${rpCount} ops role-permission pairs upserted.\n`);
+
+  // ── 3b. Upsert vendor role-permission mappings ────────────────
+  console.log("  Assigning vendor permissions to roles…");
+  let vRpCount = 0;
+  for (const r of VENDOR_ROLE_DEFS) {
+    const roleId = roleIds[r.slug];
+    for (const key of r.permissions) {
+      const [module, action] = key.split(":");
+      const permRecord = await db.permission.findUnique({
+        where: { module_action: { module, action } },
+        select: { id: true },
+      });
+      if (!permRecord) {
+        console.warn(`    ⚠️  Permission not found: ${key} — skipping`);
+        continue;
+      }
+      await db.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId, permissionId: permRecord.id } },
+        update: {},
+        create: { roleId, permissionId: permRecord.id },
+      });
+      vRpCount++;
+    }
+    console.log(`    ✅ ${r.slug}: ${r.permissions.length} vendor permissions assigned`);
+  }
+  console.log(`  ✅ ${vRpCount} vendor role-permission pairs upserted.\n`);
 
   // ── 4. Migrate existing OpsUser records ───────────────────────
   console.log("  Migrating existing OpsUser records to new RBAC roles…");
@@ -270,25 +423,41 @@ async function main() {
   let migrated = 0;
   let skipped = 0;
   for (const user of existingUsers) {
-    // Skip if already migrated
-    if (user.roleId) {
-      skipped++;
-      continue;
-    }
+    if (user.roleId) { skipped++; continue; }
     const targetSlug = ROLE_MIGRATION[user.role];
     if (!targetSlug || !roleIds[targetSlug]) {
       console.warn(`    ⚠️  No RBAC mapping for OpsRole ${user.role} — skipping user ${user.id}`);
-      skipped++;
-      continue;
+      skipped++; continue;
     }
-    await db.opsUser.update({
-      where: { id: user.id },
-      data: { roleId: roleIds[targetSlug] },
-    });
+    await db.opsUser.update({ where: { id: user.id }, data: { roleId: roleIds[targetSlug] } });
     migrated++;
     console.log(`    ✅ User ${user.id} (${user.role}) → ${targetSlug}`);
   }
   console.log(`  ✅ Migrated ${migrated} users, ${skipped} already done/skipped.\n`);
+
+  // ── 5. Assign legacy vendors to vendor_admin role ────────────
+  console.log("  Assigning legacy vendors to vendor_admin role…");
+  const vendorAdminRoleId = roleIds["vendor_admin"];
+  if (vendorAdminRoleId) {
+    let vendorMigrated = 0;
+    for (const email of VENDOR_ADMIN_EMAILS) {
+      const vendor = await db.vendor.findUnique({ where: { email }, select: { id: true, roleId: true } });
+      if (!vendor) {
+        console.warn(`    ⚠️  Vendor not found: ${email}`);
+        continue;
+      }
+      if (vendor.roleId) {
+        console.log(`    ⏭️  Vendor ${email} already has roleId — skipping`);
+        continue;
+      }
+      await db.vendor.update({ where: { id: vendor.id }, data: { roleId: vendorAdminRoleId } });
+      vendorMigrated++;
+      console.log(`    ✅ Vendor ${email} → vendor_admin`);
+    }
+    console.log(`  ✅ ${vendorMigrated} vendors assigned vendor_admin.\n`);
+  } else {
+    console.warn("  ⚠️  vendor_admin role not found — skipping vendor assignment.\n");
+  }
 
   // ── Summary ───────────────────────────────────────────────────
   const totalPerms = await db.permission.count();
