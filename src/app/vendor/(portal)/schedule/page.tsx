@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useVendorUser } from "@/app/vendor/(portal)/layout";
+import { vendorFetch } from "@/lib/vendor-fetch";
 import { VendorSchedule, type VendorScheduleItem, type VendorInfo } from "@/components/vendor/vendor-schedule";
 import { VendorEarnings } from "@/components/vendor/vendor-earnings";
 import { VendorTaskDetail } from "@/components/vendor/vendor-task-detail";
@@ -204,7 +205,7 @@ export default function VendorSchedulePage() {
   const { data: dashData, isLoading: dashLoading } = useQuery<DashboardResponse>({
     queryKey: ["vendor-dashboard", vendorId],
     queryFn: async () => {
-      const res = await fetch("/api/vendor/dashboard");
+      const res = await vendorFetch("/api/vendor/dashboard");
       if (!res.ok) throw new Error("Failed to fetch dashboard");
       return res.json();
     },
@@ -216,7 +217,7 @@ export default function VendorSchedulePage() {
     mutationFn: async ({ bookingId, action, completionNotes }: { bookingId: string; action: string; completionNotes?: string }) => {
       const body: Record<string, string> = { action };
       if (completionNotes) body.completionNotes = completionNotes;
-      const res = await fetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
+      const res = await vendorFetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -445,7 +446,7 @@ export default function VendorSchedulePage() {
                           } else {
                             // Schedule data not cached — fetch it now
                             try {
-                              const res = await fetch(`/api/vendors/${vendorId}/schedule`);
+                              const res = await vendorFetch(`/api/vendors/${vendorId}/schedule`);
                               if (res.ok) {
                                 const data = await res.json() as { schedule: VendorScheduleItem[]; vendor: VendorInfo };
                                 queryClient.setQueryData(["vendor-schedule", vendorId], data);

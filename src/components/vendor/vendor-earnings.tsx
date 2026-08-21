@@ -14,6 +14,7 @@ import {
   ArrowDownCircle,
 } from "lucide-react";
 import { EarningsCharts } from "./vendor-earnings-charts";
+import { vendorFetch } from "@/lib/vendor-fetch";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ interface VendorEarningsProps {
 // ─── Fetcher ─────────────────────────────────────────────
 
 async function fetchVendorEarnings(vendorId: string): Promise<EarningsResponse> {
-  const res = await fetch(`/api/vendors/${vendorId}/earnings`);
+  const res = await vendorFetch(`/api/vendors/${vendorId}/earnings`);
   if (!res.ok) throw new Error("Failed to fetch vendor earnings");
   return res.json();
 }

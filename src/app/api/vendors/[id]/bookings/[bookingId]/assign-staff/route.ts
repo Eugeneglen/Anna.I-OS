@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 const assignStaffSchema = z.object({
   staffId: z.string().min(1),
@@ -12,6 +13,10 @@ export async function PATCH(
 ) {
   try {
     const { id: vendorId, bookingId } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(vendorId)
+    if (!auth.success) return auth.response
 
     const body = await request.json()
     const parsed = assignStaffSchema.safeParse(body)
@@ -25,16 +30,6 @@ export async function PATCH(
 
     const { staffId } = parsed.data
 
-    // Verify vendor exists
-    const vendor = await db.vendor.findUnique({
-      where: { id: vendorId },
-      select: { id: true },
-    })
-
-    if (!vendor) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
-    }
-
     // Verify booking belongs to this vendor
     const booking = await db.booking.findUnique({
       where: { id: bookingId },
@@ -45,7 +40,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
     }
 
-    if (booking.vendorId !== vendorId) {
+    if (booking.vendorId !== auth.vendorId) {
       return NextResponse.json(
         { error: "Booking does not belong to this vendor" },
         { status: 403 }
@@ -67,7 +62,7 @@ export async function PATCH(
       select: { id: true, vendorId: true, name: true, role: true, contact: true, isActive: true },
     })
 
-    if (!staff || staff.vendorId !== vendorId) {
+    if (!staff || staff.vendorId !== auth.vendorId) {
       return NextResponse.json(
         { error: "Staff member not found or does not belong to this vendor" },
         { status: 404 }
@@ -95,7 +90,7 @@ export async function PATCH(
       },
     })
 
-    return NextResponse.json({ booking: updatedBooking })
+    return vendorJson({ booking: updatedBooking }, auth.vendorId)
   } catch (error) {
     console.error("PATCH /api/vendors/[id]/bookings/[bookingId]/assign-staff error:", error)
     return NextResponse.json(

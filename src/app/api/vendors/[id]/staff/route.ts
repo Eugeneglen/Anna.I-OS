@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 const querySchema = z.object({
   isActive: z
@@ -18,6 +19,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(id)
+    if (!auth.success) return auth.response
+
     const { searchParams } = new URL(request.url)
 
     const isActiveParam = searchParams.get("isActive")
@@ -30,17 +36,7 @@ export async function GET(
       )
     }
 
-    // Verify vendor exists
-    const vendor = await db.vendor.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-
-    if (!vendor) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
-    }
-
-    const where: Record<string, unknown> = { vendorId: id }
+    const where: Record<string, unknown> = { vendorId: auth.vendorId }
     if (parsed.data.isActive !== undefined) {
       where.isActive = parsed.data.isActive
     }
@@ -50,7 +46,7 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     })
 
-    return NextResponse.json({ staff })
+    return vendorJson({ staff }, auth.vendorId)
   } catch (error) {
     console.error("GET /api/vendors/[id]/staff error:", error)
     return NextResponse.json(

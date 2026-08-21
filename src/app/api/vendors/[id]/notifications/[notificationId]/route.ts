@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 // PATCH — mark a single notification as read, or bulk mark-all as read
 export async function PATCH(
@@ -8,25 +9,20 @@ export async function PATCH(
 ) {
   try {
     const { id, notificationId } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(id)
+    if (!auth.success) return auth.response
+
     const body = await request.json()
     const { markAll } = body
-
-    // Verify vendor exists
-    const vendor = await db.vendor.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-
-    if (!vendor) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
-    }
 
     if (markAll) {
       // Bulk mark all vendor notifications as read
       const result = await db.notification.updateMany({
         where: {
           recipientType: "VENDOR",
-          vendorId: id,
+          vendorId: auth.vendorId,
           status: "PENDING",
         },
         data: {
@@ -35,7 +31,7 @@ export async function PATCH(
         },
       })
 
-      return NextResponse.json({ updated: result.count })
+      return vendorJson({ updated: result.count }, auth.vendorId)
     }
 
     // Mark single notification as read
@@ -43,7 +39,7 @@ export async function PATCH(
       where: {
         id: notificationId,
         recipientType: "VENDOR",
-        vendorId: id,
+        vendorId: auth.vendorId,
       },
     })
 
@@ -59,7 +55,7 @@ export async function PATCH(
       },
     })
 
-    return NextResponse.json({ notification: updated })
+    return vendorJson({ notification: updated }, auth.vendorId)
   } catch (error) {
     console.error("PATCH /api/vendors/[id]/notifications/[notificationId] error:", error)
     return NextResponse.json(

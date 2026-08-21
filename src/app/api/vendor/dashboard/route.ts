@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { BookingStatus, TaskStatus, EscrowState } from "@prisma/client";
+import { vendorJson } from "@/lib/vendor-guard";
 
 export async function GET() {
   try {
@@ -137,7 +138,7 @@ export async function GET() {
       assignedStaff: b.assignedStaff ? { id: b.assignedStaff.id, name: b.assignedStaff.name, contact: b.assignedStaff.contact } : null,
     }));
 
-    return NextResponse.json({
+    return vendorJson({
       stats: {
         todayJobs: todayJobs.length,
         upcoming: upcomingCount,
@@ -150,7 +151,7 @@ export async function GET() {
         pendingPayout: pendingEscrow._sum.vendorPayoutCents ?? 0,
       },
       todayJobs,
-    });
+    }, vendorId);
   } catch (error) {
     console.error("[/api/vendor/dashboard GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

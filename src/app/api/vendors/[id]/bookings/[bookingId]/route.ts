@@ -5,6 +5,7 @@ import { TaskStatus, NotificationChannel, NotificationEventType, NotificationSta
 import { BOOKING_STATUS_TRANSITIONS, PLATFORM_COMMISSION_RATE, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
@@ -23,6 +24,10 @@ export async function PATCH(
 ) {
   try {
     const { id: vendorId, bookingId } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(vendorId)
+    if (!auth.success) return auth.response
 
     const body = await request.json()
     const parsed = patchVendorBookingSchema.safeParse(body)
@@ -48,7 +53,7 @@ export async function PATCH(
     }
 
     // Verify booking belongs to this vendor
-    if (booking.vendorId !== vendorId) {
+    if (booking.vendorId !== auth.vendorId) {
       return NextResponse.json(
         { error: "Booking does not belong to this vendor" },
         { status: 403 }
@@ -200,7 +205,7 @@ export async function PATCH(
         status: "accepted",
         previousStatus: booking.status,
         vendorName: undefined, // don't reveal in event
-        vendorId,
+        vendorId: auth.vendorId,
         householdId: task.householdId,
         category: task.category,
       }).catch(() => {})

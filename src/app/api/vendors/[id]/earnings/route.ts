@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { EscrowState } from "@prisma/client"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 export async function GET(
   _request: Request,
@@ -9,19 +10,13 @@ export async function GET(
   try {
     const { id } = await params
 
-    // Verify vendor exists
-    const vendor = await db.vendor.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-
-    if (!vendor) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
-    }
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(id)
+    if (!auth.success) return auth.response
 
     // Get all booking IDs for this vendor
     const vendorBookings = await db.booking.findMany({
-      where: { vendorId: id },
+      where: { vendorId: auth.vendorId },
       select: { id: true },
     })
 
@@ -57,12 +52,12 @@ export async function GET(
 
     // ── Completed bookings count ──
     const totalCompleted = await db.booking.count({
-      where: { vendorId: id, status: "completed" },
+      where: { vendorId: auth.vendorId, status: "completed" },
     })
 
     // ── Average rating ──
     const ratingAgg = await db.booking.aggregate({
-      where: { vendorId: id, status: "completed", rating: { not: null } },
+      where: { vendorId: auth.vendorId, status: "completed", rating: { not: null } },
       _avg: { rating: true },
     })
 
@@ -75,7 +70,7 @@ export async function GET(
     // Completed bookings this month
     const thisMonthCompleted = await db.booking.count({
       where: {
-        vendorId: id,
+        vendorId: auth.vendorId,
         status: "completed",
         completedAt: { gte: monthStart },
       },
@@ -85,7 +80,7 @@ export async function GET(
     const thisMonthCompletedBookingIds = (
       await db.booking.findMany({
         where: {
-          vendorId: id,
+          vendorId: auth.vendorId,
           status: "completed",
           completedAt: { gte: monthStart },
         },
@@ -122,7 +117,7 @@ export async function GET(
 
     // ── Recent 10 completed bookings with payout ──
     const recentBookings = await db.booking.findMany({
-      where: { vendorId: id, status: "completed" },
+      where: { vendorId: auth.vendorId, status: "completed" },
       orderBy: { completedAt: "desc" },
       take: 10,
       include: {
@@ -162,7 +157,7 @@ export async function GET(
 
     // ── CHART DATA: Category breakdown (all-time) ──
     const categoryBookings = await db.booking.findMany({
-      where: { vendorId: id, status: "completed" },
+      where: { vendorId: auth.vendorId, status: "completed" },
       include: {
         task: { select: { category: true } },
         escrowEntries: {
@@ -201,7 +196,7 @@ export async function GET(
 
     const weeklyCompletedBookings = await db.booking.findMany({
       where: {
-        vendorId: id,
+        vendorId: auth.vendorId,
         status: "completed",
         completedAt: { gte: twelveWeeksAgo },
       },
@@ -273,7 +268,7 @@ export async function GET(
       })
     }
 
-    return NextResponse.json({
+    return vendorJson({
       totalEarned,
       pendingPayout,
       totalCompleted,
@@ -289,7 +284,7 @@ export async function GET(
         weeklyTrend,
         payoutDistribution,
       },
-    })
+    }, auth.vendorId)
   } catch (error) {
     console.error("[earnings] Error:", error instanceof Error ? error.message + "\n" + error.stack : error)
     return NextResponse.json(

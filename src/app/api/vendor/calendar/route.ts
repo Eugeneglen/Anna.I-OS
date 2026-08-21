@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getVendorSession } from "@/lib/vendor-auth";
+import { vendorJson } from "@/lib/vendor-guard";
 
 export async function GET(request: NextRequest) {
   try {
@@ -185,7 +186,7 @@ export async function GET(request: NextRequest) {
       jobCount: s._count.bookings,
     }));
 
-    return NextResponse.json({
+    return vendorJson({
       bookings: formattedBookings,
       staff: formattedStaff,
       summary: {
@@ -196,7 +197,7 @@ export async function GET(request: NextRequest) {
         totalRevenueCents,
         uniqueStaffCount: uniqueStaffIds.size,
       },
-    });
+    }, vendorId);
   } catch (error) {
     console.error("[/api/vendor/calendar GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

@@ -9,6 +9,7 @@ import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon"
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
+import { vendorFetch } from "@/lib/vendor-fetch";
 import {
   CalendarDays,
   MapPin,
@@ -93,7 +94,7 @@ interface VendorScheduleProps {
 // ─── Fetcher ─────────────────────────────────────────────
 
 async function fetchVendorSchedule(vendorId: string, queryParams?: string): Promise<VendorScheduleResponse> {
-  const res = await fetch(`/api/vendors/${vendorId}/schedule${queryParams ? `?${queryParams}` : ""}`);
+  const res = await vendorFetch(`/api/vendors/${vendorId}/schedule${queryParams ? `?${queryParams}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch vendor schedule");
   return res.json();
 }
@@ -363,7 +364,7 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
     }) => {
       const body: Record<string, string> = { action };
       if (completionNotes) body.completionNotes = completionNotes;
-      const res = await fetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
+      const res = await vendorFetch(`/api/vendors/${vendorId}/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

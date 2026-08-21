@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 export async function GET(
   request: Request,
@@ -7,23 +8,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(id)
+    if (!auth.success) return auth.response
+
     const { searchParams } = new URL(request.url)
     const unreadOnly = searchParams.get("unread") === "true"
-
-    // Verify vendor exists
-    const vendor = await db.vendor.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-
-    if (!vendor) {
-      return NextResponse.json({ error: "Vendor not found" }, { status: 404 })
-    }
 
     // Build where clause
     const where: Record<string, unknown> = {
       recipientType: "VENDOR",
-      vendorId: id,
+      vendorId: auth.vendorId,
     }
 
     if (unreadOnly) {
@@ -52,15 +48,15 @@ export async function GET(
     const unreadCount = await db.notification.count({
       where: {
         recipientType: "VENDOR",
-        vendorId: id,
+        vendorId: auth.vendorId,
         status: "PENDING",
       },
     })
 
-    return NextResponse.json({
+    return vendorJson({
       notifications,
       unreadCount,
-    })
+    }, auth.vendorId)
   } catch (error) {
     console.error("GET /api/vendors/[id]/notifications error:", error)
     return NextResponse.json(

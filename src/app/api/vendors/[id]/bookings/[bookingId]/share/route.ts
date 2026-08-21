@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import crypto from "crypto";
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard";
 
 export async function POST(
   _request: Request,
@@ -9,13 +10,17 @@ export async function POST(
   try {
     const { id: vendorId, bookingId } = await params;
 
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(vendorId);
+    if (!auth.success) return auth.response;
+
     // Verify booking exists and belongs to this vendor
     const booking = await db.booking.findUnique({
       where: { id: bookingId },
       select: { id: true, vendorId: true, shareToken: true },
     });
 
-    if (!booking || booking.vendorId !== vendorId) {
+    if (!booking || booking.vendorId !== auth.vendorId) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 

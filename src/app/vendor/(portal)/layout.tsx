@@ -44,6 +44,11 @@ import {
   getVendorEventLabel,
   getVendorEventToastVariant,
 } from "@/hooks/use-vendor-events";
+import {
+  setExpectedVendorId,
+  clearExpectedVendorId,
+  vendorFetch,
+} from "@/lib/vendor-fetch";
 
 interface VendorRole {
   id: string;
@@ -119,7 +124,7 @@ function NotificationIndicator({ vendorId }: { vendorId: string }) {
   const { data } = useQuery({
     queryKey: ["vendor-notifications-count", vendorId],
     queryFn: async () => {
-      const res = await fetch(`/api/vendors/${vendorId}/notifications?unread=true`);
+      const res = await vendorFetch(`/api/vendors/${vendorId}/notifications?unread=true`);
       if (!res.ok) return { unreadCount: 0, notifications: [] };
       return res.json();
     },
@@ -164,7 +169,8 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
   });
 
   async function handleLogout() {
-    await fetch("/api/vendor/auth", { method: "DELETE" });
+    clearExpectedVendorId();
+    await vendorFetch("/api/vendor/auth", { method: "DELETE" });
     router.push("/vendor/login");
   }
 
@@ -391,17 +397,21 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
   } = useQuery<VendorUser | null>({
     queryKey: ["vendor-session"],
     queryFn: async () => {
-      const res = await fetch("/api/vendor/session");
+      const res = await vendorFetch("/api/vendor/session");
       if (res.status === 401) {
+        clearExpectedVendorId();
         window.location.replace("/vendor/login");
         return null;
       }
       if (!res.ok) return null;
       const data = await res.json();
-      return data.vendor as VendorUser;
+      const vendor = data.vendor as VendorUser;
+      // Store expected vendorId for cookie-overwrite detection
+      if (vendor?.id) setExpectedVendorId(vendor.id);
+      return vendor;
     },
     retry: false,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000, // 30s — low enough to detect cookie overwrite on refocus
   });
 
   // Extract permissions from session for RBAC
@@ -413,7 +423,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     // Fetch full session to get permissions
     (async () => {
       try {
-        const res = await fetch("/api/vendor/session");
+        const res = await vendorFetch("/api/vendor/session");
         if (res.ok) {
           const data = await res.json();
           setPermissions(data.permissions || []);
@@ -450,15 +460,15 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
       event.type.startsWith("task") ||
       event.type === "task:dispatched"
     ) {
-      queryClient.invalidateQueries({ queryKey: ["vendor-dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["vendor-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["vendor-dashboard", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["vendor-schedule", user?.id] });
     }
     if (event.type.startsWith("escrow")) {
-      queryClient.invalidateQueries({ queryKey: ["vendor-earnings"] });
+      queryClient.invalidateQueries({ queryKey: ["vendor-earnings", user?.id] });
     }
     setLatestToast(event);
     setToastKey((k) => k + 1);
-  }, [queryClient]);
+  }, [queryClient, user?.id]);
 
   // Connect to ops-events WebSocket as a vendor client
   const { isConnected } = useVendorEvents(user?.id || null, {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
+import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
 
 export async function GET(
   request: Request,
@@ -8,6 +9,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(id)
+    if (!auth.success) return auth.response
+
     const { searchParams } = new URL(request.url)
 
     const statusParam = searchParams.get("status")
@@ -27,7 +33,7 @@ export async function GET(
 
     // Fetch vendor info
     const vendor = await db.vendor.findUnique({
-      where: { id },
+      where: { id: auth.vendorId },
       select: {
         id: true,
         name: true,
@@ -41,7 +47,7 @@ export async function GET(
     }
 
     // Build where clause
-    const where: Record<string, unknown> = { vendorId: id }
+    const where: Record<string, unknown> = { vendorId: auth.vendorId }
 
     if (statuses && statuses.length > 0) {
       where.status = { in: statuses }
@@ -168,7 +174,7 @@ export async function GET(
 
     // Count by status for filter pills (computed on unfiltered data)
     const allBookings = await db.booking.findMany({
-      where: { vendorId: id },
+      where: { vendorId: auth.vendorId },
       select: { status: true },
     })
     const statusCounts = allBookings.reduce<Record<string, number>>((acc, b) => {
@@ -180,12 +186,12 @@ export async function GET(
       count,
     }))
 
-    return NextResponse.json({
+    return vendorJson({
       vendor,
       schedule,
       total: schedule.length,
       statusCounts: statusCountsArr,
-    })
+    }, auth.vendorId)
   } catch (error) {
     console.error("GET /api/vendors/[id]/schedule error:", error)
     return NextResponse.json(

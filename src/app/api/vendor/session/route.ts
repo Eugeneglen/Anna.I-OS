@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { db } from "@/lib/db";
+import { vendorJson } from "@/lib/vendor-guard";
 
 export async function GET() {
   try {
@@ -43,7 +44,7 @@ export async function GET() {
       (rp) => `${rp.permission.module}:${rp.permission.action}`
     ) || [];
 
-    return NextResponse.json({
+    return vendorJson({
       vendor: {
         id: vendor.id,
         name: vendor.name,
@@ -55,7 +56,7 @@ export async function GET() {
         ? { id: vendor.roleRel.id, name: vendor.roleRel.name, slug: vendor.roleRel.slug, level: vendor.roleRel.level }
         : null,
       permissions,
-    });
+    }, vendor.id);
   } catch (error) {
     console.error("[/api/vendor/session GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
