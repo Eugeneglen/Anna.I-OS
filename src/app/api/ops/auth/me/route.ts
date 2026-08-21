@@ -93,6 +93,7 @@ export async function GET() {
         name: user.name,
         email: user.email,
         isActive: user.isActive,
+        role: user.role, // Legacy role string (ADMIN/COORDINATOR/ANALYST) for backward compat
       },
       role,
       permissions,
