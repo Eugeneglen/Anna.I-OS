@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Briefcase, Eye, EyeOff, ArrowLeft, Mail, Lock, CheckCircle2 } from "lucide-react";
+import { setVendorToken } from "@/lib/vendor-fetch";
 
 type ViewMode = "login" | "forgot-password" | "reset-password" | "success";
 
@@ -47,6 +48,11 @@ export default function VendorLoginPage() {
       }
 
       toast.success(`Welcome, ${data.vendor.name}`);
+      // Store JWT in sessionStorage for multi-tab support.
+      // Each tab keeps its own token, preventing cookie collision.
+      if (data.token) {
+        setVendorToken(data.token);
+      }
       router.push("/vendor/schedule");
     } catch {
       toast.error("Network error");

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       success: true,
+      token,
       vendor: {
         id: vendor.id,
         name: vendor.name,
@@ -89,15 +90,12 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE() {
   try {
-    const res = NextResponse.json({ success: true });
-    res.cookies.set("vendor_token", "", {
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
-    return res;
+    // NOTE: We do NOT clear the vendor_token cookie here.
+    // With multi-tab support, each tab stores its own JWT in sessionStorage.
+    // Clearing the shared cookie would break other tabs' middleware access.
+    // The cookie expires naturally in 24h. The logging-out tab clears its
+    // own sessionStorage client-side, which is sufficient.
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[/api/vendor/auth DELETE]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

@@ -47,7 +47,9 @@ import {
 import {
   setExpectedVendorId,
   clearExpectedVendorId,
+  clearVendorToken,
   vendorFetch,
+  installVendorFetchPatch,
 } from "@/lib/vendor-fetch";
 
 interface VendorRole {
@@ -169,8 +171,11 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
   });
 
   async function handleLogout() {
+    // Clear tab-scoped session state only.
+    // We do NOT call DELETE /api/vendor/auth because that would clear
+    // the shared cookie and break other tabs' middleware access.
     clearExpectedVendorId();
-    await vendorFetch("/api/vendor/auth", { method: "DELETE" });
+    clearVendorToken();
     router.push("/vendor/login");
   }
 
@@ -384,6 +389,14 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
   const [latestToast, setLatestToast] = useState<VendorEvent | null>(null);
   const [toastKey, setToastKey] = useState(0);
 
+  // Install global fetch patch for multi-tab Authorization header injection.
+  // This ensures ALL fetch() calls to vendor API routes include the tab's
+  // own JWT, preventing cookie collision between tabs.
+  useEffect(() => {
+    const cleanup = installVendorFetchPatch();
+    return cleanup;
+  }, []);
+
   const dismissToast = useCallback(() => {
     setLatestToast(null);
     setToastKey((k) => k + 1);
@@ -400,6 +413,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
       const res = await vendorFetch("/api/vendor/session");
       if (res.status === 401) {
         clearExpectedVendorId();
+        clearVendorToken();
         window.location.replace("/vendor/login");
         return null;
       }
