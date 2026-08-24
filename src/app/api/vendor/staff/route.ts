@@ -1,43 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getVendorSession } from "@/lib/vendor-auth";
+import { requireVendorPermission } from "@/lib/vendor-guard";
 
-// Vendor-initiated audit log (raw insert to bypass OpsUser FK constraint)
+// Vendor-initiated audit log. Writes with vendorId set (userId null) so
+// vendor-scope actions are auditable without an OpsUser FK dependency.
 async function vendorAuditLog(params: {
-  userId: string;
   userName: string;
+  vendorId: string;
   action: string;
   entityType: string;
   entityId?: string;
   metadata?: Record<string, unknown>;
 }) {
   try {
-    await db.$executeRawUnsafe(
-      `INSERT INTO AuditLog (id, userId, userName, action, entityType, entityId, metadata, createdAt)
-       VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      params.userId,
-      params.userName,
-      params.action,
-      params.entityType,
-      params.entityId ?? null,
-      params.metadata ? JSON.stringify(params.metadata) : null
-    );
+    await db.auditLog.create({
+      data: {
+        userName: params.userName,
+        vendorId: params.vendorId,
+        action: params.action,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        metadata: params.metadata ?? undefined,
+      },
+    });
   } catch (err) {
     console.warn("[vendor audit] failed to write audit log:", err);
   }
 }
 
-// ── GET: List vendor's staff ──
+// ── GET: List vendor's field roster (Staff Roster) ──
+// Returns VendorStaff rows (front-end operations team — NOT login users).
 export async function GET() {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_staff", "view");
+    if (!auth.success) return auth.response;
 
     const staff = await db.vendorStaff.findMany({
-      where: { vendorId: session.vendorId },
+      where: { vendorId: auth.vendorId },
       orderBy: { createdAt: "asc" },
     });
 
@@ -51,19 +51,20 @@ export async function GET() {
   }
 }
 
-// ── POST: Add a new staff member ──
+// ── POST: Add a new field roster member (Staff Roster) ──
+// Roster members do NOT have login credentials. They are field workers
+// (cleaners, technicians) assignable to bookings.
 const addStaffSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   contact: z.string().min(1, "Contact is required").max(200),
+  jobTitle: z.string().max(100).optional(),
   role: z.string().optional().default("staff"),
 });
 
 export async function POST(request: Request) {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_staff", "create");
+    if (!auth.success) return auth.response;
 
     const body = await request.json();
     const parsed = addStaffSchema.safeParse(body);
@@ -77,20 +78,21 @@ export async function POST(request: Request) {
 
     const newStaff = await db.vendorStaff.create({
       data: {
-        vendorId: session.vendorId,
+        vendorId: auth.vendorId,
         name: parsed.data.name,
         contact: parsed.data.contact,
+        jobTitle: parsed.data.jobTitle,
         role: parsed.data.role,
       },
     });
 
     await vendorAuditLog({
-      userId: session.vendorId,
-      userName: session.name,
+      userName: auth.session.name,
+      vendorId: auth.vendorId,
       action: "vendor.staff.add",
       entityType: "VendorStaff",
       entityId: newStaff.id,
-      metadata: { name: parsed.data.name, contact: parsed.data.contact },
+      metadata: { name: parsed.data.name, contact: parsed.data.contact, jobTitle: parsed.data.jobTitle },
     });
 
     return NextResponse.json({ staff: newStaff }, { status: 201 });
@@ -103,7 +105,7 @@ export async function POST(request: Request) {
   }
 }
 
-// ── PATCH: Toggle staff active status ──
+// ── PATCH: Toggle roster member active status ──
 const patchStaffSchema = z.object({
   id: z.string().min(1),
   isActive: z.boolean(),
@@ -111,10 +113,8 @@ const patchStaffSchema = z.object({
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_staff", "edit");
+    if (!auth.success) return auth.response;
 
     const body = await request.json();
     const parsed = patchStaffSchema.safeParse(body);
@@ -126,9 +126,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Ensure the staff member belongs to this vendor
+    // Ensure the roster member belongs to this vendor
     const existing = await db.vendorStaff.findFirst({
-      where: { id: parsed.data.id, vendorId: session.vendorId },
+      where: { id: parsed.data.id, vendorId: auth.vendorId },
     });
 
     if (!existing) {
@@ -141,8 +141,8 @@ export async function PATCH(request: Request) {
     });
 
     await vendorAuditLog({
-      userId: session.vendorId,
-      userName: session.name,
+      userName: auth.session.name,
+      vendorId: auth.vendorId,
       action: "vendor.staff.toggle",
       entityType: "VendorStaff",
       entityId: updated.id,
@@ -159,17 +159,15 @@ export async function PATCH(request: Request) {
   }
 }
 
-// ── DELETE: Remove a staff member ──
+// ── DELETE: Remove a roster member ──
 const deleteStaffSchema = z.object({
   id: z.string().min(1),
 });
 
 export async function DELETE(request: Request) {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_staff", "delete");
+    if (!auth.success) return auth.response;
 
     const body = await request.json();
     const parsed = deleteStaffSchema.safeParse(body);
@@ -181,9 +179,9 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Ensure the staff member belongs to this vendor
+    // Ensure the roster member belongs to this vendor
     const existing = await db.vendorStaff.findFirst({
-      where: { id: parsed.data.id, vendorId: session.vendorId },
+      where: { id: parsed.data.id, vendorId: auth.vendorId },
     });
 
     if (!existing) {
@@ -191,12 +189,12 @@ export async function DELETE(request: Request) {
     }
 
     await db.vendorStaff.deleteMany({
-      where: { id: parsed.data.id, vendorId: session.vendorId },
+      where: { id: parsed.data.id, vendorId: auth.vendorId },
     });
 
     await vendorAuditLog({
-      userId: session.vendorId,
-      userName: session.name,
+      userName: auth.session.name,
+      vendorId: auth.vendorId,
       action: "vendor.staff.remove",
       entityType: "VendorStaff",
       entityId: parsed.data.id,
@@ -212,3 +210,4 @@ export async function DELETE(request: Request) {
     );
   }
 }
+

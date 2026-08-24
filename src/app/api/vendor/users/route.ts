@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getVendorSession } from "@/lib/vendor-auth";
+import { requireVendorPermission } from "@/lib/vendor-guard";
 import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 
 // ═════════════════════════════════════════════════════
-// GET /api/vendor/users — List vendor staff (scoped to this vendor)
+// GET /api/vendor/users — List HQ staff (VendorUser) for this vendor
+// These are back-office users (finance, auditors, analysts, ops managers)
+// who can log in to the vendor portal. They are NOT field roster members.
 // ═════════════════════════════════════════════════════
 export async function GET() {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_users", "view");
+    if (!auth.success) return auth.response;
 
-    const staff = await db.vendorStaff.findMany({
-      where: { vendorId: session.vendorId },
+    const users = await db.vendorUser.findMany({
+      where: { vendorId: auth.vendorId },
       orderBy: { createdAt: "desc" },
       include: {
         roleRel: { select: { id: true, name: true, slug: true, level: true } },
@@ -23,17 +23,18 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      users: staff.map((s) => ({
-        id: s.id,
-        name: s.name,
-        email: s.email,
-        contact: s.contact,
-        role: s.role,
-        roleId: s.roleId,
-        hasPassword: !!s.passwordHash,
-        isActive: s.isActive,
-        createdAt: s.createdAt,
-        roleRel: s.roleRel,
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        contact: u.contact,
+        jobTitle: u.jobTitle,
+        role: u.role,
+        roleId: u.roleId,
+        hasPassword: !!u.passwordHash,
+        isActive: u.isActive,
+        createdAt: u.createdAt,
+        roleRel: u.roleRel,
       })),
     });
   } catch (error) {
@@ -43,25 +44,25 @@ export async function GET() {
 }
 
 // ═════════════════════════════════════════════════════
-// POST /api/vendor/users — Add new staff member
+// POST /api/vendor/users — Create a new HQ staff user (VendorUser)
+// Email + password are REQUIRED (HQ users always have portal login).
 // ═════════════════════════════════════════════════════
-const createStaffSchema = z.object({
+const createUserSchema = z.object({
   name: z.string().min(1, "Name is required"),
   contact: z.string().min(1, "Contact is required"),
-  email: z.string().email("Invalid email").optional(),
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  jobTitle: z.string().optional(),
   roleId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireVendorPermission("v_users", "create");
+    if (!auth.success) return auth.response;
 
     const body = await req.json();
-    const parsed = createStaffSchema.safeParse(body);
+    const parsed = createUserSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.flatten().fieldErrors },
@@ -69,30 +70,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, contact, email, password, roleId } = parsed.data;
+    const { name, contact, email, password, jobTitle, roleId } = parsed.data;
 
-    // If email provided, check uniqueness within vendor
-    if (email) {
-      const existing = await db.vendorStaff.findFirst({
-        where: { vendorId: session.vendorId, email },
-      });
-      if (existing) {
-        return NextResponse.json(
-          { error: { email: ["A staff member with this email already exists"] } },
-          { status: 409 }
-        );
-      }
-    }
-
-    // Email requires password for login capability
-    if (email && !password) {
+    // Email must be globally unique among VendorUsers (@@unique)
+    const existingUser = await db.vendorUser.findUnique({ where: { email } });
+    if (existingUser) {
       return NextResponse.json(
-        { error: { password: ["Password is required when email is provided (for login)"] } },
-        { status: 400 }
+        { error: "A user with this email already exists" },
+        { status: 409 }
       );
     }
 
-    // Validate role belongs to vendor scope if provided
+    // Email must NOT collide with a Vendor owner's email — otherwise the auth
+    // route (which checks Vendor first) would shadow the HQ user and they
+    // could never log in.
+    const existingVendor = await db.vendor.findUnique({ where: { email } });
+    if (existingVendor) {
+      return NextResponse.json(
+        { error: "This email is already used by a vendor account. Choose a different email." },
+        { status: 409 }
+      );
+    }
+
+    // Validate role if provided
     if (roleId) {
       const role = await db.role.findUnique({ where: { id: roleId } });
       if (!role || !role.slug.startsWith("vendor_")) {
@@ -100,19 +100,52 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const staff = await db.vendorStaff.create({
+    const passwordHash = bcrypt.hashSync(password, 10);
+
+    const newUser = await db.vendorUser.create({
       data: {
-        vendorId: session.vendorId,
+        vendorId: auth.vendorId,
         name,
+        email,
         contact,
-        email: email || null,
-        passwordHash: password ? bcrypt.hashSync(password, 10) : null,
-        roleId: roleId || null,
+        jobTitle,
+        passwordHash,
+        roleId,
       },
-      include: { roleRel: { select: { id: true, name: true, slug: true, level: true } } },
+      include: {
+        roleRel: { select: { id: true, name: true, slug: true, level: true } },
+      },
     });
 
-    return NextResponse.json({ user: staff }, { status: 201 });
+    // Vendor-initiated audit log (FK-safe: userId nullable, vendorId set)
+    await db.auditLog.create({
+      data: {
+        userName: auth.session.name,
+        vendorId: auth.vendorId,
+        action: "vendor.user.create",
+        entityType: "VendorUser",
+        entityId: newUser.id,
+        metadata: { name, email, jobTitle, roleId },
+      },
+    }).catch((err: unknown) => {
+      console.warn("[vendor audit] failed to write audit log:", err);
+    });
+
+    return NextResponse.json({
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        contact: newUser.contact,
+        jobTitle: newUser.jobTitle,
+        role: newUser.role,
+        roleId: newUser.roleId,
+        hasPassword: !!newUser.passwordHash,
+        isActive: newUser.isActive,
+        createdAt: newUser.createdAt,
+        roleRel: newUser.roleRel,
+      },
+    }, { status: 201 });
   } catch (error) {
     console.error("[/api/vendor/users POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

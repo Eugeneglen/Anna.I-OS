@@ -295,12 +295,12 @@ export default function VendorUsersPage() {
     setFormError("");
     if (!formName.trim()) { setFormError("Name is required"); return; }
     if (!formContact.trim()) { setFormError("Contact is required"); return; }
-    if (formEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail)) {
-      setFormError("Invalid email format");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail)) {
+      setFormError("Valid login email is required");
       return;
     }
-    if (formEmail.trim() && !formPassword && !editingUser) {
-      setFormError("Password is required when email is provided (for login)");
+    if (!formPassword && !editingUser) {
+      setFormError("Password is required (min. 8 characters)");
       return;
     }
     if (formPassword && formPassword.length < 8) {
@@ -314,10 +314,8 @@ export default function VendorUsersPage() {
       if (formPassword) (body as Record<string, string>).password = formPassword;
       updateMutation.mutate({ id: editingUser.id, body });
     } else {
-      const body: Record<string, string> = { name: formName, contact: formContact };
+      const body: Record<string, string> = { name: formName, contact: formContact, email: formEmail.trim(), password: formPassword };
       if (formRoleId) body.roleId = formRoleId;
-      if (formEmail.trim()) body.email = formEmail.trim();
-      if (formPassword) body.password = formPassword;
       createMutation.mutate(body);
     }
   }
@@ -335,7 +333,7 @@ export default function VendorUsersPage() {
             User Management
           </h2>
           <p className="text-sm text-[var(--anna-muted)] mt-0.5">
-            Manage your team members
+            Manage HQ staff with portal access (finance, auditors, analysts)
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -368,7 +366,7 @@ export default function VendorUsersPage() {
               className="rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white text-xs font-medium"
             >
               <UserPlus size={14} className="mr-1.5" />
-              Add Staff
+              Add User
             </Button>
           )}
         </div>
@@ -382,11 +380,11 @@ export default function VendorUsersPage() {
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)]">
           <EmptyState
             icon={<UserCog size={24} />}
-            title="No staff members found"
+            title="No HQ staff users yet"
             subtitle={
               search
                 ? "Try adjusting your search"
-                : "Add your first team member"
+                : "Add your first HQ staff user (field staff belong in Staff Roster)"
             }
           />
         </div>
@@ -503,11 +501,11 @@ export default function VendorUsersPage() {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>{editingUser ? "Edit Staff Member" : "Add Staff Member"}</SheetTitle>
+            <SheetTitle>{editingUser ? "Edit User" : "Add User"}</SheetTitle>
             <SheetDescription>
               {editingUser
-                ? "Update staff details and role assignment."
-                : "Add a new team member to your vendor staff."}
+                ? "Update HQ staff details and role assignment."
+                : "Create a new HQ staff user (finance, auditor, analyst, etc.). This user can log in to the vendor portal."}
             </SheetDescription>
           </SheetHeader>
 
@@ -534,8 +532,7 @@ export default function VendorUsersPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Login Email
-                <span className="ml-1 text-[var(--anna-muted)] font-normal">(optional — enables staff login)</span>
+                Login Email <span className="text-red-500">*</span>
               </Label>
               <Input
                 type="email"
@@ -552,8 +549,7 @@ export default function VendorUsersPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                Password
-                {!editingUser && formEmail && <span className="text-red-500 ml-1">*</span>}
+                Password {!editingUser && <span className="text-red-500">*</span>}
               </Label>
               <div className="relative">
                 <Input
@@ -575,8 +571,8 @@ export default function VendorUsersPage() {
                   )}
                 </button>
               </div>
-              {!editingUser && formEmail && !formPassword && (
-                <p className="text-[10px] text-red-500">Required when email is provided</p>
+              {!editingUser && (
+                <p className="text-[10px] text-[var(--anna-muted)]">Minimum 8 characters</p>
               )}
             </div>
 
@@ -618,7 +614,7 @@ export default function VendorUsersPage() {
               disabled={isSaving}
             >
               {isSaving && <Loader2 size={14} className="mr-2 animate-spin" />}
-              {editingUser ? "Save Changes" : "Add Staff Member"}
+              {editingUser ? "Save Changes" : "Create User"}
             </Button>
           </div>
         </SheetContent>

@@ -402,6 +402,10 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
     setToastKey((k) => k + 1);
   }, []);
 
+  // ── Single session fetch: captures identity + role + permissions together ──
+  const [permissions, setPermissions] = useState<string[] | null>(null);
+  const [vendorRole, setVendorRole] = useState<VendorRole | null>(null);
+
   const {
     data: user,
     isLoading,
@@ -422,42 +426,36 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
       const vendor = data.vendor as VendorUser;
       // Store expected vendorId for cookie-overwrite detection
       if (vendor?.id) setExpectedVendorId(vendor.id);
+      // Hydrate RBAC state from the same response (no second fetch)
+      setPermissions(data.permissions ?? []);
+      if (data.role) {
+        setVendorRole({
+          id: data.role.id,
+          name: data.role.name,
+          slug: data.role.slug,
+          level: data.role.level,
+        });
+      } else {
+        setVendorRole(null);
+      }
       return vendor;
     },
     retry: false,
     staleTime: 30 * 1000, // 30s — low enough to detect cookie overwrite on refocus
   });
 
-  // Extract permissions from session for RBAC
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [vendorRole, setVendorRole] = useState<VendorRole | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    // Fetch full session to get permissions
-    (async () => {
-      try {
-        const res = await vendorFetch("/api/vendor/session");
-        if (res.ok) {
-          const data = await res.json();
-          setPermissions(data.permissions || []);
-          if (data.role) {
-            setVendorRole({
-              id: data.role.id,
-              name: data.role.name,
-              slug: data.role.slug,
-              level: data.role.level,
-            });
-          }
-        }
-      } catch { /* non-critical */ }
-    })();
-  }, [user?.id]);
-
+  // Deny-by-default RBAC gate.
+  // - While permissions are still loading (null), grant all access so the
+  //   nav renders on first paint without flashing empty.
+  // - Once loaded, an EMPTY permissions array means the user has NO role /
+  //   no permissions — deny everything except the always-visible Dashboard.
   const can = useCallback(
     (module: string, action: string) => {
-      // Legacy fallback: if no permissions loaded, grant all access
-      if (!permissions || permissions.length === 0) return true;
+      if (permissions === null) return true; // still loading
+      if (permissions.length === 0) {
+        // No role assigned → only allow viewing the Dashboard.
+        return module === "v_dashboard" && action === "view";
+      }
       return permissions.includes(`${module}:${action}`);
     },
     [permissions]

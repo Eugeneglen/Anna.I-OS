@@ -69,6 +69,7 @@ async function _main() {
   await db.vendorPlan.deleteMany()
   await db.vendorFeatureOverride.deleteMany()
   await db.vendorStaff.deleteMany()
+  await db.vendorUser.deleteMany()
 
   // Level 3: Shared tables
   await db.vendorHouseholdAffinity.deleteMany()
@@ -361,6 +362,18 @@ async function _main() {
   })
   console.log('✅ Vendor portal credentials set (password: vendor123)')
 
+  // Assign vendor_super_admin role to all demo vendors so they have full
+  // RBAC permissions on login (deny-by-default would otherwise lock a
+  // role-less vendor owner to Dashboard only).
+  const superAdminRole = await db.role.findUnique({ where: { slug: 'vendor_super_admin' } })
+  if (superAdminRole) {
+    await db.vendor.updateMany({
+      where: { roleId: null },
+      data: { roleId: superAdminRole.id },
+    })
+    console.log('✅ Demo vendors assigned vendor_super_admin role')
+  }
+
   // ============ 4b. VENDOR STAFF (SME only) ============
   const freshwashStaff = ['Ahmad R.', 'Siti N.', 'Raju K.', 'Mei Ling', 'Devan S.', 'Priya M.', 'Farid H.', 'Lin Wei']
   for (const name of freshwashStaff) {
@@ -395,6 +408,36 @@ async function _main() {
     })
   }
   console.log('✅ 40 vendor staff created (5 vendors × ~8 staff)')
+
+  // ============ 4b-2. VENDOR HQ USERS (User Management) ============
+  // Back-office staff who log into the vendor portal (finance, analysts, etc.).
+  // These are NOT field roster members — they do not appear in Staff Roster
+  // and are not assignable to bookings. Created via User Management UI.
+  // RBAC role is assigned so they have working nav access (deny-by-default
+  // would otherwise lock a role-less user to the Dashboard only).
+  const vendorManagerRole = await db.role.findUnique({ where: { slug: 'vendor_manager' } })
+  const vendorUserPasswordHash = bcrypt.hashSync('vendor123', 10)
+  const demoVendorUsers = [
+    { vendorId: IDS.vendors.sparkclean, name: 'Jane Finance', email: 'finance@sparkclean.sg', contact: '+65 8000 1111', jobTitle: 'Finance Manager' },
+    { vendorId: IDS.vendors.freshwash, name: 'Bob Analyst', email: 'analyst@freshwash.sg', contact: '+65 8000 2222', jobTitle: 'Operations Analyst' },
+  ]
+  for (const u of demoVendorUsers) {
+    await db.vendorUser.upsert({
+      where: { email: u.email },
+      update: {},
+      create: {
+        vendorId: u.vendorId,
+        name: u.name,
+        email: u.email,
+        contact: u.contact,
+        jobTitle: u.jobTitle,
+        role: 'manager',
+        passwordHash: vendorUserPasswordHash,
+        roleId: vendorManagerRole?.id,
+      },
+    })
+  }
+  console.log('✅ 2 vendor HQ users created (password: vendor123, role: vendor_manager) — e.g. finance@sparkclean.sg')
 
   // ============ 4c. PLANS & FEATURES (data model only) ============
   const plans = [

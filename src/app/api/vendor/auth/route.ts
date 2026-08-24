@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
-import { createVendorToken } from "@/lib/vendor-auth";
+import { createVendorToken, createVendorUserToken } from "@/lib/vendor-auth";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -16,72 +16,139 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── 1. Try the Vendor (owner) table first — backward compatible for
+    //       demo vendors created by Ops (e.g. ops@sparkclean.sg). ──
     const vendor = await db.vendor.findUnique({ where: { email } });
 
-    if (!vendor) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+    if (vendor) {
+      if (vendor.status !== "ACTIVE") {
+        return NextResponse.json(
+          { error: `Account is ${vendor.status.toLowerCase()}. Contact ops for assistance.` },
+          { status: 403 }
+        );
+      }
 
-    if (vendor.status !== "ACTIVE") {
-      return NextResponse.json(
-        { error: `Account is ${vendor.status.toLowerCase()}. Contact ops for assistance.` },
-        { status: 403 }
-      );
-    }
+      // Security: do NOT self-heal a null passwordHash. A null hash means the
+      // account is not provisioned for login — treating the incoming password
+      // as the new password (the old behaviour) would let anyone claim an
+      // unprovisioned account by attempting login with any password.
+      if (!vendor.passwordHash) {
+        console.warn(`[vendor/auth] passwordHash is NULL for ${email} — rejecting (account not provisioned for login)`);
+        return NextResponse.json(
+          { error: "Account is not provisioned for login. Contact ops for assistance." },
+          { status: 401 }
+        );
+      }
 
-    // ── Self-heal: if passwordHash is null (new column from schema push),
-    //    hash the incoming password and persist it. This handles the case
-    //    where ensure-seed.ts backfill didn't reach the database.       ──
-    let passwordHash = vendor.passwordHash;
-    if (!passwordHash) {
-      console.warn(`[vendor/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
-      passwordHash = bcrypt.hashSync(password, 10);
-      await db.vendor.update({
-        where: { id: vendor.id },
-        data: { passwordHash },
-      });
-    }
+      const valid = await bcrypt.compare(password, vendor.passwordHash);
+      if (!valid) {
+        return NextResponse.json(
+          { error: "Invalid credentials" },
+          { status: 401 }
+        );
+      }
 
-    const valid = await bcrypt.compare(password, passwordHash);
-    if (!valid) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
-
-    const token = await createVendorToken({
-      id: vendor.id,
-      email: vendor.email,
-      name: vendor.name,
-      vendorType: vendor.vendorType,
-      status: vendor.status,
-    });
-
-    const res = NextResponse.json({
-      success: true,
-      token,
-      vendor: {
+      const token = await createVendorToken({
         id: vendor.id,
-        name: vendor.name,
         email: vendor.email,
+        name: vendor.name,
         vendorType: vendor.vendorType,
         status: vendor.status,
-      },
+      });
+
+      const res = NextResponse.json({
+        success: true,
+        token,
+        vendor: {
+          id: vendor.id,
+          name: vendor.name,
+          email: vendor.email,
+          vendorType: vendor.vendorType,
+          status: vendor.status,
+        },
+      });
+
+      res.cookies.set("vendor_token", token, {
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 24 * 3600,
+      });
+
+      return res;
+    }
+
+    // ── 2. Fall back to VendorUser (HQ staff) — finance, auditors, analysts,
+    //       operations managers created via User Management. These are NOT
+    //       field roster members (Staff Roster) and never authenticate here
+    //       against VendorStaff. ──
+    const staffUser = await db.vendorUser.findUnique({
+      where: { email },
+      include: { vendor: { select: { id: true, vendorType: true, status: true } } },
     });
 
-    res.cookies.set("vendor_token", token, {
-      httpOnly: true,
-      secure: IS_PRODUCTION,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 24 * 3600,
-    });
+    if (staffUser) {
+      if (!staffUser.isActive) {
+        return NextResponse.json(
+          { error: "Account is suspended. Contact your vendor administrator." },
+          { status: 403 }
+        );
+      }
 
-    return res;
+      // Parent vendor must be ACTIVE for the staff user to log in.
+      if (staffUser.vendor.status !== "ACTIVE") {
+        return NextResponse.json(
+          { error: `Vendor account is ${staffUser.vendor.status.toLowerCase()}. Contact ops for assistance.` },
+          { status: 403 }
+        );
+      }
+
+      const valid = await bcrypt.compare(password, staffUser.passwordHash);
+      if (!valid) {
+        return NextResponse.json(
+          { error: "Invalid credentials" },
+          { status: 401 }
+        );
+      }
+
+      const token = await createVendorUserToken({
+        userId: staffUser.id,
+        vendorId: staffUser.vendorId,
+        email: staffUser.email,
+        name: staffUser.name,
+        vendorType: staffUser.vendor.vendorType,
+        status: "ACTIVE",
+      });
+
+      const res = NextResponse.json({
+        success: true,
+        token,
+        vendor: {
+          id: staffUser.vendorId,
+          name: staffUser.name,
+          email: staffUser.email,
+          vendorType: staffUser.vendor.vendorType,
+          status: "ACTIVE",
+        },
+      });
+
+      res.cookies.set("vendor_token", token, {
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 24 * 3600,
+      });
+
+      return res;
+    }
+
+    // No match in either table.
+    return NextResponse.json(
+      { error: "Invalid credentials" },
+      { status: 401 }
+    );
   } catch (error) {
     console.error("[/api/vendor/auth POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

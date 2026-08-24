@@ -153,7 +153,7 @@ export async function GET() {
       orderBy: { level: "desc" },
       include: {
         rolePermissions: { include: { permission: true }, orderBy: { permission: { module: "asc" } } },
-        _count: { select: { vendors: true, vendorStaff: true } },
+        _count: { select: { vendors: true, vendorUsers: true } },
       },
     });
 
@@ -166,7 +166,7 @@ export async function GET() {
         isSystem: r.isSystem,
         level: r.level,
         permissionCount: r.rolePermissions.length,
-        userCount: r._count.vendors + r._count.vendorStaff,
+        userCount: r._count.vendors + r._count.vendorUsers,
         permissions: r.rolePermissions.map((rp) => `${rp.permission.module}:${rp.permission.action}`),
       })),
     });

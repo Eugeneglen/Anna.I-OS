@@ -169,21 +169,21 @@ enum QuotationStatus {
 // ======================== CORE TABLES ========================
 
 model Household {
-  id                    String          @id @default(cuid())
-  name                  String           // Household name (e.g. "Tan Family")
-  fullName              String?          // Primary contact person's full name (e.g. "Alex Tan")
-  email                 String          @unique
-  phone                 String?          // Singapore mobile (+65XXXXXXXX, 8 digits starting 8/9)
-  address               String           // estate-level for batching (denormalised from default Address)
+  id                    String    @id @default(cuid())
+  name                  String // Household name (e.g. "Tan Family")
+  fullName              String? // Primary contact person's full name (e.g. "Alex Tan")
+  email                 String    @unique
+  phone                 String? // Singapore mobile (+65XXXXXXXX, 8 digits starting 8/9)
+  address               String // estate-level for batching (denormalised from default Address)
   postalCode            String?
   unitNumber            String?
   activeCategories      String // JSON array of ServiceCategory — SQLite can't do enum[]; Postgres = JSONB or native[]
-  preferences           Json              // flexible: language, preferred times, notes
-  onboardingProfile     Json?             // Deep household intelligence: homeType, occupants, lifestyle, painPoints, serviceHabits, autonomyPreference
-  onboardingStep        Int             @default(0) // 0=not started, 1-9 steps
+  preferences           Json // flexible: language, preferred times, notes
+  onboardingProfile     Json? // Deep household intelligence: homeType, occupants, lifestyle, painPoints, serviceHabits, autonomyPreference
+  onboardingStep        Int       @default(0) // 0=not started, 1-9 steps
   onboardingCompletedAt DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   members          FamilyMember[]
   tasks            Task[]
@@ -193,65 +193,67 @@ model Household {
   notifications    Notification[]
   anomalies        Anomaly[]
   quotations       Quotation[]
-  addresses         Address[]
+  addresses        Address[]
 }
 
 model FamilyMember {
-  id          String     @id @default(cuid())
-  householdId String
-  name        String
-  email       String     @unique
-  phone       String?
-  avatarUrl   String?    // relative path e.g. /avatars/xxx.jpg
-  role        MemberRole @default(MEMBER)
-  passwordHash String?    // household portal login (null = ops-managed, no self-serve access)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String     @id @default(cuid())
+  householdId  String
+  name         String
+  email        String     @unique
+  phone        String?
+  avatarUrl    String? // relative path e.g. /avatars/xxx.jpg
+  role         MemberRole @default(MEMBER)
+  passwordHash String? // household portal login (null = ops-managed, no self-serve access)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  notifications Notification[]
+  household      Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  notifications  Notification[]
   approvedAddons BookingAddon[] @relation("AddonApprover")
 }
 
 model Vendor {
-  id              String       @id @default(cuid())
-  name            String
-  email           String       @unique
-  phone           String
-  contactPerson   String?      // Name of primary contact person (Contact Person 1)
-  contactEmail1   String?      // Contact Person 1 email
-  contactPhone1   String?      // Contact Person 1 phone
-  contactPerson2  String?      // Secondary contact person
-  contactEmail2   String?      // Contact Person 2 email
-  contactPhone2   String?      // Contact Person 2 phone
-  companyName     String?      // Registered company name (e.g. "FreshWash Pte Ltd")
-  companyRegNo    String?      // ACRA / UEN registration number
-  registeredAddress String?      // Registered office address (free-text)
-  categories      String // JSON array of ServiceCategory
-  status          VendorStatus @default(PENDING)
-  vendorType      VendorType  @default(MICRO)
-  staffCount      Int          @default(1)
-  dailyCapacity   Int          @default(6)
-  verificationData Json?        // NRIC, background check, certs
-  maxTasksPerDay  Int          @default(6)
-  maxTasksPerWeek Int          @default(30)
-  availability    Json?        // working hours, days off
-  zones           String // JSON array of estate zone strings
-  avatarUrl       String?    // relative path e.g. /avatars/vendors/xxx.jpg
-  passwordHash     String?     // vendor portal login (null = ops-managed, no self-serve access)
-  roleId          String?     // FK → Role (vendor RBAC)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  name              String
+  email             String       @unique
+  phone             String
+  contactPerson     String? // Name of primary contact person (Contact Person 1)
+  contactEmail1     String? // Contact Person 1 email
+  contactPhone1     String? // Contact Person 1 phone
+  contactPerson2    String? // Secondary contact person
+  contactEmail2     String? // Contact Person 2 email
+  contactPhone2     String? // Contact Person 2 phone
+  companyName       String? // Registered company name (e.g. "FreshWash Pte Ltd")
+  companyRegNo      String? // ACRA / UEN registration number
+  registeredAddress String? // Registered office address (free-text)
+  categories        String // JSON array of ServiceCategory
+  status            VendorStatus @default(PENDING)
+  vendorType        VendorType   @default(MICRO)
+  staffCount        Int          @default(1)
+  dailyCapacity     Int          @default(6)
+  verificationData  Json? // NRIC, background check, certs
+  maxTasksPerDay    Int          @default(6)
+  maxTasksPerWeek   Int          @default(30)
+  availability      Json? // working hours, days off
+  zones             String // JSON array of estate zone strings
+  avatarUrl         String? // relative path e.g. /avatars/vendors/xxx.jpg
+  passwordHash      String? // vendor portal login (null = ops-managed, no self-serve access)
+  roleId            String? // FK → Role (vendor RBAC)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  bookings        Booking[]
-  staff           VendorStaff[]
-  vendorAffinity VendorHouseholdAffinity[]
-  vendorPlan     VendorPlan?
+  bookings         Booking[]
+  staff            VendorStaff[]
+  vendorUsers      VendorUser[]
+  vendorAffinity   VendorHouseholdAffinity[]
+  vendorPlan       VendorPlan?
   featureOverrides VendorFeatureOverride[]
-  notifications  Notification[]
-  addresses       Address[]
-  createdAddons   BookingAddon[] @relation("AddonCreator")
-  roleRel         Role?        @relation("VendorRole", fields: [roleId], references: [id])
+  notifications    Notification[]
+  addresses        Address[]
+  createdAddons    BookingAddon[]            @relation("AddonCreator")
+  roleRel          Role?                     @relation("VendorRole", fields: [roleId], references: [id])
+  auditLogs        AuditLog[]
 }
 
 // ======================== ADDRESSES ========================
@@ -259,28 +261,28 @@ model Vendor {
 model Address {
   id            String       @id @default(cuid())
   ownerType     AddressOwner
-  ownerId       String       // Denormalised owner reference for polymorphic queries
-  householdId   String?      // FK → Household.id (populated when ownerType = HOUSEHOLD)
-  vendorId      String?      // FK → Vendor.id (populated when ownerType = VENDOR)
-  label         String?      // "Home", "Office", "Parents' House" etc.
+  ownerId       String // Denormalised owner reference for polymorphic queries
+  householdId   String? // FK → Household.id (populated when ownerType = HOUSEHOLD)
+  vendorId      String? // FK → Vendor.id (populated when ownerType = VENDOR)
+  label         String? // "Home", "Office", "Parents' House" etc.
   propertyType  PropertyType @default(HDB)
-  postalCode    String       // Singapore 6-digit postal code
-  blockNumber   String?      // HDB / Condominium
-  streetName    String?      // auto-populated from postal lookup or manual
-  buildingName  String?      // Condominium / Office (e.g. "Marina Bay Sands")
-  level         String?      // HDB / Condominium / Office
-  unitNumber    String?      // HDB / Condominium / Office
-  houseNumber   String?      // Landed Property
-  streetAddress String?      // Landed / Office: full street line (e.g. "Orchard Road")
-  fullAddress   String       // Computed human-readable address string
+  postalCode    String // Singapore 6-digit postal code
+  blockNumber   String? // HDB / Condominium
+  streetName    String? // auto-populated from postal lookup or manual
+  buildingName  String? // Condominium / Office (e.g. "Marina Bay Sands")
+  level         String? // HDB / Condominium / Office
+  unitNumber    String? // HDB / Condominium / Office
+  houseNumber   String? // Landed Property
+  streetAddress String? // Landed / Office: full street line (e.g. "Orchard Road")
+  fullAddress   String // Computed human-readable address string
   isDefault     Boolean      @default(false)
-  latitude      Float?       // Future: GPS coordinates
-  longitude     Float?       // Future: GPS coordinates
+  latitude      Float? // Future: GPS coordinates
+  longitude     Float? // Future: GPS coordinates
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  household     Household?  @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  vendor        Vendor?     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  vendor    Vendor?    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([ownerType, ownerId])
   @@index([ownerType, ownerId, isDefault])
@@ -298,68 +300,68 @@ model VendorHouseholdAffinity {
   category          ServiceCategory
   bookingCount      Int             @default(0)
   completedCount    Int             @default(0)
-  totalRating       Float           @default(0)  // sum; divide by completedCount for avg
-  avgRating         Float?           // denormalized for query speed
+  totalRating       Float           @default(0) // sum; divide by completedCount for avg
+  avgRating         Float? // denormalized for query speed
   reassignmentCount Int             @default(0)
   disputeCount      Int             @default(0)
-  jobOutcomes       Json?           // last N outcomes array
+  jobOutcomes       Json? // last N outcomes array
   lastAssignedAt    DateTime?
   lastCompletedAt   DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  @@unique([householdId, vendorId, category])
-
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   vendor    Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, vendorId, category])
 }
 
 // ======================== TASKS & BOOKINGS ========================
 
 model Task {
-  id                String          @id @default(cuid())
-  householdId       String
-  category          ServiceCategory
-  status            TaskStatus      @default(CREATED)
-  jobTypeId         String?
-  quotationId       String?          @unique
-  recurrencePattern Json?            // {type, interval, dayOfWeek} — null = one-off
-  instructions      String?
-  instructionsSource String?         // "new" | "reused" | "modified" — Seed metric
-  amountCents       Int             // SGD cents (blended avg ~6800)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  dispatchedAt      DateTime?
-  acceptedAt        DateTime?          // Phase 8: vendor accepted → task ACCEPTED
-  scheduledAt       DateTime?          // Phase 8: task scheduled → task SCHEDULED
-  inProgressAt      DateTime?
-  completedAt       DateTime?
-  verifiedAt        DateTime?
-  escrowReleasedAt  DateTime?
-  disputedAt        DateTime?
-  scheduledStart    DateTime?
-  metadata          Json?             // { autoDispatched, autoMatched, autoVerified, autoEscrowReleased, matchAttempts, currentMatchVendorId }
-  acceptTimeoutAt   DateTime?         // Phase 8: vendor acceptance deadline — auto-cancel if not accepted by this time
-  lockAt            DateTime?          // Phase 4: Predictive — deadline before which household can cancel/edit
-  cancelledAt       DateTime?          // Phase 4: Predictive — when household cancelled this prediction
-  cancelReason      String?            // Phase 4: Predictive — household's cancel reason
+  id                 String          @id @default(cuid())
+  householdId        String
+  category           ServiceCategory
+  status             TaskStatus      @default(CREATED)
+  jobTypeId          String?
+  quotationId        String?         @unique
+  recurrencePattern  Json? // {type, interval, dayOfWeek} — null = one-off
+  instructions       String?
+  instructionsSource String? // "new" | "reused" | "modified" — Seed metric
+  amountCents        Int // SGD cents (blended avg ~6800)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  dispatchedAt       DateTime?
+  acceptedAt         DateTime? // Phase 8: vendor accepted → task ACCEPTED
+  scheduledAt        DateTime? // Phase 8: task scheduled → task SCHEDULED
+  inProgressAt       DateTime?
+  completedAt        DateTime?
+  verifiedAt         DateTime?
+  escrowReleasedAt   DateTime?
+  disputedAt         DateTime?
+  scheduledStart     DateTime?
+  metadata           Json? // { autoDispatched, autoMatched, autoVerified, autoEscrowReleased, matchAttempts, currentMatchVendorId }
+  acceptTimeoutAt    DateTime? // Phase 8: vendor acceptance deadline — auto-cancel if not accepted by this time
+  lockAt             DateTime? // Phase 4: Predictive — deadline before which household can cancel/edit
+  cancelledAt        DateTime? // Phase 4: Predictive — when household cancelled this prediction
+  cancelReason       String? // Phase 4: Predictive — household's cancel reason
 
-  household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  jobType           ServiceJobType?    @relation(fields: [jobTypeId], references: [id])
-  quotation         Quotation?         @relation(fields: [quotationId], references: [id])
-  bookings          Booking[]
+  household          Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  jobType            ServiceJobType?     @relation(fields: [jobTypeId], references: [id])
+  quotation          Quotation?          @relation(fields: [quotationId], references: [id])
+  bookings           Booking[]
   verificationPhotos VerificationPhoto[]
-  escrowEntries     EscrowLedger[]
-  attachments       TaskAttachment[]
+  escrowEntries      EscrowLedger[]
+  attachments        TaskAttachment[]
 }
 
 model TaskAttachment {
   id           String   @id @default(cuid())
   taskId       String
-  fileType     String   // "PHOTO" | "VIDEO"
+  fileType     String // "PHOTO" | "VIDEO"
   fileUrl      String
   thumbnailUrl String?
-  fileSize     Int      // bytes
+  fileSize     Int // bytes
   fileName     String
   mimeType     String
   createdAt    DateTime @default(now())
@@ -370,49 +372,49 @@ model TaskAttachment {
 }
 
 model Booking {
-  id               String   @id @default(cuid())
-  taskId           String
-  vendorId         String
-  assignedStaffId  String?  // SME: which vendor_staff is assigned
-  scheduledStart   DateTime
-  scheduledEnd     DateTime?
-  actualStart      DateTime?
-  actualEnd        DateTime?
-  rating           Int?      // 1–5
-  ratingComment    String?
-  completionNotes  String?   // Vendor's work summary, recommendations, feedback (e.g. "Recommend chemical wash next time")
-  status           String   @default("assigned") // assigned|accepted|in_progress|completed|cancelled
-  dispatchedAt     DateTime @default(now())
-  acceptedAt       DateTime?
-  completedAt      DateTime?
-  cancelledAt      DateTime?
-  shareToken       String?   @unique  // SME: shareable link for assigned staff
-  sharedAt         DateTime?           // when share token was generated
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String    @id @default(cuid())
+  taskId          String
+  vendorId        String
+  assignedStaffId String? // SME: which vendor_staff is assigned
+  scheduledStart  DateTime
+  scheduledEnd    DateTime?
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  rating          Int? // 1–5
+  ratingComment   String?
+  completionNotes String? // Vendor's work summary, recommendations, feedback (e.g. "Recommend chemical wash next time")
+  status          String    @default("assigned") // assigned|accepted|in_progress|completed|cancelled
+  dispatchedAt    DateTime  @default(now())
+  acceptedAt      DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  shareToken      String?   @unique // SME: shareable link for assigned staff
+  sharedAt        DateTime? // when share token was generated
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  task               Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  vendor             Vendor            @relation(fields: [vendorId], references: [id])
-  assignedStaff      VendorStaff?      @relation(fields: [assignedStaffId], references: [id])
+  task               Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  vendor             Vendor              @relation(fields: [vendorId], references: [id])
+  assignedStaff      VendorStaff?        @relation(fields: [assignedStaffId], references: [id])
   verificationPhotos VerificationPhoto[]
-  escrowEntries     EscrowLedger[]
-  addons            BookingAddon[]
+  escrowEntries      EscrowLedger[]
+  addons             BookingAddon[]
 }
 
 // ======================== VERIFICATION ========================
 
 model VerificationPhoto {
-  id               String   @id @default(cuid())
-  taskId           String
-  bookingId        String
-  fileUrl          String
-  thumbnailUrl     String?
-  uploadedBy       String   // "vendor:before" | "vendor:after" | "staff:before" | "staff:after"
-  isVerified       Boolean  @default(false)
-  verifiedBy       String?  // memberId who verified
-  verifiedAt       DateTime?
-  rejectionReason  String?
-  createdAt        DateTime @default(now())
+  id              String    @id @default(cuid())
+  taskId          String
+  bookingId       String
+  fileUrl         String
+  thumbnailUrl    String?
+  uploadedBy      String // "vendor:before" | "vendor:after" | "staff:before" | "staff:after"
+  isVerified      Boolean   @default(false)
+  verifiedBy      String? // memberId who verified
+  verifiedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
 
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking @relation(fields: [bookingId], references: [id])
@@ -423,17 +425,17 @@ model VerificationPhoto {
 // The user (household) receives a notification and must approve before work proceeds.
 
 model BookingAddon {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   bookingId    String
-  description  String                         // e.g., "Gas top-up for air-con unit"
-  amountCents  Int                             // additional charge in cents
-  status       String   @default("pending")    // pending | approved | rejected
-  addedById    String?                         // vendorId who added the charge
-  approvedById  String?                         // memberId who approved/rejected
+  description  String // e.g., "Gas top-up for air-con unit"
+  amountCents  Int // additional charge in cents
+  status       String    @default("pending") // pending | approved | rejected
+  addedById    String? // vendorId who added the charge
+  approvedById String? // memberId who approved/rejected
   approvedAt   DateTime?
   rejectedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   addedBy    Vendor?       @relation("AddonCreator", fields: [addedById], references: [id])
@@ -443,44 +445,44 @@ model BookingAddon {
 // ======================== ESCROW ========================
 
 model EscrowLedger {
-  id                   String      @id @default(cuid())
-  taskId               String
-  bookingId            String?
-  amountCents          Int
-  state                EscrowState @default(HELD)
-  commissionRate       Float       @default(10.0)
-  commissionCents      Int
-  vendorPayoutCents    Int
+  id                    String      @id @default(cuid())
+  taskId                String
+  bookingId             String?
+  amountCents           Int
+  state                 EscrowState @default(HELD)
+  commissionRate        Float       @default(10.0)
+  commissionCents       Int
+  vendorPayoutCents     Int
   stripePaymentIntentId String?
-  stripeTransferId     String?
-  createdAt            DateTime    @default(now())
-  heldAt               DateTime    @default(now())
-  releasedAt           DateTime?
-  disputedAt           DateTime?
-  refundedAt           DateTime?
-  disputeReason        String?
-  disputeResolution    String?
-  disputeResolvedBy    String?
-  disputeResolvedAt    DateTime?
+  stripeTransferId      String?
+  createdAt             DateTime    @default(now())
+  heldAt                DateTime    @default(now())
+  releasedAt            DateTime?
+  disputedAt            DateTime?
+  refundedAt            DateTime?
+  disputeReason         String?
+  disputeResolution     String?
+  disputeResolvedBy     String?
+  disputeResolvedAt     DateTime?
 
-  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task    Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id])
 }
 
 // ======================== SUBSCRIPTION ========================
 
 model Subscription {
-  id                  String             @id @default(cuid())
-  householdId         String
-  tier                SubscriptionTier   @default(HOME)
-  status              SubscriptionStatus @default(ACTIVE)
-  priceCents          Int                @default(800) // Home = SGD $8/mo
+  id                   String             @id @default(cuid())
+  householdId          String
+  tier                 SubscriptionTier   @default(HOME)
+  status               SubscriptionStatus @default(ACTIVE)
+  priceCents           Int                @default(800) // Home = SGD $8/mo
   stripeSubscriptionId String?
-  billingCycleStart   DateTime           @default(now())
-  billingCycleEnd     DateTime?
-  nextBillingDate     DateTime?
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  billingCycleStart    DateTime           @default(now())
+  billingCycleEnd      DateTime?
+  nextBillingDate      DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 }
@@ -490,8 +492,8 @@ model Subscription {
 model AutonomyLevelThreshold {
   id             String          @id @default(cuid())
   category       ServiceCategory
-  level          Int             // 1–5
-  cyclesRequired Int             // verified bookings to promote
+  level          Int // 1–5
+  cyclesRequired Int // verified bookings to promote
 
   @@unique([category, level])
 }
@@ -508,37 +510,37 @@ model HouseholdCategoryAutonomy {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
-  @@unique([householdId, category])
-
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, category])
 }
 
 // ======================== NOTIFICATIONS ========================
 
 model Notification {
-  id                String               @id @default(cuid())
+  id                String                @id @default(cuid())
   householdId       String
   recipientType     RecipientType
-  memberId          String?              // FK → FamilyMember (when recipientType = HOUSEHOLD_MEMBER)
-  vendorId          String?              // FK → Vendor (when recipientType = VENDOR)
+  memberId          String? // FK → FamilyMember (when recipientType = HOUSEHOLD_MEMBER)
+  vendorId          String? // FK → Vendor (when recipientType = VENDOR)
   channel           NotificationChannel
   eventType         NotificationEventType
   title             String
   body              String
-  status            NotificationStatus   @default(PENDING)
-  referenceType     String?              // "task" | "booking" | "escrow"
+  status            NotificationStatus    @default(PENDING)
+  referenceType     String? // "task" | "booking" | "escrow"
   referenceId       String?
-  externalMessageId String?              // Twilio SID, Push sub ID, etc.
+  externalMessageId String? // Twilio SID, Push sub ID, etc.
   errorMessage      String?
   sentAt            DateTime?
   deliveredAt       DateTime?
   readAt            DateTime?
   failedAt          DateTime?
-  createdAt         DateTime             @default(now())
+  createdAt         DateTime              @default(now())
 
-  household Household @relation(fields: [householdId], references: [id])
+  household Household     @relation(fields: [householdId], references: [id])
   member    FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull) // C-3 FIX: allow member deletion
-  vendor    Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendor    Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 }
 
 // ======================== SERVICE JOB TYPES & QUOTATION (Phase 4A) ========================
@@ -548,19 +550,19 @@ model ServiceJobType {
   category       ServiceCategory
   name           String
   slug           String          @unique
-  description    String          // short one-liner shown on card
-  basePriceCents Int             // base price in SGD cents
-  unitLabel      String          // "per unit", "flat rate", "per room"
-  pricingRules   Json            // { type, unitField?, areaMultiplier? }
-  requiredFields Json            // array of field definitions
-  addOns         Json            // array of { key, label, priceCents }
+  description    String // short one-liner shown on card
+  basePriceCents Int // base price in SGD cents
+  unitLabel      String // "per unit", "flat rate", "per room"
+  pricingRules   Json // { type, unitField?, areaMultiplier? }
+  requiredFields Json // array of field definitions
+  addOns         Json // array of { key, label, priceCents }
   sortOrder      Int             @default(0)
   isActive       Boolean         @default(true)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  quotations     Quotation[]
-  tasks          Task[]
+  quotations Quotation[]
+  tasks      Task[]
 
   @@index([category, isActive, sortOrder])
 }
@@ -569,46 +571,77 @@ model Quotation {
   id             String          @id @default(cuid())
   householdId    String
   jobTypeId      String
-  fieldValues    Json            // user's answers to dynamic fields
-  selectedAddOns Json            // array of add-on keys selected
+  fieldValues    Json // user's answers to dynamic fields
+  selectedAddOns Json // array of add-on keys selected
   baseCents      Int
   addOnsCents    Int             @default(0)
   totalCents     Int
-  breakdown      Json            // line items: [{ label, amountCents }]
-  aiExplanation  String?         // Phase B: LLM-generated explanation
-  status         QuotationStatus  @default(DRAFT)
+  breakdown      Json // line items: [{ label, amountCents }]
+  aiExplanation  String? // Phase B: LLM-generated explanation
+  status         QuotationStatus @default(DRAFT)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  household      Household       @relation(fields: [householdId], references: [id])
-  jobType        ServiceJobType  @relation(fields: [jobTypeId], references: [id])
-  task           Task?
+  household Household      @relation(fields: [householdId], references: [id])
+  jobType   ServiceJobType @relation(fields: [jobTypeId], references: [id])
+  task      Task?
 
   @@index([householdId])
   @@index([jobTypeId])
 }
 
-// ======================== VENDOR STAFF (SME Roster) ========================
+// ======================== VENDOR FIELD ROSTER (Staff Roster) ========================
+// Front-end operations team — field workers assigned to bookings.
+// These CANNOT log in to the vendor portal. Managed via Staff Roster UI
+// and by Ops coordinators. Each vendor (especially SME) has a roster of
+// cleaners / technicians / handymen who carry out jobs in the field.
+// RBAC roles do NOT apply to roster members.
 
 model VendorStaff {
+  id        String   @id @default(cuid())
+  vendorId  String
+  name      String
+  contact   String // phone or email (display / contact only)
+  jobTitle  String? // e.g. "Cleaner", "Aircon Technician", "Handyman"
+  role      String   @default("staff") // legacy free-text label (staff | lead | supervisor)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([vendorId])
+  @@index([isActive])
+}
+
+// ======================== VENDOR USER (HQ Staff — User Management) ========================
+// Back-office / HQ staff who log into the vendor portal: finance, auditors,
+// analysts, operations managers, etc. These are NOT field workers — they
+// do not appear on the Staff Roster and are not assignable to bookings.
+// Authenticated via POST /api/vendor/auth (email + passwordHash).
+// RBAC roles apply (roleId FK → Role).
+
+model VendorUser {
   id           String   @id @default(cuid())
   vendorId     String
   name         String
-  email        String?  // staff login email (unique within vendor)
-  contact      String   // phone or email (display)
-  role         String   @default("staff") // staff | manager | owner (legacy label)
-  roleId       String?  // FK → Role (vendor RBAC)
-  passwordHash String?  // bcrypt hash — null = no self-serve login
+  email        String // login email (unique globally — one identity across vendors)
+  contact      String // phone (display)
+  jobTitle     String? // e.g. "Finance Manager", "Auditor", "Operations Analyst"
+  role         String   @default("staff") // legacy free-text label
+  roleId       String? // FK → Role (vendor RBAC)
+  passwordHash String // bcrypt hash — required (HQ users always have login)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  vendor  Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  bookings Booking[]
-  roleRel Role?     @relation("VendorStaffRole", fields: [roleId], references: [id])
+  vendor  Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  roleRel Role?  @relation("VendorUserRole", fields: [roleId], references: [id])
 
+  @@unique([email])
   @@index([vendorId])
-  @@unique([vendorId, email])
+  @@index([isActive])
 }
 
 // ======================== VENDOR ENTITLEMENT & PLANS ========================
@@ -634,12 +667,12 @@ model Feature {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  planFeatures      PlanFeature[]
-  vendorOverrides  VendorFeatureOverride[]
+  planFeatures    PlanFeature[]
+  vendorOverrides VendorFeatureOverride[]
 }
 
 model PlanFeature {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   planId    String
   featureId String
 
@@ -653,7 +686,7 @@ model VendorPlan {
   id            String   @id @default(cuid())
   vendorId      String   @unique
   planId        String
-  effectiveDate  DateTime @default(now())
+  effectiveDate DateTime @default(now())
   createdAt     DateTime @default(now())
 
   vendor Vendor @relation(fields: [vendorId], references: [id])
@@ -664,7 +697,7 @@ model VendorFeatureOverride {
   id        String  @id @default(cuid())
   vendorId  String
   featureId String
-  enabled    Boolean @default(true)
+  enabled   Boolean @default(true)
 
   vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
@@ -675,20 +708,20 @@ model VendorFeatureOverride {
 // ======================== ANOMALY DETECTION (Phase 3) ========================
 
 model Anomaly {
-  id               String         @id @default(cuid())
-  householdId      String
-  taskId           String?
-  bookingId        String?
-  vendorId         String?
-  type             AnomalyType
-  severity         AnomalySeverity @default(MEDIUM)
-  message          String              // human-readable description
-  metadata         Json?               // extra context: { scheduledStart, slaMinutes, currentRating, avgRating, ... }
-  status           AnomalyStatus  @default(ACTIVE)
-  acknowledgedAt   DateTime?
-  resolvedAt       DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id             String          @id @default(cuid())
+  householdId    String
+  taskId         String?
+  bookingId      String?
+  vendorId       String?
+  type           AnomalyType
+  severity       AnomalySeverity @default(MEDIUM)
+  message        String // human-readable description
+  metadata       Json? // extra context: { scheduledStart, slaMinutes, currentRating, avgRating, ... }
+  status         AnomalyStatus   @default(ACTIVE)
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
@@ -700,13 +733,13 @@ model Anomaly {
 // ======================== PASSWORD RESET ========================
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   email     String
-  userType  String   @default("household") // "household" | "vendor" | "ops"
-  token     String   @unique
+  userType  String    @default("household") // "household" | "vendor" | "ops"
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([email, userType])
 }
@@ -732,8 +765,8 @@ model Role {
   updatedAt   DateTime @updatedAt
 
   users           OpsUser[]
-  vendors         Vendor[]     @relation("VendorRole")
-  vendorStaff     VendorStaff[] @relation("VendorStaffRole")
+  vendors         Vendor[]         @relation("VendorRole")
+  vendorUsers     VendorUser[]     @relation("VendorUserRole")
   rolePermissions RolePermission[]
 
   @@map("roles")
@@ -764,16 +797,16 @@ model RolePermission {
 }
 
 model OpsUser {
-  id           String     @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
-  email        String     @unique
-  role         OpsRole    @default(COORDINATOR)
+  email        String    @unique
+  role         OpsRole   @default(COORDINATOR)
   roleId       String?
-  isActive     Boolean    @default(true)
+  isActive     Boolean   @default(true)
   updatedBy    String?
   passwordHash String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
   lastLoginAt  DateTime?
 
   roleRel   Role?      @relation(fields: [roleId], references: [id])
@@ -782,18 +815,21 @@ model OpsUser {
 
 model AuditLog {
   id         String   @id @default(cuid())
-  userId     String
+  userId     String? // FK → OpsUser (nullable so vendor-scope actions can be logged)
   userName   String
+  vendorId   String? // FK → Vendor (set when the actor is a vendor/vendor-user, not an OpsUser)
   action     String
   entityType String
   entityId   String?
   metadata   Json?
   createdAt  DateTime @default(now())
 
-  user OpsUser @relation(fields: [userId], references: [id])
+  user   OpsUser? @relation(fields: [userId], references: [id])
+  vendor Vendor?  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([entityType, entityId])
   @@index([userId])
+  @@index([vendorId])
   @@index([createdAt])
 }
 
@@ -801,8 +837,8 @@ model AuditLog {
 
 model PlatformConfig {
   key       String   @id // e.g. "commission_rate", "category_price_CLEANING"
-  value     String   // JSON or numeric string
-  label     String   // human-readable description
+  value     String // JSON or numeric string
+  label     String // human-readable description
   updatedAt DateTime @updatedAt
 
   @@map("platform_config")
