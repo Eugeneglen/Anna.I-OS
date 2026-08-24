@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, KeyRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 import { CATEGORIES } from "@/lib/constants";
@@ -93,6 +93,8 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
     status: data.status,
   }));
   const [dirty, setDirty] = useState(false);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [hasLogin, setHasLogin] = useState<boolean>(!!data.passwordHash);
 
   const addresses: Address[] = Array.isArray(data.addresses)
     ? (data.addresses as Address[])
@@ -147,6 +149,35 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
       dailyCapacity: form.dailyCapacity,
       status: form.status,
     });
+  }
+
+  // ── Portal Login password set/reset ──
+  const passwordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const res = await fetch(`/api/ops/vendors/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to set password");
+      return result;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops-vendor", id] });
+      toast.success("Portal login password set");
+      setLoginPassword("");
+      setHasLogin(true);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function handleSetPassword() {
+    if (!loginPassword || loginPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    passwordMutation.mutate(loginPassword);
   }
 
   return (
@@ -306,6 +337,57 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
           )}
         </div>
       </div>
+
+      {/* ── Portal Login Access ── */}
+      {isAdmin && (
+        <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              Portal Login Access
+            </h3>
+            {hasLogin ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                <CheckCircle2 className="h-3 w-3" />
+                Login enabled
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                <KeyRound className="h-3 w-3" />
+                Not provisioned
+              </span>
+            )}
+          </div>
+          <div className="p-5 space-y-3">
+            <p className="text-xs text-[var(--anna-muted)] leading-relaxed">
+              {hasLogin
+                ? "This vendor can log in to the vendor portal. Set a new password below to reset their access (the old password will stop working immediately)."
+                : "This vendor cannot log in yet (no password set). Set a password below to provision portal access. The vendor email is the login email."}
+            </p>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-xs font-medium text-[var(--anna-slate)]">
+                  {hasLogin ? "New password (reset)" : "Set login password"}
+                </Label>
+                <Input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  className="rounded-xl border-[var(--anna-border)] text-sm"
+                />
+              </div>
+              <Button
+                onClick={handleSetPassword}
+                disabled={!loginPassword || loginPassword.length < 8 || passwordMutation.isPending}
+                className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl h-10 text-sm font-semibold"
+              >
+                  <KeyRound className="h-4 w-4 mr-1.5" />
+                  {passwordMutation.isPending ? "Setting..." : hasLogin ? "Reset Password" : "Set Password"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Section B: Contact Person 1 ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">

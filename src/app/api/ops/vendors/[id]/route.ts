@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import * as bcrypt from "bcryptjs";
 
 type VendorUpdateData = {
   name?: string;
@@ -24,6 +25,7 @@ type VendorUpdateData = {
   status?: string;
   availability?: unknown;
   staff?: { action: "add" | "remove" | "toggle"; data: Record<string, unknown> };
+  password?: string; // set/reset vendor portal login password
 };
 
 export async function GET(
@@ -108,6 +110,16 @@ export async function PATCH(
     if (body.zones !== undefined) updateData.zones = JSON.stringify(body.zones);
     if (body.status !== undefined) updateData.status = body.status;
     if (body.availability !== undefined) updateData.availability = body.availability;
+
+    // Set/reset vendor portal login password. Setting a password on a
+    // vendor that had none provisions them for login. Setting a new one
+    // overwrites the existing hash (password reset by ops).
+    if (body.password !== undefined) {
+      if (typeof body.password !== "string" || body.password.length < 8) {
+        return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+      }
+      updateData.passwordHash = bcrypt.hashSync(body.password, 10);
+    }
 
     const vendor = await db.vendor.update({
       where: { id },

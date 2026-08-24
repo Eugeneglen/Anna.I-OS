@@ -63,6 +63,14 @@ export async function PATCH(
         return NextResponse.json({ error: "Role not found" }, { status: 400 });
       }
 
+      // Ops users must NOT be assigned vendor-domain roles (vendor_* slugs).
+      if (targetRole.slug.startsWith("vendor_")) {
+        return NextResponse.json(
+          { error: "Cannot assign a vendor role to an ops user" },
+          { status: 400 }
+        );
+      }
+
       // Get requester's role level
       let reqLevel = 0;
       if (session.roleId) {

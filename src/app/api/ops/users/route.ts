@@ -106,6 +106,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Role not found" }, { status: 400 });
     }
 
+    // Ops users must NOT be assigned vendor-domain roles (vendor_* slugs).
+    // Vendor roles belong to the vendor portal RBAC namespace; assigning one
+    // to an ops user would cross the portal boundary.
+    if (targetRole.slug.startsWith("vendor_")) {
+      return NextResponse.json(
+        { error: "Cannot assign a vendor role to an ops user" },
+        { status: 400 }
+      );
+    }
+
     // Cannot create super_admin unless requester is super_admin
     if (targetRole.slug === "super_admin") {
       if (session.roleId) {

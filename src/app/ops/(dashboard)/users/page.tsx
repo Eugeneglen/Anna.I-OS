@@ -181,9 +181,13 @@ export default function UsersPage() {
   });
   const roles: RoleItem[] = rolesData?.roles || [];
 
-  // Filter roles for dropdown: exclude super_admin unless current user is super_admin
+  // Filter roles for the assignment dropdown:
+  // 1. Exclude vendor_* roles — they belong to the vendor portal RBAC domain,
+  //    not the ops portal. An ops user should never be assigned a vendor role.
+  // 2. Exclude super_admin unless the current user is super_admin.
   const availableRoles = roles.filter(
-    (r) => r.slug !== "super_admin" || currentUser?.role === "ADMIN" || currentUser?.roleName === "Super Admin"
+    (r) => !r.slug.startsWith("vendor_") &&
+      (r.slug !== "super_admin" || currentUser?.role === "ADMIN" || currentUser?.roleName === "Super Admin")
   );
 
   // ── Mutations ──

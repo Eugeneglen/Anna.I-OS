@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import * as bcrypt from "bcryptjs";
 
 async function requireAuth(req: NextRequest) {
   const session = await getOpsSession();
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
       staffCount,
       dailyCapacity,
       zones,
+      password,
     } = body;
 
     if (!companyName) {
@@ -72,6 +74,18 @@ export async function POST(req: NextRequest) {
     const vendorName = companyName;
     const vendorEmail = contactEmail1 || `${companyName.toLowerCase().replace(/\s+/g, ".")}@vendor.local`;
     const vendorPhone = contactPhone1 || "";
+
+    // Provision login password if provided (min 8 chars). If omitted, the
+    // vendor is created without portal login — ops can set one later via
+    // the vendor detail page. This is the legitimate provisioning path
+    // (the auth route no longer self-heals a null passwordHash for security).
+    let passwordHash: string | undefined;
+    if (password) {
+      if (typeof password !== "string" || password.length < 8) {
+        return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+      }
+      passwordHash = bcrypt.hashSync(password, 10);
+    }
 
     const vendor = await db.vendor.create({
       data: {
@@ -92,6 +106,7 @@ export async function POST(req: NextRequest) {
         staffCount: staffCount || 1,
         dailyCapacity: dailyCapacity || 6,
         zones: JSON.stringify(zones || []),
+        ...(passwordHash ? { passwordHash } : {}),
       },
     });
 
