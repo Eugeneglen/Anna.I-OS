@@ -42,6 +42,8 @@ import {
   Plus,
   DollarSign,
   Film,
+  Package,
+  Truck,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -559,7 +561,16 @@ function JobDetailView({
     [token]
   );
 
-  // ── Complete work handler ──
+  // ── Laundry Collect + Deliver handlers ──
+  // For LAUNDRY tasks, the share page has TWO buttons:
+  // 1. "Collect Laundry" — when status=accepted → calls /collect → status becomes 'collected'
+  // 2. "Deliver Laundry" — when status=collected → calls /deliver → status becomes 'delivered' + task COMPLETED
+  // For non-laundry: standard "Complete Work" button (calls /complete)
+  const isLaundry = booking?.category === "LAUNDRY";
+  const isCollected = booking?.status === "collected";
+  const isDelivered = booking?.status === "delivered";
+
+  // Complete work handler (non-laundry only)
   const handleComplete = async () => {
     setIsCompleting(true);
     try {
@@ -574,14 +585,59 @@ function JobDetailView({
       }
       toast.success("Work completed successfully!");
       setCompleteDialogOpen(false);
-      // Refresh page to show updated status
       window.location.reload();
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to complete work"
-      );
+      toast.error(err instanceof Error ? err.message : "Failed to complete work");
     } finally {
       setIsCompleting(false);
+    }
+  };
+
+  // Collect laundry handler
+  const [isCollecting, setIsCollecting] = useState(false);
+  const handleCollect = async () => {
+    setIsCollecting(true);
+    try {
+      const res = await fetch(`/api/j/share/${token}/collect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: completionNotes || undefined }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to collect laundry");
+      }
+      toast.success("Laundry collected successfully!");
+      setCompleteDialogOpen(false);
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to collect laundry");
+    } finally {
+      setIsCollecting(false);
+    }
+  };
+
+  // Deliver laundry handler
+  const [isDelivering, setIsDelivering] = useState(false);
+  const handleDeliver = async () => {
+    setIsDelivering(true);
+    try {
+      const res = await fetch(`/api/j/share/${token}/deliver`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: completionNotes || undefined }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to deliver laundry");
+      }
+      toast.success("Laundry delivered successfully!");
+      setCompleteDialogOpen(false);
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to deliver laundry");
+    } finally {
+      setIsDelivering(false);
     }
   };
 
@@ -978,8 +1034,9 @@ function JobDetailView({
           </div>
         )}
 
-        {/* ── Complete Work Button ── */}
-        {isAccepted && (
+        {/* ── Action Buttons ── */}
+        {/* Non-laundry: standard "Complete Work" button when accepted */}
+        {!isLaundry && isAccepted && (
           <Button
             onClick={() => setCompleteDialogOpen(true)}
             disabled={isCompleting}
@@ -999,30 +1056,95 @@ function JobDetailView({
           </Button>
         )}
 
-        {/* Completed confirmation */}
-        {isCompleted && (
+        {/* Laundry: "Collect Laundry" button when accepted */}
+        {isLaundry && isAccepted && (
+          <Button
+            onClick={() => setCompleteDialogOpen(true)}
+            disabled={isCollecting}
+            className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-2xl h-12 text-sm font-semibold"
+          >
+            {isCollecting ? (
+              <>
+                <Loader2 size={16} className="mr-2 animate-spin" />
+                Collecting...
+              </>
+            ) : (
+              <>
+                <Package size={16} className="mr-2" />
+                Collect Laundry
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Laundry: "Deliver Laundry" button when collected */}
+        {isLaundry && isCollected && (
+          <Button
+            onClick={() => setCompleteDialogOpen(true)}
+            disabled={isDelivering}
+            className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-2xl h-12 text-sm font-semibold"
+          >
+            {isDelivering ? (
+              <>
+                <Loader2 size={16} className="mr-2 animate-spin" />
+                Delivering...
+              </>
+            ) : (
+              <>
+                <Truck size={16} className="mr-2" />
+                Deliver Laundry
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Completed / Delivered confirmation */}
+        {(isCompleted || isDelivered) && (
           <div className="bg-[var(--anna-success)]/10 border border-[var(--anna-success)]/20 rounded-2xl p-4 flex items-center gap-3">
             <CheckCircle2 size={20} className="text-[var(--anna-success)]" />
             <div>
               <p className="text-sm font-semibold text-[var(--anna-slate)]">
-                Work Completed
+                {isDelivered ? "Laundry Delivered" : "Work Completed"}
               </p>
               <p className="text-[10px] text-[var(--anna-muted)]">
-                The household has been notified. Thank you!
+                {isDelivered
+                  ? "The household has been notified. Thank you!"
+                  : "The household has been notified. Thank you!"}
               </p>
             </div>
           </div>
         )}
 
-        {/* Complete Work Dialog */}
+        {/* Collected status (laundry: waiting for delivery) */}
+        {isLaundry && isCollected && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+            <Package size={20} className="text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">
+                Laundry Collected
+              </p>
+              <p className="text-[10px] text-amber-700">
+                Laundry is at the facility. Tap "Deliver Laundry" when returning it to the household.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Action Dialog (shared for complete/collect/deliver) */}
         <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
           <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-[var(--anna-slate)]">
-                Complete Work
+                {isLaundry && isAccepted ? "Collect Laundry"
+                  : isLaundry && isCollected ? "Deliver Laundry"
+                  : "Complete Work"}
               </DialogTitle>
               <DialogDescription className="text-[var(--anna-muted)]">
-                Mark this job as complete. You can optionally add completion notes for the household.
+                {isLaundry && isAccepted
+                  ? "Confirm that you have collected the laundry from the household. You can optionally add notes."
+                  : isLaundry && isCollected
+                  ? "Confirm that you have delivered the laundry back to the household. This will mark the job as completed."
+                  : "Mark this job as complete. You can optionally add completion notes for the household."}
               </DialogDescription>
             </DialogHeader>
 
@@ -1048,17 +1170,21 @@ function JobDetailView({
                 Cancel
               </Button>
               <Button
-                onClick={handleComplete}
-                disabled={isCompleting}
+                onClick={() => {
+                  if (isLaundry && isAccepted) handleCollect();
+                  else if (isLaundry && isCollected) handleDeliver();
+                  else handleComplete();
+                }}
+                disabled={isCompleting || isCollecting || isDelivering}
                 className="bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl flex-1 sm:flex-none"
               >
-                {isCompleting ? (
+                {(isCompleting || isCollecting || isDelivering) ? (
                   <>
                     <Loader2 size={14} className="mr-1.5 animate-spin" />
-                    Submitting...
+                    {isLaundry && isAccepted ? "Collecting..." : isLaundry && isCollected ? "Delivering..." : "Completing..."}
                   </>
                 ) : (
-                  "Confirm Complete"
+                  isLaundry && isAccepted ? "Confirm Collection" : isLaundry && isCollected ? "Confirm Delivery" : "Confirm Complete"
                 )}
               </Button>
             </DialogFooter>

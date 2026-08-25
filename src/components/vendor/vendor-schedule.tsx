@@ -117,13 +117,15 @@ async function fetchVendorSchedule(vendorId: string, queryParams?: string): Prom
 type BookingTab = "all" | "upcoming" | "completed";
 
 function getBookingTab(status: string): BookingTab {
-  if (status === "completed" || status === "cancelled") return "completed";
+  if (status === "completed" || status === "delivered" || status === "cancelled") return "completed";
   return "upcoming";
 }
 
 const BOOKING_STATUS_STYLES: Record<string, string> = {
   assigned: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
   accepted: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  collected: "bg-amber-50 text-amber-700 border-amber-200",
+  delivered: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   completed: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   cancelled: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
 };
@@ -131,6 +133,8 @@ const BOOKING_STATUS_STYLES: Record<string, string> = {
 const BOOKING_STATUS_LABELS: Record<string, string> = {
   assigned: "Assigned",
   accepted: "Accepted",
+  collected: "Collected",
+  delivered: "Delivered",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -363,10 +367,6 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
     queryKey: ["vendor-schedule", vendorId, queryParams],
     queryFn: () => fetchVendorSchedule(vendorId, queryParams),
     enabled: !!vendorId,
-    // Refetch on window focus so the vendor sees escrow state changes
-    // (e.g. release by household) without needing to navigate away.
-    refetchOnWindowFocus: true,
-    staleTime: 10_000, // 10 seconds
   });
 
   const updateMutation = useMutation({

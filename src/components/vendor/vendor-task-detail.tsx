@@ -89,6 +89,8 @@ const STATUS_STYLES: Record<string, string> = {
   assigned: "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20",
   accepted: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
   in_progress: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
+  collected: "bg-amber-50 text-amber-700 border-amber-200",
+  delivered: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   completed: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
   cancelled: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
 };
@@ -97,6 +99,8 @@ const STATUS_LABELS: Record<string, string> = {
   assigned: "Assigned",
   accepted: "Accepted",
   in_progress: "In Progress",
+  collected: "Collected",
+  delivered: "Delivered",
   completed: "Completed",
   cancelled: "Cancelled",
 };
