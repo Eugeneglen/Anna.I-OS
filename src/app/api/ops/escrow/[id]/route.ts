@@ -88,10 +88,22 @@ export async function PATCH(
       }
 
       const result = await db.$transaction(async (tx) => {
-        const updatedEscrow = await tx.escrowLedger.update({
-          where: { id },
-          data: { state: EscrowState.RELEASED, releasedAt: now },
+        // Fix: Release ALL HELD escrow entries for this task (base + add-ons),
+        // not just the one identified by `id`. Same pattern as the dispute
+        // action — all entries must be released together.
+        const allHeldEntries = await tx.escrowLedger.findMany({
+          where: { taskId: task.id, state: EscrowState.HELD },
+          select: { id: true, amountCents: true, vendorPayoutCents: true },
         });
+        const updatedEscrows = [];
+        for (const entry of allHeldEntries) {
+          const updated = await tx.escrowLedger.update({
+            where: { id: entry.id },
+            data: { state: EscrowState.RELEASED, releasedAt: now },
+          });
+          updatedEscrows.push(updated);
+        }
+        const updatedEscrow = await tx.escrowLedger.findUnique({ where: { id } });
 
         const updatedTask = await tx.task.update({
           where: { id: task.id },
@@ -99,6 +111,7 @@ export async function PATCH(
         });
 
         // Create audit log
+        const totalAmountCents = allHeldEntries.reduce((s, e) => s + e.amountCents, 0);
         await tx.auditLog.create({
           data: {
             userId: session.userId,
@@ -108,7 +121,8 @@ export async function PATCH(
             entityId: id,
             metadata: {
               taskId: task.id,
-              amountCents: escrow.amountCents,
+              amountCents: totalAmountCents,
+              entriesReleased: allHeldEntries.length,
               resolution: resolution || "Released by ops",
             },
           },
@@ -172,16 +186,27 @@ export async function PATCH(
       }
 
       const result = await db.$transaction(async (tx) => {
-        // Reset escrow to HELD
-        const updatedEscrow = await tx.escrowLedger.update({
-          where: { id },
-          data: {
-            state: EscrowState.HELD,
-            disputeResolution: resolution || "Dispute dismissed by ops",
-            disputeResolvedBy: session.name,
-            disputeResolvedAt: now,
-          },
+        // Fix: Reset ALL escrow entries for this task to HELD (not just
+        // the one identified by `id`). The dispute action disputes ALL
+        // entries (base + add-ons), so dismiss must reset ALL of them.
+        // Otherwise the add-on entries stay DISPUTED and can never be
+        // released.
+        const allEntries = await tx.escrowLedger.findMany({
+          where: { taskId: task.id, state: EscrowState.DISPUTED },
+          select: { id: true },
         });
+        for (const entry of allEntries) {
+          await tx.escrowLedger.update({
+            where: { id: entry.id },
+            data: {
+              state: EscrowState.HELD,
+              disputeResolution: resolution || "Dispute dismissed by ops",
+              disputeResolvedBy: session.name,
+              disputeResolvedAt: now,
+            },
+          });
+        }
+        const updatedEscrow = await tx.escrowLedger.findUnique({ where: { id } });
 
         // Unpause autonomy
         await tx.householdCategoryAutonomy.updateMany({

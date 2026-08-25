@@ -55,20 +55,32 @@ export async function PATCH(
         )
       }
 
-      // C-2 FIX: Validate escrow is in HELD state
-      if (escrow.state !== EscrowState.HELD) {
+      // Fix: Validate that at least ONE escrow entry is in HELD state.
+      // Previously this only checked the FIRST entry — if that entry was
+      // REFUNDED (from a full refund) but another entry was HELD, the
+      // release would fail even though there are releasable entries.
+      const heldEntries = task.escrowEntries.filter(e => e.state === EscrowState.HELD)
+      if (heldEntries.length === 0) {
+        const states = task.escrowEntries.map(e => e.state).join(", ")
         return NextResponse.json(
-          { error: `Escrow cannot be released — current state is ${escrow.state}` },
+          { error: `Escrow cannot be released — no HELD entries found (current states: ${states || "none"})` },
           { status: 409 }
         )
       }
 
       const result = await db.$transaction(async (tx) => {
-        // Release escrow
-        const updatedEscrow = await tx.escrowLedger.update({
-          where: { id: escrow.id },
-          data: { state: EscrowState.RELEASED, releasedAt: now },
-        })
+        // Fix: Release ALL HELD escrow entries for this task (base + add-ons),
+        // not just the first one. Each add-on creates a separate EscrowLedger
+        // row that must be individually released.
+        const updatedEscrows = []
+        for (const entry of heldEntries) {
+          const updated = await tx.escrowLedger.update({
+            where: { id: entry.id },
+            data: { state: EscrowState.RELEASED, releasedAt: now },
+          })
+          updatedEscrows.push(updated)
+        }
+        const updatedEscrow = updatedEscrows[0] // backward-compat: return first
 
         // Update task status
         const updatedTask = await tx.task.update({
@@ -82,6 +94,9 @@ export async function PATCH(
           select: { id: true },
         })
 
+        // Compute total payout for notification (sum of all released entries)
+        const totalPayoutCents = updatedEscrows.reduce((s, e) => s + e.vendorPayoutCents, 0)
+
         for (const member of members) {
           await tx.notification.create({
             data: {
@@ -91,7 +106,7 @@ export async function PATCH(
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.ESCROW_RELEASED,
               title: "Payment Released",
-              body: `Payment of SGD $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
+              body: `Payment of SGD $${(totalPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
