@@ -83,6 +83,11 @@ const PERMISSIONS: { module: string; action: string; description: string }[] = [
   { module: "roles", action: "edit", description: "Edit roles" },
   { module: "roles", action: "delete", description: "Delete roles" },
   { module: "roles", action: "assign", description: "Assign roles to users" },
+  // marketing: 4
+  { module: "marketing", action: "view", description: "View campaigns and discount codes" },
+  { module: "marketing", action: "create", description: "Create campaigns and generate codes" },
+  { module: "marketing", action: "edit", description: "Edit campaigns and manage codes" },
+  { module: "marketing", action: "delete", description: "Delete campaigns (DRAFT only)" },
 ];
 
 function perm(mod: string, actions: string[]): string[] {
@@ -123,6 +128,7 @@ const ROLE_DEFS: {
       ...perm("subscriptions", ["view", "create", "edit", "delete", "export", "approve"]),
       ...perm("users", ["view", "create", "edit", "export", "assign"]),
       ...perm("roles", ["view"]),
+      ...perm("marketing", ["view", "create", "edit", "delete"]),
     ],
   },
   {
@@ -141,6 +147,7 @@ const ROLE_DEFS: {
       ...perm("notifications", ["view", "create"]),
       ...perm("anomalies", ["view"]),
       ...perm("subscriptions", ["view", "create"]),
+      ...perm("marketing", ["view", "create"]),
     ],
   },
   {
