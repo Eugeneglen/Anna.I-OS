@@ -22,7 +22,7 @@ import {
 import type { QuoteResult } from "@/lib/quote-calculator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Calendar, Clock, ChevronRight } from "lucide-react";
+import { ArrowRight, Calendar, Clock, ChevronRight, Package, Truck } from "lucide-react";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 const RECURRENCE_OPTIONS: {
@@ -60,6 +60,12 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("10:00");
+  // Laundry-specific: pick-up and delivery date/time
+  const [pickupDate, setPickupDate] = useState("");
+  const [pickupTime, setPickupTime] = useState("09:00");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [deliveryTime, setDeliveryTime] = useState("18:00");
+  const isLaundry = category === "LAUNDRY";
 
   // Today's date in YYYY-MM-DD format (used as min for date picker)
   const todayISO = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Singapore" });
@@ -99,9 +105,22 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!category || !selectedHouseholdId) throw new Error("Missing household or category");
-      const scheduledStart = scheduledDate
-        ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString()
-        : new Date(Date.now() + 86400000).toISOString();
+
+      let scheduledStart: string;
+      let scheduledEnd: string | undefined = undefined;
+
+      if (isLaundry) {
+        scheduledStart = pickupDate
+          ? new Date(`${pickupDate}T${pickupTime}:00`).toISOString()
+          : new Date(Date.now() + 86400000).toISOString();
+        if (deliveryDate) {
+          scheduledEnd = new Date(`${deliveryDate}T${deliveryTime}:00`).toISOString();
+        }
+      } else {
+        scheduledStart = scheduledDate
+          ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString()
+          : new Date(Date.now() + 86400000).toISOString();
+      }
 
       // Create quotation if we have a job type
       let qId: string | null = quotationId;
@@ -132,6 +151,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
           amountCents,
           recurrencePattern: recurrence === "ONE_OFF" ? null : { type: recurrence, interval: 1 },
           scheduledStart,
+          ...(scheduledEnd ? { scheduledEnd } : {}),
           jobTypeId: selectedJobType?.id,
           quotationId: qId,
           attachments: [...photos, ...videos].map(({ fileUrl, fileType, fileName, fileSize, mimeType }) => ({
@@ -334,33 +354,59 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
       </div>
 
       {/* Schedule */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-            <Calendar size={12} className="inline mr-1" />
-            Date
-          </Label>
-          <Input
-            type="date"
-            value={scheduledDate}
-            min={todayISO}
-            onChange={(e) => setScheduledDate(e.target.value)}
-            className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
-          />
+      {isLaundry ? (
+        <div className="space-y-4">
+          <div className="bg-amber-50/50 border border-amber-200/50 rounded-xl p-3 space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+              <Package size={12} className="inline mr-1" />
+              Pick-up Date & Time
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="date" value={pickupDate} min={todayISO}
+                onChange={(e) => setPickupDate(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+              <Input type="time" value={pickupTime}
+                onChange={(e) => setPickupTime(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+            </div>
+          </div>
+          <div className="bg-[var(--anna-sage-light)]/30 border border-[var(--anna-sage)]/20 rounded-xl p-3 space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-sage-dark)]">
+              <Truck size={12} className="inline mr-1" />
+              Delivery Date & Time
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="date" value={deliveryDate} min={pickupDate || todayISO}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+              <Input type="time" value={deliveryTime}
+                onChange={(e) => setDeliveryTime(e.target.value)}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+            </div>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-            <Clock size={12} className="inline mr-1" />
-            Time
-          </Label>
-          <Input
-            type="time"
-            value={scheduledTime}
-            onChange={(e) => setScheduledTime(e.target.value)}
-            className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30"
-          />
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              <Calendar size={12} className="inline mr-1" />
+              Date
+            </Label>
+            <Input type="date" value={scheduledDate} min={todayISO}
+              onChange={(e) => setScheduledDate(e.target.value)}
+              className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
+              <Clock size={12} className="inline mr-1" />
+              Time
+            </Label>
+            <Input type="time" value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+              className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] text-sm focus-visible:ring-[var(--anna-sage)]/30" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Book Now Button */}
       <Button
