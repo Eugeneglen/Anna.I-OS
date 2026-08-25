@@ -199,6 +199,15 @@ const ROLE_MIGRATION: Record<string, string> = {
   ANALYST: "data_analyst",
 };
 
+// ─── Marketing permissions (for the Marketing module) ────────────────
+
+PERMISSIONS.push(
+  { module: "marketing", action: "view", description: "View campaigns and discount codes" },
+  { module: "marketing", action: "create", description: "Create campaigns and generate codes" },
+  { module: "marketing", action: "edit", description: "Edit campaigns and manage codes" },
+  { module: "marketing", action: "delete", description: "Delete campaigns (DRAFT only)" },
+);
+
 // ─── Vendor RBAC permissions (v_ prefix) ────────────────────────────
 
 const VENDOR_PERMISSIONS: PermDef[] = [

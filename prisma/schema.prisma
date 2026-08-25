@@ -185,6 +185,10 @@ model Household {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  // ── Marketing: acquisition tracking ──
+  acquisitionSource     AcquisitionSource @default(ORGANIC) // pilot_cohort | public_code | partnership_referral | organic | other
+  acquisitionCampaignId String? // FK to Campaign (nullable — organic has no campaign)
+
   members          FamilyMember[]
   tasks            Task[]
   subscriptions    Subscription[]
@@ -860,6 +864,142 @@ model AuditLog {
   @@index([userId])
   @@index([vendorId])
   @@index([createdAt])
+}
+
+// ======================== MARKETING MODULE ========================
+// Campaign engine for discount-driven campaigns: first-time offers,
+// upgrade discounts, cross-sell nudges, public promo codes, referrals.
+// Lives inside the Ops CMS on the shared schema.
+
+// ── Enums ──
+
+enum CampaignType {
+  FIRST_TIME
+  CROSS_SELL
+  UPGRADE
+  REFERRAL
+  PUBLIC_PROMO
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum CampaignAppliesTo {
+  SUBSCRIPTION_FEE
+  JOB_COMMISSION
+  BOTH
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountEligibility {
+  FIRST_TIME_HOUSEHOLD_ONLY
+  EXISTING_HOUSEHOLD
+  ANY
+}
+
+enum AcquisitionSource {
+  PILOT_COHORT
+  PUBLIC_CODE
+  PARTNERSHIP_REFERRAL
+  ORGANIC
+  OTHER
+}
+
+// ── Campaign ──
+
+model Campaign {
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  type             CampaignType
+  status           CampaignStatus    @default(DRAFT)
+  startDate        DateTime?
+  endDate          DateTime?
+  appliesTo        CampaignAppliesTo @default(BOTH)
+  targetTier       String? // "HOME" | "CARE" | null = all
+  targetCategory   String? // ServiceCategory or null = all
+  maxRedemptions   Int? // campaign-level cap (null = unlimited)
+  redemptionsCount Int               @default(0) // running total
+  createdById      String?
+  createdByName    String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  discountRule DiscountRule?
+  codes        DiscountCode[]
+  redemptions  CodeRedemption[]
+
+  @@index([status])
+  @@index([type])
+}
+
+// ── DiscountRule (one per campaign, versioned via updatedAt) ──
+
+model DiscountRule {
+  id                  String              @id @default(cuid())
+  campaignId          String              @unique
+  discountType        DiscountType
+  discountValue       Float // 20 = $20 or 15 = 15%
+  minOrderValueCents  Int? // minimum job/subscription value
+  maxDiscountCapCents Int? // ceiling for percentage (e.g. $30 cap)
+  stackable           Boolean             @default(false)
+  eligibility         DiscountEligibility @default(ANY)
+  minAutonomyLevel    Int?
+  maxAutonomyLevel    Int?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
+
+// ── DiscountCode ──
+
+model DiscountCode {
+  id            String    @id @default(cuid())
+  code          String    @unique // uppercase, indexed
+  campaignId    String
+  batchId       String? // groups codes generated together
+  maxUses       Int? // null = unlimited (within campaign constraints)
+  usesRemaining Int? // decremented on redemption (null = unlimited)
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true) // manual kill-switch
+  createdAt     DateTime  @default(now())
+
+  campaign    Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  redemptions CodeRedemption[]
+
+  @@index([campaignId])
+  @@index([batchId])
+  @@index([isActive])
+}
+
+// ── CodeRedemption (audit trail) ──
+
+model CodeRedemption {
+  id                   String   @id @default(cuid())
+  discountCodeId       String
+  campaignId           String
+  householdId          String
+  bookingId            String? // the job the discount applied to (if job_commission)
+  subscriptionId       String? // the subscription event (if subscription_fee)
+  discountAppliedCents Int // actual $ value discounted, for reconciliation
+  redeemedAt           DateTime @default(now())
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([discountCodeId])
+  @@index([householdId])
+  @@index([campaignId])
 }
 
 // ======================== PLATFORM CONFIG ========================
