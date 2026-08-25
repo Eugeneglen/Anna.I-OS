@@ -74,6 +74,10 @@ export default function EscrowPage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+    // Refetch on window focus so ops sees escrow state changes
+    // (e.g. household release) without needing to navigate away.
+    refetchOnWindowFocus: true,
+    staleTime: 10_000, // 10 seconds
   });
 
   const summary = data?.summary || {};

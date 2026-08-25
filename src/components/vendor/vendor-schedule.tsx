@@ -363,6 +363,10 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
     queryKey: ["vendor-schedule", vendorId, queryParams],
     queryFn: () => fetchVendorSchedule(vendorId, queryParams),
     enabled: !!vendorId,
+    // Refetch on window focus so the vendor sees escrow state changes
+    // (e.g. release by household) without needing to navigate away.
+    refetchOnWindowFocus: true,
+    staleTime: 10_000, // 10 seconds
   });
 
   const updateMutation = useMutation({

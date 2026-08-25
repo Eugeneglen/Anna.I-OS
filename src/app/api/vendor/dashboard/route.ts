@@ -114,10 +114,12 @@ export async function GET() {
         _avg: { rating: true },
       }),
 
-      // Pending escrow (held)
+      // Pending escrow (held + disputed — disputed entries still have
+      // recalculated vendorPayoutCents reflecting any partial refunds,
+      // and the vendor should see this as pending money owed to them)
       db.escrowLedger.aggregate({
         where: {
-          state: EscrowState.HELD,
+          state: { in: [EscrowState.HELD, EscrowState.DISPUTED] },
           booking: { vendorId },
         },
         _sum: { vendorPayoutCents: true },

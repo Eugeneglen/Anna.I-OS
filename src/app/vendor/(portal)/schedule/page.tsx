@@ -210,6 +210,12 @@ export default function VendorSchedulePage() {
       return res.json();
     },
     enabled: !!vendorId,
+    // Refetch when the window regains focus (so the vendor sees updates
+    // after the household releases escrow without needing to navigate away).
+    refetchOnWindowFocus: true,
+    // Keep data fresh — escrow releases can happen from the household side
+    // and the vendor needs to see the updated payout figures.
+    staleTime: 10_000, // 10 seconds (was default 0 = always refetch)
   });
 
   // Handle booking action

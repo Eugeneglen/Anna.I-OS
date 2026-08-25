@@ -262,6 +262,10 @@ export function VendorEarnings({ vendorId }: VendorEarningsProps) {
     queryKey: ["vendor-earnings", vendorId],
     queryFn: () => fetchVendorEarnings(vendorId),
     enabled: !!vendorId,
+    // Refetch on window focus so vendor sees updated payout figures
+    // after escrow release by the household.
+    refetchOnWindowFocus: true,
+    staleTime: 10_000, // 10 seconds
   });
 
   if (isLoading) return <EarningsSkeleton />;
