@@ -144,10 +144,15 @@ export interface EscrowLedger {
   commissionRate: number;
   commissionCents: number;
   vendorPayoutCents: number;
+  refundCents: number;           // cumulative amount refunded (partial refunds)
   heldAt: string;
   releasedAt?: string | null;
+  refundedAt?: string | null;
   disputedAt?: string | null;
   disputeReason?: string | null;
+  disputeResolution?: string | null;
+  disputeResolvedBy?: string | null;
+  disputeResolvedAt?: string | null;
 }
 
 export interface TaskAttachment {

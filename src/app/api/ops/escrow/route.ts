@@ -94,8 +94,9 @@ export async function GET(req: NextRequest) {
         disputedAt: true,
         household: { select: { id: true, name: true } },
         escrowEntries: {
-          select: { id: true, amountCents: true, state: true, disputeReason: true, disputedAt: true, heldAt: true },
-          take: 1,
+          where: { state: EscrowState.DISPUTED },
+          select: { id: true, amountCents: true, state: true, refundCents: true, disputeReason: true, disputedAt: true, heldAt: true },
+          orderBy: { disputedAt: "desc" },
         },
         bookings: {
           where: { status: { not: "cancelled" } },

@@ -12,6 +12,7 @@ import {
   Star,
   TrendingUp,
   ArrowDownCircle,
+  RotateCcw,
 } from "lucide-react";
 import { EarningsCharts } from "./vendor-earnings-charts";
 import { vendorFetch } from "@/lib/vendor-fetch";
@@ -21,6 +22,9 @@ import { vendorFetch } from "@/lib/vendor-fetch";
 interface EarningsResponse {
   totalEarned: number;
   pendingPayout: number;
+  totalRefunded: number;
+  totalOrderValue: number;
+  totalCommission: number;
   totalCompleted: number;
   averageRating: number;
   thisMonth: {
@@ -37,6 +41,9 @@ interface EarningsResponse {
     rating: number | null;
     payoutCents: number;
     payoutState: string;
+    orderTotalCents?: number;
+    refundedCents?: number;
+    remainingCents?: number;
   }[];
   charts: {
     byCategory: { category: string; earned: number; commission: number; count: number }[];
@@ -98,12 +105,18 @@ function EarningsStatCard({
 function EarningsSummaryGrid({
   totalEarned,
   pendingPayout,
+  totalRefunded = 0,
+  totalOrderValue = 0,
+  totalCommission = 0,
   completedJobs,
   avgRating,
   label,
 }: {
   totalEarned: number;
   pendingPayout: number;
+  totalRefunded?: number;
+  totalOrderValue?: number;
+  totalCommission?: number;
   completedJobs: number;
   avgRating: number;
   label: string;
@@ -135,6 +148,16 @@ function EarningsSummaryGrid({
           value={formatSgd(pendingPayout)}
           sub={pendingPayout > 0 ? "Processing" : "All settled"}
         />
+        {totalRefunded > 0 && (
+          <EarningsStatCard
+            icon={RotateCcw}
+            iconColor="text-[var(--anna-error)]"
+            iconBg="bg-red-50"
+            label="Total Refunded"
+            value={formatSgd(totalRefunded)}
+            sub="Refunds issued to customers"
+          />
+        )}
         <EarningsStatCard
           icon={CheckCircle2}
           iconColor="text-[var(--anna-success)]"
@@ -179,9 +202,21 @@ function PayoutRow({ payout }: { payout: EarningsResponse["recent"][number] }) {
         </div>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-          {formatSgd(payout.payoutCents)}
-        </span>
+        <div className="text-right">
+          {(payout.refundedCents || 0) > 0 && (
+            <div className="text-[10px] text-[var(--anna-error)] font-data">
+              −{formatSgd(payout.refundedCents)} refunded
+            </div>
+          )}
+          <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+            {formatSgd(payout.payoutCents)}
+          </span>
+          {(payout.refundedCents || 0) > 0 && payout.remainingCents !== undefined && (
+            <div className="text-[10px] text-[var(--anna-sage-dark)] font-data font-medium">
+              {formatSgd(payout.remainingCents)} remaining
+            </div>
+          )}
+        </div>
         <Badge
           variant="outline"
           className={cn(
@@ -189,7 +224,7 @@ function PayoutRow({ payout }: { payout: EarningsResponse["recent"][number] }) {
             PAYOUT_STYLES[payout.payoutState] ?? PAYOUT_STYLES.held
           )}
         >
-          {payout.payoutState === "released" ? "paid" : "pending"}
+          {payout.payoutState === "released" ? "paid" : payout.payoutState === "disputed" ? "disputed" : "pending"}
         </Badge>
       </div>
     </div>
@@ -249,6 +284,9 @@ export function VendorEarnings({ vendorId }: VendorEarningsProps) {
       <EarningsSummaryGrid
         totalEarned={data.totalEarned}
         pendingPayout={data.pendingPayout}
+        totalRefunded={data.totalRefunded}
+        totalOrderValue={data.totalOrderValue}
+        totalCommission={data.totalCommission}
         completedJobs={data.totalCompleted}
         avgRating={data.averageRating}
         label="All Time"

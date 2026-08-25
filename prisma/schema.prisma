@@ -453,6 +453,7 @@ model EscrowLedger {
   commissionRate        Float       @default(10.0)
   commissionCents       Int
   vendorPayoutCents     Int
+  refundCents           Int         @default(0) // cumulative amount refunded (partial refunds)
   stripePaymentIntentId String?
   stripeTransferId      String?
   createdAt             DateTime    @default(now())
@@ -467,6 +468,34 @@ model EscrowLedger {
 
   task    Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id])
+  refunds Refund[]
+
+  @@index([taskId])
+  @@index([state])
+}
+
+// ======================== REFUND (audit trail for each refund event) ========================
+// One row per refund event (supports multiple partial refunds on the same escrow).
+// When Stripe is integrated, stripeRefundId + stripeStatus will be populated
+// by the PaymentService implementation (see src/lib/payments/).
+
+model Refund {
+  id             String   @id @default(cuid())
+  escrowLedgerId String
+  amountCents    Int // amount refunded in THIS event (not cumulative)
+  reason         String
+  issuedById     String? // ops user ID who authorised the refund
+  issuedByName   String
+  idempotencyKey String // client-supplied idempotency key (unique → prevents duplicate refunds)
+  stripeRefundId String? // populated by PaymentService when Stripe is integrated
+  stripeStatus   String? // pending | succeeded | failed (Stripe lifecycle)
+  createdAt      DateTime @default(now())
+
+  escrowLedger EscrowLedger @relation(fields: [escrowLedgerId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@index([escrowLedgerId])
+  @@index([createdAt])
 }
 
 // ======================== SUBSCRIPTION ========================

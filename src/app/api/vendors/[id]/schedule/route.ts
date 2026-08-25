@@ -102,13 +102,14 @@ export async function GET(
                 id: true,
                 state: true,
                 amountCents: true,
+                refundCents: true,
                 commissionCents: true,
                 vendorPayoutCents: true,
                 disputeReason: true,
                 disputeResolution: true,
                 disputeResolvedAt: true,
               },
-              take: 1,
+              orderBy: { heldAt: "asc" },
             },
             attachments: {
               select: { id: true, fileType: true, fileUrl: true, thumbnailUrl: true, fileName: true },
@@ -170,6 +171,8 @@ export async function GET(
       taskStatus: b.task.status,
       taskDisputedAt: b.task.disputedAt,
       escrow: b.task.escrowEntries[0] ?? null,
+      // All escrow entries (base + add-ons) for full refund/remaining computation
+      escrowEntries: b.task.escrowEntries ?? [],
     }))
 
     // Count by status for filter pills (computed on unfiltered data)

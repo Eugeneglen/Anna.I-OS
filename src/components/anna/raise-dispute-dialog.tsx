@@ -84,7 +84,7 @@ export function RaiseDisputeDialog({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-red-100/70 uppercase tracking-wider font-medium">
-                  Disputed Amount
+                  Order Total (incl. add-ons)
                 </p>
                 <p className="text-white font-data text-xl font-bold mt-0.5">
                   {formatSgd(amountCents)}

@@ -114,9 +114,10 @@ export function BookingDetailSheet({
 
   // Dialog state for escrow actions
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<"release" | "resolve_dismiss" | "resolve_refund">("release");
+  const [dialogType, setDialogType] = useState<"release" | "resolve_dismiss" | "resolve_refund" | "partial_refund">("release");
   const [dialogEscrowId, setDialogEscrowId] = useState("");
   const [dialogAmount, setDialogAmount] = useState(0);
+  const [dialogAlreadyRefunded, setDialogAlreadyRefunded] = useState(0);
   const [dialogDisputeReason, setDialogDisputeReason] = useState<string | null>(null);
 
   // Dialog state for booking actions
@@ -147,15 +148,19 @@ export function BookingDetailSheet({
       escrowId,
       action,
       resolution,
+      refundAmountCents,
+      idempotencyKey,
     }: {
       escrowId: string;
       action: string;
       resolution: string;
+      refundAmountCents?: number;
+      idempotencyKey?: string;
     }) => {
       const res = await fetch(`/api/ops/escrow/${escrowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resolution }),
+        body: JSON.stringify({ action, resolution, refundAmountCents, idempotencyKey }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Action failed" }));
@@ -176,7 +181,18 @@ export function BookingDetailSheet({
   const bookings = (task?.bookings as Record<string, unknown>[]) || [];
   const booking = bookings[0] as Record<string, unknown> | undefined;
   const vendor = booking?.vendor as Record<string, unknown> | undefined;
-  const escrow = (task?.escrowEntries as Record<string, unknown>[])?.[0];
+  const allEscrowEntries = (task?.escrowEntries as Record<string, unknown>[]) || [];
+  const escrow = allEscrowEntries[0];
+  // Order Total = sum of ALL escrow entries (base + add-ons)
+  const orderTotalCents = allEscrowEntries.reduce(
+    (sum, e) => sum + (e.amountCents as number || 0), 0
+  ) || (escrow?.amountCents as number || 0);
+  // Total refunded = sum of ALL escrow entries' cumulative refundCents
+  const totalRefundCents = allEscrowEntries.reduce(
+    (sum, e) => sum + ((e.refundCents as number) || 0), 0
+  );
+  const remainingPayableCents = orderTotalCents - totalRefundCents;
+  const hasRefund = totalRefundCents > 0;
   const taskStatus = task?.status as string;
   const escrowState = escrow?.state as string;
   // Verification photos (before/after) — already returned by /api/tasks/[id]
@@ -287,7 +303,7 @@ export function BookingDetailSheet({
     if (!escrow) return;
     setDialogType("release");
     setDialogEscrowId(escrow.id as string);
-    setDialogAmount(escrow.amountCents as number);
+    setDialogAmount(orderTotalCents);
     setDialogDisputeReason(null);
     setDialogOpen(true);
   };
@@ -296,16 +312,19 @@ export function BookingDetailSheet({
     if (!escrow) return;
     setDialogType("resolve_dismiss");
     setDialogEscrowId(escrow.id as string);
-    setDialogAmount(escrow.amountCents as number);
+    setDialogAmount(orderTotalCents);
     setDialogDisputeReason(escrow.disputeReason as string | null);
     setDialogOpen(true);
   };
 
   const openRefundDialog = () => {
     if (!escrow) return;
-    setDialogType("resolve_refund");
+    // Route through partial_refund dialog with full amount pre-filled so the
+    // admin sees the exact refund amount and can adjust it.
+    setDialogType("partial_refund");
     setDialogEscrowId(escrow.id as string);
-    setDialogAmount(escrow.amountCents as number);
+    setDialogAmount(orderTotalCents);
+    setDialogAlreadyRefunded(0);
     setDialogDisputeReason(escrow.disputeReason as string | null);
     setDialogOpen(true);
   };
@@ -313,9 +332,16 @@ export function BookingDetailSheet({
   const handleDialogSubmit = async (
     escrowId: string,
     action: string,
-    resolution: string
+    resolution: string,
+    options?: { refundAmountCents?: number; idempotencyKey?: string }
   ) => {
-    await escrowAction.mutateAsync({ escrowId, action, resolution });
+    await escrowAction.mutateAsync({
+      escrowId,
+      action,
+      resolution,
+      refundAmountCents: options?.refundAmountCents,
+      idempotencyKey: options?.idempotencyKey,
+    });
   };
 
   // Determine which actions to show
@@ -698,14 +724,35 @@ export function BookingDetailSheet({
 
                       {/* Amount breakdown */}
                       <div className="space-y-2 pt-1">
+                        {allEscrowEntries.length > 1 && (
+                          <div className="flex items-center justify-between pb-1">
+                            <span className="text-xs text-[var(--anna-muted)] font-medium">
+                              Order Total (incl. add-ons)
+                            </span>
+                            <span className="text-sm font-bold text-[var(--anna-slate)] font-data">
+                              {formatSgd(orderTotalCents)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-[var(--anna-muted)]">
-                            Amount
+                            {allEscrowEntries.length > 1 ? "Base escrow" : "Amount"}
                           </span>
                           <span className="text-sm font-bold text-[var(--anna-slate)] font-data">
                             {formatSgd(escrow.amountCents as number)}
                           </span>
                         </div>
+                        {/* Refunded — sum of all escrow entries' cumulative refundCents */}
+                        {hasRefund && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-[var(--anna-error)]">
+                              Refunded
+                            </span>
+                            <span className="text-xs font-bold text-[var(--anna-error)] font-data">
+                              −{formatSgd(totalRefundCents)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-[var(--anna-muted)]">
                             Commission (10%)
@@ -723,6 +770,20 @@ export function BookingDetailSheet({
                             {formatSgd(escrow.vendorPayoutCents as number)}
                           </span>
                         </div>
+                        {/* Remaining Payable — orderTotal − totalRefunded */}
+                        {hasRefund && (
+                          <>
+                            <Separator />
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-[var(--anna-slate)] font-semibold">
+                                Remaining Payable
+                              </span>
+                              <span className="text-sm font-bold text-[var(--anna-sage-dark)] font-data">
+                                {formatSgd(remainingPayableCents)}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Dispute reason */}
@@ -1049,6 +1110,7 @@ export function BookingDetailSheet({
         taskId={taskId}
         escrowId={dialogEscrowId}
         amountCents={dialogAmount}
+        alreadyRefundedCents={dialogAlreadyRefunded}
         disputeReason={dialogDisputeReason}
         onSubmit={handleDialogSubmit}
         isSubmitting={escrowAction.isPending}

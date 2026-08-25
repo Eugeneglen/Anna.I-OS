@@ -1188,7 +1188,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
           <div className="bg-[var(--anna-bg)] rounded-2xl p-4">
             <EscrowBadge
               state={escrow.state}
-              amountCents={escrow.amountCents}
+              entries={task.escrowEntries}
               showBreakdown
             />
             {escrow.state === "HELD" &&
@@ -1299,7 +1299,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         isSubmitting={escrowMutation.isPending}
         taskCategory={task.category}
         vendorName={booking?.vendor?.name}
-        amountCents={escrow?.amountCents || 0}
+        amountCents={task.escrowEntries?.reduce((s, e) => s + (e.amountCents || 0), 0) || escrow?.amountCents || 0}
       />
 
       <EditPredictedDialog

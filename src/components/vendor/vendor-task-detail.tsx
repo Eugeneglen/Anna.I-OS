@@ -466,46 +466,96 @@ function VendorTaskDetailContent({
       )}
 
       {/* ── Escrow Status Section (non-disputed) ── */}
-      {!isDisputed && b.escrow && (
-        <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
-            <Wallet size={12} className="inline mr-1" />
-            Escrow
-          </h4>
-          <div className="bg-[var(--anna-bg)] rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[var(--anna-muted)]">Status</span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] px-2 py-0.5 font-medium",
-                  b.escrow.state === "RELEASED"
-                    ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20"
-                    : b.escrow.state === "REFUNDED"
-                      ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20"
-                      : "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20"
-                )}
-              >
-                {b.escrow.state === "RELEASED" ? (
-                  <><ShieldCheck size={10} className="mr-1" />Released</>
-                ) : b.escrow.state === "HELD" ? (
-                  <><Clock size={10} className="mr-1" />Held</>
-                ) : b.escrow.state === "REFUNDED" ? (
-                  <><Wallet size={10} className="mr-1" />Refunded</>
-                ) : (
-                  b.escrow.state
-                )}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-[var(--anna-muted)]">Your Payout</span>
-              <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-                {formatSgd(b.escrow.vendorPayoutCents)}
-              </span>
+      {!isDisputed && b.escrow && (() => {
+        // Compute order total + total refunded across ALL escrow entries
+        // (base + add-ons) so the vendor sees the same numbers as the customer.
+        const allEntries = b.escrowEntries && b.escrowEntries.length > 0
+          ? b.escrowEntries
+          : [b.escrow];
+        const orderTotalCents = allEntries.reduce(
+          (sum, e) => sum + (e.amountCents || 0), 0
+        );
+        const totalRefundCents = allEntries.reduce(
+          (sum, e) => sum + (e.refundCents || 0), 0
+        );
+        const remainingCents = orderTotalCents - totalRefundCents;
+        const hasRefund = totalRefundCents > 0;
+        const hasMultipleEntries = allEntries.length > 1;
+
+        return (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] mb-2">
+              <Wallet size={12} className="inline mr-1" />
+              Escrow
+            </h4>
+            <div className="bg-[var(--anna-bg)] rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[var(--anna-muted)]">Status</span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] px-2 py-0.5 font-medium",
+                    b.escrow.state === "RELEASED"
+                      ? "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20"
+                      : b.escrow.state === "REFUNDED"
+                        ? "bg-[var(--anna-warning)]/15 text-[var(--anna-warning)] border-[var(--anna-warning)]/20"
+                        : "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20"
+                  )}
+                >
+                  {b.escrow.state === "RELEASED" ? (
+                    <><ShieldCheck size={10} className="mr-1" />Released</>
+                  ) : b.escrow.state === "HELD" ? (
+                    <><Clock size={10} className="mr-1" />Held</>
+                  ) : b.escrow.state === "REFUNDED" ? (
+                    <><Wallet size={10} className="mr-1" />Refunded</>
+                  ) : (
+                    b.escrow.state
+                  )}
+                </Badge>
+              </div>
+
+              {/* Order total (only when there are multiple escrow entries) */}
+              {hasMultipleEntries && (
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[var(--anna-muted)] font-medium">
+                    Order Total (incl. add-ons)
+                  </span>
+                  <span className="text-sm font-bold text-[var(--anna-slate)] font-data">
+                    {formatSgd(orderTotalCents)}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--anna-muted)]">Your Payout</span>
+                <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
+                  {formatSgd(b.escrow.vendorPayoutCents)}
+                </span>
+              </div>
+
+              {/* Refund + remaining payable (only when a refund has occurred) */}
+              {hasRefund && (
+                <div className="mt-2 pt-2 border-t border-[var(--anna-border)] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[var(--anna-error)]">Refunded</span>
+                    <span className="font-data text-xs font-bold text-[var(--anna-error)]">
+                      −{formatSgd(totalRefundCents)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[var(--anna-slate)] font-medium">
+                      Remaining Payable
+                    </span>
+                    <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
+                      {formatSgd(remainingCents)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Amount — with approved addon breakdown */}
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">

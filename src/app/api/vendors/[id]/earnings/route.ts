@@ -36,19 +36,42 @@ export async function GET(
       0
     )
 
-    // ── Pending payout: sum from HELD escrow entries ──
-    const heldEntries = await db.escrowLedger.findMany({
+    // ── Pending payout: sum from HELD + DISPUTED escrow entries ──
+    // DISPUTED entries are still pending (the dispute hasn't been resolved yet).
+    // The vendorPayoutCents on disputed entries has been recalculated to reflect
+    // any partial refunds, so the vendor sees the correct adjusted payout.
+    const pendingEntries = await db.escrowLedger.findMany({
       where: {
         bookingId: { in: bookingIds },
-        state: EscrowState.HELD,
+        state: { in: [EscrowState.HELD, EscrowState.DISPUTED] },
       },
-      select: { vendorPayoutCents: true },
+      select: { vendorPayoutCents: true, state: true, amountCents: true, refundCents: true },
     })
 
-    const pendingPayout = heldEntries.reduce(
+    const pendingPayout = pendingEntries.reduce(
       (sum, e) => sum + e.vendorPayoutCents,
       0
     )
+
+    // ── Total refunded: sum of refundCents across all entries ──
+    const allEntries = await db.escrowLedger.findMany({
+      where: { bookingId: { in: bookingIds } },
+      select: { amountCents: true, refundCents: true, vendorPayoutCents: true, commissionCents: true, state: true },
+    })
+
+    const totalRefunded = allEntries.reduce(
+      (sum, e) => sum + (e.refundCents || 0),
+      0
+    )
+
+    const totalOrderValue = allEntries.reduce(
+      (sum, e) => sum + e.amountCents,
+      0
+    )
+
+    const totalCommission = allEntries
+      .filter(e => e.state !== EscrowState.REFUNDED)
+      .reduce((sum, e) => sum + e.commissionCents, 0)
 
     // ── Completed bookings count ──
     const totalCompleted = await db.booking.count({
@@ -130,7 +153,7 @@ export async function GET(
           },
         },
         escrowEntries: {
-          select: { vendorPayoutCents: true, state: true },
+          select: { vendorPayoutCents: true, state: true, amountCents: true, refundCents: true },
         },
       },
     })
@@ -142,6 +165,16 @@ export async function GET(
       const held = b.escrowEntries
         .filter((e) => e.state === EscrowState.HELD)
         .reduce((sum, e) => sum + e.vendorPayoutCents, 0)
+      const disputed = b.escrowEntries
+        .filter((e) => e.state === EscrowState.DISPUTED)
+        .reduce((sum, e) => sum + e.vendorPayoutCents, 0)
+      const refunded = b.escrowEntries
+        .reduce((sum, e) => sum + (e.refundCents || 0), 0)
+      const orderTotal = b.escrowEntries
+        .reduce((sum, e) => sum + e.amountCents, 0)
+
+      const payout = released || held || disputed || 0
+      const payoutState = released > 0 ? "released" : held > 0 ? "held" : disputed > 0 ? "disputed" : "none"
 
       return {
         id: b.id,
@@ -150,8 +183,11 @@ export async function GET(
         address: b.task.household.address,
         completedAt: b.completedAt,
         rating: b.rating,
-        payoutCents: released || held || 0,
-        payoutState: released > 0 ? "released" : "held",
+        payoutCents: payout,
+        payoutState,
+        orderTotalCents: orderTotal,
+        refundedCents: refunded,
+        remainingCents: orderTotal - refunded,
       }
     })
 
@@ -271,6 +307,9 @@ export async function GET(
     return vendorJson({
       totalEarned,
       pendingPayout,
+      totalRefunded,
+      totalOrderValue,
+      totalCommission,
       totalCompleted,
       averageRating: Math.round(averageRating * 100) / 100,
       thisMonth: {

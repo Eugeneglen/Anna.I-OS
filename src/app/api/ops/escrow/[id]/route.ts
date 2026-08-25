@@ -4,10 +4,15 @@ import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
 import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
+import { processRefund, RefundError } from "@/lib/payments/refund-service";
 
 const escrowActionSchema = z.object({
-  action: z.enum(["release", "resolve_dismiss", "resolve_refund"]),
+  action: z.enum(["release", "resolve_dismiss", "resolve_refund", "partial_refund"]),
   resolution: z.string().max(500).optional(),
+  // For partial_refund: the amount to refund (cents). Required for partial_refund.
+  refundAmountCents: z.number().int().positive().optional(),
+  // Idempotency key for refund operations (client-supplied, prevents duplicates).
+  idempotencyKey: z.string().min(1).max(200).optional(),
 });
 
 export async function PATCH(
@@ -36,7 +41,7 @@ export async function PATCH(
       );
     }
 
-    const { action, resolution } = parsed.data;
+    const { action, resolution, refundAmountCents, idempotencyKey } = parsed.data;
 
     // Fetch escrow with task and household
     const escrow = await db.escrowLedger.findUnique({
@@ -275,54 +280,31 @@ export async function PATCH(
         );
       }
 
-      const result = await db.$transaction(async (tx) => {
-        // Set escrow to REFUNDED
-        const updatedEscrow = await tx.escrowLedger.update({
-          where: { id },
-          data: {
-            state: EscrowState.REFUNDED,
-            refundedAt: now,
-            disputeResolution: resolution || "Dispute upheld — refund issued by ops",
-            disputeResolvedBy: session.name,
-            disputeResolvedAt: now,
-          },
+      // IMPORTANT #1 (police review): delegate to processRefund for the FULL
+      // remaining amount. This ensures resolve_refund produces the SAME state
+      // as partial_refund-with-full-amount: refundCents set, commission/payout
+      // recalculated to 0, Refund audit row created, task → DISPUTE_CLOSED.
+      // A server-generated idempotency key makes this call idempotent per
+      // escrow+timestamp (but the old "Refund" button is a one-shot action —
+      // retrying it after success is blocked by the state guard above).
+      try {
+        const fullRemainingCents = escrow.amountCents - escrow.refundCents;
+        const refundResult = await processRefund({
+          escrowLedgerId: id,
+          refundAmountCents: fullRemainingCents,
+          reason: resolution || "Dispute upheld — full refund issued by ops",
+          issuedById: session.userId,
+          issuedByName: session.name,
+          idempotencyKey: `resolve-refund-${id}-${Date.now()}`,
         });
 
-        // Unpause autonomy (household shouldn't be penalised if dispute was upheld)
-        await tx.householdCategoryAutonomy.updateMany({
-          where: {
-            householdId: task.householdId,
-            category: task.category,
-            promotionPaused: true,
-          },
-          data: { promotionPaused: false },
-        });
-
-        // Audit log
-        await tx.auditLog.create({
-          data: {
-            userId: session.userId,
-            userName: session.name,
-            action: "DISPUTE_REFUNDED",
-            entityType: "EscrowLedger",
-            entityId: id,
-            metadata: {
-              taskId: task.id,
-              amountCents: escrow.amountCents,
-              disputeReason: escrow.disputeReason,
-              resolution: resolution || "Dispute upheld — refund issued by ops",
-            },
-          },
-        });
-
-        // Notify household members
-        const members = await tx.familyMember.findMany({
+        // Notify household members of the refund
+        const members = await db.familyMember.findMany({
           where: { householdId: task.householdId },
           select: { id: true },
         });
-
         for (const member of members) {
-          await tx.notification.create({
+          await db.notification.create({
             data: {
               householdId: task.householdId,
               recipientType: RecipientType.HOUSEHOLD_MEMBER,
@@ -330,38 +312,114 @@ export async function PATCH(
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.DISPUTE_RESOLVED,
               title: "Refund Issued",
-              body: `Your dispute on the ${task.category.toLowerCase()} task has been upheld. A refund of SGD $${(escrow.amountCents / 100).toFixed(2)} will be processed.`,
+              body: `Your dispute on the ${task.category.toLowerCase()} task has been upheld. A full refund of SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been issued.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
             },
-          });
+          }).catch(() => {});
         }
 
-        return { updatedEscrow };
-      });
+        // Fire-and-forget: push real-time event to household
+        emitDisputeResolved({
+          taskId: task.id,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          category: task.category,
+          resolution: "refunded",
+          escrowAmountCents: escrow.amountCents,
+        }).catch(() => {});
+        emitEscrowStateChanged({
+          id,
+          state: "REFUNDED",
+          previousState: "DISPUTED",
+          amountCents: escrow.amountCents,
+          category: task.category,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          disputeResolution: resolution || "Dispute upheld — refund issued",
+        }).catch(() => {});
 
-      // Fire-and-forget: push real-time event to household
-      emitDisputeResolved({
-        taskId: task.id,
-        householdId: task.householdId,
-        householdName: task.household?.name,
-        category: task.category,
-        resolution: "refunded",
-        escrowAmountCents: escrow.amountCents,
-      }).catch(() => {});
-      emitEscrowStateChanged({
-        id,
-        state: "REFUNDED",
-        previousState: "DISPUTED",
-        amountCents: escrow.amountCents,
-        category: task.category,
-        householdId: task.householdId,
-        householdName: task.household?.name,
-        disputeResolution: resolution || "Dispute upheld — refund issued",
-      }).catch(() => {});
+        return NextResponse.json({
+          refund: refundResult,
+          escrow: await db.escrowLedger.findUnique({ where: { id } }),
+        });
+      } catch (e) {
+        if (e instanceof RefundError) {
+          return NextResponse.json(
+            { error: e.message, code: e.code },
+            { status: e.statusCode }
+          );
+        }
+        throw e;
+      }
+    }
 
-      return NextResponse.json({ escrow: result.updatedEscrow });
+    // ── ACTION: Partial Refund — refund a portion of the held amount ──
+    // Recalculates commission/payout on the adjusted (remaining) amount.
+    // Idempotent: same idempotencyKey returns the original result (no double refund).
+    if (action === "partial_refund") {
+      // Validate required params
+      if (!refundAmountCents) {
+        return NextResponse.json(
+          { error: "refundAmountCents is required for partial_refund" },
+          { status: 400 }
+        );
+      }
+      if (!idempotencyKey) {
+        return NextResponse.json(
+          { error: "idempotencyKey is required for partial_refund" },
+          { status: 400 }
+        );
+      }
+
+      try {
+        const refundResult = await processRefund({
+          escrowLedgerId: id,
+          refundAmountCents,
+          reason: resolution || "Partial refund issued by ops",
+          issuedById: session.userId,
+          issuedByName: session.name,
+          idempotencyKey,
+        });
+
+        // Notify household members of the refund
+        const members = await db.familyMember.findMany({
+          where: { householdId: task.householdId },
+          select: { id: true },
+        });
+        for (const member of members) {
+          await db.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.DISPUTE_RESOLVED,
+              title: refundResult.isFullyRefunded ? "Refund Issued" : "Partial Refund Issued",
+              body: refundResult.isFullyRefunded
+                ? `Your dispute on the ${task.category.toLowerCase()} task has been upheld. A full refund of SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been issued.`
+                : `A partial refund of SGD $${(refundResult.refundedCents / 100).toFixed(2)} has been issued for your ${task.category.toLowerCase()} task. Remaining payable: SGD $${(refundResult.effectiveAmountCents / 100).toFixed(2)}.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          }).catch(() => {}); // non-critical
+        }
+
+        return NextResponse.json({
+          refund: refundResult,
+          escrow: await db.escrowLedger.findUnique({ where: { id } }),
+        });
+      } catch (e) {
+        if (e instanceof RefundError) {
+          return NextResponse.json(
+            { error: e.message, code: e.code },
+            { status: e.statusCode }
+          );
+        }
+        throw e;
+      }
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

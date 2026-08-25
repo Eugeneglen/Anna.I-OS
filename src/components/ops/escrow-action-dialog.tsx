@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,23 +10,43 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, ShieldCheck, ShieldX, AlertTriangle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type ActionType = "release" | "resolve_dismiss" | "resolve_refund" | "partial_refund";
 
 interface EscrowActionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  type: "release" | "resolve_dismiss" | "resolve_refund";
+  type: ActionType;
   taskId: string;
   escrowId: string;
   amountCents: number;
+  /** Cumulative amount already refunded on this escrow (for partial_refund max validation). */
+  alreadyRefundedCents?: number;
   disputeReason?: string | null;
-  onSubmit: (escrowId: string, action: string, resolution: string) => Promise<void>;
+  /** Extended onSubmit: includes refundAmountCents + idempotencyKey for partial_refund. */
+  onSubmit: (
+    escrowId: string,
+    action: string,
+    resolution: string,
+    options?: { refundAmountCents?: number; idempotencyKey?: string }
+  ) => Promise<void>;
   isSubmitting: boolean;
 }
 
-const DIALOG_CONFIG = {
+const DIALOG_CONFIG: Record<ActionType, {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+  btnLabel: string;
+  btnClass: string;
+  placeholder: string;
+  gradientHeader: string;
+}> = {
   release: {
     title: "Release Escrow Payment",
     description: "Release the held payment to the vendor. This action cannot be undone.",
@@ -50,15 +70,26 @@ const DIALOG_CONFIG = {
     gradientHeader: "from-amber-600 to-amber-700",
   },
   resolve_refund: {
-    title: "Approve Refund",
-    description: "Uphold the dispute and issue a refund to the household. This is final.",
+    title: "Approve Full Refund",
+    description: "Uphold the dispute and issue a FULL refund to the household. This is final.",
     icon: AlertTriangle,
     iconBg: "bg-red-50",
     iconColor: "text-red-600",
-    btnLabel: "Issue Refund",
+    btnLabel: "Issue Full Refund",
     btnClass: "bg-red-600 hover:bg-red-700 text-white",
     placeholder: "Refund justification (e.g., work not completed as described)...",
     gradientHeader: "from-red-600 to-red-700",
+  },
+  partial_refund: {
+    title: "Issue Partial Refund",
+    description: "Refund a portion of the held amount. Commission and payout are recalculated on the remaining amount.",
+    icon: RotateCcw,
+    iconBg: "bg-orange-50",
+    iconColor: "text-orange-600",
+    btnLabel: "Issue Partial Refund",
+    btnClass: "bg-orange-600 hover:bg-orange-700 text-white",
+    placeholder: "Reason for partial refund (e.g., service partially incomplete)...",
+    gradientHeader: "from-orange-600 to-orange-700",
   },
 };
 
@@ -73,22 +104,65 @@ export function EscrowActionDialog({
   taskId,
   escrowId,
   amountCents,
+  alreadyRefundedCents = 0,
   disputeReason,
   onSubmit,
   isSubmitting,
 }: EscrowActionDialogProps) {
   const [resolution, setResolution] = useState("");
+  const [refundAmountStr, setRefundAmountStr] = useState(""); // user enters SGD dollars, not cents
   const config = DIALOG_CONFIG[type];
   const Icon = config.icon;
 
+  // The maximum refundable amount (original - already refunded), in cents
+  const maxRefundableCents = amountCents - alreadyRefundedCents;
+  const maxRefundableDollars = maxRefundableCents / 100;
+
+  // Pre-fill the refund amount with the full remaining amount when the
+  // dialog opens. The admin can then adjust it down (e.g. change $15 to $11).
+  // This prevents accidental full refunds when the admin only intended a partial.
+  useEffect(() => {
+    if (open && type === "partial_refund" && maxRefundableDollars > 0) {
+      setRefundAmountStr(maxRefundableDollars.toFixed(2));
+    } else if (!open) {
+      setRefundAmountStr("");
+      setResolution("");
+    }
+  }, [open, type, maxRefundableDollars]);
+
+  // Parse the user-entered dollar amount to cents
+  const refundAmountCents = useMemo(() => {
+    if (type !== "partial_refund") return undefined;
+    const dollars = parseFloat(refundAmountStr);
+    if (isNaN(dollars) || dollars <= 0) return undefined;
+    return Math.round(dollars * 100);
+  }, [refundAmountStr, type]);
+
+  // Generate an idempotency key client-side (unique per dialog submission)
+  const idempotencyKey = useMemo(() => {
+    if (type !== "partial_refund") return undefined;
+    return `refund-${escrowId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }, [escrowId, type, open]); // regenerate on each open
+
+  const isPartialRefundValid = type === "partial_refund"
+    ? refundAmountCents !== undefined && refundAmountCents > 0 && refundAmountCents <= maxRefundableCents
+    : true;
+
   const handleClose = () => {
     setResolution("");
+    setRefundAmountStr("");
     onOpenChange(false);
   };
 
   const handleSubmit = async () => {
-    await onSubmit(escrowId, type, resolution.trim());
+    if (type === "partial_refund") {
+      if (!refundAmountCents || !idempotencyKey) return;
+      await onSubmit(escrowId, type, resolution.trim(), { refundAmountCents, idempotencyKey });
+    } else {
+      await onSubmit(escrowId, type, resolution.trim());
+    }
     setResolution("");
+    setRefundAmountStr("");
     onOpenChange(false);
   };
 
@@ -118,15 +192,56 @@ export function EscrowActionDialog({
           {/* Amount display */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--anna-bg)] border border-[var(--anna-border)]">
             <span className="text-xs text-[var(--anna-muted)] font-medium uppercase tracking-wider">
-              Amount
+              {type === "partial_refund" ? "Order Total" : type === "release" ? "Amount" : "Order Total (incl. add-ons)"}
             </span>
             <span className="text-lg font-bold text-[var(--anna-slate)] font-data">
               {formatSgd(amountCents)}
             </span>
           </div>
 
+          {/* For partial_refund: show already-refunded + max refundable */}
+          {type === "partial_refund" && alreadyRefundedCents > 0 && (
+            <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50 border border-amber-100">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-amber-700">
+                Already Refunded
+              </span>
+              <span className="text-sm font-bold text-amber-700 font-data">
+                {formatSgd(alreadyRefundedCents)}
+              </span>
+            </div>
+          )}
+
+          {/* Partial refund amount input */}
+          {type === "partial_refund" && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] block">
+                Refund Amount (SGD) <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={maxRefundableDollars.toFixed(2)}
+                value={refundAmountStr}
+                onChange={(e) => setRefundAmountStr(e.target.value)}
+                placeholder={`Max ${maxRefundableDollars.toFixed(2)}`}
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-bg)] text-sm text-[var(--anna-slate)] placeholder:text-[var(--anna-muted)] focus-visible:ring-[var(--anna-sage)]/30"
+              />
+              <div className="flex justify-between text-[10px] text-[var(--anna-muted)]">
+                <span>Max refundable: {formatSgd(maxRefundableCents)}</span>
+                {refundAmountCents !== undefined && refundAmountCents > 0 && (
+                  <span className={refundAmountCents > maxRefundableCents ? "text-red-500" : "text-emerald-600"}>
+                    {refundAmountCents > maxRefundableCents
+                      ? "Exceeds max"
+                      : `Remaining after: ${formatSgd(maxRefundableCents - refundAmountCents)}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Dispute reason (for resolve actions) */}
-          {(type === "resolve_dismiss" || type === "resolve_refund") && disputeReason && (
+          {(type === "resolve_dismiss" || type === "resolve_refund" || type === "partial_refund") && disputeReason && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-100">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-red-600 mb-1">
                 Dispute Reason
@@ -169,7 +284,7 @@ export function EscrowActionDialog({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isPartialRefundValid}
               className={cn("flex-1 rounded-xl text-sm font-medium gap-1.5", config.btnClass)}
             >
               {isSubmitting ? (

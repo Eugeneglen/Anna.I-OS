@@ -146,23 +146,32 @@ export async function PATCH(
       }
 
       // C-2 FIX: Validate escrow is in HELD state (can't re-dispute a released/disputed escrow)
-      if (escrow.state !== EscrowState.HELD) {
+      // Fix #8: Check ALL escrow entries — if any is not HELD, the dispute is invalid.
+      const heldEntries = task.escrowEntries.filter(e => e.state === EscrowState.HELD)
+      if (heldEntries.length === 0) {
+        const states = task.escrowEntries.map(e => e.state).join(", ")
         return NextResponse.json(
-          { error: `Escrow cannot be disputed — current state is ${escrow.state}` },
+          { error: `Escrow cannot be disputed — no HELD entries found (current states: ${states || "none"})` },
           { status: 409 }
         )
       }
 
       const result = await db.$transaction(async (tx) => {
-        // Dispute escrow
-        const updatedEscrow = await tx.escrowLedger.update({
-          where: { id: escrow.id },
-          data: {
-            state: EscrowState.DISPUTED,
-            disputedAt: now,
-            disputeReason: reason ?? "No reason provided",
-          },
-        })
+        // Fix #8: Dispute ALL escrow entries for this task (base + add-ons),
+        // not just the first one. This ensures add-on escrows are also frozen.
+        const updatedEscrows: typeof task.escrowEntries[number][] = []
+        for (const entry of heldEntries) {
+          const updated = await tx.escrowLedger.update({
+            where: { id: entry.id },
+            data: {
+              state: EscrowState.DISPUTED,
+              disputedAt: now,
+              disputeReason: reason ?? "No reason provided",
+            },
+          })
+          updatedEscrows.push(updated)
+        }
+        const updatedEscrow = updatedEscrows[0] // backward-compat: return first
 
         // B-9 FIX: Cancel the active booking to prevent inconsistent state
         const activeBooking = await tx.booking.findFirst({

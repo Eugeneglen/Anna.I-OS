@@ -101,11 +101,17 @@ function EscrowCard({ item }: { item: EscrowItem }) {
         </p>
       )}
 
-      {/* Amount */}
-      <div>
+      {/* Amount + remaining payable (Fix #10) */}
+      <div className="text-right">
         <p className="font-data text-sm font-bold text-[var(--anna-slate)]">
           {formatSgd(escrow.amountCents)}
         </p>
+        {escrow.refundCents > 0 && (
+          <div className="mt-1 text-[10px] text-[var(--anna-muted)] leading-tight">
+            <p>Refunded: <span className="text-[var(--anna-error)] font-medium">{formatSgd(escrow.refundCents)}</span></p>
+            <p>Remaining: <span className="text-[var(--anna-slate)] font-semibold">{formatSgd(escrow.amountCents - escrow.refundCents)}</span></p>
+          </div>
+        )}
       </div>
 
       {/* Footer: dates + state badge */}
@@ -215,8 +221,14 @@ export function EscrowPanel() {
   // Summary stats
   const totalHeld = groups.HELD.reduce((s, i) => s + i.escrow.amountCents, 0);
   const totalReleased = groups.RELEASED.reduce((s, i) => s + i.escrow.amountCents, 0);
-  // Total amount spent by household (sum of all escrow amounts = what they paid)
-  const totalSpent = [...groups.RELEASED, ...groups.HELD, ...groups.REFUNDED].reduce(
+  // Fix #5: Total amount spent = released + held (excludes refunded amounts).
+  // Refunded amounts are returned to the customer, so they should NOT inflate
+  // the "total spent" figure. The totalRefunded is shown separately.
+  const totalRefunded = groups.REFUNDED.reduce(
+    (s, i) => s + (i.escrow.refundCents || i.escrow.amountCents),
+    0
+  );
+  const totalSpent = [...groups.RELEASED, ...groups.HELD].reduce(
     (s, i) => s + i.escrow.amountCents,
     0
   );
@@ -241,7 +253,7 @@ export function EscrowPanel() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 lg:p-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 p-4 lg:p-6">
         <SummaryStat
           icon={ShieldCheck}
           iconColor="text-[var(--anna-warning)]"
@@ -261,7 +273,14 @@ export function EscrowPanel() {
           iconColor="text-[var(--anna-slate-light)]"
           label="Total Spent"
           value={formatSgd(totalSpent)}
-          sub="All-time household spending"
+          sub="Excludes refunded amounts"
+        />
+        <SummaryStat
+          icon={ArrowUpCircle}
+          iconColor="text-[var(--anna-error)]"
+          label="Total Refunded"
+          value={formatSgd(totalRefunded)}
+          sub={`${groups.REFUNDED.length} refund${groups.REFUNDED.length !== 1 ? "s" : ""}`}
         />
         <SummaryStat
           icon={AlertTriangle}

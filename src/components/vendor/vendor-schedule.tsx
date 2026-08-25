@@ -63,12 +63,25 @@ export interface VendorScheduleItem {
     id: string;
     state: string;
     amountCents: number;
+    refundCents?: number;
     commissionCents: number;
     vendorPayoutCents: number;
     disputeReason?: string | null;
     disputeResolution?: string | null;
     disputeResolvedAt?: string | null;
   } | null;
+  // All escrow entries (base + add-ons) for full refund/remaining computation
+  escrowEntries?: {
+    id: string;
+    state: string;
+    amountCents: number;
+    refundCents?: number;
+    commissionCents: number;
+    vendorPayoutCents: number;
+    disputeReason?: string | null;
+    disputeResolution?: string | null;
+    disputeResolvedAt?: string | null;
+  }[];
 }
 
 interface VendorInfo {

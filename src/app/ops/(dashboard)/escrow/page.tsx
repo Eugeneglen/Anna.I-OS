@@ -47,10 +47,11 @@ export default function EscrowPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<
-    "release" | "resolve_dismiss" | "resolve_refund"
+    "release" | "resolve_dismiss" | "resolve_refund" | "partial_refund"
   >("release");
   const [dialogEscrowId, setDialogEscrowId] = useState("");
   const [dialogAmount, setDialogAmount] = useState(0);
+  const [dialogAlreadyRefunded, setDialogAlreadyRefunded] = useState(0);
   const [dialogDisputeReason, setDialogDisputeReason] = useState<string | null>(
     null
   );
@@ -89,15 +90,19 @@ export default function EscrowPage() {
       escrowId,
       action,
       resolution,
+      refundAmountCents,
+      idempotencyKey,
     }: {
       escrowId: string;
       action: string;
       resolution: string;
+      refundAmountCents?: number;
+      idempotencyKey?: string;
     }) => {
       const res = await fetch(`/api/ops/escrow/${escrowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resolution }),
+        body: JSON.stringify({ action, resolution, refundAmountCents, idempotencyKey }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Action failed" }));
@@ -140,9 +145,31 @@ export default function EscrowPage() {
     amount: number,
     reason?: string | null
   ) => {
-    setDialogType("resolve_refund");
+    // Route "Refund" through the partial_refund dialog with the full
+    // remaining amount pre-filled. This makes the refund AMOUNT explicit —
+    // the admin sees exactly how much will be refunded and can adjust it
+    // (e.g. change $15 to $11). Previously the "Refund" button did a
+    // silent full refund via resolve_refund with no amount input, causing
+    // admins to accidentally refund the full escrow entry amount when they
+    // only intended a partial refund.
+    setDialogType("partial_refund");
     setDialogEscrowId(escrowId);
     setDialogAmount(amount);
+    setDialogAlreadyRefunded(0);
+    setDialogDisputeReason(reason || null);
+    setDialogOpen(true);
+  };
+
+  const openPartialRefundDialog = (
+    escrowId: string,
+    amount: number,
+    alreadyRefundedCents: number,
+    reason?: string | null
+  ) => {
+    setDialogType("partial_refund");
+    setDialogEscrowId(escrowId);
+    setDialogAmount(amount);
+    setDialogAlreadyRefunded(alreadyRefundedCents);
     setDialogDisputeReason(reason || null);
     setDialogOpen(true);
   };
@@ -150,9 +177,16 @@ export default function EscrowPage() {
   const handleDialogSubmit = async (
     escrowId: string,
     action: string,
-    resolution: string
+    resolution: string,
+    options?: { refundAmountCents?: number; idempotencyKey?: string }
   ) => {
-    await escrowMutation.mutateAsync({ escrowId, action, resolution });
+    await escrowMutation.mutateAsync({
+      escrowId,
+      action,
+      resolution,
+      refundAmountCents: options?.refundAmountCents,
+      idempotencyKey: options?.idempotencyKey,
+    });
   };
 
   const activeFilterCount = [stateFilter, fromDate, toDate].filter(Boolean).length;
@@ -230,6 +264,7 @@ export default function EscrowPage() {
           onRelease={openReleaseDialog}
           onDismiss={openDismissDialog}
           onRefund={openRefundDialog}
+          onPartialRefund={openPartialRefundDialog}
         />
       )}
 
@@ -347,6 +382,7 @@ export default function EscrowPage() {
         taskId=""
         escrowId={dialogEscrowId}
         amountCents={dialogAmount}
+        alreadyRefundedCents={dialogAlreadyRefunded}
         disputeReason={dialogDisputeReason}
         onSubmit={handleDialogSubmit}
         isSubmitting={escrowMutation.isPending}

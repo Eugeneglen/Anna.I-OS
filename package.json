@@ -6,7 +6,7 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "npx tsx scripts/ensure-db.ts && NEXT_TELEMETRY_DISABLED=1 nohup npx next dev -p 3000 > dev.log 2>&1 & disown",
+    "dev": "npx tsx scripts/ensure-db.ts && NEXT_TELEMETRY_DISABLED=1 nohup npx next start -p 3000 -H 0.0.0.0 > dev.log 2>&1 & disown",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "npx tsx scripts/ensure-db.ts && NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
@@ -19,7 +19,8 @@
     "db:provider": "bash scripts/switch-provider.sh",
     "db:provider:local": "bash scripts/switch-provider.sh local",
     "db:provider:prod": "bash scripts/switch-provider.sh prod",
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seed.ts",
+    "test:refund": "bun tests/refund-flow.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
