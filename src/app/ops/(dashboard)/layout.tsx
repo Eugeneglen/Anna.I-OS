@@ -27,6 +27,7 @@ import {
   Wallet,
   CreditCard,
   Shield,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,7 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; active: boolea
   { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true, permission: "notifications:view" },
   { label: "Anomalies", href: "/ops/anomalies", icon: AlertTriangle, active: true, permission: "anomalies:view" },
   { label: "Subscriptions", href: "/ops/subscriptions", icon: CreditCard, active: true, permission: "subscriptions:view" },
+  { label: "Marketing", href: "/ops/marketing", icon: Megaphone, active: true, permission: "marketing:view" },
   { label: "User Management", href: "/ops/users", icon: Shield, active: true, permission: "users:view" },
   { label: "Role Management", href: "/ops/roles", icon: Shield, active: true, permission: "roles:view" },
 ];
