@@ -120,7 +120,18 @@ function perm(mod: string, actions: string[]): string[] {
   return actions.map((a) => `${mod}:${a}`);
 }
 
-/** All modules and their full action sets for super_admin */
+// ─── Marketing permissions (for the Marketing module) ────────────────
+// NOTE: These MUST be pushed before ALL_PERMS is computed below,
+// otherwise super_admin won't receive them and the sidebar nav item
+// will be hidden (can("marketing", "view") returns false).
+PERMISSIONS.push(
+  { module: "marketing", action: "view", description: "View campaigns and discount codes" },
+  { module: "marketing", action: "create", description: "Create campaigns and generate codes" },
+  { module: "marketing", action: "edit", description: "Edit campaigns and manage codes" },
+  { module: "marketing", action: "delete", description: "Delete campaigns (DRAFT only)" },
+);
+
+/** All modules and their full action sets for super_admin (computed AFTER marketing push) */
 const ALL_PERMS: string[] = PERMISSIONS.map((p) => `${p.module}:${p.action}`);
 
 const ROLES: RoleDef[] = [
@@ -149,6 +160,7 @@ const ROLES: RoleDef[] = [
       ...perm("subscriptions", ["view", "create", "edit", "delete", "export", "approve"]),
       ...perm("users", ["view", "create", "edit", "export", "assign"]), // NO delete
       ...perm("roles", ["view"]),                        // NO create/edit/delete/assign
+      ...perm("marketing", ["view", "create", "edit", "delete"]), // Marketing management
     ],
   },
   {
@@ -167,6 +179,7 @@ const ROLES: RoleDef[] = [
       ...perm("notifications", ["view", "create"]),
       ...perm("anomalies", ["view"]),
       ...perm("subscriptions", ["view", "create"]),
+      ...perm("marketing", ["view", "create"]),         // Coordinator can view + create campaigns
       // NO users, NO roles
     ],
   },
@@ -199,14 +212,7 @@ const ROLE_MIGRATION: Record<string, string> = {
   ANALYST: "data_analyst",
 };
 
-// ─── Marketing permissions (for the Marketing module) ────────────────
 
-PERMISSIONS.push(
-  { module: "marketing", action: "view", description: "View campaigns and discount codes" },
-  { module: "marketing", action: "create", description: "Create campaigns and generate codes" },
-  { module: "marketing", action: "edit", description: "Edit campaigns and manage codes" },
-  { module: "marketing", action: "delete", description: "Delete campaigns (DRAFT only)" },
-);
 
 // ─── Vendor RBAC permissions (v_ prefix) ────────────────────────────
 

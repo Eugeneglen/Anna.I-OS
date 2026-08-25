@@ -15,7 +15,7 @@
 
 import { db } from "./seed-db";
 
-export const SEED_VERSION = "2025-08-25-v2";
+export const SEED_VERSION = "2025-08-25-v3";
 
 async function main() {
   console.log("╔══════════════════════════════════════════════╗");
