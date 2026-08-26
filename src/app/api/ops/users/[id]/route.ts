@@ -175,14 +175,6 @@ export async function DELETE(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Safety: only allow deleting deactivated users
-    if (target.isActive) {
-      return NextResponse.json(
-        { error: "Deactivate the user first before deleting." },
-        { status: 409 }
-      );
-    }
-
     await db.opsUser.delete({ where: { id } });
 
     await auditLog({

@@ -484,7 +484,7 @@ export default function UsersPage() {
                     <Ban size={14} className="text-red-400" />
                   </Button>
                 )}
-                {can?.("users", "edit") && !u.isActive && (
+                {can?.("users", "delete") && !u.isActive && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -494,7 +494,7 @@ export default function UsersPage() {
                     <CheckCircle2 size={14} className="text-emerald-500" />
                   </Button>
                 )}
-                {can?.("users", "delete") && !u.isActive && (
+                {can?.("users", "delete") && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -670,7 +670,13 @@ export default function UsersPage() {
               <span className="font-medium text-[var(--anna-slate)]">
                 {deleteTarget?.name}
               </span>{" "}
-              ({deleteTarget?.email}). This action cannot be undone.
+              ({deleteTarget?.email}).{" "}
+              {deleteTarget?.isActive && (
+                <span className="text-amber-600 font-medium">
+                  This user is currently active — they will lose access immediately.
+                </span>
+              )}
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
