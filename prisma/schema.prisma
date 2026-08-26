@@ -333,6 +333,9 @@ model Task {
   instructions       String?
   instructionsSource String? // "new" | "reused" | "modified" — Seed metric
   amountCents        Int // SGD cents (blended avg ~6800)
+  discountCents      Int      @default(0) // Phase 3: discount applied from promo code
+  discountCodeId     String?  // Phase 3: FK to DiscountCode (nullable — no code used)
+  finalAmountCents   Int      @default(0) // Phase 3: amountCents - discountCents (set on creation)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   dispatchedAt       DateTime?

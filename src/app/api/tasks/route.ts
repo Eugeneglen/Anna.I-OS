@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
 import { triggerAutomationOnTaskCreated } from "@/lib/automation"
 import { isCategoryActive } from "@/lib/get-active-categories"
+import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-service"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -18,6 +19,7 @@ const createTaskSchema = z.object({
   category: z.nativeEnum(ServiceCategory),
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
+  discountCode: z.string().optional(), // Phase 3: optional promo code
   recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
   scheduledStart: z.string().optional().refine(
     (val) => {
@@ -101,7 +103,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
+    const { householdId, category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
 
     // Category active guard — reject if category is currently unavailable
     const categoryActive = await isCategoryActive(category)
@@ -145,6 +147,29 @@ export async function POST(request: Request) {
       finalAmountCents = quotation.totalCents;
     }
 
+    // Phase 3: Validate discount code if provided (before creating the task)
+    let discountCents = 0;
+    let discountCodeId: string | null = null;
+    let discountCampaignId: string | null = null;
+    if (discountCode && discountCode.trim()) {
+      const redemption = await validateRedemption({
+        code: discountCode.trim(),
+        householdId,
+        orderValueCents: finalAmountCents,
+        orderType: "job",
+        category,
+      });
+      if (!redemption.valid) {
+        return NextResponse.json(
+          { error: `Discount code invalid: ${redemption.reason}`, code: "DISCOUNT_INVALID" },
+          { status: 400 }
+        );
+      }
+      discountCents = redemption.discountCents || 0;
+      discountCodeId = redemption.codeId || null;
+      discountCampaignId = redemption.campaignId || null;
+    }
+
     // Ensure HouseholdCategoryAutonomy exists for this household+category
     await db.householdCategoryAutonomy.upsert({
       where: {
@@ -169,6 +194,9 @@ export async function POST(request: Request) {
         instructions: instructions ?? null,
         instructionsSource: "new",
         amountCents: finalAmountCents,
+        discountCents,
+        discountCodeId,
+        finalAmountCents: finalAmountCents - discountCents,
         recurrencePattern: recurrencePattern ?? null,
         jobTypeId: jobTypeId ?? null,
         quotationId: quotationId ?? null,
@@ -189,6 +217,25 @@ export async function POST(request: Request) {
       },
       include: { attachments: true },
     })
+
+    // Phase 3: Apply the discount redemption now that the task exists
+    if (discountCode && discountCodeId && discountCampaignId) {
+      try {
+        await applyRedemption({
+          code: discountCode.trim(),
+          householdId,
+          discountCents,
+          campaignId: discountCampaignId,
+          codeId: discountCodeId,
+          bookingId: task.id, // link redemption to this task
+        });
+      } catch (redeemError) {
+        console.error("[POST /api/tasks] Failed to apply discount redemption:", redeemError);
+        // Non-fatal — task is created, but redemption failed.
+        // The code was already validated, so this is likely a race condition
+        // (another request used the last use). Log and continue.
+      }
+    }
 
     // If quotationId was provided, update the quotation status to ACCEPTED
     if (quotationId) {

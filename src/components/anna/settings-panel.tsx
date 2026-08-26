@@ -67,6 +67,7 @@ import { PhoneInput } from "@/components/shared/phone-input";
 import { AddressForm, type AddressFormData } from "@/components/shared/address-form";
 import { HouseholdProfileSection, type HouseholdProfile } from "@/components/anna/household-profile-section";
 import { BillingSection } from "@/components/anna/billing-section";
+import { PromotionsSection } from "@/components/anna/promotions-section";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────
@@ -1012,6 +1013,9 @@ export function SettingsPanel() {
 
       {/* ── Subscription & Billing (Stripe-integrated) ── */}
       <BillingSection sub={sub} householdId={selectedHouseholdId} />
+
+      {/* ── Promotions (Phase 3: discount code redemption history) ── */}
+      <PromotionsSection householdId={selectedHouseholdId} />
 
       {/* ── Members ── */}
       <div className="bg-[var(--anna-white)] rounded-2xl p-5 border border-[var(--anna-border)]">

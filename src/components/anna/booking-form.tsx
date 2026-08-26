@@ -22,7 +22,7 @@ import {
 import type { QuoteResult } from "@/lib/quote-calculator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Calendar, Clock, ChevronRight, Package, Truck } from "lucide-react";
+import { ArrowRight, Calendar, Clock, ChevronRight, Package, Truck, Ticket, Check, X, Loader2 } from "lucide-react";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 
 const RECURRENCE_OPTIONS: {
@@ -78,6 +78,15 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
   const [quoteSelectedAddOns, setQuoteSelectedAddOns] = useState<string[]>([]);
   const [quotationId, setQuotationId] = useState<string | null>(null);
 
+  // Phase 3: Discount code state
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoDiscountCents, setPromoDiscountCents] = useState(0);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+
+  const finalAmountCents = amountCents - (promoApplied ? promoDiscountCents : 0);
+
   function selectJobType(jt: ServiceJobType) {
     if (selectedJobType?.id === jt.id) {
       setSelectedJobType(null);
@@ -98,9 +107,59 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
       }
       setQuoteFieldValues(fieldValues);
       setQuoteSelectedAddOns(selectedAddOns);
+      // Reset promo if amount changed
+      if (promoApplied) {
+        setPromoApplied(false);
+        setPromoDiscountCents(0);
+      }
     },
-    []
+    [promoApplied]
   );
+
+  // Phase 3: Apply / remove promo code
+  async function handleApplyPromo() {
+    if (!promoCode.trim() || !selectedHouseholdId) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const res = await fetch("/api/marketing/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: promoCode.trim(),
+          orderValueCents: amountCents,
+          orderType: "job",
+          category,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPromoError(data.error || "Failed to validate code");
+        setPromoApplied(false);
+        return;
+      }
+      if (!data.valid) {
+        setPromoError(data.reason || "Invalid code");
+        setPromoApplied(false);
+        return;
+      }
+      setPromoDiscountCents(data.discountCents || 0);
+      setPromoApplied(true);
+      setPromoError(null);
+    } catch {
+      setPromoError("Network error");
+      setPromoApplied(false);
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  function handleRemovePromo() {
+    setPromoApplied(false);
+    setPromoDiscountCents(0);
+    setPromoCode("");
+    setPromoError(null);
+  }
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -149,6 +208,7 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
           category,
           instructions: instructions.trim(),
           amountCents,
+          discountCode: promoApplied ? promoCode.trim() : undefined,
           recurrencePattern: recurrence === "ONE_OFF" ? null : { type: recurrence, interval: 1 },
           scheduledStart,
           ...(scheduledEnd ? { scheduledEnd } : {}),
@@ -275,6 +335,68 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
         ) : (
           <p className="text-[10px] text-[var(--anna-muted)]">
             Default estimate for {getCategoryLabel(category)}. Edit to customize.
+          </p>
+        )}
+      </div>
+
+      {/* Phase 3: Promo Code */}
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+          <Ticket size={12} />
+          Promo Code <span className="font-normal text-[var(--anna-muted)]">(optional)</span>
+        </Label>
+        {promoApplied ? (
+          <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                <Check size={14} className="text-emerald-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-emerald-900 truncate">
+                  {promoCode.toUpperCase()} applied
+                </p>
+                <p className="text-[10px] text-emerald-700">
+                  Save {formatSgd(promoDiscountCents)} · Final: {formatSgd(finalAmountCents)}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleRemovePromo}
+              className="text-emerald-600 hover:text-emerald-800 shrink-0"
+              type="button"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                type="text"
+                value={promoCode}
+                onChange={(e) => {
+                  setPromoCode(e.target.value.toUpperCase());
+                  setPromoError(null);
+                }}
+                placeholder="e.g. ANNA-XXXX"
+                className="rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm uppercase placeholder:normal-case focus-visible:ring-[var(--anna-sage)]/30"
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={handleApplyPromo}
+              disabled={!promoCode.trim() || promoLoading}
+              variant="outline"
+              className="h-10 px-4 rounded-xl border-[var(--anna-border)] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+            >
+              {promoLoading ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+            </Button>
+          </div>
+        )}
+        {promoError && (
+          <p className="text-[10px] text-rose-600 flex items-center gap-1">
+            <X size={10} />
+            {promoError}
           </p>
         )}
       </div>
@@ -409,14 +531,28 @@ export function BookingForm({ category, initialJobType, initialInstructions, ini
       )}
 
       {/* Book Now Button */}
-      <Button
-        onClick={() => createMutation.mutate()}
-        disabled={createMutation.isPending || !amountCents || amountCents <= 0}
-        className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-12 text-sm font-semibold"
-      >
-        {createMutation.isPending ? "Booking..." : "Book Now"}
-        <ArrowRight size={16} className="ml-2" />
-      </Button>
+      <div className="space-y-2">
+        {promoApplied && promoDiscountCents > 0 && (
+          <div className="flex items-center justify-between text-xs px-1">
+            <span className="text-[var(--anna-muted)] line-through font-data">
+              {formatSgd(amountCents)}
+            </span>
+            <span className="text-emerald-600 font-medium">−{formatSgd(promoDiscountCents)}</span>
+          </div>
+        )}
+        <Button
+          onClick={() => createMutation.mutate()}
+          disabled={createMutation.isPending || !amountCents || amountCents <= 0}
+          className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-12 text-sm font-semibold"
+        >
+          {createMutation.isPending
+            ? "Booking..."
+            : promoApplied
+              ? `Book Now · ${formatSgd(finalAmountCents)}`
+              : "Book Now"}
+          <ArrowRight size={16} className="ml-2" />
+        </Button>
+      </div>
     </div>
   );
 }
