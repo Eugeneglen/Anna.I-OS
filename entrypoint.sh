@@ -77,6 +77,18 @@ npx tsx scripts/ensure-db.ts 2>&1
 echo "  ✅ Database ready"
 
 # ─────────────────────────────────────────────────────
+# 3b. Backfill job numbers for existing tasks
+#     Idempotent — skips tasks that already have a jobNo.
+#     Runs on every startup so any pre-existing tasks (from before
+#     the job-number feature was deployed) get assigned a number.
+#     Safe to run repeatedly (no-op once all tasks have jobNo).
+# ─────────────────────────────────────────────────────
+echo ""
+echo "▶ Step 3b: Backfilling job numbers (idempotent)..."
+npx tsx scripts/backfill-jobno.ts 2>&1 || echo "  ⚠️  Backfill skipped (non-fatal)"
+echo "  ✅ Job numbers ready"
+
+# ─────────────────────────────────────────────────────
 # 4. Start the Next.js server
 # ─────────────────────────────────────────────────────
 echo ""
