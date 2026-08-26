@@ -15,7 +15,7 @@ export async function POST() {
     }
 
     // Run the seed directly
-    const seedModule = await import("../../../../prisma/seed");
+    const seedModule = await import("../../../../../prisma/seed");
     const seed = seedModule.default;
     if (typeof seed !== "function") {
       return NextResponse.json({ error: "Seed function not found" }, { status: 500 });
