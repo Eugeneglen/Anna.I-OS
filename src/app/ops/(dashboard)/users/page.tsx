@@ -38,14 +38,26 @@ import {
   Ban,
   CheckCircle2,
   FileText,
+  Trash2,
   Eye,
   EyeOff,
   Loader2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { OpsPageHeader, OpsSearchInput } from "@/components/ops/ops-page-header";
 import { OpsEmptyState } from "@/components/ops/ops-empty-state";
 import { OpsLoadingRows } from "@/components/ops/ops-loading-skeleton";
+import { AuditLogList } from "@/components/shared/audit-log-list";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 
 // ── Types ──
@@ -262,6 +274,22 @@ export default function UsersPage() {
     },
   });
 
+  // Delete user (permanent — only available for deactivated users)
+  const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
+  const [auditTarget, setAuditTarget] = useState<UserItem | null>(null);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/ops/users/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-users"] });
+      setDeleteTarget(null);
+    },
+  });
+
   // ── Helpers ──
 
   function openAddSheet() {
@@ -466,6 +494,16 @@ export default function UsersPage() {
                     <CheckCircle2 size={14} className="text-emerald-500" />
                   </Button>
                 )}
+                {can?.("users", "delete") && !u.isActive && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-red-50"
+                    onClick={() => setDeleteTarget(u)}
+                  >
+                    <Trash2 size={14} className="text-red-400" />
+                  </Button>
+                )}
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -481,7 +519,7 @@ export default function UsersPage() {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem disabled>
+                    <DropdownMenuItem onClick={() => setAuditTarget(u)}>
                       <FileText size={14} className="mr-2" />
                       View Audit Log
                     </DropdownMenuItem>
@@ -619,6 +657,47 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Delete User Confirm Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-semibold text-[var(--anna-slate)]">
+              Delete user permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-[var(--anna-muted)]">
+              You are about to permanently delete{" "}
+              <span className="font-medium text-[var(--anna-slate)]">
+                {deleteTarget?.name}
+              </span>{" "}
+              ({deleteTarget?.email}). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Audit Log Sheet */}
+      <Sheet open={!!auditTarget} onOpenChange={(open) => !open && setAuditTarget(null)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Audit Log — {auditTarget?.name}</SheetTitle>
+            <SheetDescription>
+              Recent actions performed on or by this user.
+            </SheetDescription>
+          </SheetHeader>
+          <AuditLogList userId={auditTarget?.id} scope="ops" />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -140,3 +140,63 @@ export async function PATCH(
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
+
+// ──────────────────────────────────────────────────────────
+// DELETE /api/ops/users/[id] — Permanently delete a user
+// Only allowed for already-deactivated users (soft-delete-first pattern).
+// ──────────────────────────────────────────────────────────
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "users", "delete");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+
+    // Self-deletion guard
+    if (id === session.userId) {
+      return NextResponse.json(
+        { error: "You cannot delete your own account." },
+        { status: 403 }
+      );
+    }
+
+    const target = await db.opsUser.findUnique({ where: { id } });
+    if (!target) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Safety: only allow deleting deactivated users
+    if (target.isActive) {
+      return NextResponse.json(
+        { error: "Deactivate the user first before deleting." },
+        { status: 409 }
+      );
+    }
+
+    await db.opsUser.delete({ where: { id } });
+
+    await auditLog({
+      userId: session.userId,
+      userName: session.name,
+      action: "user.delete",
+      entityType: "OpsUser",
+      entityId: id,
+      metadata: { name: target.name, email: target.email },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[/api/ops/users/[id] DELETE]", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}

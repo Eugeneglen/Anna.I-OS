@@ -21,9 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { UserPlus, UserCog, Pencil, Ban, CheckCircle2, Loader2 } from "lucide-react";
+import { UserPlus, UserCog, Pencil, Ban, CheckCircle2, Loader2, MoreVertical, Key, FileText } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useVendorUser } from "@/app/vendor/(portal)/layout";
+import { AuditLogList } from "@/components/shared/audit-log-list";
 
 // ── Types ──
 
@@ -259,6 +277,28 @@ export default function VendorUsersPage() {
     },
   });
 
+  // Reset password state + mutation
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetTarget, setResetTarget] = useState<string | null>(null);
+  const [auditTarget, setAuditTarget] = useState<UserItem | null>(null);
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/vendor/users/${id}/reset-password`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      return data;
+    },
+    onSuccess: (data) => {
+      setResetResult(data.password);
+    },
+  });
+
+  function handleResetPassword(userId: string) {
+    setResetTarget(userId);
+    setResetResult(null);
+    resetPasswordMutation.mutate(userId);
+  }
+
   // ── Helpers ──
 
   function openAddSheet() {
@@ -491,6 +531,27 @@ export default function VendorUsersPage() {
                     </svg>
                   </Button>
                 )}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical size={14} className="text-[var(--anna-slate-light)]" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {can?.("v_users", "edit") && (
+                      <DropdownMenuItem onClick={() => handleResetPassword(u.id)}>
+                        <Key size={14} className="mr-2" />
+                        Reset Password
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setAuditTarget(u)}>
+                      <FileText size={14} className="mr-2" />
+                      View Audit Log
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}
@@ -617,6 +678,49 @@ export default function VendorUsersPage() {
               {editingUser ? "Save Changes" : "Create User"}
             </Button>
           </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Reset Password Result */}
+      {resetResult && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-6 max-w-sm w-full">
+            <div className="text-center space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center mx-auto">
+                <Key size={18} className="text-[var(--anna-sage-dark)]" />
+              </div>
+              <p className="text-sm font-medium text-[var(--anna-slate)]">
+                Temporary password generated
+              </p>
+              <p className="text-xs text-[var(--anna-muted)]">
+                Share this with the user. They can change it after logging in.
+              </p>
+              <div className="bg-[var(--anna-bg)] rounded-xl p-3 border border-[var(--anna-border)]">
+                <p className="text-sm font-mono font-medium text-[var(--anna-slate)] break-all text-center">
+                  {resetResult}
+                </p>
+              </div>
+              <Button
+                className="w-full rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white text-sm font-medium"
+                onClick={() => setResetResult(null)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Log Sheet */}
+      <Sheet open={!!auditTarget} onOpenChange={(open) => !open && setAuditTarget(null)}>
+        <SheetContent className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Audit Log — {auditTarget?.name}</SheetTitle>
+            <SheetDescription>
+              Recent actions performed on or by this user.
+            </SheetDescription>
+          </SheetHeader>
+          <AuditLogList userId={auditTarget?.id} scope="vendor" />
         </SheetContent>
       </Sheet>
     </div>
