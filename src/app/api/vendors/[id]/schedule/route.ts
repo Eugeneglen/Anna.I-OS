@@ -154,6 +154,7 @@ export async function GET(
       ratingComment: b.ratingComment,
       completionNotes: b.completionNotes,
       category: b.task.category,
+      jobNo: b.task.jobNo,
       instructions: b.task.instructions,
       amountCents: b.task.amountCents,
       householdName: b.task.household.name,

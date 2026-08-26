@@ -44,6 +44,7 @@ import {
   Film,
   Package,
   Truck,
+  Hash,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────
@@ -480,7 +481,6 @@ function JobDetailView({
   token: string;
 }) {
   const { booking } = data;
-  const ref = booking.jobNo ? `#${booking.jobNo}` : `#ANN-${booking.id.slice(0, 8).toUpperCase()}`;
 
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [addons, setAddons] = useState<Addon[]>([]);
@@ -711,6 +711,18 @@ function JobDetailView({
 
       {/* ── Content ── */}
       <div className="flex-1 max-w-lg mx-auto w-full px-4 py-6 space-y-5">
+        {/* Job Number — prominent banner at the top (enlarged 200%) */}
+        {booking.jobNo && (
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--anna-sage-light)] border border-[var(--anna-sage)]/30">
+              <Hash size={20} className="text-[var(--anna-sage-dark)]" />
+              <span className="text-xl font-bold font-mono tracking-wider text-[var(--anna-sage-dark)]">
+                {booking.jobNo}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Category Card */}
         <div className="bg-[var(--anna-bg)] rounded-2xl p-5">
           <div className="flex items-center justify-between">
@@ -1285,11 +1297,6 @@ function JobDetailView({
           />
           Auto-refreshes every 30s
         </div>
-
-        {/* Reference */}
-        <p className="text-center text-[11px] text-[var(--anna-muted)] font-mono">
-          Reference: {ref}
-        </p>
       </div>
 
       {/* ── Footer ── */}

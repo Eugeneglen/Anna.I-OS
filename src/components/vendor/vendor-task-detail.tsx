@@ -423,7 +423,7 @@ function VendorTaskDetailContent({
           <CategoryIcon category={b.category} size={20} />
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <JobNoBadge jobNo={b.task?.jobNo} size="md" />
+              <JobNoBadge jobNo={b.jobNo} size="md" />
             </div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
               {getCategoryLabel(b.category)}
