@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
             category: true,
             status: true,
             amountCents: true,
+            jobNo: true,
             household: {
               select: { id: true, name: true, email: true, phone: true, address: true, postalCode: true },
             },

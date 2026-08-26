@@ -90,6 +90,7 @@ export async function GET(
             amountCents: true,
             status: true,
             disputedAt: true,
+            jobNo: true,
             household: {
               select: {
                 id: true,

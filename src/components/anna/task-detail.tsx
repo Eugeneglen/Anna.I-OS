@@ -31,6 +31,7 @@ import { Star, Clock, User, ShieldCheck, Send, Play, CheckCircle, ThumbsUp, Thum
 import { RaiseDisputeDialog } from "./raise-dispute-dialog";
 import { EditPredictedDialog } from "./edit-predicted-dialog";
 import { WithErrorBoundary } from "@/components/error-boundary";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -481,6 +482,9 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         <div className="flex items-center gap-3">
           <CategoryIcon category={task.category} size={20} />
           <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <JobNoBadge jobNo={task.jobNo} size="md" />
+            </div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
               {task.jobType
                 ? `${getCategoryLabel(task.category)} — ${task.jobType.name}`

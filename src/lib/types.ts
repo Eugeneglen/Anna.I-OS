@@ -73,6 +73,7 @@ export interface Vendor {
 
 export interface Task {
   id: string;
+  jobNo: string | null; // #AI-00000001 — human-readable global sequence (null on legacy tasks pre-backfill)
   householdId: string;
   category: ServiceCategory;
   status: TaskStatus;

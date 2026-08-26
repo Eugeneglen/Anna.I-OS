@@ -6,6 +6,7 @@ import { formatSgd, formatDate, STATUS_LABELS, type Task, type TaskStatus } from
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Star, Clock, RotateCcw, Zap, Search, CheckCircle2 } from "lucide-react";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 
 const statusStyles: Record<TaskStatus, string> = {
   PREDICTED: "bg-[var(--anna-sage)]/15 text-[var(--anna-sage-dark)] border-[var(--anna-sage)]/20",
@@ -65,11 +66,14 @@ export function TaskCard({ task, isExpanded = false }: TaskCardProps) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Top row: category + status */}
+          {/* Top row: job number + status */}
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <span className="text-sm font-semibold text-[var(--anna-slate)]">
-              {getCategoryLabel(task.category)}
-            </span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <JobNoBadge jobNo={task.jobNo} size="sm" />
+              <span className="text-sm font-semibold text-[var(--anna-slate)] truncate">
+                {getCategoryLabel(task.category)}
+              </span>
+            </div>
             <Badge
               variant="outline"
               className={cn(

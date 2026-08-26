@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight, Search, Filter, Star, Shield, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, ACTIVE_CATEGORIES } from "@/lib/constants";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 
 const BOOKING_STATUS_STYLES: Record<string, string> = {
   assigned: "bg-blue-50 text-blue-700 border-blue-200",
@@ -239,6 +240,7 @@ export default function BookingsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--anna-border)] bg-[var(--anna-bg)]">
+                  <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Job #</th>
                   <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Household</th>
                   <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Category</th>
                   <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Vendor</th>
@@ -263,6 +265,9 @@ export default function BookingsPage() {
                       className="border-b border-[var(--anna-border)] last:border-0 hover:bg-[var(--anna-sage-light)]/20 transition-colors cursor-pointer"
                       onClick={() => setDetailTaskId(task?.id as string)}
                     >
+                      <td className="px-4 py-3">
+                        <JobNoBadge jobNo={task?.jobNo as string | null | undefined} size="sm" />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0">

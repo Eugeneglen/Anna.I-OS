@@ -324,6 +324,7 @@ model VendorHouseholdAffinity {
 
 model Task {
   id                 String          @id @default(cuid())
+  jobNo              String?  @unique // #AI-00000001 — human-readable global sequence (stored at creation). Nullable temporarily during backfill.
   householdId        String
   category           ServiceCategory
   status             TaskStatus      @default(CREATED)

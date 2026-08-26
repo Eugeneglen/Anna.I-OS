@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ACTIVE_CATEGORIES } from "@/lib/constants";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export interface VendorScheduleItem {
   ratingComment?: string | null;
   completionNotes?: string | null;
   category: ServiceCategory;
+  jobNo?: string | null;
   instructions?: string | null;
   amountCents: number;
   householdName: string;
@@ -219,9 +221,10 @@ function BookingCard({
         </div>
       )}
 
-      {/* Top row: category + status */}
+      {/* Top row: job no + category + status */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
+          <JobNoBadge jobNo={item.jobNo} size="sm" />
           <CategoryIcon category={item.category} size={16} />
           <span className="text-sm font-semibold text-[var(--anna-slate)]">
             {getCategoryLabel(item.category)}

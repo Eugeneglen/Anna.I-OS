@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
+import { Prisma } from "@prisma/client"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
 import { triggerAutomationOnTaskCreated } from "@/lib/automation"
 import { isCategoryActive } from "@/lib/get-active-categories"
 import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-service"
+import { generateJobNo } from "@/lib/job-number"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -186,37 +188,67 @@ export async function POST(request: Request) {
       update: {},
     })
 
-    const task = await db.task.create({
-      data: {
-        householdId,
-        category,
-        status: TaskStatus.CREATED,
-        instructions: instructions ?? null,
-        instructionsSource: "new",
-        amountCents: finalAmountCents,
-        discountCents,
-        discountCodeId,
-        finalAmountCents: finalAmountCents - discountCents,
-        recurrencePattern: recurrencePattern ?? null,
-        jobTypeId: jobTypeId ?? null,
-        quotationId: quotationId ?? null,
-        scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
-        ...(attachments && attachments.length > 0
-          ? {
-              attachments: {
-                create: attachments.map((a) => ({
-                  fileType: a.fileType,
-                  fileUrl: a.fileUrl,
-                  fileName: a.fileName,
-                  fileSize: a.fileSize,
-                  mimeType: a.mimeType,
-                })),
-              },
-            }
-          : {}),
-      },
-      include: { attachments: true },
-    })
+    // Create the task with an auto-generated jobNo inside a transaction.
+    // Retry on unique-constraint collision (P2002) in case two concurrent
+    // creations pick the same sequence number.
+    const MAX_JOB_NO_RETRIES = 5;
+    let task;
+    let lastCreateError: unknown = null;
+    for (let attempt = 0; attempt < MAX_JOB_NO_RETRIES; attempt++) {
+      try {
+        task = await db.$transaction(async (tx) => {
+          const jobNo = await generateJobNo(tx);
+          return tx.task.create({
+            data: {
+              jobNo,
+              householdId,
+              category,
+              status: TaskStatus.CREATED,
+              instructions: instructions ?? null,
+              instructionsSource: "new",
+              amountCents: finalAmountCents,
+              discountCents,
+              discountCodeId,
+              finalAmountCents: finalAmountCents - discountCents,
+              recurrencePattern: recurrencePattern ?? null,
+              jobTypeId: jobTypeId ?? null,
+              quotationId: quotationId ?? null,
+              scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+              ...(attachments && attachments.length > 0
+                ? {
+                    attachments: {
+                      create: attachments.map((a) => ({
+                        fileType: a.fileType,
+                        fileUrl: a.fileUrl,
+                        fileName: a.fileName,
+                        fileSize: a.fileSize,
+                        mimeType: a.mimeType,
+                      })),
+                    },
+                  }
+                : {}),
+            },
+            include: { attachments: true },
+          });
+        });
+        lastCreateError = null;
+        break;
+      } catch (err) {
+        lastCreateError = err;
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          // unique constraint on jobNo — retry with a fresh sequence
+          continue;
+        }
+        throw err; // unrelated error — rethrow
+      }
+    }
+    if (!task) {
+      console.error("[POST /api/tasks] Failed to generate unique jobNo after retries:", lastCreateError);
+      return NextResponse.json(
+        { error: "Failed to assign a job number. Please retry." },
+        { status: 500 }
+      );
+    }
 
     // Phase 3: Apply the discount redemption now that the task exists
     if (discountCode && discountCodeId && discountCampaignId) {

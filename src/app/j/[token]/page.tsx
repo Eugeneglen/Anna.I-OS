@@ -58,6 +58,7 @@ interface ShareBooking {
   category: string;
   instructions: string | null;
   amountCents: number;
+  jobNo: string | null;
   taskStatus: string;
   address: string | null;
   unitNumber: string | null;
@@ -479,7 +480,7 @@ function JobDetailView({
   token: string;
 }) {
   const { booking } = data;
-  const ref = `#ANN-${booking.id.slice(0, 8).toUpperCase()}`;
+  const ref = booking.jobNo ? `#${booking.jobNo}` : `#ANN-${booking.id.slice(0, 8).toUpperCase()}`;
 
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
   const [addons, setAddons] = useState<Addon[]>([]);

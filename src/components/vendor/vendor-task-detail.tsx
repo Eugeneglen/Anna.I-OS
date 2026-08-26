@@ -35,6 +35,7 @@ import { VendorPhotoUpload } from "./vendor-photo-upload";
 import { cn } from "@/lib/utils";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
 import type { VendorScheduleItem, VendorInfo } from "./vendor-schedule";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 import {
   Clock,
   MapPin,
@@ -421,6 +422,9 @@ function VendorTaskDetailContent({
         <div className="flex items-center gap-3">
           <CategoryIcon category={b.category} size={20} />
           <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <JobNoBadge jobNo={b.task?.jobNo} size="md" />
+            </div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
               {getCategoryLabel(b.category)}
             </h2>

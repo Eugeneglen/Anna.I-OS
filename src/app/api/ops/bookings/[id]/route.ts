@@ -37,7 +37,7 @@ export async function PATCH(
     const booking = await db.booking.findUnique({
       where: { id },
       include: {
-        task: { select: { id: true, status: true } },
+        task: { select: { id: true, status: true, jobNo: true, category: true, amountCents: true } },
       },
     });
 

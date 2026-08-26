@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EscrowActionDialog } from "@/components/ops/escrow-action-dialog";
+import { JobNoBadge } from "@/components/shared/job-no-badge";
 import {
   Dialog,
   DialogContent,
@@ -398,6 +399,11 @@ export function BookingDetailSheet({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <JobNoBadge
+                        jobNo={task?.jobNo as string | null | undefined}
+                        size="sm"
+                        className="bg-white/15 border-white/20 text-white hover:bg-white/25"
+                      />
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-white/20 text-white/90 border border-white/10">
                         {(task?.category as string)?.replace(/_/g, " ")}
                       </span>

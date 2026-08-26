@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
               status: true,
               amountCents: true,
               instructions: true,
+              jobNo: true,
               household: {
                 select: {
                   name: true,
