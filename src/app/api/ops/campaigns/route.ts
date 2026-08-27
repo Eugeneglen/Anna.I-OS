@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { createCampaign, getCampaigns } from "@/lib/marketing/campaign-service";
+import { issueVouchersToSegment } from "@/lib/marketing/voucher-engine";
+import { db } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,6 +44,7 @@ const createSchema = z.object({
   eligibility: z.enum(["FIRST_TIME_HOUSEHOLD_ONLY", "EXISTING_HOUSEHOLD", "ANY"]).optional(),
   minAutonomyLevel: z.number().int().optional(),
   maxAutonomyLevel: z.number().int().optional(),
+  segmentId: z.string().optional(), // Phase 2: link campaign to a segment for voucher issuance
 });
 
 export async function POST(req: NextRequest) {
@@ -64,7 +67,30 @@ export async function POST(req: NextRequest) {
       createdByName: session.name,
     });
 
-    return NextResponse.json({ campaign }, { status: 201 });
+    // Phase 2: If a segmentId is provided, issue per-household vouchers to all segment members
+    let vouchersIssued = 0;
+    if (parsed.data.segmentId) {
+      // Activate the campaign first (so codes can be redeemed)
+      await db.campaign.update({
+        where: { id: campaign.id },
+        data: { status: "ACTIVE" },
+      });
+
+      // Issue vouchers to all segment members
+      const result = await issueVouchersToSegment({
+        segmentId: parsed.data.segmentId,
+        campaignId: campaign.id,
+      });
+      vouchersIssued = result.issued;
+
+      // Link the segment to the campaign
+      await db.segment.update({
+        where: { id: parsed.data.segmentId },
+        data: { campaignId: campaign.id },
+      });
+    }
+
+    return NextResponse.json({ campaign, vouchersIssued }, { status: 201 });
   } catch (error) {
     console.error("[/api/ops/campaigns POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

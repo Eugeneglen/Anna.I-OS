@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CAMPAIGN_QUERY_KEYS } from "./campaign-styles";
+import { SegmentSelector } from "./segment-selector";
 
 // ============================================================
 // Anna.I — Ops Campaign Create Dialog
@@ -100,6 +101,7 @@ export function CampaignCreateDialog({
   const [maxRedemptions, setMaxRedemptions] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [segmentId, setSegmentId] = useState(""); // Phase 2: link to segment
   const [minOrderValue, setMinOrderValue] = useState("");
   const [maxDiscountCap, setMaxDiscountCap] = useState("");
   const [stackable, setStackable] = useState(false);
@@ -124,6 +126,7 @@ export function CampaignCreateDialog({
     setMinOrderValue("");
     setMaxDiscountCap("");
     setStackable(false);
+    setSegmentId("");
     setFieldErrors({});
   }
 
@@ -209,6 +212,7 @@ export function CampaignCreateDialog({
     if (minCents !== undefined) payload.minOrderValueCents = minCents;
     const maxCents = dollarsToCents(maxDiscountCap);
     if (maxCents !== undefined) payload.maxDiscountCapCents = maxCents;
+    if (segmentId) payload.segmentId = segmentId;
 
     mutation.mutate(payload);
   }
@@ -246,6 +250,16 @@ export function CampaignCreateDialog({
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
               Campaign
             </p>
+            {/* Phase 2: Target Segment (optional) */}
+            <div className="space-y-1">
+              <Label className="text-xs">Target Segment (optional)</Label>
+              <SegmentSelector value={segmentId} onChange={setSegmentId} />
+              {segmentId && (
+                <p className="text-[10px] text-[var(--anna-sage-dark)]">
+                  Per-household vouchers will be auto-issued to all segment members on creation.
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1 col-span-2">
                 <Label className="text-xs">Name *</Label>
