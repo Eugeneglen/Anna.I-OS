@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, LogOut, User } from "lucide-react";
+import { Bell, LayoutDashboard, Layers, Brain, ListChecks, Landmark, Settings, Home, LogOut, User, Ticket } from "lucide-react";
 import { useAnnaStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import { RealtimeToasts } from "@/components/anna/realtime-toasts";
 const TABS: { key: TabType; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "services", label: "Services", icon: Layers },
+  { key: "vouchers", label: "Vouchers", icon: Ticket },
   { key: "autonomy", label: "Autonomy", icon: Brain },
   { key: "activity", label: "Activity", icon: ListChecks },
   { key: "escrow", label: "Escrow", icon: Landmark },

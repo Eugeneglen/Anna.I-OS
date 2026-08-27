@@ -10,6 +10,7 @@ import { AutonomyPanel } from "@/components/anna/autonomy-panel";
 import { ActivityTab } from "@/components/anna/activity-tab";
 import { EscrowPanel } from "@/components/anna/escrow-panel";
 import { SettingsPanel } from "@/components/anna/settings-panel";
+import { MyVouchers } from "@/components/anna/my-vouchers";
 import { OnboardingWizard, type OnboardingHousehold } from "@/components/anna/onboarding-wizard";
 import { useAnnaStore } from "@/lib/store";
 import { WithErrorBoundary } from "@/components/error-boundary";
@@ -18,6 +19,7 @@ import { AnimatePresence, motion } from "framer-motion";
 const VIEWS: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
   services: TaskServices,
+  vouchers: MyVouchers,
   autonomy: AutonomyPanel,
   activity: ActivityTab,
   escrow: EscrowPanel,
