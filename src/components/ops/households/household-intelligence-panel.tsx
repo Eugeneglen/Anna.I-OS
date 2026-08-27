@@ -2,6 +2,20 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Home, Users, AlertCircle, Calendar, Sparkles, MapPin } from "lucide-react";
+import {
+  HOME_TYPE_LABELS,
+  HDB_SIZE_LABELS,
+  OCCUPANT_LABELS,
+  MEMBER_LABELS,
+  PET_LABELS,
+  SCHEDULE_LABELS,
+  PAIN_POINT_LABELS,
+  FREQUENCY_LABELS,
+  DAY_LABELS,
+  TIME_LABELS,
+  AUTONOMY_LABELS,
+  ACQUISITION_LABELS,
+} from "@/lib/household-labels";
 import { formatDate, formatDateTime } from "@/lib/ops-format";
 
 // ============================================================
@@ -18,96 +32,6 @@ import { formatDate, formatDateTime } from "@/lib/ops-format";
 // ============================================================
 
 // ── Label maps (mirrored from household-profile-section.tsx) ──
-
-const HOME_TYPE_LABELS: Record<string, string> = {
-  HDB: "HDB Flat",
-  CONDO: "Condominium",
-  LANDED: "Landed Property",
-  TERRACE: "Terrace House",
-  OTHER: "Other",
-};
-
-const HDB_SIZE_LABELS: Record<string, string> = {
-  "2ROOM": "2-Room",
-  "3ROOM": "3-Room",
-  "4ROOM": "4-Room",
-  "5ROOM": "5-Room",
-  EXEC: "Executive",
-};
-
-const OCCUPANT_LABELS: Record<string, string> = {
-  "1": "1 (Solo)",
-  "2": "2 (Couple)",
-  "3-4": "3–4 (Small family)",
-  "5+": "5+ (Large family)",
-};
-
-const PET_LABELS: Record<string, string> = {
-  DOGS: "Dogs",
-  CATS: "Cats",
-  SMALL: "Small Animals",
-  OTHERS: "Others",
-};
-
-const SCHEDULE_LABELS: Record<string, string> = {
-  HOME: "Everyone's usually home",
-  MIXED: "Mixed schedule",
-  OUT: "Usually out during the day",
-};
-
-const MEMBER_LABELS: Record<string, string> = {
-  ADULTS: "Working Adults",
-  CHILDREN: "Young Children",
-  TEENS: "Teenagers",
-  ELDERLY: "Elderly",
-  PETS: "Pets",
-};
-
-const PAIN_POINT_LABELS: Record<string, string> = {
-  CLEANING: "Cleaning & tidying",
-  AIRCON: "Air-con servicing",
-  REPAIRS: "Repairs & maintenance",
-  LAUNDRY: "Laundry",
-  PLANNING: "Planning & scheduling",
-  FINDING: "Finding reliable providers",
-};
-
-const FREQUENCY_LABELS: Record<string, string> = {
-  WEEKLY: "Weekly",
-  FORTNIGHTLY: "Fortnightly",
-  MONTHLY: "Monthly",
-  QUARTERLY: "Quarterly",
-  AD_HOC: "Ad hoc",
-  AS_NEEDED: "As needed",
-};
-
-const DAY_LABELS: Record<string, string> = {
-  ANY: "Any day",
-  WEEKDAY: "Weekdays",
-  WEEKEND: "Weekends",
-};
-
-const TIME_LABELS: Record<string, string> = {
-  MORNING: "Morning",
-  AFTERNOON: "Afternoon",
-  EVENING: "Evening",
-  FLEXIBLE: "Flexible",
-};
-
-const AUTONOMY_LABELS: Record<string, string> = {
-  "1": "Remind me",
-  "2": "Suggest",
-  "3": "Prepare",
-  "4": "Automate",
-};
-
-const ACQUISITION_LABELS: Record<string, string> = {
-  PILOT_COHORT: "Pilot Cohort",
-  PUBLIC_CODE: "Public Code",
-  PARTNERSHIP_REFERRAL: "Partnership Referral",
-  ORGANIC: "Organic",
-  OTHER: "Other",
-};
 
 // ── Types ──
 

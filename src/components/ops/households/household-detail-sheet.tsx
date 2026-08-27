@@ -34,6 +34,7 @@ import { AUTONOMY_LEVEL_NAMES } from "@/lib/constants";
 import { formatCents, formatDateTime } from "@/lib/ops-format";
 import { SUBSCRIPTION_STYLES } from "./households-styles";
 import { HouseholdIntelligencePanel } from "./household-intelligence-panel";
+import { DownloadButton } from "./download-button";
 
 // ============================================================
 // Anna.I — Ops Household Detail Sheet
@@ -252,15 +253,18 @@ export function HouseholdDetailSheet({
                   </Button>
                 </div>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl border-[var(--anna-border)] ml-auto"
-                  onClick={startEditing}
-                >
-                  <Pencil size={14} className="mr-1" />
-                  Edit
-                </Button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <DownloadButton householdId={householdInfo.id as string} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl border-[var(--anna-border)]"
+                    onClick={startEditing}
+                  >
+                    <Pencil size={14} className="mr-1" />
+                    Edit
+                  </Button>
+                </div>
               )}
             </SheetHeader>
 

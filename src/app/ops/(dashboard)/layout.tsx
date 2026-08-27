@@ -28,6 +28,7 @@ import {
   CreditCard,
   Shield,
   Megaphone,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,7 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; active: boolea
   { label: "Analytics", href: "/ops/analytics", icon: BarChart3, active: true, permission: "analytics:view" },
   { label: "Bookings", href: "/ops/bookings", icon: Calendar, active: true, permission: "bookings:view" },
   { label: "Households", href: "/ops/households", icon: Home, active: true, permission: "households:view" },
+  { label: "Intelligence", href: "/ops/households/intelligence", icon: Sparkles, active: true, permission: "households:view" },
   { label: "Vendors", href: "/ops/vendors", icon: Users, active: true, permission: "vendors:view" },
   { label: "Escrow", href: "/ops/escrow", icon: Wallet, active: true, permission: "escrow:view" },
   { label: "Config", href: "/ops/config", icon: Settings, active: true, permission: "config:view" },
