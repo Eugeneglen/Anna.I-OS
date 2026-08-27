@@ -22,6 +22,100 @@ function isAllowedField(key: string): key is AllowedField {
   return (ALLOWED_FIELDS as readonly string[]).includes(key);
 }
 
+// GET /api/ops/households/[id] — Fetch household detail (ops only, auth-gated)
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    const household = await db.household.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        address: true,
+        postalCode: true,
+        unitNumber: true,
+        activeCategories: true,
+        preferences: true,
+        onboardingStep: true,
+        onboardingCompletedAt: true,
+        onboardingProfile: true,
+        acquisitionSource: true,
+        acquisitionCampaignId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!household) {
+      return NextResponse.json({ error: "Household not found" }, { status: 404 });
+    }
+
+    const [members, tasks, subscriptions, categoryAutonomy] = await Promise.all([
+      db.familyMember.findMany({
+        where: { householdId: id },
+        orderBy: { createdAt: "asc" },
+      }),
+      db.task.findMany({
+        where: {
+          householdId: id,
+          OR: [
+            { cancelledAt: null },
+            { status: { not: "PREDICTED" } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          jobType: { select: { id: true, name: true, slug: true } },
+          quotation: { select: { id: true, totalCents: true, breakdown: true } },
+          bookings: {
+            include: {
+              vendor: {
+                select: {
+                  id: true, name: true, email: true, phone: true,
+                  categories: true, status: true,
+                },
+              },
+            },
+          },
+          verificationPhotos: true,
+          escrowEntries: true,
+          attachments: true,
+        },
+      }),
+      db.subscription.findMany({
+        where: { householdId: id },
+      }),
+      db.householdCategoryAutonomy.findMany({
+        where: { householdId: id },
+        orderBy: { category: "asc" },
+      }),
+    ]);
+
+    return NextResponse.json({
+      household,
+      members,
+      tasks,
+      subscriptions,
+      categoryAutonomy,
+    });
+  } catch (error) {
+    console.error("GET /api/ops/households/[id] error:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
 // PATCH /api/ops/households/[id] — Update a household (admin only)
 export async function PATCH(
   req: NextRequest,

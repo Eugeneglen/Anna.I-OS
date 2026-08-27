@@ -67,15 +67,19 @@ export default function HouseholdsPage() {
       )
     : households;
 
-  // Detail query
+  // Detail query — auto-refreshes every 5s so ops sees preference
+  // updates from the household app within 5 seconds (same DB, no sync needed)
+  // Uses the ops-auth-gated endpoint (not the public /api/households/[id])
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ["ops-household-detail", selectedId],
     queryFn: async () => {
-      const res = await fetch(`/api/households/${selectedId}`);
+      const res = await fetch(`/api/ops/households/${selectedId}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     enabled: !!selectedId,
+    refetchInterval: 5000, // re-fetch every 5 seconds for near-real-time sync
+    refetchOnWindowFocus: true, // re-fetch when ops user switches tabs back
   });
 
   const detail = detailData || null;

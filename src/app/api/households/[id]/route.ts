@@ -134,6 +134,8 @@ export async function GET(
         onboardingStep: true,
         onboardingCompletedAt: true,
         onboardingProfile: true,
+        acquisitionSource: true,
+        acquisitionCampaignId: true,
         createdAt: true,
         updatedAt: true,
       },

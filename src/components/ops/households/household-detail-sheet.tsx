@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { AUTONOMY_LEVEL_NAMES } from "@/lib/constants";
 import { formatCents, formatDateTime } from "@/lib/ops-format";
 import { SUBSCRIPTION_STYLES } from "./households-styles";
+import { HouseholdIntelligencePanel } from "./household-intelligence-panel";
 
 // ============================================================
 // Anna.I — Ops Household Detail Sheet
@@ -419,6 +420,15 @@ export function HouseholdDetailSheet({
                 )}
               </div>
             </div>
+
+            {/* Household Intelligence Panel (onboarding profile) */}
+            <HouseholdIntelligencePanel
+              onboardingProfile={householdInfo.onboardingProfile as Record<string, unknown> | null}
+              acquisitionSource={(householdInfo.acquisitionSource as string) || null}
+              acquisitionCampaignId={(householdInfo.acquisitionCampaignId as string) || null}
+              onboardingCompletedAt={(householdInfo.onboardingCompletedAt as string) || null}
+              updatedAt={(householdInfo.updatedAt as string) || null}
+            />
 
             {/* Autonomy Levels */}
             {categoryAutonomy.length > 0 && (
