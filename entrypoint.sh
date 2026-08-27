@@ -89,6 +89,14 @@ npx tsx scripts/backfill-jobno.ts 2>&1 || echo "  ⚠️  Backfill skipped (non-
 echo "  ✅ Job numbers ready"
 
 # ─────────────────────────────────────────────────────
+# 3c. Backfill household cached stats (idempotent)
+# ─────────────────────────────────────────────────────
+echo ""
+echo "▶ Step 3c: Backfilling household stats (idempotent)..."
+npx tsx scripts/backfill-household-stats.ts 2>&1 || echo "  ⚠️  Backfill skipped (non-fatal)"
+echo "  ✅ Household stats ready"
+
+# ─────────────────────────────────────────────────────
 # 4. Start the Next.js server
 # ─────────────────────────────────────────────────────
 echo ""

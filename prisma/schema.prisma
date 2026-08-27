@@ -189,6 +189,12 @@ model Household {
   acquisitionSource     AcquisitionSource @default(ORGANIC) // pilot_cohort | public_code | partnership_referral | organic | other
   acquisitionCampaignId String? // FK to Campaign (nullable — organic has no campaign)
 
+  // Phase 1: Marketing intelligence cached fields (updated by behaviour engine)
+  marketingConsent   Boolean  @default(true) // PDPA consent for marketing comms
+  lastOrderAt        DateTime? // cached: last COMPLETED/VERIFIED task date
+  totalOrders        Int      @default(0) // cached: count of completed tasks
+  totalSpentCents    Int      @default(0) // cached: sum of finalAmountCents on completed tasks
+
   members          FamilyMember[]
   tasks            Task[]
   subscriptions    Subscription[]
@@ -196,6 +202,9 @@ model Household {
   vendorAffinity   VendorHouseholdAffinity[]
   notifications    Notification[]
   anomalies        Anomaly[]
+  vouchers         Voucher[]
+  segmentMembers   SegmentMember[]
+  attributions     CampaignAttribution[]
   quotations       Quotation[]
   addresses        Address[]
 }
@@ -941,9 +950,13 @@ model Campaign {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
-  discountRule DiscountRule?
-  codes        DiscountCode[]
-  redemptions  CodeRedemption[]
+  discountRule    DiscountRule?
+  codes           DiscountCode[]
+  redemptions     CodeRedemption[]
+  vouchers        Voucher[]
+  attributions    CampaignAttribution[]
+  events          CampaignEvent[]
+  segments        Segment[]
 
   @@index([status])
   @@index([type])
@@ -971,22 +984,25 @@ model DiscountRule {
 // ── DiscountCode ──
 
 model DiscountCode {
-  id            String    @id @default(cuid())
-  code          String    @unique // uppercase, indexed
-  campaignId    String
-  batchId       String? // groups codes generated together
-  maxUses       Int? // null = unlimited (within campaign constraints)
-  usesRemaining Int? // decremented on redemption (null = unlimited)
-  expiresAt     DateTime?
-  isActive      Boolean   @default(true) // manual kill-switch
-  createdAt     DateTime  @default(now())
+  id                    String    @id @default(cuid())
+  code                  String    @unique // uppercase, indexed
+  campaignId            String
+  batchId               String? // groups codes generated together
+  assignedHouseholdId   String? // if set, this code is exclusively for this household (targeted voucher)
+  maxUses               Int? // null = unlimited (within campaign constraints)
+  usesRemaining         Int? // decremented on redemption (null = unlimited)
+  expiresAt             DateTime?
+  isActive              Boolean   @default(true) // manual kill-switch
+  createdAt             DateTime  @default(now())
 
   campaign    Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   redemptions CodeRedemption[]
+  vouchers   Voucher[]
 
   @@index([campaignId])
   @@index([batchId])
   @@index([isActive])
+  @@index([assignedHouseholdId])
 }
 
 // ── CodeRedemption (audit trail) ──
@@ -1018,4 +1034,136 @@ model PlatformConfig {
   updatedAt DateTime @updatedAt
 
   @@map("platform_config")
+}
+
+// ======================== INTELLIGENT MARKETING (Phase 1) ========================
+
+// ── Voucher (wallet entry — a discount code assigned to a specific household) ──
+
+model Voucher {
+  id              String       @id @default(cuid())
+  householdId     String
+  discountCodeId  String
+  campaignId      String
+  status          VoucherStatus @default(CLAIMED)
+  claimedAt       DateTime     @default(now())
+  usedAt          DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  revokedReason   String?
+  notifiedAt      DateTime?
+  viewedAt       DateTime?
+
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  discountCode DiscountCode  @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  campaign     Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, discountCodeId])
+  @@index([householdId, status])
+  @@index([campaignId])
+  @@index([status, expiresAt])
+}
+
+enum VoucherStatus {
+  CLAIMED    // issued to household, not yet used
+  USED       // redeemed on an order
+  EXPIRED    // past expiry date
+  REVOKED    // cancelled by ops
+}
+
+// ── Segment (dynamic customer segment definition) ──
+
+model Segment {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  status          SegmentStatus @default(ACTIVE)
+  filters         Json          // SegmentFilters JSON
+  campaignId      String?       // linked campaign (optional)
+  memberCount     Int           @default(0)
+  lastComputedAt  DateTime?
+  createdById     String?
+  createdByName   String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  campaign  Campaign?       @relation(fields: [campaignId], references: [id])
+  members   SegmentMember[]
+
+  @@index([status])
+  @@index([campaignId])
+}
+
+enum SegmentStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// ── SegmentMember (dynamic membership) ──
+
+model SegmentMember {
+  id          String   @id @default(cuid())
+  segmentId   String
+  householdId String
+  reason      Json?    // snapshot of why this household qualifies
+  joinedAt    DateTime @default(now())
+
+  segment    Segment   @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  household  Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentId, householdId])
+  @@index([householdId])
+}
+
+// ── CampaignAttribution (multi-touch attribution) ──
+
+model CampaignAttribution {
+  id            String   @id @default(cuid())
+  householdId   String
+  campaignId    String
+  taskId        String?
+  touchpoint    AttributionTouchpoint
+  weight        Float    @default(1.0)
+  attributedAt  DateTime @default(now())
+
+  household  Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, campaignId])
+  @@index([campaignId, touchpoint])
+}
+
+enum AttributionTouchpoint {
+  CODE_REDEEMED
+  VOUCHER_CLAIMED
+  VOUCHER_USED
+  SEGMENT_TARGETED
+}
+
+// ── CampaignEvent (engagement tracking) ──
+
+model CampaignEvent {
+  id          String   @id @default(cuid())
+  campaignId  String
+  householdId String?
+  eventType   CampaignEventType
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, eventType])
+  @@index([householdId])
+}
+
+enum CampaignEventType {
+  CAMPAIGN_ACTIVATED
+  CODE_GENERATED
+  VOUCHER_ISSUED
+  VOUCHER_VIEWED
+  VOUCHER_REDEEMED
+  VOUCHER_EXPIRED
+  VOUCHER_REVOKED
+  ORDER_PLACED
+  REVENUE_GENERATED
 }
