@@ -95,8 +95,6 @@ export async function GET(request: NextRequest) {
               id: true,
               description: true,
               amountCents: true,
-              discountCents: true,
-              finalAmountCents: true,
               status: true,
             },
           },
