@@ -247,6 +247,8 @@ async function executeGetJobDetails(
         select: {
           category: true,
           amountCents: true,
+          discountCents: true,
+          finalAmountCents: true,
           instructions: true,
           scheduledStart: true,
           household: {
@@ -303,8 +305,8 @@ async function executeGetJobDetails(
       status: booking.status,
       category: getCategoryLabel(booking.task.category),
       scheduledTime: fmtDateTime(booking.scheduledStart),
-      amount: sgd(booking.task.amountCents),
-      yourPayout: sgd(booking.task.amountCents * 0.9),
+      amount: sgd(booking.task.finalAmountCents || booking.task.amountCents),
+      yourPayout: sgd(booking.escrowEntries[0]?.vendorPayoutCents ?? Math.round((booking.task.finalAmountCents || booking.task.amountCents) * 0.9)),
       instructions: booking.task.instructions || null,
       customer: booking.task.household.name,
       address: `${booking.task.household.address}${booking.task.household.unitNumber ? ` #${booking.task.household.unitNumber}` : ""}`,

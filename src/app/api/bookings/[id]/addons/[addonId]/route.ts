@@ -132,6 +132,9 @@ export async function PATCH(
           taskId: addon.booking.taskId,
           bookingId,
           amountCents: addon.amountCents,
+          originalAmountCents: 0,     // addons don't have discounts — 0 = no discount
+          discountCents: 0,
+          discountFundedBy: "PLATFORM",
           state: "HELD",
           commissionRate,
           commissionCents: addonCommissionCents,

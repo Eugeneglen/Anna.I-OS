@@ -457,6 +457,9 @@ model EscrowLedger {
   taskId                String
   bookingId             String?
   amountCents           Int
+  originalAmountCents   Int  @default(0) // pre-discount amount (for audit; 0 = no discount applied)
+  discountCents         Int  @default(0) // discount amount captured in this escrow entry
+  discountFundedBy      String  @default("PLATFORM") // "PLATFORM" | "VENDOR" | "CAMPAIGN" — who absorbs the discount
   state                 EscrowState @default(HELD)
   commissionRate        Float       @default(10.0)
   commissionCents       Int

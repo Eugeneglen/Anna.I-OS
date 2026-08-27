@@ -140,7 +140,10 @@ export interface EscrowLedger {
   id: string;
   taskId: string;
   bookingId?: string | null;
-  amountCents: number;
+  amountCents: number;              // the HELD amount (post-discount)
+  originalAmountCents: number;      // pre-discount amount (0 = no discount was applied)
+  discountCents: number;            // discount amount captured in this escrow entry
+  discountFundedBy: string;        // "PLATFORM" | "VENDOR" | "CAMPAIGN"
   state: EscrowState;
   commissionRate: number;
   commissionCents: number;

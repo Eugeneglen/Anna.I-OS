@@ -569,9 +569,17 @@ function VendorTaskDetailContent({
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--anna-slate-light)]">Job Amount</span>
-          <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-            {formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}
-          </span>
+          <div className="text-right">
+            {(b.discountCents || 0) > 0 && (
+              <div className="text-[10px] text-[var(--anna-muted)] mb-0.5">
+                <span className="line-through">{formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}</span>
+                <span className="text-emerald-600 ml-1">−{formatSgd(b.discountCents)}</span>
+              </div>
+            )}
+            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+              {formatSgd((b.finalAmountCents || b.amountCents) + (b.approvedAddonsTotal || 0))}
+            </span>
+          </div>
         </div>
         {(b.approvedAddonsTotal || 0) > 0 && (
           <div className="border-t border-[var(--anna-border)]/40 pt-2 space-y-1.5">

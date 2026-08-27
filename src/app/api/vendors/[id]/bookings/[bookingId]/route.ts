@@ -95,9 +95,12 @@ export async function PATCH(
         task: {
           select: {
             id: true,
+            jobNo: true,
             category: true,
             householdId: true,
             amountCents: true,
+            discountCents: true,
+            finalAmountCents: true,
             scheduledStart: true,
           },
         },
@@ -112,16 +115,26 @@ export async function PATCH(
     // ────────────────────────────────────────────────
     if (action === "accept") {
       const task = booking.task
-      const amountCents = task.amountCents
-      const commissionCents = Math.round((amountCents * PLATFORM_COMMISSION_RATE) / 100)
-      const vendorPayoutCents = amountCents - commissionCents
+      // Phase 0 FIX: Use finalAmountCents (post-discount) for escrow, NOT amountCents (pre-discount).
+      // Use ?? (nullish coalescing) instead of || to handle the case where finalAmountCents is 0
+      // (a 100% discount would make it 0, which is a valid amount — || would incorrectly fall back).
+      // But since finalAmountCents is non-nullable with @default(0), we check if a discount was applied.
+      const hasDiscount = (task.discountCents || 0) > 0
+      const escrowAmountCents = hasDiscount ? task.finalAmountCents : task.amountCents
+      const discountCents = task.discountCents || 0
+      const originalAmountCents = task.amountCents
+      const commissionCents = Math.round((escrowAmountCents * PLATFORM_COMMISSION_RATE) / 100)
+      const vendorPayoutCents = escrowAmountCents - commissionCents
 
       // Hold escrow (this is the ONLY place escrow is created)
       await db.escrowLedger.create({
         data: {
           taskId: task.id,
           bookingId,
-          amountCents,
+          amountCents: escrowAmountCents,       // the actual held amount (post-discount)
+          originalAmountCents,                   // pre-discount amount (for audit)
+          discountCents,                         // discount captured in this escrow
+          discountFundedBy: "PLATFORM",          // platform absorbs the discount cost
           state: "HELD",
           commissionRate: PLATFORM_COMMISSION_RATE,
           commissionCents,
@@ -161,7 +174,7 @@ export async function PATCH(
             channel: NotificationChannel.WHATSAPP,
             eventType: NotificationEventType.VENDOR_ACCEPTED,
             title: "Provider Accepted",
-            body: `A service provider has accepted your ${task.category.toLowerCase()} task. Escrow of SGD $${(amountCents / 100).toFixed(2)} has been secured.`,
+            body: `A service provider has accepted your ${task.category.toLowerCase()} task. Escrow of SGD $${(escrowAmountCents / 100).toFixed(2)} has been secured.`,
             status: NotificationStatus.PENDING,
             referenceType: "task",
             referenceId: task.id,

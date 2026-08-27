@@ -42,6 +42,8 @@ export async function GET() {
             select: {
               category: true,
               amountCents: true,
+              discountCents: true,
+              finalAmountCents: true,
               instructions: true,
               jobNo: true,
               household: { select: { name: true, address: true, unitNumber: true } },
@@ -133,6 +135,8 @@ export async function GET() {
       category: b.task.category,
       jobNo: b.task.jobNo,
       amountCents: b.task.amountCents,
+      discountCents: b.task.discountCents,
+      finalAmountCents: b.task.finalAmountCents,
       instructions: b.task.instructions,
       scheduledStart: b.scheduledStart.toISOString(),
       scheduledEnd: b.scheduledEnd?.toISOString() ?? null,

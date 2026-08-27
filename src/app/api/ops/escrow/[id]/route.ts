@@ -93,7 +93,7 @@ export async function PATCH(
         // action — all entries must be released together.
         const allHeldEntries = await tx.escrowLedger.findMany({
           where: { taskId: task.id, state: EscrowState.HELD },
-          select: { id: true, amountCents: true, vendorPayoutCents: true },
+          select: { id: true, amountCents: true, vendorPayoutCents: true, discountCents: true, originalAmountCents: true },
         });
         const updatedEscrows = [];
         for (const entry of allHeldEntries) {
@@ -112,6 +112,8 @@ export async function PATCH(
 
         // Create audit log
         const totalAmountCents = allHeldEntries.reduce((s, e) => s + e.amountCents, 0);
+        const totalDiscountCents = allHeldEntries.reduce((s, e) => s + (e.discountCents || 0), 0);
+        const totalOriginalCents = allHeldEntries.reduce((s, e) => s + (e.originalAmountCents || 0), 0);
         await tx.auditLog.create({
           data: {
             userId: session.userId,
@@ -122,6 +124,8 @@ export async function PATCH(
             metadata: {
               taskId: task.id,
               amountCents: totalAmountCents,
+              originalAmountCents: totalOriginalCents,
+              discountCents: totalDiscountCents,
               entriesReleased: allHeldEntries.length,
               resolution: resolution || "Released by ops",
             },

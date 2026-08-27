@@ -68,6 +68,8 @@ export async function GET(request: NextRequest) {
               category: true,
               status: true,
               amountCents: true,
+              discountCents: true,
+              finalAmountCents: true,
               instructions: true,
               jobNo: true,
               household: {
@@ -93,6 +95,8 @@ export async function GET(request: NextRequest) {
               id: true,
               description: true,
               amountCents: true,
+              discountCents: true,
+              finalAmountCents: true,
               status: true,
             },
           },

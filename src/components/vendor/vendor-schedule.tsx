@@ -48,6 +48,8 @@ export interface VendorScheduleItem {
   jobNo?: string | null;
   instructions?: string | null;
   amountCents: number;
+  discountCents?: number;
+  finalAmountCents?: number;
   householdName: string;
   address: string;
   verificationPhotoCount: number;

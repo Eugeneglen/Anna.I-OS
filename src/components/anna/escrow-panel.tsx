@@ -101,8 +101,14 @@ function EscrowCard({ item }: { item: EscrowItem }) {
         </p>
       )}
 
-      {/* Amount + remaining payable (Fix #10) */}
+      {/* Amount + remaining payable (Fix #10) + discount info (Phase 0) */}
       <div className="text-right">
+        {escrow.originalAmountCents > 0 && escrow.discountCents > 0 && (
+          <div className="mb-0.5 text-[10px] text-[var(--anna-muted)] leading-tight">
+            <span className="line-through">{formatSgd(escrow.originalAmountCents)}</span>
+            <span className="text-emerald-600 ml-1">−{formatSgd(escrow.discountCents)}</span>
+          </div>
+        )}
         <p className="font-data text-sm font-bold text-[var(--anna-slate)]">
           {formatSgd(escrow.amountCents)}
         </p>
