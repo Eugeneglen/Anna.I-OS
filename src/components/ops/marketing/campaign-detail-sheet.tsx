@@ -38,6 +38,7 @@ import {
   CAMPAIGN_QUERY_KEYS,
 } from "./campaign-styles";
 import { CampaignGenerateCodesDialog } from "./campaign-generate-codes-dialog";
+import { CampaignPerformance } from "./campaign-performance";
 import type {
   CampaignDetailResponse,
   CampaignStatus,
@@ -372,6 +373,11 @@ export function CampaignDetailSheet({
                     ))}
                   </div>
                 )}
+            </section>
+
+            {/* ── Section 3b: Campaign Performance (Phase 3) ── */}
+            <section className="space-y-2">
+              <CampaignPerformance campaignId={selectedId} />
             </section>
 
             {/* ── Section 4: Codes ── */}

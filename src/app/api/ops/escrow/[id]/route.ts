@@ -369,6 +369,18 @@ export async function PATCH(
           disputeResolution: resolution || "Dispute upheld — refund issued",
         }).catch(() => {});
 
+        // Phase 3: Restore voucher if the task had a discount code applied
+        // This is non-fatal — if the restore fails, the voucher stays USED
+        // (the household can contact ops to restore it manually)
+        if (task.discountCodeId) {
+          try {
+            const { restoreVoucherOnCancellation } = await import("@/lib/marketing/voucher-engine");
+            await restoreVoucherOnCancellation(task.id);
+          } catch (restoreError) {
+            console.error("[escrow resolve_refund] Failed to restore voucher:", restoreError);
+          }
+        }
+
         return NextResponse.json({
           refund: refundResult,
           escrow: await db.escrowLedger.findUnique({ where: { id } }),

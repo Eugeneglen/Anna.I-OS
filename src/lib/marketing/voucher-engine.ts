@@ -45,7 +45,7 @@ export async function issueVoucher(params: {
       campaignId: params.campaignId,
       status: "CLAIMED",
       expiresAt: params.customExpiry || code.expiresAt,
-      notifiedAt: new Date(), // will be set when notification is sent
+      notifiedAt: null, // will be set when the VOUCHER_ISSUED notification is sent
     },
   });
 
@@ -357,49 +357,51 @@ export async function revokeVoucher(voucherId: string, reason: string): Promise<
 // ── Restore voucher on task cancellation ──
 
 export async function restoreVoucherOnCancellation(taskId: string): Promise<void> {
-  const task = await db.task.findUnique({
-    where: { id: taskId },
-    select: { discountCodeId: true, householdId: true },
-  });
-
-  if (!task || !task.discountCodeId) return;
-
-  // Find the voucher for this household + code
-  const voucher = await db.voucher.findFirst({
-    where: {
-      householdId: task.householdId,
-      discountCodeId: task.discountCodeId,
-      status: "USED",
-    },
-  });
-
-  if (!voucher) return;
-
-  // Restore the voucher to CLAIMED
-  await db.voucher.update({
-    where: { id: voucher.id },
-    data: { status: "CLAIMED", usedAt: null },
-  });
-
-  // Restore usesRemaining on the code
-  const code = await db.discountCode.findUnique({
-    where: { id: task.discountCodeId },
-    select: { usesRemaining: true },
-  });
-  if (code && code.usesRemaining !== null) {
-    await db.discountCode.update({
-      where: { id: task.discountCodeId },
-      data: { usesRemaining: code.usesRemaining + 1 },
+  await db.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      select: { discountCodeId: true, householdId: true },
     });
-  }
 
-  // Record event
-  await db.campaignEvent.create({
-    data: {
-      campaignId: voucher.campaignId,
-      householdId: task.householdId,
-      eventType: "VOUCHER_REVOKED",
-      metadata: { voucherId: voucher.id, reason: "Task cancelled", taskId },
-    },
+    if (!task || !task.discountCodeId) return;
+
+    // Find the voucher for this household + code
+    const voucher = await tx.voucher.findFirst({
+      where: {
+        householdId: task.householdId,
+        discountCodeId: task.discountCodeId,
+        status: "USED",
+      },
+    });
+
+    if (!voucher) return;
+
+    // Restore the voucher to CLAIMED
+    await tx.voucher.update({
+      where: { id: voucher.id },
+      data: { status: "CLAIMED", usedAt: null },
+    });
+
+    // Restore usesRemaining on the code
+    const code = await tx.discountCode.findUnique({
+      where: { id: task.discountCodeId },
+      select: { usesRemaining: true },
+    });
+    if (code && code.usesRemaining !== null) {
+      await tx.discountCode.update({
+        where: { id: task.discountCodeId },
+        data: { usesRemaining: code.usesRemaining + 1 },
+      });
+    }
+
+    // Record event
+    await tx.campaignEvent.create({
+      data: {
+        campaignId: voucher.campaignId,
+        householdId: task.householdId,
+        eventType: "VOUCHER_REVOKED",
+        metadata: { voucherId: voucher.id, reason: "Task cancelled", taskId },
+      },
+    });
   });
 }

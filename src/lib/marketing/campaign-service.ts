@@ -397,6 +397,45 @@ export async function applyRedemption(params: {
       },
     });
 
+    // Phase 3 FIX (C1): If a Voucher exists for this household+code, mark it as USED
+    // + record VOUCHER_USED + CODE_REDEEMED attribution + campaign events
+    const voucher = await tx.voucher.findUnique({
+      where: {
+        householdId_discountCodeId: {
+          householdId: params.householdId,
+          discountCodeId: params.codeId,
+        },
+      },
+    }).catch(() => null);
+
+    if (voucher) {
+      await tx.voucher.update({
+        where: { id: voucher.id },
+        data: { status: "USED", usedAt: new Date() },
+      });
+    }
+
+    // Record attribution (CODE_REDEEMED or VOUCHER_USED depending on whether a voucher existed)
+    await tx.campaignAttribution.create({
+      data: {
+        householdId: params.householdId,
+        campaignId: params.campaignId,
+        taskId: params.bookingId || null,
+        touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
+        weight: 1.0,
+      },
+    }).catch(() => {}); // non-fatal — attribution is analytics, not transactional
+
+    // Record campaign event
+    await tx.campaignEvent.create({
+      data: {
+        campaignId: params.campaignId,
+        householdId: params.householdId,
+        eventType: "VOUCHER_REDEEMED",
+        metadata: { code: params.code, discountCents: params.discountCents, taskId: params.bookingId },
+      },
+    }).catch(() => {});
+
     // Update household acquisition source if this is their first redemption
     const household = await tx.household.findUnique({
       where: { id: params.householdId },
