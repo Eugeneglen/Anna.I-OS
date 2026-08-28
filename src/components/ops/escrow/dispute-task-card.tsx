@@ -1,14 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ShieldAlert, Loader2, RotateCcw } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Loader2, RotateCcw, Ticket } from "lucide-react";
 import { formatSgd, formatDateTime } from "@/lib/ops-format";
 
 // ============================================================
 // Anna.I — Ops Escrow Dispute Task Card
 // ============================================================
 // Red-bordered card showing a disputed task with the dispute
-// reason, optional resolution, and Dismiss/Partial Refund/Refund action buttons.
+// reason, optional resolution, and Dismiss/Partial Refund/Refund/Issue Voucher action buttons.
 // ============================================================
 
 interface DisputeTaskCardProps {
@@ -16,6 +16,7 @@ interface DisputeTaskCardProps {
   onDismiss: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   onRefund: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   onPartialRefund?: (escrowId: string, amount: number, alreadyRefundedCents: number, reason?: string | null) => void;
+  onIssueVoucher?: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   isActing: boolean;
 }
 
@@ -24,6 +25,7 @@ export function DisputeTaskCard({
   onDismiss,
   onRefund,
   onPartialRefund,
+  onIssueVoucher,
   isActing,
 }: DisputeTaskCardProps) {
   const household = task.household as Record<string, unknown>;
@@ -109,7 +111,7 @@ export function DisputeTaskCard({
 
       {/* Actions only if still DISPUTED */}
       {escrow?.state === "DISPUTED" && (
-        <div className="flex gap-2 pt-1">
+        <div className="flex gap-2 pt-1 flex-wrap">
           <Button
             size="sm"
             variant="outline"
@@ -120,7 +122,7 @@ export function DisputeTaskCard({
               escrow.disputeReason as string | null
             )}
             disabled={isActing}
-            className="flex-1 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50 text-xs gap-1.5"
+            className="flex-1 min-w-[80px] rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50 text-xs gap-1.5"
           >
             {isActing ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
             Dismiss
@@ -136,10 +138,27 @@ export function DisputeTaskCard({
                 escrow.disputeReason as string | null
               )}
               disabled={isActing}
-              className="flex-1 rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50 text-xs gap-1.5"
+              className="flex-1 min-w-[80px] rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50 text-xs gap-1.5"
             >
               {isActing ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
               Partial
+            </Button>
+          )}
+          {onIssueVoucher && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onIssueVoucher(
+                task.id as string,
+                escrow.id as string,
+                orderTotalCents,
+                escrow.disputeReason as string | null
+              )}
+              disabled={isActing}
+              className="flex-1 min-w-[80px] rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50 text-xs gap-1.5"
+            >
+              {isActing ? <Loader2 size={12} className="animate-spin" /> : <Ticket size={12} />}
+              Voucher
             </Button>
           )}
           <Button
@@ -152,7 +171,7 @@ export function DisputeTaskCard({
               escrow.disputeReason as string | null
             )}
             disabled={isActing}
-            className="flex-1 rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1.5"
+            className="flex-1 min-w-[80px] rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1.5"
           >
             {isActing ? <Loader2 size={12} className="animate-spin" /> : <ShieldAlert size={12} />}
             Refund

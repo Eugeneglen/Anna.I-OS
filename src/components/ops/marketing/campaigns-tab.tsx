@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Megaphone, Plus } from "lucide-react";
+import { Megaphone, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { OpsSearchInput } from "@/components/ops/ops-page-header";
 import { OpsEmptyState } from "@/components/ops/ops-empty-state";
 import { OpsLoadingRows } from "@/components/ops/ops-loading-skeleton";
@@ -19,6 +20,10 @@ import type { CampaignListItem, CampaignListResponse } from "@/components/ops/ma
 
 // ============================================================
 // Campaigns Tab — existing campaign list (extracted from page)
+// ============================================================
+// Adds a toggle to hide/show SERVICE_RECOVERY campaigns. These are
+// auto-created by the dispute-resolution flow (one per compensation
+// voucher); they clutter the list, so we hide them by default.
 // ============================================================
 
 const STATUS_PILL_OPTIONS: { value: string; label: string }[] = [
@@ -38,6 +43,7 @@ export function CampaignsTab() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [showServiceRecovery, setShowServiceRecovery] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -53,8 +59,21 @@ export function CampaignsTab() {
 
   const allCampaigns: CampaignListItem[] = data?.campaigns || [];
 
+  // Split into marketing campaigns (default) vs service-recovery
+  // compensation vouchers (hidden unless toggled on).
+  const marketingCampaigns = useMemo(
+    () => allCampaigns.filter((c) => c.type !== "SERVICE_RECOVERY"),
+    [allCampaigns],
+  );
+  const serviceRecoveryCampaigns = useMemo(
+    () => allCampaigns.filter((c) => c.type === "SERVICE_RECOVERY"),
+    [allCampaigns],
+  );
+
+  const visibleCampaigns = showServiceRecovery ? allCampaigns : marketingCampaigns;
+
   const filteredCampaigns = useMemo(() => {
-    let list = allCampaigns;
+    let list = visibleCampaigns;
     if (statusFilter !== "ALL") {
       list = list.filter((c) => c.status === statusFilter);
     }
@@ -68,24 +87,24 @@ export function CampaignsTab() {
       );
     }
     return list;
-  }, [allCampaigns, statusFilter, search]);
+  }, [visibleCampaigns, statusFilter, search]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: allCampaigns.length, DRAFT: 0, ACTIVE: 0, PAUSED: 0, ENDED: 0 };
-    for (const c of allCampaigns) counts[c.status] = (counts[c.status] || 0) + 1;
+    const counts: Record<string, number> = { ALL: visibleCampaigns.length, DRAFT: 0, ACTIVE: 0, PAUSED: 0, ENDED: 0 };
+    for (const c of visibleCampaigns) counts[c.status] = (counts[c.status] || 0) + 1;
     return counts;
-  }, [allCampaigns]);
+  }, [visibleCampaigns]);
 
   const summary = useMemo(() => {
     let activeCount = 0, draftCount = 0, totalRedemptions = 0, totalCodes = 0;
-    for (const c of allCampaigns) {
+    for (const c of marketingCampaigns) {
       if (c.status === "ACTIVE") activeCount += 1;
       if (c.status === "DRAFT") draftCount += 1;
       totalRedemptions += c.redemptionsCount || 0;
       totalCodes += c._count?.codes || 0;
     }
     return { activeCount, draftCount, totalRedemptions, totalCodes };
-  }, [allCampaigns]);
+  }, [marketingCampaigns]);
 
   const pillOptions = STATUS_PILL_OPTIONS.map((opt) => ({ ...opt, count: statusCounts[opt.value] ?? 0 }));
 
@@ -95,8 +114,14 @@ export function CampaignsTab() {
         <div>
           <h2 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">Campaigns</h2>
           <p className="text-sm text-[var(--anna-muted)]">
-            <span className="font-data">{allCampaigns.length}</span> campaigns ·{" "}
+            <span className="font-data">{marketingCampaigns.length}</span> campaigns ·{" "}
             <span className="font-data">{summary.activeCount}</span> active
+            {serviceRecoveryCampaigns.length > 0 && (
+              <>
+                {" · "}
+                <span className="font-data text-violet-600">{serviceRecoveryCampaigns.length}</span> service-recovery
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -121,6 +146,28 @@ export function CampaignsTab() {
       />
 
       <OpsStatusPillRow options={pillOptions} value={statusFilter} onChange={setStatusFilter} />
+
+      {/* Toggle: show service-recovery vouchers */}
+      {serviceRecoveryCampaigns.length > 0 && (
+        <div className="flex items-center gap-2 p-3 rounded-xl border border-violet-200 bg-violet-50/40">
+          <Sparkles size={14} className="text-violet-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-violet-700">
+              Service-recovery vouchers
+            </p>
+            <p className="text-[10px] text-[var(--anna-muted)]">
+              Auto-created when ops issues a compensation voucher during dispute resolution. {serviceRecoveryCampaigns.length} total.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-[var(--anna-muted)]">Show</span>
+            <Switch
+              checked={showServiceRecovery}
+              onCheckedChange={setShowServiceRecovery}
+            />
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <OpsLoadingRows count={4} rowClassName="h-16" />

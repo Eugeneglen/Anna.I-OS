@@ -33,7 +33,23 @@ export async function GET(
           },
         },
         verificationPhotos: true,
-        escrowEntries: true,
+        escrowEntries: {
+          include: {
+            compensationVouchers: {
+              include: {
+                discountCode: { select: { code: true, isActive: true } },
+                campaign: {
+                  select: {
+                    id: true, name: true,
+                    discountRule: {
+                      select: { discountType: true, discountValue: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         attachments: true,
         jobType: { select: { id: true, name: true, slug: true } },
         quotation: { select: { id: true, totalCents: true, breakdown: true } },

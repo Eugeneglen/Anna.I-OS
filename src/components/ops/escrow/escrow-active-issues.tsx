@@ -23,6 +23,7 @@ interface EscrowActiveIssuesProps {
   onDismiss: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   onRefund: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   onPartialRefund?: (escrowId: string, amount: number, alreadyRefundedCents: number, reason?: string | null) => void;
+  onIssueVoucher?: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
 }
 
 export function EscrowActiveIssues({
@@ -35,6 +36,7 @@ export function EscrowActiveIssues({
   onDismiss,
   onRefund,
   onPartialRefund,
+  onIssueVoucher,
 }: EscrowActiveIssuesProps) {
   return (
     <div className="space-y-6">
@@ -92,6 +94,7 @@ export function EscrowActiveIssues({
                 onDismiss={onDismiss}
                 onRefund={onRefund}
                 onPartialRefund={onPartialRefund}
+                onIssueVoucher={onIssueVoucher}
                 isActing={isActing}
               />
             ))}

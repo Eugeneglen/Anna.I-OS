@@ -147,6 +147,11 @@ export async function getHouseholdVouchers(householdId: string) {
     claimedAt: v.claimedAt,
     usedAt: v.usedAt,
     expiresAt: v.expiresAt,
+    // Service-recovery audit fields (populated when this voucher was issued
+    // as dispute compensation; null otherwise).
+    issuedFromTaskId: v.issuedFromTaskId ?? null,
+    compensationReason: v.compensationReason ?? null,
+    issuedByName: v.issuedByName ?? null,
   }));
 }
 

@@ -25,6 +25,10 @@ interface Voucher {
   claimedAt: string;
   usedAt: string | null;
   expiresAt: string | null;
+  // Service-recovery audit fields (null when not a compensation voucher)
+  issuedFromTaskId?: string | null;
+  compensationReason?: string | null;
+  issuedByName?: string | null;
 }
 
 interface MyVouchersProps {
@@ -66,7 +70,7 @@ function VoucherCard({
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <span className="text-lg font-bold text-[var(--anna-sage-dark)]">
               {formatDiscount(voucher)}
             </span>
@@ -85,10 +89,26 @@ function VoucherCard({
                 Expired
               </Badge>
             )}
+            {voucher.issuedFromTaskId && (
+              <Badge
+                variant="outline"
+                className="text-[9px] border-violet-300 bg-violet-100 text-violet-700 cursor-help"
+                title={voucher.compensationReason
+                  ? `Issued by Anna.I as compensation — ${voucher.compensationReason}`
+                  : "Issued by Anna.I as compensation for a service issue"}
+              >
+                Compensation
+              </Badge>
+            )}
           </div>
-          <p className="text-xs font-medium text-[var(--anna-slate)] truncate">
+          <p className="text-xs font-medium text-[var(--anna-slate)] truncate" title={voucher.campaignName}>
             {voucher.campaignName}
           </p>
+          {voucher.compensationReason && (
+            <p className="text-[10px] text-[var(--anna-muted)] italic mt-0.5 line-clamp-2">
+              “{voucher.compensationReason}”
+            </p>
+          )}
         </div>
         {isAvailable && voucher.expiresAt && (
           <div className="text-right shrink-0">

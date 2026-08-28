@@ -123,6 +123,7 @@ enum NotificationEventType {
   ADDON_REQUESTED
   ADDON_APPROVED
   ADDON_REJECTED
+  VOUCHER_COMPENSATION_ISSUED
 }
 
 enum NotificationStatus {
@@ -485,10 +486,12 @@ model EscrowLedger {
   disputeResolution     String?
   disputeResolvedBy     String?
   disputeResolvedAt     DateTime?
+  voucherCompensationCents Int  @default(0) // cumulative voucher $ issued as service-recovery compensation
 
   task    Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id])
   refunds Refund[]
+  compensationVouchers Voucher[] @relation("VoucherCompensation")
 
   @@index([taskId])
   @@index([state])
@@ -895,6 +898,7 @@ enum CampaignType {
   UPGRADE
   REFERRAL
   PUBLIC_PROMO
+  SERVICE_RECOVERY
   OTHER
 }
 
@@ -1054,14 +1058,24 @@ model Voucher {
   notifiedAt      DateTime?
   viewedAt       DateTime?
 
+  // ── Service-recovery audit fields (set when this voucher is issued as dispute compensation) ──
+  issuedFromEscrowId   String?  // FK → EscrowLedger.id (nullable; SetNull when escrow is hard-deleted)
+  issuedFromTaskId     String?  // denormalised task ID for quick lookups (no FK to avoid cycles)
+  issuedById           String?  // ops user ID who authorised the compensation
+  issuedByName         String?  // ops user name (denormalised for audit display)
+  compensationReason   String?  // human-readable reason for the compensation
+
   household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
   discountCode DiscountCode  @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
   campaign     Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  escrowLedger EscrowLedger? @relation("VoucherCompensation", fields: [issuedFromEscrowId], references: [id], onDelete: SetNull)
 
   @@unique([householdId, discountCodeId])
   @@index([householdId, status])
   @@index([campaignId])
   @@index([status, expiresAt])
+  @@index([issuedFromEscrowId])
+  @@index([issuedFromTaskId])
 }
 
 enum VoucherStatus {

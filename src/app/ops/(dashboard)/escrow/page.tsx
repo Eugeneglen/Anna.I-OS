@@ -47,7 +47,7 @@ export default function EscrowPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState<
-    "release" | "resolve_dismiss" | "resolve_refund" | "partial_refund"
+    "release" | "resolve_dismiss" | "resolve_refund" | "partial_refund" | "resolve_voucher"
   >("release");
   const [dialogEscrowId, setDialogEscrowId] = useState("");
   const [dialogAmount, setDialogAmount] = useState(0);
@@ -96,17 +96,27 @@ export default function EscrowPage() {
       resolution,
       refundAmountCents,
       idempotencyKey,
+      voucherAmountCents,
+      voucherRefundAmountCents,
+      voucherExpiryDays,
     }: {
       escrowId: string;
       action: string;
       resolution: string;
       refundAmountCents?: number;
       idempotencyKey?: string;
+      voucherAmountCents?: number;
+      voucherRefundAmountCents?: number;
+      voucherExpiryDays?: number;
     }) => {
       const res = await fetch(`/api/ops/escrow/${escrowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resolution, refundAmountCents, idempotencyKey }),
+        body: JSON.stringify({
+          action, resolution,
+          refundAmountCents, idempotencyKey,
+          voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Action failed" }));
@@ -178,19 +188,48 @@ export default function EscrowPage() {
     setDialogOpen(true);
   };
 
+  const openIssueVoucherDialog = (
+    taskId: string,
+    escrowId: string,
+    amount: number,
+    reason?: string | null
+  ) => {
+    setDialogType("resolve_voucher");
+    setDialogEscrowId(escrowId);
+    setDialogAmount(amount);
+    setDialogAlreadyRefunded(0);
+    setDialogDisputeReason(reason || null);
+    setDialogOpen(true);
+  };
+
   const handleDialogSubmit = async (
     escrowId: string,
     action: string,
     resolution: string,
-    options?: { refundAmountCents?: number; idempotencyKey?: string }
+    options?: {
+      refundAmountCents?: number;
+      idempotencyKey?: string;
+      voucherAmountCents?: number;
+      voucherRefundAmountCents?: number;
+      voucherExpiryDays?: number;
+    }
   ) => {
-    await escrowMutation.mutateAsync({
+    const result = await escrowMutation.mutateAsync({
       escrowId,
       action,
       resolution,
       refundAmountCents: options?.refundAmountCents,
       idempotencyKey: options?.idempotencyKey,
+      voucherAmountCents: options?.voucherAmountCents,
+      voucherRefundAmountCents: options?.voucherRefundAmountCents,
+      voucherExpiryDays: options?.voucherExpiryDays,
     });
+    // For resolve_voucher, return the voucher result so the dialog can show
+    // the generated code prominently. For other actions, return undefined.
+    if (action === "resolve_voucher" && result && typeof result === "object" && "code" in result) {
+      return result as { voucherId: string; code: string; expiresAt: string; cashRefundId?: string; isDuplicate?: boolean };
+    }
+    return undefined;
   };
 
   const activeFilterCount = [stateFilter, fromDate, toDate].filter(Boolean).length;
@@ -269,6 +308,7 @@ export default function EscrowPage() {
           onDismiss={openDismissDialog}
           onRefund={openRefundDialog}
           onPartialRefund={openPartialRefundDialog}
+          onIssueVoucher={openIssueVoucherDialog}
         />
       )}
 

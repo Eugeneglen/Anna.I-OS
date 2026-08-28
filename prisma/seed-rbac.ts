@@ -46,6 +46,11 @@ const PERMISSIONS: PermDef[] = [
   { module: "vendors", action: "export", description: "Export vendors" },
 
   // escrow: 6
+  // NOTE: The new "resolve_voucher" service-recovery action (5th escrow action
+  // added in build-service-recovery-voucher) reuses the existing
+  // `escrow:approve` permission — no new permission is needed. The
+  // Suspend/Reactivate/Remove endpoints for compensation vouchers are also
+  // gated by `escrow:approve` (via hasMinRole COORDINATOR check in the route).
   { module: "escrow", action: "view", description: "View escrow transactions" },
   { module: "escrow", action: "create", description: "Create escrow entries" },
   { module: "escrow", action: "edit", description: "Edit escrow entries" },

@@ -5,14 +5,21 @@ import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
 import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
 import { processRefund, RefundError } from "@/lib/payments/refund-service";
+import { issueCompensationVoucher } from "@/lib/marketing/service-recovery";
 
 const escrowActionSchema = z.object({
-  action: z.enum(["release", "resolve_dismiss", "resolve_refund", "partial_refund"]),
+  action: z.enum(["release", "resolve_dismiss", "resolve_refund", "partial_refund", "resolve_voucher"]),
   resolution: z.string().max(500).optional(),
   // For partial_refund: the amount to refund (cents). Required for partial_refund.
   refundAmountCents: z.number().int().positive().optional(),
   // Idempotency key for refund operations (client-supplied, prevents duplicates).
   idempotencyKey: z.string().min(1).max(200).optional(),
+  // For resolve_voucher: the voucher amount (cents). Required for resolve_voucher.
+  voucherAmountCents: z.number().int().positive().optional(),
+  // For resolve_voucher: optional cash refund amount (mixed mode).
+  voucherRefundAmountCents: z.number().int().nonnegative().optional(),
+  // For resolve_voucher: voucher expiry in days (default 90, min 1, max 365).
+  voucherExpiryDays: z.number().int().min(1).max(365).optional(),
 });
 
 export async function PATCH(
@@ -41,7 +48,8 @@ export async function PATCH(
       );
     }
 
-    const { action, resolution, refundAmountCents, idempotencyKey } = parsed.data;
+    const { action, resolution, refundAmountCents, idempotencyKey,
+            voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays } = parsed.data;
 
     // Fetch escrow with task and household
     const escrow = await db.escrowLedger.findUnique({
@@ -450,6 +458,189 @@ export async function PATCH(
 
         return NextResponse.json({
           refund: refundResult,
+          escrow: await db.escrowLedger.findUnique({ where: { id } }),
+        });
+      } catch (e) {
+        if (e instanceof RefundError) {
+          return NextResponse.json(
+            { error: e.message, code: e.code },
+            { status: e.statusCode }
+          );
+        }
+        throw e;
+      }
+    }
+
+    // ── ACTION: Resolve Dispute (Voucher) — issue a marketing voucher as
+    // compensation, then release the escrow to the vendor (vendor gets paid).
+    // Optionally also issues a partial cash refund (mixed mode). Does NOT modify
+    // the existing 4 actions — this is a 5th action added to the enum.
+    if (action === "resolve_voucher") {
+      // Validate required params for resolve_voucher
+      if (!voucherAmountCents) {
+        return NextResponse.json(
+          { error: "voucherAmountCents is required for resolve_voucher" },
+          { status: 400 }
+        );
+      }
+      if (!idempotencyKey) {
+        return NextResponse.json(
+          { error: "idempotencyKey is required for resolve_voucher" },
+          { status: 400 }
+        );
+      }
+      if (!resolution || resolution.trim().length === 0) {
+        return NextResponse.json(
+          { error: "resolution (reason) is required for resolve_voucher" },
+          { status: 400 }
+        );
+      }
+
+      // Validate escrow + task state
+      if (escrow.state !== EscrowState.DISPUTED) {
+        return NextResponse.json(
+          { error: `Escrow is not in DISPUTED state — current state is ${escrow.state}` },
+          { status: 409 }
+        );
+      }
+      if (task.status !== TaskStatus.DISPUTED) {
+        return NextResponse.json(
+          { error: `Task is not DISPUTED — current status is ${task.status}` },
+          { status: 409 }
+        );
+      }
+
+      // Compute orderTotal = sum of ALL escrow entries' amountCents for this task
+      // (base + add-ons, NOT just this entry).
+      const allEscrowEntries = await db.escrowLedger.findMany({
+        where: { taskId: task.id },
+        select: { id: true, amountCents: true, state: true },
+      });
+      const orderTotalCents = allEscrowEntries.reduce(
+        (s, e) => s + e.amountCents, 0
+      );
+
+      // 2x cap validation (also enforced in the service layer, but we do it
+      // here to give a clean 422 before any state changes).
+      const cash = voucherRefundAmountCents || 0;
+      if (voucherAmountCents + cash > 2 * orderTotalCents) {
+        return NextResponse.json(
+          {
+            error: `Total compensation (voucher $${(voucherAmountCents / 100).toFixed(2)} + cash $${(cash / 100).toFixed(2)}) exceeds the 2× order value cap ($${((2 * orderTotalCents) / 100).toFixed(2)}).`,
+            code: "COMPENSATION_CAP_EXCEEDED",
+          },
+          { status: 422 }
+        );
+      }
+
+      try {
+        const result = await issueCompensationVoucher({
+          householdId: task.householdId,
+          taskId: task.id,
+          escrowLedgerId: id,
+          voucherAmountCents,
+          refundAmountCents: cash > 0 ? cash : undefined,
+          reason: resolution,
+          issuedById: session.userId,
+          issuedByName: session.name,
+          expiryDays: voucherExpiryDays,
+          idempotencyKey,
+          orderTotalCents,
+        });
+
+        // After success: set ALL HELD escrow entries → RELEASED (vendor paid).
+        // Task → ESCROW_RELEASED. This mirrors the "release" action's pattern.
+        await db.$transaction(async (tx) => {
+          const heldEntries = await tx.escrowLedger.findMany({
+            where: { taskId: task.id, state: EscrowState.DISPUTED },
+            select: { id: true },
+          });
+          const now = new Date();
+          for (const entry of heldEntries) {
+            await tx.escrowLedger.update({
+              where: { id: entry.id },
+              data: {
+                state: EscrowState.RELEASED,
+                releasedAt: now,
+                disputeResolvedBy: session.name,
+                disputeResolvedAt: now,
+              },
+            });
+          }
+          await tx.task.update({
+            where: { id: task.id },
+            data: {
+              status: TaskStatus.ESCROW_RELEASED,
+              escrowReleasedAt: now,
+            },
+          });
+          // Unpause autonomy — household shouldn't be penalised
+          await tx.householdCategoryAutonomy.updateMany({
+            where: {
+              householdId: task.householdId,
+              category: task.category,
+              promotionPaused: true,
+            },
+            data: { promotionPaused: false },
+          });
+        });
+
+        // Create DISPUTE_RESOLVED notification for all household members
+        const members = await db.familyMember.findMany({
+          where: { householdId: task.householdId },
+          select: { id: true },
+        });
+        const expiryDateStr = result.expiresAt.toLocaleDateString("en-SG", {
+          day: "numeric", month: "short", year: "numeric",
+        });
+        const cashText = cash > 0
+          ? ` plus a cash refund of SGD $${(cash / 100).toFixed(2)}`
+          : "";
+        for (const member of members) {
+          await db.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.VOUCHER_COMPENSATION_ISSUED,
+              title: "Dispute resolved — voucher issued",
+              body: `We've issued you a SGD $${(voucherAmountCents / 100).toFixed(2)} voucher (code ${result.code}) for #${task.jobNo ?? "your task"}${cashText}. Valid until ${expiryDateStr}. Apply it at checkout on your next booking.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          }).catch(() => {});
+        }
+
+        // Emit real-time events
+        emitDisputeResolved({
+          taskId: task.id,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          category: task.category,
+          resolution: "voucher",
+          escrowAmountCents: escrow.amountCents,
+        }).catch(() => {});
+        emitEscrowStateChanged({
+          id,
+          state: "RELEASED",
+          previousState: "DISPUTED",
+          amountCents: escrow.amountCents,
+          category: task.category,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          disputeResolution: `Compensated by voucher ${result.code} ($${(voucherAmountCents / 100).toFixed(2)})`,
+        }).catch(() => {});
+
+        return NextResponse.json({
+          voucherId: result.voucherId,
+          code: result.code,
+          campaignId: result.campaignId,
+          expiresAt: result.expiresAt,
+          cashRefundId: result.cashRefundId,
+          isDuplicate: result.isDuplicate,
+          escrowState: "RELEASED",
           escrow: await db.escrowLedger.findUnique({ where: { id } }),
         });
       } catch (e) {

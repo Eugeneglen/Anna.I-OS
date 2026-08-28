@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EscrowActionDialog } from "@/components/ops/escrow-action-dialog";
+import { CompensationVoucherCard, type CompensationVoucher } from "@/components/ops/escrow/compensation-voucher-card";
 import { JobNoBadge } from "@/components/shared/job-no-badge";
 import {
   Dialog,
@@ -43,6 +44,7 @@ import {
   Camera,
   ImageIcon,
   Film,
+  Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -115,7 +117,7 @@ export function BookingDetailSheet({
 
   // Dialog state for escrow actions
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogType, setDialogType] = useState<"release" | "resolve_dismiss" | "resolve_refund" | "partial_refund">("release");
+  const [dialogType, setDialogType] = useState<"release" | "resolve_dismiss" | "resolve_refund" | "partial_refund" | "resolve_voucher">("release");
   const [dialogEscrowId, setDialogEscrowId] = useState("");
   const [dialogAmount, setDialogAmount] = useState(0);
   const [dialogAlreadyRefunded, setDialogAlreadyRefunded] = useState(0);
@@ -151,17 +153,27 @@ export function BookingDetailSheet({
       resolution,
       refundAmountCents,
       idempotencyKey,
+      voucherAmountCents,
+      voucherRefundAmountCents,
+      voucherExpiryDays,
     }: {
       escrowId: string;
       action: string;
       resolution: string;
       refundAmountCents?: number;
       idempotencyKey?: string;
+      voucherAmountCents?: number;
+      voucherRefundAmountCents?: number;
+      voucherExpiryDays?: number;
     }) => {
       const res = await fetch(`/api/ops/escrow/${escrowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, resolution, refundAmountCents, idempotencyKey }),
+        body: JSON.stringify({
+          action, resolution,
+          refundAmountCents, idempotencyKey,
+          voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Action failed" }));
@@ -173,7 +185,6 @@ export function BookingDetailSheet({
       queryClient.invalidateQueries({ queryKey: ["ops-task-detail", taskId] });
       queryClient.invalidateQueries({ queryKey: ["ops-escrow"] });
       queryClient.invalidateQueries({ queryKey: ["ops-bookings"] });
-      setDialogOpen(false);
     },
   });
 
@@ -351,19 +362,43 @@ export function BookingDetailSheet({
     setDialogOpen(true);
   };
 
+  const openIssueVoucherDialog = () => {
+    if (!escrow) return;
+    setDialogType("resolve_voucher");
+    setDialogEscrowId(escrow.id as string);
+    setDialogAmount(orderTotalCents);
+    setDialogAlreadyRefunded(0);
+    setDialogDisputeReason(escrow.disputeReason as string | null);
+    setDialogOpen(true);
+  };
+
   const handleDialogSubmit = async (
     escrowId: string,
     action: string,
     resolution: string,
-    options?: { refundAmountCents?: number; idempotencyKey?: string }
+    options?: {
+      refundAmountCents?: number;
+      idempotencyKey?: string;
+      voucherAmountCents?: number;
+      voucherRefundAmountCents?: number;
+      voucherExpiryDays?: number;
+    }
   ) => {
-    await escrowAction.mutateAsync({
+    const result = await escrowAction.mutateAsync({
       escrowId,
       action,
       resolution,
       refundAmountCents: options?.refundAmountCents,
       idempotencyKey: options?.idempotencyKey,
+      voucherAmountCents: options?.voucherAmountCents,
+      voucherRefundAmountCents: options?.voucherRefundAmountCents,
+      voucherExpiryDays: options?.voucherExpiryDays,
     });
+    // For resolve_voucher, return the result so the dialog can show the code.
+    if (action === "resolve_voucher" && result && typeof result === "object" && "code" in result) {
+      return result as { voucherId: string; code: string; expiresAt: string; cashRefundId?: string; isDuplicate?: boolean };
+    }
+    return undefined;
   };
 
   // Determine which actions to show
@@ -909,6 +944,27 @@ export function BookingDetailSheet({
                           </div>
                         </div>
                       )}
+
+                      {/* Compensation vouchers (issued for this escrow) */}
+                      {(() => {
+                        const allVouchers = (allEscrowEntries as Record<string, unknown>[])
+                          .flatMap((e) => (e.compensationVouchers as Record<string, unknown>[]) || []);
+                        if (allVouchers.length === 0) return null;
+                        return (
+                          <div className="pt-2 space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">
+                              Compensation Vouchers ({allVouchers.length})
+                            </p>
+                            {allVouchers.map((v) => (
+                              <CompensationVoucherCard
+                                key={v.id as string}
+                                voucher={v as unknown as CompensationVoucher}
+                                taskJobNo={task?.jobNo as string | null | undefined}
+                              />
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </section>
                 )}
@@ -948,6 +1004,13 @@ export function BookingDetailSheet({
                             >
                               <ShieldAlert size={16} />
                               Dismiss Dispute
+                            </Button>
+                            <Button
+                              onClick={openIssueVoucherDialog}
+                              className="w-full rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium gap-2"
+                            >
+                              <Ticket size={16} />
+                              Issue Voucher
                             </Button>
                             <Button
                               onClick={openRefundDialog}
