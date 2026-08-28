@@ -37,7 +37,11 @@ const stateConfig: Record<
 
 interface EscrowEntryInfo {
   amountCents: number;
+  originalAmountCents?: number;
+  discountCents?: number;
   refundCents?: number;
+  commissionCents?: number;
+  vendorPayoutCents?: number;
 }
 
 interface EscrowBadgeProps {
@@ -71,9 +75,29 @@ export function EscrowBadge({
     ? entries.reduce((sum, e) => sum + (e.refundCents || 0), 0)
     : 0;
 
+  // Sum commission + vendor payout across ALL entries so the household
+  // view matches the vendor + OPS views exactly.
+  const totalCommissionCents = entries && entries.length > 0
+    ? entries.reduce((sum, e) => sum + (e.commissionCents || 0), 0)
+    : 0;
+  const totalVendorPayoutCents = entries && entries.length > 0
+    ? entries.reduce((sum, e) => sum + (e.vendorPayoutCents || 0), 0)
+    : 0;
+
+  // Marketing discount totals (base entry carries the discount; addons = 0)
+  const totalDiscountCents = entries && entries.length > 0
+    ? entries.reduce((sum, e) => sum + (e.discountCents || 0), 0)
+    : 0;
+  const totalOriginalCents = entries && entries.length > 0
+    ? entries.reduce((sum, e) => sum + (e.originalAmountCents || 0), 0)
+    : 0;
+  const hasDiscount = totalDiscountCents > 0 && totalOriginalCents > 0;
+
   const remainingCents = orderTotalCents - totalRefundCents;
   const hasMultipleEntries = entries && entries.length > 1;
   const hasRefund = totalRefundCents > 0;
+  const isReleased = state === "RELEASED";
+  const isRefunded = state === "REFUNDED";
 
   return (
     <div className="space-y-2">
@@ -96,8 +120,26 @@ export function EscrowBadge({
             </span>
           </div>
 
+          {/* Discount breakdown (when a marketing promo/voucher was applied) */}
+          {hasDiscount && (
+            <div className="space-y-0.5 pl-2 border-l border-[var(--anna-border)] ml-1">
+              <div className="flex items-center justify-between text-[10px] text-[var(--anna-muted)]">
+                <span>Original Amount</span>
+                <span className="font-data line-through">{formatSgd(totalOriginalCents)}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-emerald-600">
+                <span>Promo Discount</span>
+                <span className="font-data">−{formatSgd(totalDiscountCents)}</span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-[var(--anna-slate-light)] font-medium">
+                <span>Held Amount</span>
+                <span className="font-data">{formatSgd(orderTotalCents)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Per-entry breakdown when there are multiple (base + add-ons) */}
-          {hasMultipleEntries && entries && (
+          {hasMultipleEntries && entries && !hasDiscount && (
             <div className="space-y-0.5 pl-2 border-l border-[var(--anna-border)] ml-1">
               {entries.map((e, i) => (
                 <div key={i} className="flex items-center justify-between text-[10px] text-[var(--anna-muted)]">
@@ -108,21 +150,55 @@ export function EscrowBadge({
             </div>
           )}
 
-          {/* Refund + remaining payable (only when a refund has occurred) */}
-          {hasRefund && (
+          {/* Commission + payout breakdown (summed across all entries) */}
+          <div className="flex items-center justify-between text-[10px] text-[var(--anna-muted)] pt-1 border-t border-[var(--anna-border)]">
+            <span>Platform Commission (10%)</span>
+            <span className="font-data">−{formatSgd(totalCommissionCents)}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--anna-muted)]">Your Payout</span>
+            <span className="font-data font-bold text-[var(--anna-slate)]">
+              {formatSgd(totalVendorPayoutCents)}
+            </span>
+          </div>
+
+          {/* Refund + bottom row (PAID / Refunded / Remaining Payable) */}
+          {(hasRefund || isReleased) && (
             <>
-              <div className="flex items-center justify-between text-xs pt-1 border-t border-[var(--anna-border)]">
-                <span className="text-[var(--anna-error)]">Refunded</span>
-                <span className="font-data text-[var(--anna-error)]">
-                  −{formatSgd(totalRefundCents)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--anna-slate)] font-medium">Remaining Payable</span>
-                <span className="font-data font-bold text-[var(--anna-sage-dark)]">
-                  {formatSgd(remainingCents)}
-                </span>
-              </div>
+              {hasRefund && (
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-[var(--anna-border)]">
+                  <span className="text-[var(--anna-error)]">Refunded</span>
+                  <span className="font-data text-[var(--anna-error)]">
+                    −{formatSgd(totalRefundCents)}
+                  </span>
+                </div>
+              )}
+              {isReleased ? (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--anna-success)] font-semibold uppercase tracking-wider">
+                    Paid
+                  </span>
+                  <span className="font-data font-bold text-[var(--anna-success)]">
+                    {formatSgd(totalVendorPayoutCents)}
+                  </span>
+                </div>
+              ) : isRefunded ? (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--anna-warning)] font-semibold uppercase tracking-wider">
+                    Refunded to Household
+                  </span>
+                  <span className="font-data font-bold text-[var(--anna-warning)]">
+                    {formatSgd(remainingCents)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--anna-slate)] font-medium">Remaining Payable</span>
+                  <span className="font-data font-bold text-[var(--anna-sage-dark)]">
+                    {formatSgd(remainingCents)}
+                  </span>
+                </div>
+              )}
             </>
           )}
         </div>

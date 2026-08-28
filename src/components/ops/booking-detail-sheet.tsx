@@ -196,6 +196,27 @@ export function BookingDetailSheet({
   const hasRefund = totalRefundCents > 0;
   const taskStatus = task?.status as string;
   const escrowState = escrow?.state as string;
+  // Sum commission + vendor payout across ALL escrow entries (base + add-ons)
+  // so the OPS view matches the vendor + household views exactly.
+  const totalCommissionCents = allEscrowEntries.reduce(
+    (sum, e) => sum + ((e.commissionCents as number) || 0), 0
+  );
+  const totalVendorPayoutCents = allEscrowEntries.reduce(
+    (sum, e) => sum + ((e.vendorPayoutCents as number) || 0), 0
+  );
+  // Marketing discount totals (base entry carries the discount; addons = 0)
+  const totalDiscountCents = allEscrowEntries.reduce(
+    (sum, e) => sum + ((e.discountCents as number) || 0), 0
+  );
+  const totalOriginalCents = allEscrowEntries.reduce(
+    (sum, e) => sum + ((e.originalAmountCents as number) || 0), 0
+  );
+  const hasDiscount = totalDiscountCents > 0 && totalOriginalCents > 0;
+  // When the escrow has been released (household verified & released the
+  // final agreed amount), the vendor has been paid — show PAID instead of
+  // "Remaining Payable", matching the vendor + household portals.
+  const isReleased = escrowState === "RELEASED";
+  const isRefunded = escrowState === "REFUNDED";
   // Verification photos (before/after) — already returned by /api/tasks/[id]
   const verificationPhotos = (task?.verificationPhotos as Array<{
     id: string;
@@ -740,6 +761,29 @@ export function BookingDetailSheet({
                             </span>
                           </div>
                         )}
+                        {/* Discount breakdown (when a marketing promo/voucher was applied) */}
+                        {hasDiscount && (
+                          <div className="space-y-1 pb-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-[var(--anna-muted)]">Original Amount</span>
+                              <span className="text-[10px] font-data text-[var(--anna-muted)] line-through">
+                                {formatSgd(totalOriginalCents)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-emerald-600">Promo Discount</span>
+                              <span className="text-[10px] font-data text-emerald-600">
+                                −{formatSgd(totalDiscountCents)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-[var(--anna-slate-light)] font-medium">Held Amount</span>
+                              <span className="text-[10px] font-data text-[var(--anna-slate-light)] font-medium">
+                                {formatSgd(orderTotalCents)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-[var(--anna-muted)]">
                             {allEscrowEntries.length > 1 ? "Base escrow" : "Amount"}
@@ -764,7 +808,7 @@ export function BookingDetailSheet({
                             Commission (10%)
                           </span>
                           <span className="text-xs text-[var(--anna-slate-light)] font-data">
-                            -{formatSgd(escrow.commissionCents as number)}
+                            -{formatSgd(totalCommissionCents)}
                           </span>
                         </div>
                         <Separator />
@@ -773,21 +817,44 @@ export function BookingDetailSheet({
                             Vendor Payout
                           </span>
                           <span className="text-sm font-bold text-[var(--anna-sage-dark)] font-data">
-                            {formatSgd(escrow.vendorPayoutCents as number)}
+                            {formatSgd(totalVendorPayoutCents)}
                           </span>
                         </div>
-                        {/* Remaining Payable — orderTotal − totalRefunded */}
-                        {hasRefund && (
+                        {/* Bottom row: PAID when released, Refunded to Household when refunded,
+                            otherwise Remaining Payable. Aligns with vendor + household portals. */}
+                        {(hasRefund || isReleased) && (
                           <>
                             <Separator />
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-[var(--anna-slate)] font-semibold">
-                                Remaining Payable
-                              </span>
-                              <span className="text-sm font-bold text-[var(--anna-sage-dark)] font-data">
-                                {formatSgd(remainingPayableCents)}
-                              </span>
-                            </div>
+                            {isReleased ? (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-[var(--anna-success)] font-semibold uppercase tracking-wider">
+                                  <CheckCircle2 size={11} className="inline mr-1" />
+                                  Paid
+                                </span>
+                                <span className="text-sm font-bold text-[var(--anna-success)] font-data">
+                                  {formatSgd(totalVendorPayoutCents)}
+                                </span>
+                              </div>
+                            ) : isRefunded ? (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-[var(--anna-warning)] font-semibold uppercase tracking-wider">
+                                  <Wallet size={11} className="inline mr-1" />
+                                  Refunded to Household
+                                </span>
+                                <span className="text-sm font-bold text-[var(--anna-warning)] font-data">
+                                  {formatSgd(remainingPayableCents)}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-[var(--anna-slate)] font-semibold">
+                                  Remaining Payable
+                                </span>
+                                <span className="text-sm font-bold text-[var(--anna-sage-dark)] font-data">
+                                  {formatSgd(remainingPayableCents)}
+                                </span>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>

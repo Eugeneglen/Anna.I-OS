@@ -67,6 +67,9 @@ export interface VendorScheduleItem {
     id: string;
     state: string;
     amountCents: number;
+    originalAmountCents?: number;
+    discountCents?: number;
+    discountFundedBy?: string;
     refundCents?: number;
     commissionCents: number;
     vendorPayoutCents: number;
@@ -79,6 +82,9 @@ export interface VendorScheduleItem {
     id: string;
     state: string;
     amountCents: number;
+    originalAmountCents?: number;
+    discountCents?: number;
+    discountFundedBy?: string;
     refundCents?: number;
     commissionCents: number;
     vendorPayoutCents: number;
@@ -218,7 +224,11 @@ function BookingCard({
         <div className="mb-3 rounded-xl bg-gradient-to-r from-[var(--anna-sage)]/8 to-[var(--anna-sage)]/3 border border-[var(--anna-sage)]/15 px-3 py-2 flex items-center gap-2">
           <ShieldCheck size={14} className="text-[var(--anna-sage-dark)] shrink-0" />
           <p className="text-[11px] font-medium text-[var(--anna-sage-dark)]">
-            Payment released — {formatSgd(item.escrow.vendorPayoutCents)} payout
+            Payment released — {formatSgd(
+              (item.escrowEntries ?? []).reduce(
+                (sum, e) => sum + (e.vendorPayoutCents || 0), 0
+              ) || item.escrow.vendorPayoutCents
+            )} payout
           </p>
         </div>
       )}
