@@ -284,7 +284,7 @@ function BookingCard({
       <div className="flex items-center justify-between pt-3 border-t border-[var(--anna-border)]">
         <div className="flex items-center gap-3">
           <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-            {formatSgd(item.amountCents + (item.approvedAddonsTotal || 0))}
+            {formatSgd((item.finalAmountCents || item.amountCents) + (item.approvedAddonsTotal || 0))}
           </span>
           {(item.approvedAddonsTotal || 0) > 0 && (
             <span className="text-[10px] text-[var(--anna-sage-dark)] bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-md">

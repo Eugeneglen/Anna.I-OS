@@ -547,9 +547,17 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
-          <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-            {formatSgd(task.amountCents + approvedAddonsTotal)}
-          </span>
+          <div className="text-right">
+            {(task.discountCents || 0) > 0 && (
+              <div className="text-[10px] text-[var(--anna-muted)] mb-0.5">
+                <span className="line-through">{formatSgd(task.amountCents + approvedAddonsTotal)}</span>
+                <span className="text-emerald-600 ml-1">−{formatSgd(task.discountCents)}</span>
+              </div>
+            )}
+            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+              {formatSgd((task.finalAmountCents || task.amountCents) + approvedAddonsTotal)}
+            </span>
+          </div>
         </div>
         {approvedAddonsTotal > 0 && (
           <div className="border-t border-[var(--anna-border)]/40 pt-2 space-y-1.5">
@@ -558,7 +566,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             </p>
             <div className="flex items-center justify-between text-xs">
               <span className="text-[var(--anna-slate-light)]">Original service</span>
-              <span className="font-data font-medium">{formatSgd(task.amountCents)}</span>
+              <span className="font-data font-medium">{formatSgd(task.finalAmountCents || task.amountCents)}</span>
             </div>
             {approvedAddons.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-xs">
@@ -569,7 +577,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
             <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
               <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
-                {formatSgd(task.amountCents + approvedAddonsTotal)}
+                {formatSgd((task.finalAmountCents || task.amountCents) + approvedAddonsTotal)}
               </span>
             </div>
           </div>

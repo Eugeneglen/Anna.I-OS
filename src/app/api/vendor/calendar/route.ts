@@ -132,9 +132,9 @@ export async function GET(request: NextRequest) {
       ["assigned", "accepted", "in_progress"].includes(b.status),
     ).length;
 
-    // Total revenue = task.amountCents + approved addon amounts
+    // Total revenue = task.finalAmountCents (post-discount) + approved addon amounts
     const totalRevenueCents = bookings.reduce((sum, b) => {
-      let revenue = b.task.amountCents;
+      let revenue = b.task.finalAmountCents || b.task.amountCents;
       if (b.addons && b.addons.length > 0) {
         revenue += b.addons
           .filter((a) => a.status === "approved")
@@ -161,6 +161,8 @@ export async function GET(request: NextRequest) {
         category: b.task.category,
         status: b.task.status,
         amountCents: b.task.amountCents,
+        discountCents: b.task.discountCents,
+        finalAmountCents: b.task.finalAmountCents,
         instructions: b.task.instructions,
         household: b.task.household,
       },

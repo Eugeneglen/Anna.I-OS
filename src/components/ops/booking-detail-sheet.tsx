@@ -682,7 +682,9 @@ export function BookingDetailSheet({
                   const approvedTotal = bookingAddons
                     .filter((a) => a.status === "approved")
                     .reduce((sum, a) => sum + a.amountCents, 0);
-                  const baseAmount = task?.amountCents as number || 0;
+                  // Use finalAmountCents (post-discount) so the OPS add-on breakdown
+                  // matches what the customer actually paid, not the pre-discount original.
+                  const baseAmount = (task?.finalAmountCents as number) || (task?.amountCents as number) || 0;
                   return (
                     <>
                       <Separator />

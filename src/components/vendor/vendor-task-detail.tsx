@@ -663,7 +663,7 @@ function VendorTaskDetailContent({
             </p>
             <div className="flex items-center justify-between text-xs">
               <span className="text-[var(--anna-slate-light)]">Original service</span>
-              <span className="font-data font-medium">{formatSgd(b.amountCents)}</span>
+              <span className="font-data font-medium">{formatSgd(b.finalAmountCents || b.amountCents)}</span>
             </div>
             {(b.addons || [])
               .filter((a) => a.status === "approved")
@@ -676,7 +676,7 @@ function VendorTaskDetailContent({
             <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
               <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
-                {formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}
+                {formatSgd((b.finalAmountCents || b.amountCents) + (b.approvedAddonsTotal || 0))}
               </span>
             </div>
           </div>

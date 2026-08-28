@@ -162,6 +162,8 @@ export async function GET(
       jobNo: b.task.jobNo,
       instructions: b.task.instructions,
       amountCents: b.task.amountCents,
+      discountCents: b.task.discountCents,
+      finalAmountCents: b.task.finalAmountCents,
       householdName: b.task.household.name,
       address: b.task.household.address,
       verificationPhotoCount: b.verificationPhotos.length,

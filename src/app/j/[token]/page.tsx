@@ -59,6 +59,8 @@ interface ShareBooking {
   category: string;
   instructions: string | null;
   amountCents: number;
+  discountCents?: number;
+  finalAmountCents?: number;
   jobNo: string | null;
   taskStatus: string;
   address: string | null;
@@ -763,9 +765,17 @@ function JobDetailView({
         <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-[var(--anna-slate-light)]">Service Amount</span>
-            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-              {formatSgd(booking.amountCents + approvedAddonsTotal)}
-            </span>
+            <div className="text-right">
+              {(booking.discountCents || 0) > 0 && (
+                <div className="text-[10px] text-[var(--anna-muted)] mb-0.5">
+                  <span className="line-through">{formatSgd(booking.amountCents + approvedAddonsTotal)}</span>
+                  <span className="text-emerald-600 ml-1">−{formatSgd(booking.discountCents)}</span>
+                </div>
+              )}
+              <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+                {formatSgd((booking.finalAmountCents || booking.amountCents) + approvedAddonsTotal)}
+              </span>
+            </div>
           </div>
           {approvedAddonsTotal > 0 && (
             <div className="border-t border-[var(--anna-border)]/40 pt-2 space-y-1.5">
@@ -774,7 +784,7 @@ function JobDetailView({
               </p>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[var(--anna-slate-light)]">Original service</span>
-                <span className="font-data font-medium">{formatSgd(booking.amountCents)}</span>
+                <span className="font-data font-medium">{formatSgd(booking.finalAmountCents || booking.amountCents)}</span>
               </div>
               {addons
                 .filter((a) => a.status === "approved")
@@ -787,7 +797,7 @@ function JobDetailView({
               <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
                 <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
                 <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
-                  {formatSgd(booking.amountCents + approvedAddonsTotal)}
+                  {formatSgd((booking.finalAmountCents || booking.amountCents) + approvedAddonsTotal)}
                 </span>
               </div>
             </div>

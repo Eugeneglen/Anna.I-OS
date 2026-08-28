@@ -48,6 +48,8 @@ interface TodayJob {
   status: string;
   category: ServiceCategory;
   amountCents: number;
+  discountCents?: number;
+  finalAmountCents?: number;
   instructions?: string | null;
   scheduledStart: string;
   scheduledEnd?: string | null;
@@ -156,7 +158,7 @@ function TodayJobCard({
           <span>{time}</span>
         </div>
         <span className="font-data text-sm font-bold text-[var(--anna-slate)]">
-          {formatSgd(job.amountCents)}
+          {formatSgd(job.finalAmountCents || job.amountCents)}
         </span>
       </div>
     </div>

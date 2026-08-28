@@ -54,6 +54,8 @@ export async function GET(
         category: booking.task.category,
         instructions: booking.task.instructions,
         amountCents: booking.task.amountCents,
+        discountCents: booking.task.discountCents,
+        finalAmountCents: booking.task.finalAmountCents,
         jobNo: booking.task.jobNo,
         taskStatus: booking.task.status,
         address: booking.task.household?.address || null,
