@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client"
 import { ServiceCategory, TaskStatus } from "@prisma/client"
 import { triggerAutomationOnTaskCreated } from "@/lib/automation"
 import { isCategoryActive } from "@/lib/get-active-categories"
-import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-service"
+import { validateRedemption } from "@/lib/marketing/campaign-service"
 import { generateJobNo } from "@/lib/job-number"
 
 const attachmentSchema = z.object({
@@ -21,7 +21,7 @@ const createTaskSchema = z.object({
   category: z.nativeEnum(ServiceCategory),
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
-  discountCode: z.string().optional(), // Phase 3: optional promo code
+  discountCode: z.string().optional(), // optional promo code
   recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
   scheduledStart: z.string().optional().refine(
     (val) => {
@@ -36,6 +36,11 @@ const createTaskSchema = z.object({
   attachments: z.array(attachmentSchema).optional(),
   jobTypeId: z.string().nullable().optional(),
   quotationId: z.string().nullable().optional(),
+  // Idempotency: a client-supplied key. If a task with the same
+  // householdId + idempotencyKey exists within the last 60s, the existing
+  // task is returned unchanged — preventing double-clicks / network retries
+  // from spawning duplicate bookings (audit proposal E).
+  idempotencyKey: z.string().max(200).optional(),
 })
 
 // GET /api/tasks?householdId=xxx
@@ -105,7 +110,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId } = parsed.data
+    const { householdId, category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
 
     // Category active guard — reject if category is currently unavailable
     const categoryActive = await isCategoryActive(category)
@@ -120,6 +125,26 @@ export async function POST(request: Request) {
     const household = await db.household.findUnique({ where: { id: householdId } })
     if (!household) {
       return NextResponse.json({ error: "Household not found" }, { status: 404 })
+    }
+
+    // Idempotency: if the client supplied an idempotencyKey AND we already
+    // have a task for this household with that key created within the last
+    // 60 seconds, return the existing task instead of creating a duplicate.
+    // (Audit proposal E §3.) We deliberately allow replay AFTER 60s so a
+    // stuck retry loop eventually does create a fresh task.
+    if (idempotencyKey) {
+      const sixtySecondsAgo = new Date(Date.now() - 60_000)
+      const existing = await db.task.findFirst({
+        where: {
+          householdId,
+          idempotencyKey,
+          createdAt: { gte: sixtySecondsAgo },
+        },
+        include: { attachments: true },
+      })
+      if (existing) {
+        return NextResponse.json({ task: existing, idempotentReplay: true }, { status: 200 })
+      }
     }
 
     // If quotationId provided, validate it exists and belongs to this household
@@ -149,7 +174,10 @@ export async function POST(request: Request) {
       finalAmountCents = quotation.totalCents;
     }
 
-    // Phase 3: Validate discount code if provided (before creating the task)
+    // Validate discount code if provided (before creating the task).
+    // The result is fed into the same transaction that creates the task
+    // AND applies the redemption — so if applyRedemption fails, the task
+    // creation rolls back too (audit proposal E §1, §2).
     let discountCents = 0;
     let discountCodeId: string | null = null;
     let discountCampaignId: string | null = null;
@@ -188,17 +216,22 @@ export async function POST(request: Request) {
       update: {},
     })
 
-    // Create the task with an auto-generated jobNo inside a transaction.
-    // Retry on unique-constraint collision (P2002) in case two concurrent
-    // creations pick the same sequence number.
+    // ── Two-phase commit (audit proposal E §1, §2) ──
+    // Wrap the task.create + applyRedemption in a SINGLE transaction so a
+    // failure in applyRedemption (e.g. concurrent redemption took the last
+    // use between validate and apply) rolls back the task creation too.
+    // Previously the task was created in its own transaction and the
+    // redemption ran separately — leaving a task without the discount but
+    // a "success" toast to the user.
     const MAX_JOB_NO_RETRIES = 5;
     let task;
     let lastCreateError: unknown = null;
+    let redemptionFailureReason: string | null = null;
     for (let attempt = 0; attempt < MAX_JOB_NO_RETRIES; attempt++) {
       try {
         task = await db.$transaction(async (tx) => {
           const jobNo = await generateJobNo(tx);
-          return tx.task.create({
+          const created = await tx.task.create({
             data: {
               jobNo,
               householdId,
@@ -213,6 +246,7 @@ export async function POST(request: Request) {
               recurrencePattern: recurrencePattern ?? null,
               jobTypeId: jobTypeId ?? null,
               quotationId: quotationId ?? null,
+              idempotencyKey: idempotencyKey ?? null,
               scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
               ...(attachments && attachments.length > 0
                 ? {
@@ -230,43 +264,143 @@ export async function POST(request: Request) {
             },
             include: { attachments: true },
           });
+
+          // Apply the discount redemption INSIDE the same transaction.
+          // If this throws, the entire task creation rolls back — the user
+          // sees a 422 with the failure reason, not a "success" toast with
+          // a silently-dropped discount.
+          if (discountCode && discountCodeId && discountCampaignId) {
+            try {
+              // Decrement uses remaining
+              const code = await tx.discountCode.findUnique({
+                where: { id: discountCodeId },
+              });
+              if (code && code.usesRemaining !== null) {
+                if (code.usesRemaining <= 0) {
+                  throw new Error("This voucher's usage limit has been reached");
+                }
+                await tx.discountCode.update({
+                  where: { id: discountCodeId },
+                  data: { usesRemaining: code.usesRemaining - 1 },
+                });
+              }
+
+              // Increment campaign redemption count
+              await tx.campaign.update({
+                where: { id: discountCampaignId },
+                data: { redemptionsCount: { increment: 1 } },
+              });
+
+              // Write redemption record
+              await tx.codeRedemption.create({
+                data: {
+                  discountCodeId,
+                  campaignId: discountCampaignId,
+                  householdId,
+                  bookingId: created.id,
+                  discountAppliedCents: discountCents,
+                },
+              });
+
+              // If a Voucher exists for this household+code, mark it USED
+              const voucher = await tx.voucher.findUnique({
+                where: {
+                  householdId_discountCodeId: {
+                    householdId,
+                    discountCodeId,
+                  },
+                },
+              }).catch(() => null);
+
+              if (voucher) {
+                await tx.voucher.update({
+                  where: { id: voucher.id },
+                  data: { status: "USED", usedAt: new Date() },
+                });
+              }
+
+              // Record attribution (best-effort, non-fatal)
+              await tx.campaignAttribution.create({
+                data: {
+                  householdId,
+                  campaignId: discountCampaignId,
+                  taskId: created.id,
+                  touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
+                  weight: 1.0,
+                },
+              }).catch(() => {});
+
+              // Record campaign event (best-effort, non-fatal)
+              await tx.campaignEvent.create({
+                data: {
+                  campaignId: discountCampaignId,
+                  householdId,
+                  eventType: "VOUCHER_REDEEMED",
+                  metadata: { code: discountCode.trim(), discountCents, taskId: created.id },
+                },
+              }).catch(() => {});
+
+              // Update household acquisition source if first redemption
+              const hh = await tx.household.findUnique({ where: { id: householdId } });
+              if (hh && hh.acquisitionSource === "ORGANIC") {
+                await tx.household.update({
+                  where: { id: householdId },
+                  data: {
+                    acquisitionSource: "PUBLIC_CODE",
+                    acquisitionCampaignId: discountCampaignId,
+                  },
+                });
+              }
+            } catch (redeemError) {
+              // Capture the reason and re-throw to abort the transaction.
+              const reason = redeemError instanceof Error ? redeemError.message : "Unknown error";
+              redemptionFailureReason = reason;
+              throw redeemError;
+            }
+          }
+
+          return created;
         });
         lastCreateError = null;
         break;
       } catch (err) {
         lastCreateError = err;
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-          // unique constraint on jobNo — retry with a fresh sequence
+          // unique constraint on jobNo (or idempotencyKey) — retry with a fresh sequence.
+          // If the collision was on idempotencyKey, the replay lookup above should have
+          // caught it, but in the race between two concurrent requests we still retry
+          // here and let the next iteration's replay lookup handle it.
           continue;
+        }
+        // If this was a redemption failure, surface a 422 immediately — don't retry.
+        if (redemptionFailureReason) {
+          return NextResponse.json(
+            {
+              error: `Voucher could not be applied: ${redemptionFailureReason}. Please try again or remove the voucher.`,
+              code: "VOUCHER_APPLY_FAILED",
+            },
+            { status: 422 }
+          );
         }
         throw err; // unrelated error — rethrow
       }
     }
     if (!task) {
+      // If the redemption failed mid-transaction we already returned above.
+      if (redemptionFailureReason) {
+        return NextResponse.json(
+          {
+            error: `Voucher could not be applied: ${redemptionFailureReason}. Please try again or remove the voucher.`,
+            code: "VOUCHER_APPLY_FAILED",
+          },
+          { status: 422 }
+        );
+      }
       console.error("[POST /api/tasks] Failed to generate unique jobNo after retries:", lastCreateError);
       return NextResponse.json(
         { error: "Failed to assign a job number. Please retry." },
         { status: 500 }
       );
-    }
-
-    // Phase 3: Apply the discount redemption now that the task exists
-    if (discountCode && discountCodeId && discountCampaignId) {
-      try {
-        await applyRedemption({
-          code: discountCode.trim(),
-          householdId,
-          discountCents,
-          campaignId: discountCampaignId,
-          codeId: discountCodeId,
-          bookingId: task.id, // link redemption to this task
-        });
-      } catch (redeemError) {
-        console.error("[POST /api/tasks] Failed to apply discount redemption:", redeemError);
-        // Non-fatal — task is created, but redemption failed.
-        // The code was already validated, so this is likely a race condition
-        // (another request used the last use). Log and continue.
-      }
     }
 
     // If quotationId was provided, update the quotation status to ACCEPTED
@@ -277,7 +411,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Phase 7: Fire-and-forget auto-dispatch check (Level 3+)
+    // Fire-and-forget auto-dispatch check (Level 3+)
     triggerAutomationOnTaskCreated(task.id, householdId, category)
 
     return NextResponse.json({ task }, { status: 201 })

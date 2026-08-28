@@ -363,6 +363,11 @@ model Task {
   lockAt             DateTime? // Phase 4: Predictive — deadline before which household can cancel/edit
   cancelledAt        DateTime? // Phase 4: Predictive — when household cancelled this prediction
   cancelReason       String? // Phase 4: Predictive — household's cancel reason
+  // Idempotency: client-supplied key (e.g. hash of householdId + quotationId +
+  // amount + 60s bucket) — duplicate POST /api/tasks within a 60s window
+  // returns the existing task instead of creating a new one. Prevents
+  // double-clicks and network retries from spawning duplicate bookings.
+  idempotencyKey     String?
 
   household          Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
   jobType            ServiceJobType?     @relation(fields: [jobTypeId], references: [id])
@@ -371,6 +376,8 @@ model Task {
   verificationPhotos VerificationPhoto[]
   escrowEntries      EscrowLedger[]
   attachments        TaskAttachment[]
+
+  @@index([householdId, idempotencyKey])
 }
 
 model TaskAttachment {

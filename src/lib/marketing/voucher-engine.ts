@@ -110,7 +110,7 @@ export async function getHouseholdVouchers(householdId: string) {
     orderBy: { claimedAt: "desc" },
     include: {
       discountCode: {
-        select: { code: true, maxUses: true, usesRemaining: true },
+        select: { code: true, isActive: true, usesRemaining: true, maxUses: true },
       },
       campaign: {
         select: {
@@ -147,6 +147,13 @@ export async function getHouseholdVouchers(householdId: string) {
     claimedAt: v.claimedAt,
     usedAt: v.usedAt,
     expiresAt: v.expiresAt,
+    // Underlying code state — drives the "Suspended" badge in the wallet UI
+    // when the code is paused (isActive=false) but the Voucher row is still
+    // CLAIMED. Without this the household sees an "Available" voucher that
+    // fails to apply with a generic "deactivated" message.
+    codeActive: v.discountCode.isActive,
+    usesRemaining: v.discountCode.usesRemaining,
+    maxUses: v.discountCode.maxUses,
     // Service-recovery audit fields (populated when this voucher was issued
     // as dispute compensation; null otherwise).
     issuedFromTaskId: v.issuedFromTaskId ?? null,

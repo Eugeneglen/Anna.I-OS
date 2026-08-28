@@ -4,6 +4,12 @@ import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-se
 
 // POST /api/marketing/redeem — public endpoint for households to redeem discount codes
 // No ops auth required — but the household must be authenticated (checked by the caller)
+//
+// NOTE (audit proposal H §5): This endpoint is NOT called by the household
+// booking flow today — that flow validates + applies the redemption inside
+// POST /api/tasks within a single transaction. This endpoint remains for
+// ops-only programmatic access (e.g. marketing-site landing pages, manual
+// ops redemptions). Do not delete without confirming ops has no callers.
 const redeemSchema = z.object({
   code: z.string().min(1),
   householdId: z.string().min(1),

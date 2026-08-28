@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,10 @@ interface QuoteBuilderProps {
   jobType: ServiceJobType;
   onQuoteChange: (result: QuoteResult | null, fieldValues: Record<string, number>, selectedAddOns: string[]) => void;
   quotationId?: string | null;
+  /** Live discount (in cents) when a voucher is applied to the order.
+   * Drives the 3-line breakdown (original / discount / final) inside the
+   * quote card — proposal G §1. */
+  appliedDiscountCents?: number;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -104,7 +108,16 @@ function DynamicField({
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
-export function QuoteBuilder({ jobType, onQuoteChange, quotationId }: QuoteBuilderProps) {
+export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDiscountCents = 0 }: QuoteBuilderProps) {
+  // Ref to the latest onQuoteChange — lets us invoke the parent's latest
+  // callback WITHOUT putting it in the effect deps. Audit proposal A: the
+  // old `[quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents, onQuoteChange]`
+  // deps array meant that any time BookingForm re-created `handleQuoteChange`
+  // (e.g. because promoApplied flipped), this effect re-fired and reset
+  // promo state. Decoupling them kills the silent-reset loop.
+  const onQuoteChangeRef = useRef(onQuoteChange);
+  onQuoteChangeRef.current = onQuoteChange;
+
   // Initialize field values from defaults
   const [fieldValues, setFieldValues] = useState<Record<string, number>>(() => {
     const defaults: Record<string, number> = {};
@@ -162,11 +175,11 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId }: QuoteBuild
         ...quoteResult,
         totalCents: customCents,
       };
-      onQuoteChange(customResult, fieldValues, selectedAddOns);
+      onQuoteChangeRef.current(customResult, fieldValues, selectedAddOns);
     } else {
-      onQuoteChange(quoteResult, fieldValues, selectedAddOns);
+      onQuoteChangeRef.current(quoteResult, fieldValues, selectedAddOns);
     }
-  }, [quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents, onQuoteChange]);
+  }, [quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents]);
 
   // Auto-explain with debounce when quote changes
   useEffect(() => {
@@ -331,8 +344,11 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId }: QuoteBuild
           )}
         </div>
 
-        {/* Total amount */}
-        <div className="px-4 pb-3">
+        {/* Total amount — when a voucher is applied, show three lines:
+            original (struck through), discount (red, with −), final (bold).
+            Audit proposal G §1: previously the breakdown only appeared
+            above the Book Now button. */}
+        <div className="px-4 pb-3 space-y-1">
           {useCustomAmount ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-[var(--anna-muted)]">SGD $</span>
@@ -347,6 +363,18 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId }: QuoteBuild
                 className="flex-1 bg-[var(--anna-white)]/60 border border-[var(--anna-sage)]/30 rounded-lg px-3 py-1.5 font-data text-2xl font-bold text-[var(--anna-sage-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30"
               />
             </div>
+          ) : appliedDiscountCents > 0 ? (
+            <>
+              <div className="font-data text-sm font-medium text-[var(--anna-muted)] line-through">
+                {formatSgd(displayCents)}
+              </div>
+              <div className="font-data text-sm font-medium text-emerald-600">
+                −{formatSgd(appliedDiscountCents)}
+              </div>
+              <div className="font-data text-2xl font-bold text-[var(--anna-sage-dark)]">
+                {formatSgd(Math.max(0, displayCents - appliedDiscountCents))}
+              </div>
+            </>
           ) : (
             <div className="font-data text-2xl font-bold text-[var(--anna-sage-dark)]">
               {formatSgd(displayCents)}

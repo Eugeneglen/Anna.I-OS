@@ -244,7 +244,7 @@ export async function validateRedemption(params: {
 }): Promise<RedemptionResult> {
   const { code, householdId, orderValueCents, orderType, category, existingDiscountApplied } = params;
 
-  // 1. Code exists and is active
+  // 1. Code exists
   const discountCode = await db.discountCode.findUnique({
     where: { code: code.toUpperCase() },
     include: {
@@ -256,42 +256,79 @@ export async function validateRedemption(params: {
     return { valid: false, reason: "Code not found" };
   }
 
+  // 2. Security: targeted voucher assigned to a different household
+  // (closes the gap where any household could redeem another's targeted voucher)
+  if (
+    discountCode.assignedHouseholdId !== null &&
+    discountCode.assignedHouseholdId !== householdId
+  ) {
+    return { valid: false, reason: "This voucher was not issued to your household" };
+  }
+
+  // 3. Suspended (isActive=false) — distinguish from REVOKED using Voucher.status.
+  //    Look up the household's Voucher row: if status==="REVOKED" → removed;
+  //    if status==="CLAIMED" but isActive=false → suspended (e.g. ops pause).
   if (!discountCode.isActive) {
-    return { valid: false, reason: "Code has been deactivated" };
+    const voucher = await db.voucher.findUnique({
+      where: {
+        householdId_discountCodeId: {
+          householdId,
+          discountCodeId: discountCode.id,
+        },
+      },
+      select: { status: true },
+    }).catch(() => null);
+
+    if (voucher?.status === "REVOKED") {
+      return { valid: false, reason: "This voucher has been removed" };
+    }
+    return { valid: false, reason: "This voucher has been temporarily suspended" };
   }
 
-  // 2. Not expired
+  // 4. Expired
   if (discountCode.expiresAt && new Date() > discountCode.expiresAt) {
-    return { valid: false, reason: "Code has expired" };
+    return { valid: false, reason: "This voucher has expired" };
   }
 
-  // 3. Uses remaining
+  // 5. Usage limit reached — but distinguish "you already redeemed" from
+  //    "the code is exhausted globally". If the household has a prior
+  //    CodeRedemption for this code, surface the more accurate reason.
   if (discountCode.usesRemaining !== null && discountCode.usesRemaining <= 0) {
-    return { valid: false, reason: "Code usage limit reached" };
+    const priorRedemption = await db.codeRedemption.findFirst({
+      where: { discountCodeId: discountCode.id, householdId },
+      select: { id: true },
+    });
+    if (priorRedemption) {
+      return { valid: false, reason: "You have already redeemed this voucher" };
+    }
+    return { valid: false, reason: "This voucher's usage limit has been reached" };
   }
 
   const { campaign } = discountCode;
   const rule = campaign.discountRule;
 
-  // 4. Campaign is active and within date range
+  // 6. Campaign state — distinguish paused / not-yet-started / ended
   if (campaign.status !== "ACTIVE") {
-    return { valid: false, reason: `Campaign is ${campaign.status.toLowerCase()}` };
+    if (campaign.status === "PAUSED") {
+      return { valid: false, reason: "This campaign is paused" };
+    }
+    return { valid: false, reason: `This campaign is ${campaign.status.toLowerCase()}` };
   }
 
   const now = new Date();
   if (campaign.startDate && now < campaign.startDate) {
-    return { valid: false, reason: "Campaign has not started yet" };
+    return { valid: false, reason: "This voucher is not yet active" };
   }
   if (campaign.endDate && now > campaign.endDate) {
-    return { valid: false, reason: "Campaign has ended" };
+    return { valid: false, reason: "This voucher has expired" };
   }
 
-  // 5. Campaign-level cap
+  // 7. Campaign-level cap
   if (campaign.maxRedemptions !== null && campaign.redemptionsCount >= campaign.maxRedemptions) {
-    return { valid: false, reason: "Campaign redemption limit reached" };
+    return { valid: false, reason: "This voucher's usage limit has been reached" };
   }
 
-  // 6. Applies to this order type
+  // 8. Applies to this order type
   if (campaign.appliesTo === "SUBSCRIPTION_FEE" && orderType !== "subscription") {
     return { valid: false, reason: "This code applies to subscription fees only" };
   }
@@ -299,12 +336,12 @@ export async function validateRedemption(params: {
     return { valid: false, reason: "This code applies to job orders only" };
   }
 
-  // 7. Target category check
+  // 9. Target category check
   if (campaign.targetCategory && category && campaign.targetCategory !== category) {
-    return { valid: false, reason: `Code is for ${campaign.targetCategory} only` };
+    return { valid: false, reason: `This voucher is for ${campaign.targetCategory} only` };
   }
 
-  // 8. Eligibility check
+  // 10. Eligibility check
   if (rule) {
     if (rule.eligibility === "FIRST_TIME_HOUSEHOLD_ONLY") {
       const existingBookings = await db.booking.count({
@@ -322,18 +359,21 @@ export async function validateRedemption(params: {
       }
     }
 
-    // 9. Min order value
+    // 11. Min order value — surface the user's current order value too
     if (rule.minOrderValueCents && orderValueCents < rule.minOrderValueCents) {
-      return { valid: false, reason: `Minimum order value is $${(rule.minOrderValueCents / 100).toFixed(2)}` };
+      return {
+        valid: false,
+        reason: `Minimum order value is $${(rule.minOrderValueCents / 100).toFixed(2)} — your order is $${(orderValueCents / 100).toFixed(2)}`,
+      };
     }
 
-    // 10. Stackable check
+    // 12. Stackable check
     if (existingDiscountApplied && !rule.stackable) {
       return { valid: false, reason: "Another discount is already applied and this code is not stackable" };
     }
   }
 
-  // 11. Calculate discount
+  // 13. Calculate discount
   let discountCents = 0;
   if (rule) {
     if (rule.discountType === "PERCENTAGE") {
@@ -350,6 +390,7 @@ export async function validateRedemption(params: {
 
   return {
     valid: true,
+    reason: "applied",
     discountCents,
     campaignId: campaign.id,
     codeId: discountCode.id,

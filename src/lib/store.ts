@@ -45,6 +45,12 @@ interface AnnaStore {
   rebookData: RebookData | null;
   setRebookData: (data: RebookData | null) => void;
 
+  // Preselect voucher (set by My Vouchers → Book Now, consumed by Services)
+  // Carries the code/voucherId/targetCategory from a wallet card so the
+  // booking form can pre-fill + auto-apply the voucher on mount.
+  preselectVoucher: { code: string; voucherId: string; category?: string | null } | null;
+  setPreselectVoucher: (v: { code: string; voucherId: string; category?: string | null } | null) => void;
+
   // Helper: select a task and open detail
   openTaskDetail: (task: Task) => void;
   closeTaskDetail: () => void;
@@ -71,6 +77,9 @@ export const useAnnaStore = create<AnnaStore>((set) => ({
 
   rebookData: null,
   setRebookData: (data) => set({ rebookData: data }),
+
+  preselectVoucher: null,
+  setPreselectVoucher: (v) => set({ preselectVoucher: v }),
 
   notificationPanelOpen: false,
   setNotificationPanelOpen: (open) => set({ notificationPanelOpen: open }),

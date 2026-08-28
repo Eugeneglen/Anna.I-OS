@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
 import {
@@ -250,6 +250,25 @@ function ServicesBrowse() {
   const [view, setView] = useState<ViewState>({ mode: "browse" });
   const [searchQuery, setSearchQuery] = useState("");
   const { isCategoryActive } = useDynamicPricing();
+  // Preselect voucher (set by My Vouchers → Book Now) — passed down as
+  // `initialPromoCode` so the booking form auto-applies the code on mount.
+  // Cleared after consumption so it doesn't re-apply on every re-render.
+  const preselectVoucher = useAnnaStore((s) => s.preselectVoucher);
+  const setPreselectVoucher = useAnnaStore((s) => s.setPreselectVoucher);
+
+  // When the user arrives from My Vouchers → Book Now with a voucher that
+  // has a targetCategory, auto-jump to that category's booking form so they
+  // don't have to click through the category grid first.
+  useEffect(() => {
+    if (!preselectVoucher) return;
+    if (view.mode !== "browse") return;
+    const target = preselectVoucher.category as ServiceCategory | null | undefined;
+    if (target && isCategoryActive(target)) {
+      // Schedule the state update on the next tick so we don't call
+      // setState synchronously inside an effect (React 19 lint rule).
+      Promise.resolve().then(() => setView({ mode: "booking", category: target }));
+    }
+  }, [preselectVoucher, view.mode, isCategoryActive, setView]);
 
   // Fetch job types when viewing a category
   const activeCategory = view.mode === "category" ? view.category
@@ -282,13 +301,33 @@ function ServicesBrowse() {
 
   // --- RENDER: Booking Form ---
   if (view.mode === "booking") {
+    // If the user came from My Vouchers → Book Now with a voucher whose
+    // targetCategory matches the current view's category, preselect that
+    // voucher. If the categories mismatch (e.g. user picked a Laundry
+    // voucher but navigated to Cleaning), we silently skip the preselect
+    // so the booking form doesn't auto-fail validation. The user can
+    // still manually pick the right category.
+    const preselectMatchesCategory =
+      preselectVoucher &&
+      (!preselectVoucher.category || preselectVoucher.category === view.category);
+
+    const initialPromoCode = preselectMatchesCategory ? preselectVoucher!.code : undefined;
+
     return (
       <div className="p-4 lg:p-6 pb-20 md:pb-0">
         <BookingForm
           category={view.category}
           initialJobType={view.jobType ?? null}
-          onBack={() => setView({ mode: "category", category: view.category })}
-          onSuccess={() => setView({ mode: "browse" })}
+          initialPromoCode={initialPromoCode}
+          onBack={() => {
+            // Clear preselect so the back button doesn't carry it forward
+            if (preselectVoucher) setPreselectVoucher(null);
+            setView({ mode: "category", category: view.category });
+          }}
+          onSuccess={() => {
+            if (preselectVoucher) setPreselectVoucher(null);
+            setView({ mode: "browse" });
+          }}
         />
       </div>
     );

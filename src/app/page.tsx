@@ -16,14 +16,17 @@ import { useAnnaStore } from "@/lib/store";
 import { WithErrorBoundary } from "@/components/error-boundary";
 import { AnimatePresence, motion } from "framer-motion";
 
-const VIEWS: Record<string, React.ComponentType> = {
-  dashboard: Dashboard,
-  services: TaskServices,
-  vouchers: MyVouchers,
-  autonomy: AutonomyPanel,
-  activity: ActivityTab,
-  escrow: EscrowPanel,
-  settings: SettingsPanel,
+// VIEWS is a record of lazy-built view components so we can inject props
+// (e.g. My Vouchers' onBookNow → Services tab + preselect voucher) without
+// giving up the simple `VIEWS[activeTab]` lookup pattern.
+const VIEWS: Record<string, () => React.ReactNode> = {
+  dashboard: () => <Dashboard />,
+  services: () => <TaskServices />,
+  vouchers: () => <MyVouchers />,
+  autonomy: () => <AutonomyPanel />,
+  activity: () => <ActivityTab />,
+  escrow: () => <EscrowPanel />,
+  settings: () => <SettingsPanel />,
 };
 
 async function fetchSession() {
@@ -41,11 +44,28 @@ async function fetchHouseholdDetail(id: string) {
 export default function Home() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { selectedHouseholdId, activeTab } = useAnnaStore();
-  const ActiveView = VIEWS[activeTab];
+  const { selectedHouseholdId, activeTab, setActiveTab, setPreselectVoucher } = useAnnaStore();
+  // When activeTab is "vouchers", render the My Vouchers component wrapped
+  // so its onBookNow callback can stash the picked voucher into store state
+  // AND flip the active tab to "services" — that wiring was missing before
+  // (audit §1, proposal B) and made the Book Now button a no-op.
+  const renderActiveView = () => {
+    if (activeTab === "vouchers") {
+      return (
+        <MyVouchers
+          onBookNow={(code, _voucherId, category) => {
+            setPreselectVoucher({ code, voucherId: _voucherId, category });
+            setActiveTab("services");
+          }}
+        />
+      );
+    }
+    const builder = VIEWS[activeTab];
+    return builder ? builder() : <Dashboard />;
+  };
 
   // Check auth session
-  const { data: sessionData, isLoading: sessionLoading, isError: sessionError } = useQuery({
+  const { data: sessionData, isLoading: sessionLoading } = useQuery({
     queryKey: ["household-session"],
     queryFn: fetchSession,
     retry: false,
@@ -60,7 +80,7 @@ export default function Home() {
   }, [sessionLoading, sessionData, router]);
 
   // Fetch household detail to check onboarding status
-  const { data: householdData, isLoading: householdLoading } = useQuery({
+  const { data: householdData } = useQuery({
     queryKey: ["household", selectedHouseholdId],
     queryFn: () => fetchHouseholdDetail(selectedHouseholdId),
     enabled: !!selectedHouseholdId,
@@ -112,10 +132,11 @@ export default function Home() {
           className="min-h-[calc(100vh-3.5rem)] md:min-h-[calc(100vh-3.5rem-3.25rem)]"
         >
           <WithErrorBoundary name={activeTab} variant="page">
-            <ActiveView />
+            {renderActiveView()}
           </WithErrorBoundary>
         </motion.div>
       </AnimatePresence>
     </LayoutShell>
   );
 }
+

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Ticket, Clock, CheckCircle2, XCircle, Loader2, ChevronRight } from "lucide-react";
+import { Ticket, Clock, CheckCircle2, XCircle, Loader2, ChevronRight, PauseCircle } from "lucide-react";
+import { VoucherStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { formatSgd, formatDate } from "@/lib/types";
 import { useAnnaStore } from "@/lib/store";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 
 interface Voucher {
   id: string;
-  status: "CLAIMED" | "USED" | "EXPIRED" | "REVOKED";
+  status: VoucherStatus;
   code: string;
   campaignName: string;
   campaignType: string;
@@ -25,6 +26,12 @@ interface Voucher {
   claimedAt: string;
   usedAt: string | null;
   expiresAt: string | null;
+  // Underlying code state — when isActive=false the wallet card greys out
+  // and shows a "Suspended" badge, so the household sees the truth before
+  // attempting to apply the code at checkout.
+  codeActive?: boolean;
+  usesRemaining?: number | null;
+  maxUses?: number | null;
   // Service-recovery audit fields (null when not a compensation voucher)
   issuedFromTaskId?: string | null;
   compensationReason?: string | null;
@@ -32,7 +39,9 @@ interface Voucher {
 }
 
 interface MyVouchersProps {
-  onBookNow?: () => void;
+  // Carries the voucher's code/id/targetCategory back up to the layout shell
+  // so the booking form can pre-fill the promo code and auto-apply it.
+  onBookNow?: (code: string, voucherId: string, targetCategory?: string | null) => void;
 }
 
 // ── Helpers ──
@@ -53,9 +62,14 @@ function VoucherCard({
   onView?: () => void;
 }) {
   const [showTerms, setShowTerms] = useState(false);
-  const isAvailable = voucher.status === "CLAIMED";
+  // A voucher is "suspended" when the underlying code has been paused by ops
+  // (DiscountCode.isActive=false) but the Voucher row itself is still CLAIMED.
+  // We surface this as a distinct visual state from "Available" so the
+  // household knows before clicking Book Now.
+  const isSuspended = voucher.status === "CLAIMED" && voucher.codeActive === false;
+  const isAvailable = voucher.status === "CLAIMED" && !isSuspended;
   const isUsed = voucher.status === "USED";
-  const isExpired = voucher.status === "EXPIRED";
+  const isExpired = voucher.status === "EXPIRED" || voucher.status === "REVOKED";
 
   return (
     <div
@@ -63,9 +77,11 @@ function VoucherCard({
         "rounded-2xl border p-4 transition-all",
         isAvailable
           ? "border-[var(--anna-sage)]/30 bg-[var(--anna-sage-light)]/30"
-          : isUsed
-            ? "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-60"
-            : "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-50"
+          : isSuspended
+            ? "border-amber-200 bg-amber-50/40 opacity-70"
+            : isUsed
+              ? "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-60"
+              : "border-[var(--anna-border)] bg-[var(--anna-bg)] opacity-50"
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
@@ -79,14 +95,29 @@ function VoucherCard({
                 Available
               </Badge>
             )}
+            {isSuspended && (
+              <Badge
+                variant="outline"
+                className="text-[10px] border-amber-300 bg-amber-100 text-amber-700 cursor-help"
+                title="This voucher was suspended — contact support"
+              >
+                <PauseCircle size={10} className="inline mr-0.5" />
+                Suspended
+              </Badge>
+            )}
             {isUsed && (
               <Badge variant="outline" className="text-[10px] border-[var(--anna-muted)] text-[var(--anna-muted)]">
                 Used
               </Badge>
             )}
-            {isExpired && (
+            {voucher.status === "EXPIRED" && (
               <Badge variant="outline" className="text-[10px] border-[var(--anna-muted)] text-[var(--anna-muted)]">
                 Expired
+              </Badge>
+            )}
+            {voucher.status === "REVOKED" && (
+              <Badge variant="outline" className="text-[10px] border-[var(--anna-muted)] text-[var(--anna-muted)]">
+                Removed
               </Badge>
             )}
             {voucher.issuedFromTaskId && (
@@ -174,7 +205,7 @@ function VoucherCard({
           {voucher.minOrderValueCents > 0 && <p>• Minimum spend: {formatSgd(voucher.minOrderValueCents)}</p>}
           {voucher.eligibility && <p>• Eligibility: {voucher.eligibility.replace(/_/g, " ").toLowerCase()}</p>}
           {voucher.expiresAt && <p>• Valid until: {formatDate(voucher.expiresAt)}</p>}
-          <p>• Code: {voucher.code} (auto-applied at checkout)</p>
+          <p>• Code: {voucher.code} (selectable at checkout)</p>
         </div>
       )}
     </div>
@@ -204,7 +235,8 @@ export function MyVouchers({ onBookNow }: MyVouchersProps) {
   });
 
   const vouchers = data?.vouchers || [];
-  const available = vouchers.filter((v) => v.status === "CLAIMED");
+  const available = vouchers.filter((v) => v.status === "CLAIMED" && v.codeActive !== false);
+  const suspended = vouchers.filter((v) => v.status === "CLAIMED" && v.codeActive === false);
   const used = vouchers.filter((v) => v.status === "USED");
   const expired = vouchers.filter((v) => v.status === "EXPIRED" || v.status === "REVOKED");
 
@@ -234,6 +266,7 @@ export function MyVouchers({ onBookNow }: MyVouchersProps) {
         <h2 className="text-xl font-bold text-[var(--anna-slate)]">My Vouchers</h2>
         <p className="text-sm text-[var(--anna-muted)]">
           {available.length} available · {used.length} used · {expired.length} expired
+          {suspended.length > 0 && ` · ${suspended.length} suspended`}
         </p>
       </div>
 
@@ -250,9 +283,22 @@ export function MyVouchers({ onBookNow }: MyVouchersProps) {
               voucher={v}
               onView={() => {
                 viewMutation.mutate(v.id);
-                onBookNow?.();
+                onBookNow?.(v.code, v.id, v.targetCategory);
               }}
             />
+          ))}
+        </div>
+      )}
+
+      {/* Suspended */}
+      {suspended.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+            <PauseCircle size={12} />
+            Suspended ({suspended.length})
+          </h3>
+          {suspended.map((v) => (
+            <VoucherCard key={v.id} voucher={v} />
           ))}
         </div>
       )}
