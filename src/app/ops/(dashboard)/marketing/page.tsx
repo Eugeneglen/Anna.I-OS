@@ -6,12 +6,21 @@ import { BarChart3, Users, Ticket } from "lucide-react";
 import { InsightsTab } from "@/components/ops/marketing/insights-tab";
 import { SegmentsTab } from "@/components/ops/marketing/segments-tab";
 import { CampaignsTab } from "@/components/ops/marketing/campaigns-tab";
+import { CampaignCreateDialog } from "@/components/ops/marketing/campaign-create-dialog";
+import { useQuery } from "@tanstack/react-query";
 
 // ============================================================
 // Anna.I — Ops Marketing Page (Phase 2 restructure)
 // ============================================================
 // Three sub-tabs: Insights (behaviour analytics), Segments
 // (dynamic segment builder), Campaigns (existing campaign list).
+//
+// Fix 15 — The Create-Campaign dialog state is lifted here so the
+// Insights tab's "Create Campaign" recommendation action can open
+// the same dialog the Campaigns tab uses. When the user clicks
+// "Create Campaign" on a REACTIVATION/CHURN card, we look up a
+// matching segment by name (e.g. "Lapsed") and pre-select it;
+// if none exists, the dialog opens with no segment selected.
 // ============================================================
 
 type Tab = "insights" | "segments" | "campaigns";
@@ -24,6 +33,47 @@ const TABS: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
 
 export default function MarketingPage() {
   const [tab, setTab] = useState<Tab>("insights");
+
+  // Fix 15 — Lifted create-campaign dialog state. Owned by the page
+  // so both the Campaigns tab's "New Campaign" button and the
+  // Insights tab's "Create Campaign" recommendation action share
+  // the same dialog instance.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSegmentId, setCreateSegmentId] = useState<string | undefined>(undefined);
+
+  // Fetch the segments list so we can pre-select a "lapsed" segment
+  // when the user clicks "Create Campaign" on a REACTIVATION card.
+  // (Reuses the same query key the Segments tab uses, so the data
+  // is shared and cached.)
+  const { data: segmentsData } = useQuery<{ segments: Array<{ id: string; name: string; memberCount: number }> }>({
+    queryKey: ["ops-marketing-segments"],
+    queryFn: async () => {
+      const res = await fetch("/api/ops/marketing/segments");
+      if (!res.ok) return { segments: [] };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  function handleOpenCreateCampaign(segmentId?: string) {
+    // If a specific segment was passed in, use it. Otherwise, look
+    // for an existing segment whose name suggests it targets lapsed
+    // customers (case-insensitive contains "lapse" or "churn").
+    if (segmentId) {
+      setCreateSegmentId(segmentId);
+    } else {
+      const segments = segmentsData?.segments ?? [];
+      const match = segments.find(
+        (s) => /lapse|churn|reactivat/i.test(s.name) && s.memberCount > 0,
+      );
+      setCreateSegmentId(match?.id);
+    }
+    setCreateOpen(true);
+  }
+
+  function handleNavigateTab(next: Tab) {
+    setTab(next);
+  }
 
   return (
     <div className="space-y-4 pb-20 md:pb-0 anna-fade-in">
@@ -51,9 +101,34 @@ export default function MarketingPage() {
       </div>
 
       {/* Tab content */}
-      {tab === "insights" && <InsightsTab />}
+      {tab === "insights" && (
+        <InsightsTab
+          onNavigateTab={handleNavigateTab}
+          onOpenCreateCampaign={handleOpenCreateCampaign}
+        />
+      )}
       {tab === "segments" && <SegmentsTab />}
-      {tab === "campaigns" && <CampaignsTab />}
+      {tab === "campaigns" && (
+        <CampaignsTab
+          createOpen={createOpen}
+          setCreateOpen={setCreateOpen}
+        />
+      )}
+
+      {/* Fix 15 — Shared Create-Campaign dialog. Rendered once at the
+          page level so both the Campaigns tab's "New Campaign" button
+          and the Insights tab's "Create Campaign" action open the
+          same instance (with optional preselected segment). */}
+      <CampaignCreateDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          // Clear the preselected segment whenever the dialog closes
+          // so the next open starts fresh.
+          if (!open) setCreateSegmentId(undefined);
+        }}
+        initialSegmentId={createSegmentId}
+      />
     </div>
   );
 }

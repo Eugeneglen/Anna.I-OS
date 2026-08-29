@@ -38,6 +38,21 @@ export interface SegmentFilters {
   lifecycleStage?: string[];
   // Acquisition
   acquisitionSource?: string[];
+  // ── Phase 2 — expanded filter types (Fix 9) ──
+  /** Customer value tier (derived from RFM segment). HIGH | MEDIUM | LOW */
+  customerValue?: "HIGH" | "MEDIUM" | "LOW";
+  /** Minimum vouchers redeemed (number). */
+  minVouchersRedeemed?: number;
+  /** Geographic area — case-insensitive substring match on household address. */
+  geographicArea?: string;
+  /** Demographics — case-insensitive substring match on household name/fullName. */
+  nameContains?: string;
+  /** Activity level (derived from lifecycle stage). ACTIVE | INACTIVE */
+  activityLevel?: "ACTIVE" | "INACTIVE";
+  /** Marketing engagement (derived from voucher behaviour). ENGAGED | NOT_ENGAGED */
+  marketingEngagement?: "ENGAGED" | "NOT_ENGAGED";
+  /** Minimum max-autonomy-level reached across categories (1-5). */
+  minAutonomyLevel?: number;
 }
 
 // ── Create a segment ──
@@ -158,6 +173,26 @@ export async function archiveSegment(segmentId: string): Promise<void> {
   });
 }
 
+// ── Unarchive a segment (reactivate) ──
+// Phase 2 Fix 12 — restores an ARCHIVED segment to ACTIVE status and
+// recomputes its members so it is immediately usable again. Mirrors the
+// createSegment flow: status flip first, then a fresh member computation.
+
+export async function unarchiveSegment(
+  segmentId: string,
+): Promise<{ total: number; added: number; removed: number }> {
+  // Restore ACTIVE status — the segment becomes visible in lists again.
+  await db.segment.update({
+    where: { id: segmentId },
+    data: { status: "ACTIVE" },
+  });
+
+  // Recompute members from the stored filters (may restore prior members
+  // and/or pick up changes that happened while the segment was archived).
+  const result = await computeSegmentMembers(segmentId);
+  return { total: result.total, added: result.added, removed: result.removed };
+}
+
 // ── Filter matching logic ──
 
 function matchesFilters(behaviour: HouseholdBehaviour, filters: SegmentFilters): boolean {
@@ -206,6 +241,26 @@ function matchesFilters(behaviour: HouseholdBehaviour, filters: SegmentFilters):
     }
   }
 
+  // Account age
+  if (filters.minAccountAgeDays !== undefined && behaviour.accountAgeDays < filters.minAccountAgeDays) {
+    return false;
+  }
+  if (filters.maxAccountAgeDays !== undefined && behaviour.accountAgeDays > filters.maxAccountAgeDays) {
+    return false;
+  }
+
+  // Subscription tier (membership)
+  if (filters.subscriptionTier && behaviour.subscriptionTier !== filters.subscriptionTier) {
+    return false;
+  }
+
+  // Acquisition source (referral source)
+  if (filters.acquisitionSource && filters.acquisitionSource.length > 0) {
+    if (!filters.acquisitionSource.includes(behaviour.acquisitionSource)) {
+      return false;
+    }
+  }
+
   // RFM
   if (filters.rfmSegment && behaviour.rfmSegment !== filters.rfmSegment) {
     return false;
@@ -223,6 +278,58 @@ function matchesFilters(behaviour: HouseholdBehaviour, filters: SegmentFilters):
     if (!filters.lifecycleStage.includes(behaviour.lifecycleStage)) {
       return false;
     }
+  }
+
+  // ── Phase 2 — expanded filters (Fix 9) ──
+
+  // Customer value (derived from RFM segment)
+  if (filters.customerValue && behaviour.customerValue !== filters.customerValue) {
+    return false;
+  }
+
+  // Voucher usage — minimum vouchers redeemed
+  if (
+    filters.minVouchersRedeemed !== undefined &&
+    behaviour.vouchersRedeemed < filters.minVouchersRedeemed
+  ) {
+    return false;
+  }
+
+  // Geographic area — case-insensitive substring match on address
+  if (filters.geographicArea && filters.geographicArea.trim().length > 0) {
+    const needle = filters.geographicArea.trim().toLowerCase();
+    if (!behaviour.householdAddress.toLowerCase().includes(needle)) {
+      return false;
+    }
+  }
+
+  // Demographics — case-insensitive substring match on household name
+  if (filters.nameContains && filters.nameContains.trim().length > 0) {
+    const needle = filters.nameContains.trim().toLowerCase();
+    if (!behaviour.householdName.toLowerCase().includes(needle)) {
+      return false;
+    }
+  }
+
+  // Activity level
+  if (filters.activityLevel && behaviour.activityLevel !== filters.activityLevel) {
+    return false;
+  }
+
+  // Marketing engagement
+  if (
+    filters.marketingEngagement &&
+    behaviour.marketingEngagement !== filters.marketingEngagement
+  ) {
+    return false;
+  }
+
+  // Autonomy level — household's max autonomy across categories must be >= threshold
+  if (
+    filters.minAutonomyLevel !== undefined &&
+    behaviour.maxAutonomyLevel < filters.minAutonomyLevel
+  ) {
+    return false;
   }
 
   return true; // all checks passed

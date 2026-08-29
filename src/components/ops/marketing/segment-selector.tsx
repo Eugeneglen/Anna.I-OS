@@ -38,7 +38,7 @@ export function SegmentSelector({ value, onChange }: SegmentSelectorProps) {
         <SelectItem value="none">No segment (public campaign)</SelectItem>
         {segments.filter((s) => s.memberCount > 0).map((s) => (
           <SelectItem key={s.id} value={s.id}>
-            {s.name} ({s.memberCount} members)
+            {s.name} ({s.memberCount} member{s.memberCount === 1 ? "" : "s"})
           </SelectItem>
         ))}
       </SelectContent>

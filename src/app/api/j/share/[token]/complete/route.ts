@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { TaskStatus } from "@prisma/client";
 import { triggerAnomalyDetection } from "@/lib/notify";
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine";
 
 export async function POST(
   request: Request,
@@ -77,6 +78,14 @@ export async function POST(
 
     // ── Trigger anomaly detection ──
     triggerAnomalyDetection(booking.task.householdId);
+
+    // Phase 1 P1-4 fix: refresh cached household marketing stats.
+    // Non-fatal — task completion must succeed even if the stats refresh fails.
+    try {
+      await updateHouseholdCachedStats(booking.task.householdId);
+    } catch (statsErr) {
+      console.error("[share/complete] updateHouseholdCachedStats failed:", statsErr);
+    }
 
     return NextResponse.json({ booking: updatedBooking });
   } catch (error) {

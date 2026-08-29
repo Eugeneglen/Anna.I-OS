@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
 import { emitWorkCompleted } from "@/lib/events"
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 // C-7 FIX: Extend schema to accept rating and ratingComment
 // Allow standalone rating updates (no status transition required)
@@ -161,6 +162,14 @@ export async function PATCH(
         hasPhotos: false,
         completionNotes: booking.completionNotes ?? undefined,
       }).catch(() => {});
+
+      // Phase 1 P1-4 fix: refresh cached household marketing stats.
+      // Non-fatal — task completion must succeed even if the stats refresh fails.
+      try {
+        await updateHouseholdCachedStats(booking.task.householdId)
+      } catch (statsErr) {
+        console.error("[bookings PATCH complete] updateHouseholdCachedStats failed:", statsErr)
+      }
 
     // Verification and escrow release remain manual at all autonomy levels
     // per the canonical Closed-Loop brand promise (CLAUDE.md).

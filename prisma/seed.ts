@@ -58,6 +58,27 @@ async function main() {
   });
   console.log(`  ✅ Seed version recorded: ${SEED_VERSION}`);
 
+  // 5b. Seed marketing_config (Phase 2 Fix 8) — default magic-number values
+  //     now stored in platform_config so they can be tuned without a code change.
+  await db.platformConfig.upsert({
+    where: { key: "marketing_config" },
+    update: {},
+    create: {
+      key: "marketing_config",
+      value: JSON.stringify({
+        reactivationRate: 0.3,
+        defaultDiscountValue: 15,
+        avgOrderValueCents: 5000,
+        rfmRecencyThresholds: [30, 60, 90, 180],
+        rfmFrequencyThresholds: [1, 3, 6, 10],
+        rfmMonetaryThresholds: [5000, 10000, 30000, 50000],
+        voucherExpiryNoticeDays: 3,
+      }),
+      label: "Marketing module configuration (RFM thresholds, reactivation rate, etc.)",
+    },
+  });
+  console.log(`  ✅ Marketing config seeded`);
+
   await db.$disconnect();
 
   console.log("\n╔══════════════════════════════════════════════╗");

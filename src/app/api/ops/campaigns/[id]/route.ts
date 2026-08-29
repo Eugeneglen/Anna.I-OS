@@ -4,6 +4,7 @@ import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { getCampaign, updateCampaign, transitionCampaignStatus, getCampaignStats } from "@/lib/marketing/campaign-service";
 import { CampaignStatus } from "@prisma/client";
+import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -66,10 +67,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (parsed.data.status) {
       const newStatus = parsed.data.status as CampaignStatus;
       const updated = await transitionCampaignStatus(id, newStatus);
+      // ── Fix 19 — status transitions (e.g. DRAFT → ACTIVE) change the
+      // funnel's "active campaign" status and may unlock redemptions, so
+      // drop the campaign-perf cache. The behaviour cache is unaffected
+      // by a status flip alone, but we invalidate defensively because a
+      // PAUSED → ENDED transition may freeze voucher issuance flows.
+      invalidateCampaignPerfCache(id);
+      invalidateBehaviourCache();
       return NextResponse.json({ campaign: updated });
     }
 
     const updated = await updateCampaign(id, parsed.data);
+    // ── Fix 19 — content / rule edits change the funnel (codes count,
+    // discount rules) and the behaviour outputs (discountCents affects
+    // monetaryScore if a redemption is later applied with new rules).
+    invalidateCampaignPerfCache(id);
+    invalidateBehaviourCache();
     return NextResponse.json({ campaign: updated });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal error";
@@ -96,6 +109,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { db } = await import("@/lib/db");
     await db.campaign.delete({ where: { id } });
+    // ── Fix 19 — campaign deletion removes the funnel + ROI rows, so
+    // drop the perf cache. The behaviour cache may still reference the
+    // deleted campaign via attribution rows, so invalidate defensively.
+    invalidateCampaignPerfCache(id);
+    invalidateBehaviourCache();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[/api/ops/campaigns/[id] DELETE]", error);

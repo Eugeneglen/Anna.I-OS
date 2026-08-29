@@ -110,14 +110,51 @@ export async function calculateCampaignROI(campaignId: string) {
     0,
   );
 
+  // ── Phase 1 P1-6 fix: fetch ALL tasks for each attributed household (not just
+  // the attributed ones). The previous code only looked at attributed tasks when
+  // computing "prior orders" — so a household with 50 prior orders on other
+  // campaigns was classified as a "first-ever order — 100% incremental" simply
+  // because they had no prior attributed tasks to THIS campaign.
+  //
+  // We fetch ALL the household's completed tasks (any campaign) so the
+  // prior-order baseline reflects the household's true ordering behaviour.
+  const householdIds = [...new Set(completedTasks.map((t) => t.householdId))];
+  const allHouseholdTasks = householdIds.length > 0
+    ? await db.task.findMany({
+        where: {
+          householdId: { in: householdIds },
+          status: { in: ["COMPLETED", "VERIFIED", "ESCROW_RELEASED"] },
+          cancelledAt: null,
+        },
+        select: {
+          id: true,
+          householdId: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+          verifiedAt: true,
+          finalAmountCents: true,
+          amountCents: true,
+        },
+      })
+    : [];
+  const tasksByHousehold = new Map<string, typeof allHouseholdTasks>();
+  for (const t of allHouseholdTasks) {
+    const arr = tasksByHousehold.get(t.householdId) ?? [];
+    arr.push(t);
+    tasksByHousehold.set(t.householdId, arr);
+  }
+
   // Estimate incremental revenue:
   // - If the household's last order before the voucher was 90+ days ago → 100% incremental
   // - If order frequency is stable → 50% incremental
   // - If household orders frequently → only the discount is incremental
+  // - No prior orders → 100% incremental (new customer)
   let incrementalRevenueCents = 0;
 
   for (const task of completedTasks) {
-    const householdTasks = tasks.filter((t) => t.householdId === task.householdId);
+    // Use ALL of the household's tasks (not just attributed ones) to compute prior orders.
+    const householdTasks = tasksByHousehold.get(task.householdId) ?? [];
     const taskDate = new Date(task.createdAt);
     const priorOrders = householdTasks.filter(
       (t) => new Date(t.createdAt) < taskDate,

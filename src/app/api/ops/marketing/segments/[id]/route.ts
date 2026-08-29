@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { computeSegmentMembers, archiveSegment } from "@/lib/marketing/segment-engine";
+import { computeSegmentMembers, archiveSegment, unarchiveSegment } from "@/lib/marketing/segment-engine";
 
 // GET /api/ops/marketing/segments/[id] — segment details + paginated members
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -67,6 +67,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (action === "archive") {
       await archiveSegment(id);
       return NextResponse.json({ success: true });
+    }
+
+    // Phase 2 Fix 12 — reactivate an ARCHIVED segment back to ACTIVE,
+    // recomputing members so it is immediately usable.
+    if (action === "unarchive") {
+      // Guard: only ARCHIVED segments can be reactivated.
+      const seg = await db.segment.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!seg) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (seg.status !== "ARCHIVED") {
+        return NextResponse.json(
+          { error: "Segment is not archived" },
+          { status: 400 },
+        );
+      }
+      const result = await unarchiveSegment(id);
+      return NextResponse.json({
+        success: true,
+        total: result.total,
+        added: result.added,
+        removed: result.removed,
+      });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

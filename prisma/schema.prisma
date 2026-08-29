@@ -124,6 +124,7 @@ enum NotificationEventType {
   ADDON_APPROVED
   ADDON_REJECTED
   VOUCHER_COMPENSATION_ISSUED
+  VOUCHER_ISSUED
 }
 
 enum NotificationStatus {
@@ -376,6 +377,7 @@ model Task {
   verificationPhotos VerificationPhoto[]
   escrowEntries      EscrowLedger[]
   attachments        TaskAttachment[]
+  campaignAttributions CampaignAttribution[] @relation("CampaignAttributionTask")
 
   @@index([householdId, idempotencyKey])
 }
@@ -961,6 +963,33 @@ model Campaign {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
+  // ── Phase 2 Fix 10 — campaign content editor ──
+  // Optional message content stored on the campaign. Not yet a delivery
+  // mechanism — these fields hold the editor's content; delivery is a
+  // later phase's concern (Fix 11 only handles the voucher-issuance job).
+  subjectLine      String? // email subject line
+  bodyText         String? // plain-text email body
+  bodyHtml         String? // optional HTML email body
+  smsText          String? // SMS body (max 160 chars enforced in UI)
+
+  // ── Fix 21 — timezone-aware scheduled send ──
+  //
+  // `sendAt` is the wall-clock time at which the campaign should be
+  // activated / dispatched, interpreted in `timezone`. Both fields are
+  // optional: when `sendAt` is null the campaign is treated as "send
+  // immediately on activation" (existing behaviour).
+  //
+  // `timezone` defaults to "Asia/Singapore" because the app is a
+  // Singapore-local product — even when no schedule is set, capturing
+  // the default lets the UI render every existing campaign's start/end
+  // in SG time without falling back to UTC.
+  //
+  // Note: storing the schedule does NOT trigger delivery — that's a
+  // separate scheduler concern. Fix 21 is purely about persisting +
+  // displaying the intended send time correctly.
+  sendAt           DateTime?
+  timezone         String?  @default("Asia/Singapore")
+
   discountRule    DiscountRule?
   codes           DiscountCode[]
   redemptions     CodeRedemption[]
@@ -968,6 +997,7 @@ model Campaign {
   attributions    CampaignAttribution[]
   events          CampaignEvent[]
   segments        Segment[]
+  issuanceJobs    VoucherIssuanceJob[]
 
   @@index([status])
   @@index([type])
@@ -1110,6 +1140,7 @@ model Segment {
 
   campaign  Campaign?       @relation(fields: [campaignId], references: [id])
   members   SegmentMember[]
+  issuanceJobs VoucherIssuanceJob[]
 
   @@index([status])
   @@index([campaignId])
@@ -1136,6 +1167,35 @@ model SegmentMember {
   @@index([householdId])
 }
 
+// ── VoucherIssuanceJob (Phase 2 Fix 11) ──
+//
+// Tracks an asynchronous voucher-issuance run for a (campaign, segment) pair.
+// Created when POST /api/ops/campaigns is called with a segmentId; the API
+// returns 202 immediately with the jobId. A polling endpoint
+// (POST /api/ops/marketing/process-issuance-job) picks up PENDING jobs and
+// processes them in batches, transitioning PENDING → RUNNING → COMPLETED (or FAILED).
+
+model VoucherIssuanceJob {
+  id              String    @id @default(cuid())
+  campaignId      String
+  segmentId       String
+  status          String    @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  totalMembers    Int       @default(0)
+  processedCount  Int       @default(0)
+  failedCount     Int       @default(0)
+  voucherIds      Json?     // array of created voucher IDs
+  error           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  campaign  Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([status])
+}
+
 // ── CampaignAttribution (multi-touch attribution) ──
 
 model CampaignAttribution {
@@ -1149,9 +1209,11 @@ model CampaignAttribution {
 
   household  Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  task       Task?     @relation("CampaignAttributionTask", fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([householdId, campaignId])
   @@index([campaignId, touchpoint])
+  @@index([taskId])
 }
 
 enum AttributionTouchpoint {

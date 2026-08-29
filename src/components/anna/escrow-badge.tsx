@@ -150,19 +150,16 @@ export function EscrowBadge({
             </div>
           )}
 
-          {/* Commission + payout breakdown (summed across all entries) */}
-          <div className="flex items-center justify-between text-[10px] text-[var(--anna-muted)] pt-1 border-t border-[var(--anna-border)]">
-            <span>Platform Commission (10%)</span>
-            <span className="font-data">−{formatSgd(totalCommissionCents)}</span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--anna-muted)]">Your Payout</span>
-            <span className="font-data font-bold text-[var(--anna-slate)]">
-              {formatSgd(totalVendorPayoutCents)}
-            </span>
-          </div>
+          {/* Commission + payout breakdown (summed across all entries)
+              NOTE: Commission and vendor payout are INTERNAL financial details
+              (platform + vendor only). They must NOT be shown to the household.
+              The household sees: Order Total, Refund (if any), and the final
+              amount paid/remaining — which is orderTotal − refund, NOT the
+              vendor's payout (which is after commission deduction). */}
 
-          {/* Refund + bottom row (PAID / Refunded / Remaining Payable) */}
+          {/* Refund + bottom row (PAID / Refunded / Remaining Payable)
+              For the household, the bottom row shows the ORDER total minus
+              refund (what they actually paid), not the vendor payout. */}
           {(hasRefund || isReleased) && (
             <>
               {hasRefund && (
@@ -179,7 +176,7 @@ export function EscrowBadge({
                     Paid
                   </span>
                   <span className="font-data font-bold text-[var(--anna-success)]">
-                    {formatSgd(totalVendorPayoutCents)}
+                    {formatSgd(remainingCents)}
                   </span>
                 </div>
               ) : isRefunded ? (

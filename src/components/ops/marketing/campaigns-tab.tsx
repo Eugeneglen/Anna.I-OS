@@ -14,7 +14,6 @@ import { CampaignTable } from "@/components/ops/marketing/campaign-table";
 import { CampaignMobileList } from "@/components/ops/marketing/campaign-mobile-card";
 import { CampaignSummaryCards } from "@/components/ops/marketing/campaign-summary-cards";
 import { CampaignDetailSheet } from "@/components/ops/marketing/campaign-detail-sheet";
-import { CampaignCreateDialog } from "@/components/ops/marketing/campaign-create-dialog";
 import { CAMPAIGN_QUERY_KEYS } from "@/components/ops/marketing/campaign-styles";
 import type { CampaignListItem, CampaignListResponse } from "@/components/ops/marketing/types";
 
@@ -34,7 +33,17 @@ const STATUS_PILL_OPTIONS: { value: string; label: string }[] = [
   { value: "ENDED", label: "Ended" },
 ];
 
-export function CampaignsTab() {
+export function CampaignsTab({
+  // Fix 15 — create-dialog state is now lifted to the parent page so the
+  // Insights tab's "Create Campaign" action can open the same dialog.
+  // Both props are optional; if omitted, the tab falls back to internal
+  // state (preserving backwards compat for any caller that doesn't lift).
+  createOpen: externalCreateOpen,
+  setCreateOpen: externalSetCreateOpen,
+}: {
+  createOpen?: boolean;
+  setCreateOpen?: (open: boolean) => void;
+} = {}) {
   const opsCtx = useOpsUser();
   const can = opsCtx?.can;
   const canCreate = !!can && can("marketing", "create");
@@ -45,7 +54,10 @@ export function CampaignsTab() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [showServiceRecovery, setShowServiceRecovery] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  // Internal fallback state used when the parent doesn't lift the dialog.
+  const [internalCreateOpen, setInternalCreateOpen] = useState(false);
+  const createOpen = externalCreateOpen ?? internalCreateOpen;
+  const setCreateOpen = externalSetCreateOpen ?? setInternalCreateOpen;
 
   const { data, isLoading } = useQuery<CampaignListResponse>({
     queryKey: CAMPAIGN_QUERY_KEYS.list,
@@ -193,7 +205,11 @@ export function CampaignsTab() {
         canDelete={canDelete}
       />
 
-      <CampaignCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {/* Note: the CampaignCreateDialog is now rendered by the parent
+          marketing page (so the Insights tab can trigger it via the
+          "Create Campaign" action). The "New Campaign" button above
+          calls setCreateOpen(true), which works regardless of whether
+          the parent lifted the state. */}
     </div>
   );
 }

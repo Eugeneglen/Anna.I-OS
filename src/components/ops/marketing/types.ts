@@ -69,6 +69,14 @@ export interface CampaignListItem {
   createdByName: string;
   _count: { codes: number; redemptions: number };
   discountRule?: DiscountRule | null;
+  // Phase 2 Fix 10 — campaign content fields (optional, additive)
+  subjectLine?: string | null;
+  bodyText?: string | null;
+  bodyHtml?: string | null;
+  smsText?: string | null;
+  // ── Fix 21 — timezone-aware scheduled send (additive) ──
+  sendAt?: string | null;
+  timezone?: string | null;
 }
 
 export interface CampaignDetail extends CampaignListItem {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-service";
+import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
 
 // POST /api/marketing/redeem — public endpoint for households to redeem discount codes
 // No ops auth required — but the household must be authenticated (checked by the caller)
@@ -51,6 +52,13 @@ export async function POST(req: NextRequest) {
       bookingId: parsed.data.bookingId,
       subscriptionId: parsed.data.subscriptionId,
     });
+
+    // ── Fix 19 — invalidate caches after a successful redemption ──
+    // Mirrors the ops-side /api/ops/campaigns/[id]/redeem invalidation:
+    // a household-side redemption changes behaviour counts (vouchersRedeemed)
+    // + campaign-perf numbers (redemptionRate, conversionRate, etc.).
+    invalidateBehaviourCache();
+    invalidateCampaignPerfCache(result.campaignId!);
 
     return NextResponse.json({
       valid: true,

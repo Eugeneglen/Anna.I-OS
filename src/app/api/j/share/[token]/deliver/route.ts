@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine";
 
 // POST /api/j/share/[token]/deliver
 // No-auth — the shareToken IS the auth. Driver clicks "Deliver Laundry".
@@ -87,6 +88,14 @@ export async function POST(
 
       return updatedBooking;
     });
+
+    // Phase 1 P1-4 fix: refresh cached household marketing stats (post-commit,
+    // non-fatal — task completion must succeed even if the stats refresh fails).
+    try {
+      await updateHouseholdCachedStats(booking.task.householdId);
+    } catch (statsErr) {
+      console.error("[share/deliver] updateHouseholdCachedStats failed:", statsErr);
+    }
 
     return NextResponse.json({ booking: updated });
   } catch (error) {

@@ -16,7 +16,12 @@
 
 import { db } from "@/lib/db";
 import { generateSingleCode } from "./campaign-service";
-import type { Campaign } from "@prisma/client";
+import {
+  NotificationChannel,
+  NotificationEventType,
+  NotificationStatus,
+  RecipientType,
+} from "@prisma/client";
 
 // ── Issue a single voucher to a household ──
 
@@ -25,6 +30,33 @@ export async function issueVoucher(params: {
   campaignId: string;
   customExpiry?: Date;
 }): Promise<{ voucherId: string; code: string }> {
+  // ── Fix 20 — PDPA marketingConsent gate ──
+  //
+  // Households with `marketingConsent=false` have explicitly opted out
+  // of marketing communications. Issuing them a marketing voucher would
+  // violate PDPA consent rules, so we short-circuit BEFORE creating any
+  // DiscountCode / Voucher / Notification rows. The check is placed at
+  // the top of `issueVoucher` so every caller is covered — including
+  // the segment-bulk path (issueVouchersToSegment) and the dispute
+  // compensation path (service-recovery → issueCompensationVoucher).
+  //
+  // Throwing rather than returning a "soft" failure keeps the contract
+  // simple: callers that want to ignore the failure (e.g. the bulk
+  // issuer) wrap the call in try/catch, which is exactly what
+  // issueVouchersToSegment already does.
+  const household = await db.household.findUnique({
+    where: { id: params.householdId },
+    select: { marketingConsent: true, name: true },
+  });
+  if (!household) {
+    throw new Error(`Household ${params.householdId} not found — voucher not issued.`);
+  }
+  if (household.marketingConsent === false) {
+    throw new Error(
+      "Household has opted out of marketing communications. Voucher not issued.",
+    );
+  }
+
   // Generate a unique code assigned to this household
   const code = await generateSingleCode(params.campaignId, {
     maxUses: 1, // single-use voucher
@@ -46,6 +78,23 @@ export async function issueVoucher(params: {
       status: "CLAIMED",
       expiresAt: params.customExpiry || code.expiresAt,
       notifiedAt: null, // will be set when the VOUCHER_ISSUED notification is sent
+    },
+    include: {
+      campaign: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          targetCategory: true,
+          discountRule: {
+            select: {
+              discountType: true,
+              discountValue: true,
+              maxDiscountCapCents: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -69,37 +118,272 @@ export async function issueVoucher(params: {
     },
   });
 
+  // ── Phase 1 P0-3 fix: create a household Notification so the household
+  // learns they received a marketing voucher. Mirrors the
+  // VOUCHER_COMPENSATION_ISSUED pattern in /api/ops/escrow/[id]/route.ts.
+  // Wrapped in try/catch — voucher issuance should still succeed even if the
+  // notification write fails (the wallet row is the source of truth).
+  try {
+    const campaign = voucher.campaign;
+    const rule = campaign.discountRule;
+    const isPct = rule?.discountType === "PERCENTAGE";
+    const discountLabel = rule
+      ? isPct
+        ? `${rule.discountValue}% off`
+        : `SGD $${rule.discountValue.toFixed(2)} off`
+      : "a discount";
+    const expiresAt = voucher.expiresAt;
+    const expiryLabel = expiresAt
+      ? expiresAt.toLocaleDateString("en-SG", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : "no expiry";
+
+    // Look up household members so each one gets a personal notification.
+    const members = await db.familyMember.findMany({
+      where: { householdId: params.householdId },
+      select: { id: true },
+    });
+
+    const now = new Date();
+    for (const member of members) {
+      await db.notification.create({
+        data: {
+          householdId: params.householdId,
+          recipientType: RecipientType.HOUSEHOLD_MEMBER,
+          memberId: member.id,
+          channel: NotificationChannel.WEB_PUSH,
+          eventType: NotificationEventType.VOUCHER_ISSUED,
+          title: `New voucher: ${discountLabel}`,
+          body: `You've received a voucher (code ${code.code}) for "${campaign.name}". Expires ${expiryLabel}. Apply it at checkout on your next booking.`,
+          status: NotificationStatus.PENDING,
+          referenceType: "voucher",
+          referenceId: voucher.id,
+        },
+      });
+    }
+
+    // Mark the voucher as notified now that the notification(s) have been created
+    await db.voucher.update({
+      where: { id: voucher.id },
+      data: { notifiedAt: now },
+    });
+  } catch (error) {
+    console.error(
+      `[voucher-engine] Failed to create VOUCHER_ISSUED notification for voucher ${voucher.id}:`,
+      error,
+    );
+    // Non-fatal: the voucher itself was already created successfully.
+  }
+
   return { voucherId: voucher.id, code: code.code };
 }
 
 // ── Issue vouchers to all members of a segment ──
+//
+// Phase 2 Fix 11: this function now optionally accepts a `jobId` so the
+// caller (the background job processor) can stream progress to the
+// `VoucherIssuanceJob` row as it goes. When `jobId` is undefined the
+// function behaves exactly as before (synchronous, all members at once)
+// so existing callers are unaffected.
+//
+// Processing is done in batches of `batchSize` (default 50) to keep
+// memory bounded for large segments. Between batches, if a jobId is
+// provided, the job row's processedCount/voucherIds are updated.
+
+const DEFAULT_BATCH_SIZE = 50;
 
 export async function issueVouchersToSegment(params: {
   segmentId: string;
   campaignId: string;
   customExpiry?: Date;
-}): Promise<{ issued: number; voucherIds: string[] }> {
+  jobId?: string;
+  batchSize?: number;
+}): Promise<{ issued: number; voucherIds: string[]; failedCount: number; skippedCount: number }> {
   const members = await db.segmentMember.findMany({
     where: { segmentId: params.segmentId },
     select: { householdId: true },
   });
 
+  // ── Fix 20 — pre-filter households that have opted out of marketing ──
+  //
+  // We do a single bulk lookup so we can skip opted-out households BEFORE
+  // calling issueVoucher (which would throw the consent error for each
+  // one). This keeps the bulk path efficient — one extra query instead
+  // of N extra DiscountCode-update rollbacks — and lets us surface a
+  // distinct `skippedCount` to the caller / job log, instead of lumping
+  // consent opt-outs into `failedCount` (which would surface as a
+  // misleading red error in the issuance-job UI).
+  const householdIds = members.map((m) => m.householdId);
+  const optedOutHouseholdIds = new Set<string>();
+  if (householdIds.length > 0) {
+    const optedOut = await db.household.findMany({
+      where: {
+        id: { in: householdIds },
+        marketingConsent: false,
+      },
+      select: { id: true },
+    });
+    for (const h of optedOut) optedOutHouseholdIds.add(h.id);
+  }
+
+  const eligibleMembers = members.filter(
+    (m) => !optedOutHouseholdIds.has(m.householdId),
+  );
+  const skippedCount = optedOutHouseholdIds.size;
+
+  if (skippedCount > 0) {
+    // Log how many were skipped — surfaces in the dev server console so
+    // ops can correlate a "200 vouchers issued, 5 skipped" run with the
+    // segment's actual consent state.
+    console.info(
+      `[voucher-engine] Segment ${params.segmentId}: skipping ${skippedCount} household${skippedCount === 1 ? "" : "s"} with marketingConsent=false (PDPA opt-out).`,
+    );
+  }
+
+  const batchSize = params.batchSize ?? DEFAULT_BATCH_SIZE;
   const voucherIds: string[] = [];
-  for (const member of members) {
-    try {
-      const result = await issueVoucher({
-        householdId: member.householdId,
-        campaignId: params.campaignId,
-        customExpiry: params.customExpiry,
-      });
-      voucherIds.push(result.voucherId);
-    } catch (error) {
-      console.error(`[voucher-engine] Failed to issue voucher to household ${member.householdId}:`, error);
-      // Continue with other households
+  let failedCount = 0;
+
+  // If a jobId is provided, mark the job as RUNNING + set totalMembers.
+  // NOTE: totalMembers reflects the *eligible* count (segment members
+  // minus opted-out households) so the progress bar denominator matches
+  // the actual number of vouchers we will attempt to issue.
+  if (params.jobId) {
+    await db.voucherIssuanceJob.update({
+      where: { id: params.jobId },
+      data: {
+        status: "RUNNING",
+        totalMembers: eligibleMembers.length,
+        startedAt: new Date(),
+      },
+    }).catch((err) => {
+      // Non-fatal — log and continue. The job row may have been deleted
+      // concurrently; the issuance itself should still proceed.
+      console.error("[voucher-engine] Failed to mark job RUNNING:", err);
+    });
+  }
+
+  for (let i = 0; i < eligibleMembers.length; i += batchSize) {
+    const batch = eligibleMembers.slice(i, i + batchSize);
+    for (const member of batch) {
+      try {
+        const result = await issueVoucher({
+          householdId: member.householdId,
+          campaignId: params.campaignId,
+          customExpiry: params.customExpiry,
+        });
+        voucherIds.push(result.voucherId);
+      } catch (error) {
+        // Distinguish consent opt-out from genuine failures. The pre-filter
+        // above should make this branch rare for consent reasons (only if the
+        // household flipped consent between the bulk lookup and this call),
+        // but we still log it as "skipped" rather than "failed" so the
+        // failure count reflects actual errors only.
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("opted out of marketing communications")) {
+          // Defensive — should be 0 in practice due to the pre-filter.
+          console.info(
+            `[voucher-engine] Late skip for household ${member.householdId} (consent flipped mid-batch).`,
+          );
+        } else {
+          console.error(`[voucher-engine] Failed to issue voucher to household ${member.householdId}:`, error);
+          failedCount++;
+        }
+        // Continue with other households
+      }
+    }
+
+    // After each batch, stream progress to the job row (if a jobId was provided).
+    if (params.jobId) {
+      try {
+        await db.voucherIssuanceJob.update({
+          where: { id: params.jobId },
+          data: {
+            processedCount: i + batch.length,
+            failedCount,
+            voucherIds: voucherIds as unknown as Record<string, unknown>,
+          },
+        });
+      } catch (err) {
+        // Non-fatal — log and continue.
+        console.error("[voucher-engine] Failed to update job progress:", err);
+      }
     }
   }
 
-  return { issued: voucherIds.length, voucherIds };
+  // Mark the job as COMPLETED (if a jobId was provided).
+  if (params.jobId) {
+    try {
+      await db.voucherIssuanceJob.update({
+        where: { id: params.jobId },
+        data: {
+          status: "COMPLETED",
+          processedCount: eligibleMembers.length,
+          failedCount,
+          voucherIds: voucherIds as unknown as Record<string, unknown>,
+          completedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      console.error("[voucher-engine] Failed to mark job COMPLETED:", err);
+    }
+  }
+
+  return { issued: voucherIds.length, voucherIds, failedCount, skippedCount };
+}
+
+// ── Helper: get a single VoucherIssuanceJob's status ──
+
+export async function getVoucherIssuanceJobStatus(jobId: string) {
+  const job = await db.voucherIssuanceJob.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      campaignId: true,
+      segmentId: true,
+      status: true,
+      totalMembers: true,
+      processedCount: true,
+      failedCount: true,
+      error: true,
+      startedAt: true,
+      completedAt: true,
+      createdAt: true,
+    },
+  });
+  return job;
+}
+
+// ── Helper: atomically claim the oldest PENDING job ──
+//
+// Uses an updateMany with a status filter to atomically transition
+// PENDING → RUNNING for the oldest job, returning the claimed job's id.
+// This avoids race conditions if multiple processor requests arrive
+// concurrently. Returns null if no PENDING job exists.
+
+export async function claimNextPendingIssuanceJob(): Promise<string | null> {
+  // Find oldest PENDING job first (read).
+  const pending = await db.voucherIssuanceJob.findFirst({
+    where: { status: "PENDING" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!pending) return null;
+
+  // Atomically transition PENDING → RUNNING only if still PENDING.
+  // This guards against concurrent processors both picking up the same row.
+  const result = await db.voucherIssuanceJob.updateMany({
+    where: { id: pending.id, status: "PENDING" },
+    data: { status: "RUNNING", startedAt: new Date() },
+  });
+  if (result.count === 0) {
+    // Another processor beat us to it — recurse to try the next one.
+    return claimNextPendingIssuanceJob();
+  }
+  return pending.id;
 }
 
 // ── Get all vouchers for a household ──

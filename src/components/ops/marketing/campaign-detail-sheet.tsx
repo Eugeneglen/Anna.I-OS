@@ -23,12 +23,16 @@ import {
   Settings2,
   BarChart3,
   Calendar,
+  Clock,
+  Globe2,
   User,
   Layers,
   AlertCircle,
+  Mail,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatSgd, formatDateTime, humanizeEnum } from "@/lib/ops-format";
+import { formatSgd, formatDateTime, humanizeEnum, formatInTimezone, timezoneLabel } from "@/lib/ops-format";
 import {
   STATUS_STYLES,
   TYPE_STYLES,
@@ -304,6 +308,38 @@ export function CampaignDetailSheet({
               </div>
             </section>
 
+            {/* ── Fix 21 — Scheduled Send (only shown when sendAt is set) ── */}
+            {/* Display the intended send time + timezone using Intl.DateTimeFormat */}
+            {/* so it renders correctly regardless of the viewer's browser tz. */}
+            {/* Additive: existing campaigns with no sendAt look unchanged. */}
+            {campaign.sendAt && (
+              <section className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1">
+                  <Clock size={12} /> Scheduled Send
+                </p>
+                <div className="bg-gradient-to-br from-[var(--anna-sage-light)] to-[var(--anna-bg)] rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Clock size={14} className="text-[var(--anna-sage-dark)]" />
+                    <span className="font-data text-sm font-semibold text-[var(--anna-slate)]">
+                      {formatInTimezone(campaign.sendAt, campaign.timezone)}
+                    </span>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] font-medium bg-[var(--anna-bg)] text-[var(--anna-slate-light)] inline-flex items-center gap-1"
+                    >
+                      <Globe2 size={10} />
+                      {timezoneLabel(campaign.timezone)}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-[var(--anna-muted)]">
+                    Stored in {campaign.timezone || "Asia/Singapore"}. Delivery
+                    scheduler is a separate concern — this field records the
+                    intended send time only.
+                  </p>
+                </div>
+              </section>
+            )}
+
             {/* ── Section 2: Discount rule ── */}
             <section className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1">
@@ -387,6 +423,50 @@ export function CampaignDetailSheet({
             <section className="space-y-2">
               <CampaignPerformance campaignId={selectedId} />
             </section>
+
+            {/* ── Phase 2 Fix 10 — Campaign Content (read-only display) ── */}
+            {(campaign.subjectLine || campaign.bodyText || campaign.smsText) && (
+              <section className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1">
+                  <Mail size={12} /> Campaign Content
+                </p>
+                <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4 space-y-3">
+                  {campaign.subjectLine && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wider text-[var(--anna-muted)]">
+                        Subject Line
+                      </p>
+                      <p className="text-sm font-medium text-[var(--anna-slate)]">
+                        {campaign.subjectLine}
+                      </p>
+                    </div>
+                  )}
+                  {campaign.bodyText && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wider text-[var(--anna-muted)]">
+                        Email Body
+                      </p>
+                      <pre className="text-xs text-[var(--anna-slate-light)] whitespace-pre-wrap font-sans bg-[var(--anna-bg)] rounded-lg p-2 max-h-60 overflow-y-auto anna-scroll">
+                        {campaign.bodyText}
+                      </pre>
+                    </div>
+                  )}
+                  {campaign.smsText && (
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1">
+                        <MessageSquare size={10} /> SMS Text
+                        <span className="font-data text-[var(--anna-muted)] normal-case tracking-normal">
+                          ({campaign.smsText.length}/160)
+                        </span>
+                      </p>
+                      <p className="text-xs text-[var(--anna-slate-light)] bg-[var(--anna-bg)] rounded-lg p-2">
+                        {campaign.smsText}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* ── Section 4: Codes ── */}
             <section className="space-y-2">

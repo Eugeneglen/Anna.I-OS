@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const resolveDisputeSchema = z.object({
   bookingId: z.string().min(1).optional(),
@@ -107,6 +108,15 @@ export async function POST(
 
       return updatedTask
     })
+
+    // Phase 1 P1-4 fix: refresh cached household marketing stats (post-commit,
+    // non-fatal). The dispute reset transitions DISPUTED → COMPLETED, so the
+    // task now re-enters the cached-stats filter set.
+    try {
+      await updateHouseholdCachedStats(task.householdId)
+    } catch (statsErr) {
+      console.error("[tasks/resolve-dispute] updateHouseholdCachedStats failed:", statsErr)
+    }
 
     return NextResponse.json({ task: result })
   } catch (error) {

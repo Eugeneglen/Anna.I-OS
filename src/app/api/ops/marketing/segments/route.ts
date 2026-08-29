@@ -3,6 +3,12 @@ import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { createSegment, type SegmentFilters } from "@/lib/marketing/segment-engine";
+import {
+  checkRateLimit,
+  opsRateKey,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 // GET /api/ops/marketing/segments — list all segments
 export async function GET() {
@@ -41,6 +47,15 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const allowed = await hasPermission(session, "marketing", "create");
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    // ── Fix 17 — rate limit segment creation per ops user ──
+    // 10 requests / minute. Segment creation triggers a full recompute
+    // of segment members (computeAllHouseholdBehaviours is expensive —
+    // scans every task + household). Auth + permission checks first.
+    const rlKey = opsRateKey(session.userId, "segment-create");
+    if (!checkRateLimit(rlKey, RATE_LIMITS.segmentCreate.limit, RATE_LIMITS.segmentCreate.windowMs)) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
 
     const body = await req.json();
     const { name, description, filters } = body;

@@ -5,6 +5,7 @@ import { TaskStatus, NotificationChannel, NotificationEventType, NotificationSta
 import { checkAndPromoteAutonomy } from "@/lib/autonomy"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged } from "@/lib/events"
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
@@ -113,6 +114,15 @@ export async function POST(
       previousStatus: task.status,
       householdId: task.householdId,
     }).catch(() => {});
+
+    // Phase 1 P1-4 fix: refresh cached household marketing stats (verifiedAt
+    // may now feed into lastOrderAt). Non-fatal — verification must succeed
+    // even if the stats refresh fails.
+    try {
+      await updateHouseholdCachedStats(task.householdId)
+    } catch (statsErr) {
+      console.error("[tasks/verify] updateHouseholdCachedStats failed:", statsErr)
+    }
 
     return NextResponse.json({
       task: verifiedTask,

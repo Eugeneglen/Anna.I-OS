@@ -3,6 +3,7 @@ import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { expireVouchers } from "@/lib/marketing/voucher-engine";
+import { invalidateBehaviourCache, invalidateAllCampaignPerfCaches } from "@/lib/cache";
 
 // POST /api/ops/marketing/expire-vouchers
 // Manually triggers voucher expiry + sends VOUCHER_EXPIRING notifications
@@ -44,7 +45,7 @@ export async function POST() {
     let notified = 0;
     for (const voucher of expiringVouchers) {
       const members = await db.familyMember.findMany({
-        where: { householdId: voucher.householdId, isActive: true },
+        where: { householdId: voucher.householdId },
         select: { id: true },
       });
 
@@ -72,6 +73,15 @@ export async function POST() {
       });
       notified++;
     }
+
+    // ── Fix 19 — bulk voucher expiry sweep touches multiple campaigns ──
+    // Voucher status flips (CLAIMED → EXPIRED) change the behaviour
+    // outputs (vouchersExpired) for every affected household and the
+    // funnel numbers (vouchersIssued vs vouchersRedeemed denominator)
+    // for every affected campaign. Drop the entire behaviour cache +
+    // all campaign-perf caches so the next reads see the new state.
+    invalidateBehaviourCache();
+    invalidateAllCampaignPerfCaches();
 
     return NextResponse.json({
       expired: expired.expired,

@@ -5,6 +5,7 @@ import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, No
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
 import { emitEscrowStateChanged, emitDisputeRaised, emitVendorNotification } from "@/lib/events"
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -146,6 +147,18 @@ export async function PATCH(
         householdId: task.householdId,
         vendorPayoutCents: escrow.vendorPayoutCents,
       }).catch(() => {})
+
+      // Phase 1 P1-4 fix: refresh cached household marketing stats now that
+      // the task transitioned into ESCROW_RELEASED (a cached-stats-eligible
+      // state). Non-fatal — escrow release must succeed even if the stats
+      // refresh fails. This endpoint is NOT one of the 5 OPS escrow actions
+      // (those live in /api/ops/escrow/[id]/route.ts) so this addition does
+      // not touch the forbidden module.
+      try {
+        await updateHouseholdCachedStats(task.householdId)
+      } catch (statsErr) {
+        console.error("[tasks/[id]/escrow release] updateHouseholdCachedStats failed:", statsErr)
+      }
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }

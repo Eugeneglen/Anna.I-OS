@@ -35,6 +35,17 @@ export interface CreateCampaignInput {
   maxAutonomyLevel?: number;
   createdById?: string;
   createdByName: string;
+  // ── Phase 2 Fix 10 — campaign content editor ──
+  subjectLine?: string;
+  bodyText?: string;
+  bodyHtml?: string;
+  smsText?: string;
+  // ── Fix 21 — timezone-aware scheduled send ──
+  // Optional ISO datetime string interpreted in `timezone`. When omitted,
+  // the campaign has no scheduled send (existing "send on activation"
+  // behaviour). The timezone defaults to Asia/Singapore server-side.
+  sendAt?: string;
+  timezone?: string;
 }
 
 export async function createCampaign(input: CreateCampaignInput) {
@@ -51,6 +62,19 @@ export async function createCampaign(input: CreateCampaignInput) {
       endDate: input.endDate ? new Date(input.endDate) : null,
       createdById: input.createdById,
       createdByName: input.createdByName,
+      // Phase 2 Fix 10 — content editor fields (optional, additive)
+      subjectLine: input.subjectLine || null,
+      bodyText: input.bodyText || null,
+      bodyHtml: input.bodyHtml || null,
+      smsText: input.smsText || null,
+      // Fix 21 — scheduled send (additive). `sendAt` is stored as UTC
+      // (Prisma DateTime is always UTC); the original timezone string is
+      // persisted alongside so the UI can render the wall-clock time in
+      // the user's chosen zone rather than always defaulting to SG.
+      // Defaults to Asia/Singapore when timezone is empty (matches the
+      // Prisma column default).
+      sendAt: input.sendAt ? new Date(input.sendAt) : null,
+      timezone: input.timezone?.trim() || "Asia/Singapore",
       discountRule: {
         create: {
           discountType: input.discountType as any,

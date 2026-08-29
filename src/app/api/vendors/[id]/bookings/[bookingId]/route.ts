@@ -6,6 +6,7 @@ import { BOOKING_STATUS_TRANSITIONS, PLATFORM_COMMISSION_RATE, VENDOR_ACCEPTANCE
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
+import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
@@ -236,6 +237,15 @@ export async function PATCH(
       })
 
       triggerAnomalyDetection(booking.task.householdId)
+
+      // Phase 1 P1-4 fix: refresh cached household marketing stats
+      // (totalOrders / totalSpentCents / lastOrderAt). Non-fatal — task
+      // completion must succeed even if the stats refresh fails.
+      try {
+        await updateHouseholdCachedStats(booking.task.householdId)
+      } catch (statsErr) {
+        console.error("[vendors/bookings PATCH complete] updateHouseholdCachedStats failed:", statsErr)
+      }
 
       return NextResponse.json({ booking: updatedBooking })
     }

@@ -16,6 +16,7 @@
 
 import { db } from "@/lib/db";
 import type { ServiceCategory } from "@prisma/client";
+import { getMarketingConfig, type MarketingConfig } from "./config";
 
 // ── Types ──
 
@@ -49,6 +50,25 @@ export interface HouseholdBehaviour {
   vouchersClaimed: number;
   vouchersRedeemed: number;
   vouchersExpired: number;
+  // ── Phase 2 — additional fields used by the expanded Segment filters ──
+  /** Household name (for demographics / name-contains filter). */
+  householdName: string;
+  /** Household address line (for geographic-area filter — case-insensitive contains). */
+  householdAddress: string;
+  /** Max autonomy level reached across categories (1-5). 0 if never onboarding. */
+  maxAutonomyLevel: number;
+  /** Customer value tier (derived from RFM segment). HIGH | MEDIUM | LOW */
+  customerValue: "HIGH" | "MEDIUM" | "LOW";
+  /** Activity level — derived from lifecycle stage. ACTIVE | INACTIVE */
+  activityLevel: "ACTIVE" | "INACTIVE";
+  /** Marketing engagement — derived from voucher behaviour. ENGAGED | NOT_ENGAGED */
+  marketingEngagement: "ENGAGED" | "NOT_ENGAGED";
+  /** Account age in days (from household.createdAt). */
+  accountAgeDays: number;
+  /** Acquisition source (PILOT_COHORT | PUBLIC_CODE | PARTNERSHIP_REFERRAL | ORGANIC | OTHER). */
+  acquisitionSource: string;
+  /** Most recent active subscription tier (HOME | CARE). null if no active subscription. */
+  subscriptionTier: "HOME" | "CARE" | null;
 }
 
 const ALL_CATEGORIES = [
@@ -57,30 +77,57 @@ const ALL_CATEGORIES = [
 ];
 
 // ── RFM Scoring ──
+//
+// The scoring functions are pure (no DB) so they accept an optional
+// `config` parameter. When omitted, they fall back to the default
+// marketing config — preserving backwards compatibility with callers
+// that haven't been updated to pass config explicitly.
 
-export function scoreRecency(daysSinceLastOrder: number | null): number {
+const DEFAULT_CONFIG: MarketingConfig = {
+  reactivationRate: 0.3,
+  defaultDiscountValue: 15,
+  avgOrderValueCents: 5000,
+  rfmRecencyThresholds: [30, 60, 90, 180],
+  rfmFrequencyThresholds: [1, 3, 6, 10],
+  rfmMonetaryThresholds: [5000, 10000, 30000, 50000],
+  voucherExpiryNoticeDays: 3,
+};
+
+export function scoreRecency(
+  daysSinceLastOrder: number | null,
+  config: Pick<MarketingConfig, "rfmRecencyThresholds"> = DEFAULT_CONFIG,
+): number {
   if (daysSinceLastOrder === null) return 1; // never ordered
-  if (daysSinceLastOrder <= 30) return 5;
-  if (daysSinceLastOrder <= 60) return 4;
-  if (daysSinceLastOrder <= 90) return 3;
-  if (daysSinceLastOrder <= 180) return 2;
+  const [t1, t2, t3, t4] = config.rfmRecencyThresholds;
+  if (daysSinceLastOrder <= t1) return 5;
+  if (daysSinceLastOrder <= t2) return 4;
+  if (daysSinceLastOrder <= t3) return 3;
+  if (daysSinceLastOrder <= t4) return 2;
   return 1;
 }
 
-export function scoreFrequency(totalOrders: number): number {
-  if (totalOrders >= 10) return 5;
-  if (totalOrders >= 6) return 4;
-  if (totalOrders >= 3) return 3;
-  if (totalOrders >= 1) return 2;
+export function scoreFrequency(
+  totalOrders: number,
+  config: Pick<MarketingConfig, "rfmFrequencyThresholds"> = DEFAULT_CONFIG,
+): number {
+  const [f1, f2, f3, f4] = config.rfmFrequencyThresholds;
+  if (totalOrders >= f4) return 5;
+  if (totalOrders >= f3) return 4;
+  if (totalOrders >= f2) return 3;
+  if (totalOrders >= f1) return 2;
   return 1;
 }
 
-export function scoreMonetary(totalSpentCents: number): number {
-  const spent = totalSpentCents / 100; // convert to dollars
-  if (spent >= 500) return 5;
-  if (spent >= 300) return 4;
-  if (spent >= 100) return 3;
-  if (spent >= 50) return 2;
+export function scoreMonetary(
+  totalSpentCents: number,
+  config: Pick<MarketingConfig, "rfmMonetaryThresholds"> = DEFAULT_CONFIG,
+): number {
+  // Monetary thresholds are stored in cents (consistent with the rest of the system).
+  const [m1, m2, m3, m4] = config.rfmMonetaryThresholds;
+  if (totalSpentCents >= m4) return 5;
+  if (totalSpentCents >= m3) return 4;
+  if (totalSpentCents >= m2) return 3;
+  if (totalSpentCents >= m1) return 2;
   return 1;
 }
 
@@ -97,44 +144,63 @@ export function getRfmSegment(r: number, f: number, m: number): string {
 }
 
 // ── Churn Risk ──
+//
+// `calculateChurnRisk` uses RFM recency + frequency thresholds. The
+// thresholds come from the marketing config so they can be tuned via
+// platform_config without a code change.
 
 export function calculateChurnRisk(
   daysSinceLastOrder: number | null,
   totalOrders: number,
   orderFrequency: string,
+  config: Pick<MarketingConfig, "rfmRecencyThresholds" | "rfmFrequencyThresholds"> = DEFAULT_CONFIG,
 ): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
+  const [recencyRecent, recencyMid, recencyLate, recencyLapsed] = config.rfmRecencyThresholds;
+  const [, , freqRegular] = config.rfmFrequencyThresholds;
+
   if (daysSinceLastOrder === null && totalOrders === 0) return "LOW"; // new, never ordered — not churn risk yet
   if (daysSinceLastOrder === null) return "CRITICAL"; // registered but never ordered
 
-  if (daysSinceLastOrder <= 30 && totalOrders >= 3) return "LOW";
-  if (daysSinceLastOrder <= 30) return "MEDIUM"; // recent but few orders
-  if (daysSinceLastOrder <= 60 && orderFrequency === "DECLINING") return "HIGH";
-  if (daysSinceLastOrder <= 90 && totalOrders >= 3) return "HIGH";
-  if (daysSinceLastOrder > 90) return "CRITICAL";
-  if (daysSinceLastOrder > 60) return "HIGH";
+  if (daysSinceLastOrder <= recencyRecent && totalOrders >= freqRegular) return "LOW";
+  if (daysSinceLastOrder <= recencyRecent) return "MEDIUM"; // recent but few orders
+  if (daysSinceLastOrder <= recencyMid && orderFrequency === "DECLINING") return "HIGH";
+  if (daysSinceLastOrder <= recencyLate && totalOrders >= freqRegular) return "HIGH";
+  if (daysSinceLastOrder > recencyLate) return "CRITICAL";
+  if (daysSinceLastOrder > recencyMid) return "HIGH";
   return "MEDIUM";
 }
 
 // ── Lifecycle Stage ──
+//
+// Uses the recency thresholds from marketing config (recencyMid,
+// recencyRecent, and an intermediate midpoint) plus the
+// `rfmFrequencyThresholds` regular-customer cutoff.
 
 export function determineLifecycleStage(
   daysSinceLastOrder: number | null,
   totalOrders: number,
   accountAgeDays: number,
   orderFrequency: string,
+  config: Pick<MarketingConfig, "rfmRecencyThresholds" | "rfmFrequencyThresholds"> = DEFAULT_CONFIG,
 ): "NEW" | "ACTIVE" | "REGULAR" | "DECLINING" | "LAPSED" | "REACTIVATED" {
-  if (totalOrders === 0 && accountAgeDays <= 30) return "NEW";
+  const [recencyRecent, recencyMid, recencyLate] = config.rfmRecencyThresholds;
+  // "Regular" customer frequency — third bucket of rfmFrequencyThresholds (defaults to 6).
+  const freqRegular = config.rfmFrequencyThresholds[2];
+  // Midpoint between recencyRecent (30) and recencyMid (60) — used for "declining" detection.
+  const recencyMidpoint = Math.round((recencyRecent + recencyMid) / 2);
+
+  if (totalOrders === 0 && accountAgeDays <= recencyRecent) return "NEW";
   if (totalOrders === 0) return "NEW"; // registered but never ordered
 
   if (daysSinceLastOrder === null) return "NEW";
 
-  if (daysSinceLastOrder > 90) return "LAPSED";
-  if (orderFrequency === "DECLINING" && daysSinceLastOrder > 45) return "DECLINING";
-  if (totalOrders >= 5 && daysSinceLastOrder <= 30) return "REGULAR";
-  if (daysSinceLastOrder <= 30) return "ACTIVE";
+  if (daysSinceLastOrder > recencyLate) return "LAPSED";
+  if (orderFrequency === "DECLINING" && daysSinceLastOrder > recencyMidpoint) return "DECLINING";
+  if (totalOrders >= freqRegular && daysSinceLastOrder <= recencyRecent) return "REGULAR";
+  if (daysSinceLastOrder <= recencyRecent) return "ACTIVE";
 
   // If they were lapsed but ordered recently, they're reactivated
-  if (totalOrders >= 2 && daysSinceLastOrder <= 45) return "ACTIVE";
+  if (totalOrders >= 2 && daysSinceLastOrder <= recencyMidpoint) return "ACTIVE";
 
   return "ACTIVE";
 }
@@ -171,47 +237,92 @@ function determineOrderFrequency(
 }
 
 // ── Main: compute behaviour for a single household ──
+//
+// `computeHouseholdBehaviour` keeps its original per-household signature
+// (it's called from the household intelligence panel + cached-stats
+// backfill). The shared "pure" computation lives in
+// `computeBehaviourFromData()` below — both the single-household path
+// and the batched all-households path funnel through it, guaranteeing
+// identical output shape.
 
-export async function computeHouseholdBehaviour(householdId: string): Promise<HouseholdBehaviour> {
-  const [tasks, household, vouchers] = await Promise.all([
-    db.task.findMany({
-      where: { householdId, cancelledAt: null },
-      select: {
-        id: true,
-        status: true,
-        category: true,
-        amountCents: true,
-        discountCents: true,
-        finalAmountCents: true,
-        createdAt: true,
-        completedAt: true,
-        verifiedAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.household.findUnique({
-      where: { id: householdId },
-      select: {
-        id: true,
-        createdAt: true,
-        lastOrderAt: true,
-        totalOrders: true,
-        totalSpentCents: true,
-      },
-    }),
-    db.voucher.findMany({
-      where: { householdId },
-      select: { id: true, status: true },
-    }),
-  ]);
+// Types for the in-memory data the pure helper consumes. Mirrors the
+// Prisma select shapes used in `computeHouseholdBehaviour` exactly, so
+// the same code path can be reused by both call sites without
+// duplicating the per-household aggregation logic.
+
+type BehaviourHousehold = {
+  id: string;
+  name: string | null;
+  fullName: string | null;
+  address: string | null;
+  createdAt: Date;
+  lastOrderAt: Date | null;
+  totalOrders: number | null;
+  totalSpentCents: number | null;
+  acquisitionSource: string | null;
+};
+
+type BehaviourTask = {
+  householdId: string;
+  status: string;
+  category: string | null;
+  amountCents: number | null;
+  discountCents: number | null;
+  finalAmountCents: number | null;
+  createdAt: Date;
+  completedAt: Date | null;
+  verifiedAt: Date | null;
+};
+
+type BehaviourVoucher = {
+  householdId: string;
+  status: string;
+};
+
+type BehaviourAutonomyRow = {
+  householdId: string;
+  currentLevel: number;
+};
+
+type BehaviourSubscription = {
+  householdId: string;
+  tier: string;
+  status: string;
+  createdAt: Date;
+};
+
+/**
+ * Pure helper: compute a single household's behaviour from pre-fetched
+ * in-memory data. No DB access — both `computeHouseholdBehaviour` (single)
+ * and `computeAllHouseholdBehaviours` (batched) call into this so the
+ * output shape is identical regardless of how the data was fetched.
+ */
+function computeBehaviourFromData(params: {
+  householdId: string;
+  household: BehaviourHousehold | null;
+  tasks: BehaviourTask[];
+  vouchers: BehaviourVoucher[];
+  autonomyRows: BehaviourAutonomyRow[];
+  subscriptions: BehaviourSubscription[];
+  config: MarketingConfig;
+}): HouseholdBehaviour {
+  const { householdId, household, tasks, vouchers, autonomyRows, subscriptions, config } = params;
 
   const completedTasks = tasks.filter(
     (t) => t.status === "COMPLETED" || t.status === "VERIFIED" || t.status === "ESCROW_RELEASED",
   );
   const cancelledTasks = tasks.filter((t) => t.status === "CANCELLED");
 
-  // Recency
-  const lastCompleted = completedTasks[0]?.completedAt || completedTasks[0]?.verifiedAt || null;
+  // Recency — pick the most recent completed/verified timestamp.
+  // Mirrors the original logic which preferred completedAt then fell
+  // back to verifiedAt. We sort the completed set in-memory (newest
+  // first) so the first element is the most recent, matching the
+  // original `orderBy: { createdAt: "desc" }` + `[0]` access pattern.
+  const sortedCompleted = [...completedTasks].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const lastCompleted =
+    sortedCompleted[0]?.completedAt || sortedCompleted[0]?.verifiedAt || null;
   const daysSinceLastOrder = lastCompleted
     ? Math.floor((Date.now() - new Date(lastCompleted).getTime()) / (1000 * 60 * 60 * 24))
     : null;
@@ -234,25 +345,60 @@ export async function computeHouseholdBehaviour(householdId: string): Promise<Ho
   // Trends
   const orderFrequency = determineOrderFrequency(tasks);
 
-  // RFM
-  const recencyScore = scoreRecency(daysSinceLastOrder);
-  const frequencyScore = scoreFrequency(totalOrders);
-  const monetaryScore = scoreMonetary(totalSpentCents);
+  // RFM — pass the loaded config so thresholds come from platform_config
+  const recencyScore = scoreRecency(daysSinceLastOrder, config);
+  const frequencyScore = scoreFrequency(totalOrders, config);
+  const monetaryScore = scoreMonetary(totalSpentCents, config);
   const rfmSegment = getRfmSegment(recencyScore, frequencyScore, monetaryScore);
 
   // Churn risk
-  const churnRisk = calculateChurnRisk(daysSinceLastOrder, totalOrders, orderFrequency);
+  const churnRisk = calculateChurnRisk(daysSinceLastOrder, totalOrders, orderFrequency, config);
 
   // Lifecycle
   const accountAgeDays = household
     ? Math.floor((Date.now() - household.createdAt.getTime()) / (1000 * 60 * 60 * 24))
     : 0;
-  const lifecycleStage = determineLifecycleStage(daysSinceLastOrder, totalOrders, accountAgeDays, orderFrequency);
+  const lifecycleStage = determineLifecycleStage(
+    daysSinceLastOrder,
+    totalOrders,
+    accountAgeDays,
+    orderFrequency,
+    config,
+  );
 
   // Vouchers
   const vouchersClaimed = vouchers.filter((v) => v.status === "CLAIMED").length;
   const vouchersRedeemed = vouchers.filter((v) => v.status === "USED").length;
   const vouchersExpired = vouchers.filter((v) => v.status === "EXPIRED").length;
+
+  // Phase 2 — derived fields for expanded segment filters
+  const maxAutonomyLevel = autonomyRows.length > 0
+    ? autonomyRows.reduce((max, r) => Math.max(max, r.currentLevel), 0)
+    : 0;
+
+  const customerValue: "HIGH" | "MEDIUM" | "LOW" = (() => {
+    if (rfmSegment === "Champions" || rfmSegment === "Loyal") return "HIGH";
+    if (rfmSegment === "At Risk" || rfmSegment === "Lost") return "LOW";
+    return "MEDIUM";
+  })();
+
+  const activityLevel: "ACTIVE" | "INACTIVE" = (() => {
+    if (lifecycleStage === "DECLINING" || lifecycleStage === "LAPSED") return "INACTIVE";
+    return "ACTIVE";
+  })();
+
+  const marketingEngagement: "ENGAGED" | "NOT_ENGAGED" =
+    vouchersClaimed > 0 || vouchersRedeemed > 0 ? "ENGAGED" : "NOT_ENGAGED";
+
+  // Subscription tier — most recent active subscription wins; fall back to most recent of any status.
+  // `subscriptions` is assumed already sorted by createdAt desc (we sort
+  // in the batched query), so `find()` returns the most recent ACTIVE.
+  const subscriptionTier: "HOME" | "CARE" | null = (() => {
+    if (subscriptions.length === 0) return null;
+    const active = subscriptions.find((s) => s.status === "ACTIVE");
+    const pick = active || subscriptions[0];
+    return (pick?.tier === "CARE" ? "CARE" : "HOME");
+  })();
 
   return {
     householdId,
@@ -275,21 +421,204 @@ export async function computeHouseholdBehaviour(householdId: string): Promise<Ho
     vouchersClaimed,
     vouchersRedeemed,
     vouchersExpired,
+    // Phase 2 — expanded-segment filter fields
+    householdName: household?.fullName || household?.name || "",
+    householdAddress: household?.address || "",
+    maxAutonomyLevel,
+    customerValue,
+    activityLevel,
+    marketingEngagement,
+    accountAgeDays,
+    acquisitionSource: household?.acquisitionSource || "ORGANIC",
+    subscriptionTier,
   };
 }
 
+export async function computeHouseholdBehaviour(householdId: string): Promise<HouseholdBehaviour> {
+  // Read marketing config once per call (cached in-memory after first read).
+  const config = await getMarketingConfig();
+
+  const [tasks, household, vouchers, autonomyRows, subscriptions] = await Promise.all([
+    db.task.findMany({
+      where: { householdId, cancelledAt: null },
+      select: {
+        householdId: true,
+        status: true,
+        category: true,
+        amountCents: true,
+        discountCents: true,
+        finalAmountCents: true,
+        createdAt: true,
+        completedAt: true,
+        verifiedAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.household.findUnique({
+      where: { id: householdId },
+      select: {
+        id: true,
+        name: true,
+        fullName: true,
+        address: true,
+        createdAt: true,
+        lastOrderAt: true,
+        totalOrders: true,
+        totalSpentCents: true,
+        acquisitionSource: true,
+      },
+    }),
+    db.voucher.findMany({
+      where: { householdId },
+      select: { householdId: true, status: true },
+    }),
+    // Phase 2 — fetch the household's per-category autonomy rows so we can
+    // surface `maxAutonomyLevel` for the Autonomy Level segment filter.
+    db.householdCategoryAutonomy.findMany({
+      where: { householdId },
+      select: { householdId: true, currentLevel: true },
+    }),
+    // Phase 2 — fetch subscriptions so we can surface `subscriptionTier`
+    // for the Membership segment filter.
+    db.subscription.findMany({
+      where: { householdId },
+      select: { householdId: true, tier: true, status: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return computeBehaviourFromData({
+    householdId,
+    household,
+    tasks,
+    vouchers,
+    autonomyRows,
+    subscriptions,
+    config,
+  });
+}
+
 // ── Batch: compute for all households ──
+//
+// Fix 18 — replaces the previous "3N queries" (one household list + 3
+// queries per household inside `computeHouseholdBehaviour`) with a
+// constant 5 batched queries (households, tasks, vouchers, autonomy
+// rows, subscriptions). Results are grouped by householdId in memory
+// and the per-household computation is delegated to the same
+// `computeBehaviourFromData` helper used by the single-household path
+// — guaranteeing the output shape is byte-for-byte identical to the
+// previous implementation.
+//
+// Why 5 batched queries instead of 3 (tasks/household/vouchers)?
+// The single-household path also reads autonomy rows + subscriptions
+// to populate `maxAutonomyLevel` + `subscriptionTier` (Phase 2 segment
+// filters). Batching only tasks/household/vouchers would force the
+// all-households path back into per-household queries for the other
+// two tables, defeating the optimization. We batch ALL five tables so
+// the constant-query claim holds regardless of household count.
+//
+// Output ordering is preserved: households are fetched in createdAt
+// asc order, and we map over that exact list when emitting behaviours.
 
 export async function computeAllHouseholdBehaviours(): Promise<HouseholdBehaviour[]> {
+  // Read marketing config once (cached in-memory after first read).
+  const config = await getMarketingConfig();
+
+  // 1 batched query: households (the "driving" set — we iterate over this).
   const households = await db.household.findMany({
-    select: { id: true },
+    select: {
+      id: true,
+      name: true,
+      fullName: true,
+      address: true,
+      createdAt: true,
+      lastOrderAt: true,
+      totalOrders: true,
+      totalSpentCents: true,
+      acquisitionSource: true,
+    },
     orderBy: { createdAt: "asc" },
   });
 
+  if (households.length === 0) return [];
+
+  const householdIds = households.map((h) => h.id);
+
+  // 4 batched queries (run concurrently) — `where householdId IN [...]`.
+  const [allTasks, allVouchers, allAutonomyRows, allSubscriptions] = await Promise.all([
+    db.task.findMany({
+      where: { householdId: { in: householdIds }, cancelledAt: null },
+      select: {
+        householdId: true,
+        status: true,
+        category: true,
+        amountCents: true,
+        discountCents: true,
+        finalAmountCents: true,
+        createdAt: true,
+        completedAt: true,
+        verifiedAt: true,
+      },
+    }),
+    db.voucher.findMany({
+      where: { householdId: { in: householdIds } },
+      select: { householdId: true, status: true },
+    }),
+    db.householdCategoryAutonomy.findMany({
+      where: { householdId: { in: householdIds } },
+      select: { householdId: true, currentLevel: true },
+    }),
+    db.subscription.findMany({
+      where: { householdId: { in: householdIds } },
+      select: { householdId: true, tier: true, status: true, createdAt: true },
+      // Sort by createdAt desc so the helper's `find(s => s.status==="ACTIVE")`
+      // picks the most recent ACTIVE sub when no ACTIVE exists; falls back to
+      // `subscriptions[0]` (most recent of any status).
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  // Group the four lists by householdId in memory. We pre-seed every
+  // householdId with an empty array so the per-household computation
+  // doesn't have to handle "missing household" branches separately.
+  const tasksByHousehold = new Map<string, BehaviourTask[]>();
+  const vouchersByHousehold = new Map<string, BehaviourVoucher[]>();
+  const autonomyByHousehold = new Map<string, BehaviourAutonomyRow[]>();
+  const subscriptionsByHousehold = new Map<string, BehaviourSubscription[]>();
+  for (const id of householdIds) {
+    tasksByHousehold.set(id, []);
+    vouchersByHousehold.set(id, []);
+    autonomyByHousehold.set(id, []);
+    subscriptionsByHousehold.set(id, []);
+  }
+  for (const t of allTasks) {
+    tasksByHousehold.get(t.householdId)?.push(t);
+  }
+  for (const v of allVouchers) {
+    vouchersByHousehold.get(v.householdId)?.push(v);
+  }
+  for (const a of allAutonomyRows) {
+    autonomyByHousehold.get(a.householdId)?.push(a);
+  }
+  for (const s of allSubscriptions) {
+    subscriptionsByHousehold.get(s.householdId)?.push(s);
+  }
+
+  // Map over the households list (preserving createdAt asc order) and
+  // delegate to the pure helper. No DB access inside the loop.
   const behaviours: HouseholdBehaviour[] = [];
-  for (const h of households) {
-    const behaviour = await computeHouseholdBehaviour(h.id);
-    behaviours.push(behaviour);
+  for (const household of households) {
+    behaviours.push(
+      computeBehaviourFromData({
+        householdId: household.id,
+        household,
+        tasks: tasksByHousehold.get(household.id) ?? [],
+        vouchers: vouchersByHousehold.get(household.id) ?? [],
+        autonomyRows: autonomyByHousehold.get(household.id) ?? [],
+        subscriptions: subscriptionsByHousehold.get(household.id) ?? [],
+        config,
+      }),
+    );
   }
   return behaviours;
 }
@@ -337,14 +666,32 @@ export interface CrossSellOpportunity {
   householdIds: string[];
 }
 
-export async function detectCrossSellOpportunities(): Promise<CrossSellOpportunity[]> {
-  const behaviours = await computeAllHouseholdBehaviours();
+/**
+ * Detect cross-sell opportunities (households using category A that have
+ * never tried category B).
+ *
+ * Fix 18 — `behaviours` is now an OPTIONAL parameter. When supplied,
+ * the caller's already-computed array is reused (no second
+ * `computeAllHouseholdBehaviours()` call). When omitted, the function
+ * falls back to fetching fresh — preserving backwards compatibility
+ * with any caller that hasn't been updated to pass behaviours through.
+ *
+ * The behaviour route now passes the same array it already computed
+ * for its overview stats, so a single behaviour GET request triggers
+ * exactly ONE `computeAllHouseholdBehaviours()` call instead of three
+ * (one for the overview + one for cross-sell + one for any segment
+ * preview triggered downstream).
+ */
+export async function detectCrossSellOpportunities(
+  behaviours?: HouseholdBehaviour[],
+): Promise<CrossSellOpportunity[]> {
+  const list = behaviours ?? (await computeAllHouseholdBehaviours());
   const opportunities: CrossSellOpportunity[] = [];
 
   for (const from of ALL_CATEGORIES) {
     for (const to of ALL_CATEGORIES) {
       if (from === to) continue;
-      const eligible = behaviours.filter(
+      const eligible = list.filter(
         (b) => b.categoriesUsed.includes(from) && b.categoriesNeverTried.includes(to),
       );
       if (eligible.length > 0) {
