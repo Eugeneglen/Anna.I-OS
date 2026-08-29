@@ -20,6 +20,7 @@ export async function GET(_req: NextRequest) {
     const households = await db.household.findMany({
       select: {
         id: true,
+        name: true,
         onboardingProfile: true,
         acquisitionSource: true,
         acquisitionCampaignId: true,
@@ -100,6 +101,35 @@ export async function GET(_req: NextRequest) {
       .map(([task, count]) => ({ task, count, percentage: total > 0 ? count / total : 0 }))
       .sort((a, b) => b.count - a.count);
 
+    // Build per-household array for drill-down dialogs (additive — existing
+    // response shape is unchanged, this just adds a new `households` field).
+    const householdDetails = households.map((hh) => {
+      const profile = (hh.onboardingProfile as Record<string, unknown>) || {};
+      const homeType = getProfileValue(profile, "home", "homeType") as string || null;
+      const painPoints = (getProfileValue(profile, "painPoints", "tasks") as string[]) ||
+        (getProfileValue(profile, "painPoints", "timeConsumingTasks") as string[]) || [];
+      const petTypes = (getProfileValue(profile, "people", "petTypes") as string[]) ||
+        (getProfileValue(profile, "people", "pets") as string[]) || [];
+      const members = (getProfileValue(profile, "people", "members") as string[]) || [];
+      const schedule = getProfileValue(profile, "people", "schedule") as string || null;
+      return {
+        id: hh.id,
+        name: hh.name,
+        onboardingStep: hh.onboardingStep || 0,
+        completedOnboarding: (hh.onboardingStep || 0) >= 8,
+        acquisitionSource: hh.acquisitionSource || "UNKNOWN",
+        hasActiveSubscription: hh.subscriptions[0]?.status === "ACTIVE",
+        subscriptionTier: hh.subscriptions[0]?.tier || null,
+        homeType,
+        painPoints,
+        petTypes,
+        hasPets: petTypes.length > 0,
+        members,
+        schedule,
+        createdAt: hh.createdAt,
+      };
+    });
+
     return NextResponse.json({
       overview: {
         totalHouseholds: total,
@@ -115,6 +145,7 @@ export async function GET(_req: NextRequest) {
       serviceFrequency: serviceFreq,
       memberTypes,
       scheduleDistribution: scheduleDist,
+      households: householdDetails,
     });
   } catch (error) {
     console.error("[/api/ops/households/intelligence GET]", error);

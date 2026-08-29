@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ============================================================
@@ -26,6 +27,10 @@ interface OpsKpiCardProps {
   amountColor?: string;
   amount: ReactNode;
   sublabel?: ReactNode;
+  /** Makes the card clickable (opens a drill-down dialog). */
+  onClick?: () => void;
+  /** Tooltip shown on hover. */
+  title?: string;
 }
 
 export function OpsKpiCard({
@@ -37,21 +42,39 @@ export function OpsKpiCard({
   amountColor = "text-[var(--anna-slate)]",
   amount,
   sublabel,
+  onClick,
+  title,
 }: OpsKpiCardProps) {
+  const interactive = !!onClick;
   return (
-    <div className={cn("rounded-2xl border border-[var(--anna-border)] p-4", cardBg)}>
+    <div
+      className={cn(
+        "rounded-2xl border border-[var(--anna-border)] p-4",
+        cardBg,
+        interactive && "hover:shadow-sm hover:border-[var(--anna-sage)]/30 transition-all cursor-pointer"
+      )}
+      onClick={onClick}
+      title={title}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+    >
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
           {label}
         </span>
-        <div
-          className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center",
-            iconBg,
-            iconColor
+        <div className="flex items-center gap-1">
+          {interactive && (
+            <ChevronRight size={12} className="text-[var(--anna-muted)]" />
           )}
-        >
-          {icon}
+          <div
+            className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center",
+              iconBg,
+              iconColor
+            )}
+          >
+            {icon}
+          </div>
         </div>
       </div>
       <p className={cn("text-lg font-bold font-data", amountColor)}>{amount}</p>
