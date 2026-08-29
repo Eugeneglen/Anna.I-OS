@@ -184,6 +184,14 @@ export function CampaignDetailSheet({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto bg-[var(--anna-white)] anna-scroll">
         {isLoading || !campaign ? (
           <div className="p-6 space-y-4">
+            {/* Radix requires a SheetTitle (DialogTitle) + SheetDescription
+                (DialogDescription) inside SheetContent even during loading —
+                otherwise it throws an accessibility error that crashes the
+                page. Visually hidden but present. */}
+            <SheetTitle className="sr-only">Loading campaign…</SheetTitle>
+            <SheetDescription className="sr-only">
+              Campaign details are loading.
+            </SheetDescription>
             <Skeleton className="h-6 w-48 bg-[var(--anna-border)]" />
             <Skeleton className="h-32 w-full rounded-2xl bg-[var(--anna-border)]" />
             <Skeleton className="h-40 w-full rounded-2xl bg-[var(--anna-border)]" />

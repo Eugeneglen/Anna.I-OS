@@ -81,6 +81,11 @@ export const TYPE_STYLES: Record<
     text: "text-[var(--anna-slate-light)]",
     label: "Other",
   },
+  SERVICE_RECOVERY: {
+    bg: "bg-violet-50",
+    text: "text-violet-700",
+    label: "Service Recovery",
+  },
 };
 
 export const APPLIES_TO_LABELS: Record<CampaignAppliesTo, string> = {
