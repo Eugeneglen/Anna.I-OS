@@ -101,6 +101,14 @@ export async function issueRefundCreditVoucher(
   //    FIXED_AMOUNT = owed money). System-only type: not creatable via the
   //    ops manual API. Expiry: issueVoucher applies the 12-month credit
   //    default (policy sub-decision 3.2) when customExpiry is absent.
+  //
+  //    police-2b f2 (forfeiture guard): minOrderValueCents = credit amount.
+  //    Credit is single-use FIXED — without a floor, a $45 credit spent on
+  //    a $20 order would burn the whole code and forfeit $25 of the
+  //    household's own money. The floor (enforced by validateRedemption +
+  //    getEligibleVouchers) means credit can only be spent on an order it
+  //    fully covers — no partial spend, no forfeiture (policy §3.3 pilot:
+  //    no stacking/split-payment; credit-as-payment-method is roadmap).
   const campaign = await createCampaign({
     name: campaignName,
     description: `Refund credit for task #${jobNoLabel}. Reason: ${params.reason}`,
@@ -109,6 +117,7 @@ export async function issueRefundCreditVoucher(
     maxRedemptions: 1,
     discountType: "FIXED_AMOUNT",
     discountValue: creditDollarsNum,
+    minOrderValueCents: params.creditAmountCents,
     eligibility: "ANY",
     createdById: params.issuedById,
     createdByName: params.issuedByName ?? "system (refund-as-credit)",

@@ -231,10 +231,29 @@ export async function PATCH(
     // COMPLETE: Vendor finishes → COMPLETED (works from accepted)
     // ────────────────────────────────────────────────
     if (action === "complete") {
-      await db.task.update({
-        where: { id: booking.taskId },
+      // police-2b f4: guard the task transition on pre-completion status —
+      // a true-parallel household CANCEL would otherwise be resurrected to
+      // COMPLETED here (torn state: booking cancelled + escrow REFUNDED +
+      // task COMPLETED). updateMany claim: exactly one writer wins.
+      const completedClaim = await db.task.updateMany({
+        where: {
+          id: booking.taskId,
+          status: { in: [TaskStatus.ACCEPTED, TaskStatus.SCHEDULED, TaskStatus.IN_PROGRESS] },
+        },
         data: { status: TaskStatus.COMPLETED, completedAt: now },
       })
+      if (completedClaim.count === 0) {
+        const current = await db.task.findUnique({
+          where: { id: booking.taskId },
+          select: { status: true },
+        })
+        return NextResponse.json(
+          {
+            error: `Task can no longer be completed — current status is ${current?.status ?? "unknown"}${current?.status === TaskStatus.CANCELLED ? " (cancelled — escrow already refunded as credit)" : ""}.`,
+          },
+          { status: 409 }
+        )
+      }
 
       triggerAnomalyDetection(booking.task.householdId)
 

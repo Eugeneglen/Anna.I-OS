@@ -581,6 +581,26 @@ export async function PATCH(
         );
       }
 
+      // police-2b f6: consent pre-check — a consent-OFF household cannot
+      // receive SERVICE_RECOVERY vouchers (policy "keep as-is"), and without
+      // this check the whole action would 500 mid-issuance. Offer the
+      // policy-clean alternative up-front: resolve_refund (credit is
+      // transactional and consent-exempt).
+      const consentRow = await db.household.findUnique({
+        where: { id: task.householdId },
+        select: { marketingConsent: true },
+      });
+      if (consentRow?.marketingConsent === false) {
+        return NextResponse.json(
+          {
+            error:
+              "This household has opted out of marketing communications, so a compensation (service-recovery) voucher cannot be issued. Use Full refund instead — refunds convert to refund credit, which is the household's own money and is not gated by consent.",
+            code: "HOUSEHOLD_CONSENT_OFF",
+          },
+          { status: 422 }
+        );
+      }
+
       try {
         const result = await issueCompensationVoucher({
           householdId: task.householdId,

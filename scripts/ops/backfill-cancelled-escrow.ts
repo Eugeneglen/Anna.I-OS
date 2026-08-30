@@ -1,13 +1,12 @@
 /**
- * F18 backfill: orphaned HELD escrow on CANCELLED tasks (audit C6/N4).
+ * F18 backfill — two modes, both idempotent (police-2b finding 1):
  *
- * Before the cancel route existed, tasks could reach CANCELLED with their
- * escrow entries stuck HELD forever (no refund path). This script converts
- * those entries to REFUNDED and issues the owed REFUND_CREDIT voucher per
- * policy R3 — the same math the /api/tasks/[id]/cancel route applies.
- *
- * Idempotent: re-running is a no-op (HELD filter + deterministic credit
- * idempotency key `cancel-credit-<taskId>` + restore's marker semantics).
+ *   Mode 1 (original): orphaned HELD escrow on CANCELLED tasks (audit C6/N4)
+ *                     → REFUNDED + credit issuance.
+ *   Mode 2 (police-2b): REFUNDED escrow on CANCELLED tasks where the credit
+ *                     conversion never landed (crash between the cancel tx
+ *                     and the post-tx credit issuance — refundCreditCents <
+ *                     refundCents) → issue the missing credit only.
  *
  * Usage: bunx tsx scripts/ops/backfill-cancelled-escrow.ts [--dry]
  */
@@ -17,6 +16,48 @@ import { calculateRefundImpact } from "../../src/lib/payments/calculations";
 
 async function main() {
   const dry = process.argv.includes("--dry");
+
+  // ── Mode 2 first: credit owed but never issued (police-2b f1) ──
+  const owedTasks = await db.task.findMany({
+    where: {
+      status: TaskStatus.CANCELLED,
+      escrowEntries: {
+        some: { state: EscrowState.REFUNDED, refundCents: { gt: 0 } },
+      },
+    },
+    select: {
+      id: true,
+      jobNo: true,
+      householdId: true,
+      discountCodeId: true,
+      escrowEntries: {
+        where: { state: EscrowState.REFUNDED, refundCents: { gt: 0 } },
+        select: { id: true, refundCents: true, refundCreditCents: true },
+      },
+    },
+  });
+  for (const task of owedTasks) {
+    const owed = task.escrowEntries
+      .map((e) => ({ id: e.id, amountCents: e.refundCents - e.refundCreditCents }))
+      .filter((e) => e.amountCents > 0);
+    const total = owed.reduce((s, e) => s + e.amountCents, 0);
+    if (total === 0) continue;
+    console.log(
+      `[backfill-mode2] ${dry ? "[dry] " : ""}${task.jobNo ?? task.id}: owed credit $${(total / 100).toFixed(2)} (refunded but credit never issued)`
+    );
+    if (dry) continue;
+    const { issueRefundCreditVoucher } = await import("../../src/lib/marketing/refund-credit");
+    const credit = await issueRefundCreditVoucher({
+      householdId: task.householdId,
+      taskId: task.id,
+      creditAmountCents: total,
+      reason: "Backfill mode-2: cancel credit was never issued (post-crash recovery)",
+      idempotencyKey: `cancel-credit-${task.id}`,
+      escrowLedgerId: owed[0]?.id,
+      escrowEntries: owed,
+    });
+    console.log(`[backfill-mode2] ${task.jobNo ?? task.id}: credit -> voucher ${credit.code}${credit.isDuplicate ? " (existing — idempotent)" : ""}`);
+  }
 
   // Orphans: CANCELLED task + escrow entry still HELD with money remaining
   const orphanTasks = await db.task.findMany({

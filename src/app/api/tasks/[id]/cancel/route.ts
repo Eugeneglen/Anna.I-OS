@@ -117,8 +117,9 @@ export async function POST(
         : `${task.household?.name ?? "household"} (household)`;
 
     // ── Step 1: terminal state transition (all-or-nothing) ──
-    const { refundedEntries, refundedTotalCents, cancelledBookings } = await db.$transaction(
-      async (tx) => {
+    let step1: { refundedEntries: { id: string; amountCents: number }[]; refundedTotalCents: number; cancelledBookings: number };
+    try {
+      step1 = await db.$transaction(async (tx) => {
         // Cancel live bookings for this task (assigned/accepted — booking
         // statuses are plain strings, no Prisma enum)
         const liveBookings = await tx.booking.findMany({
@@ -235,12 +236,28 @@ export async function POST(
           refundedTotalCents: refundedTotal,
           cancelledBookings: liveBookings.length,
         };
+      });
+    } catch (txError) {
+      // police-2b f3: the status-guarded task claim aborts with a generic
+      // Error when a concurrent writer (vendor complete / release) won the
+      // race — map that to a clean 409, not a 500.
+      if (txError instanceof Error && txError.message.includes("changed concurrently")) {
+        return NextResponse.json(
+          {
+            error: "Task state changed concurrently — nothing was cancelled. Refresh and retry if still intended.",
+            code: "CONCURRENT_STATE_CHANGE",
+          },
+          { status: 409 }
+        );
       }
-    );
+      throw txError;
+    }
+    const { refundedEntries, refundedTotalCents, cancelledBookings } = step1;
 
     // ── Step 2: credit conversion + original-voucher reissue (idempotent,
     //    non-fatal — step 1 already reached terminal state) ──
     let credit: { code: string; amountCents: number; expiresAt: Date } | null = null;
+    let creditPending = false;
     if (refundedTotalCents > 0) {
       try {
         const { issueRefundCreditVoucher } = await import("@/lib/marketing/refund-credit");
@@ -261,9 +278,14 @@ export async function POST(
           expiresAt: result.expiresAt,
         };
       } catch (creditError) {
-        // Escrow is already REFUNDED — ops can re-trigger safely (the
-        // deterministic idempotency key prevents a double credit).
-        console.error("[tasks/cancel] refund-credit issuance failed:", creditError);
+        // Escrow is already REFUNDED — recovery is deterministic:
+        // scripts/ops/backfill-cancelled-escrow.ts mode-2 re-issues missing
+        // credit (same idempotency key). Flag it in the response for ops.
+        creditPending = true;
+        console.error(
+          `[tasks/cancel] refund-credit issuance FAILED for task ${task.id} ($${(refundedTotalCents / 100).toFixed(2)} owed) — run backfill mode-2 to recover:`,
+          creditError,
+        );
       }
     }
 
@@ -303,6 +325,7 @@ export async function POST(
       task: await db.task.findUnique({ where: { id: task.id } }),
       refundedCents: refundedTotalCents,
       credit,
+      creditPending, // true = refund landed but credit issuance failed; recover via backfill mode-2
       voucherRestored,
       cancelledBookings,
     });

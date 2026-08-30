@@ -21,7 +21,9 @@ interface VoucherResult {
   voucherId: string;
   code: string;
   expiresAt: string;
-  cashRefundId?: string;
+  cashRefundId?: string; // legacy — API no longer returns this
+  /** F18/R3 §3.4: mixed-mode refund portion is issued as refund credit */
+  cashCreditCode?: string;
   isDuplicate?: boolean;
 }
 
@@ -331,7 +333,7 @@ export function EscrowActionDialog({
                   : "Valid until " + new Date(voucherResult.expiresAt).toLocaleDateString("en-SG", {
                       day: "numeric", month: "short", year: "numeric",
                     })}
-                {voucherResult.cashRefundId && " · Cash refund also issued"}
+                {voucherResult.cashCreditCode && ` · Refund credit also issued (${voucherResult.cashCreditCode})`}
               </p>
               <div className="flex gap-2">
                 <Button
