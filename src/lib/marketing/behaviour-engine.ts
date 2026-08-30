@@ -277,6 +277,7 @@ type BehaviourTask = {
 type BehaviourVoucher = {
   householdId: string;
   status: string;
+  origin?: string | null; // F22 — undefined/null treated as MARKETING (pre-F22 rows)
 };
 
 type BehaviourAutonomyRow = {
@@ -366,10 +367,14 @@ function computeBehaviourFromData(params: {
     config,
   );
 
-  // Vouchers
-  const vouchersClaimed = vouchers.filter((v) => v.status === "CLAIMED").length;
-  const vouchersRedeemed = vouchers.filter((v) => v.status === "USED").length;
-  const vouchersExpired = vouchers.filter((v) => v.status === "EXPIRED").length;
+  // Vouchers — F22: only MARKETING vouchers count toward engagement
+  // (policy R3: "behaviour segmentation counts only marketing-voucher
+  // engagement"). REFUND_CREDIT is the household's own money and
+  // SERVICE_RECOVERY is dispute goodwill — neither is promo engagement.
+  const marketingVouchers = vouchers.filter((v) => v.origin === undefined || v.origin === "MARKETING");
+  const vouchersClaimed = marketingVouchers.filter((v) => v.status === "CLAIMED").length;
+  const vouchersRedeemed = marketingVouchers.filter((v) => v.status === "USED").length;
+  const vouchersExpired = marketingVouchers.filter((v) => v.status === "EXPIRED").length;
 
   // Phase 2 — derived fields for expanded segment filters
   const maxAutonomyLevel = autonomyRows.length > 0
@@ -470,7 +475,7 @@ export async function computeHouseholdBehaviour(householdId: string): Promise<Ho
     }),
     db.voucher.findMany({
       where: { householdId },
-      select: { householdId: true, status: true },
+      select: { householdId: true, status: true, origin: true },
     }),
     // Phase 2 — fetch the household's per-category autonomy rows so we can
     // surface `maxAutonomyLevel` for the Autonomy Level segment filter.
@@ -562,7 +567,7 @@ export async function computeAllHouseholdBehaviours(): Promise<HouseholdBehaviou
     }),
     db.voucher.findMany({
       where: { householdId: { in: householdIds } },
-      select: { householdId: true, status: true },
+      select: { householdId: true, status: true, origin: true },
     }),
     db.householdCategoryAutonomy.findMany({
       where: { householdId: { in: householdIds } },

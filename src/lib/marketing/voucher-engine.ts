@@ -22,6 +22,7 @@ import {
   NotificationEventType,
   NotificationStatus,
   RecipientType,
+  VoucherOrigin,
 } from "@prisma/client";
 
 // ── Issue a single voucher to a household ──
@@ -31,20 +32,38 @@ export async function issueVoucher(params: {
   campaignId: string;
   customExpiry?: Date;
 }): Promise<{ voucherId: string; code: string }> {
-  // ── Fix 20 — PDPA marketingConsent gate ──
+  // ── F22 (policy R3): origin derivation ──
+  //
+  // The voucher's origin is derived from its container campaign's type —
+  // single source of truth, no caller can mislabel a voucher:
+  //   CampaignType.REFUND_CREDIT    → VoucherOrigin.REFUND_CREDIT   (transactional)
+  //   CampaignType.SERVICE_RECOVERY → VoucherOrigin.SERVICE_RECOVERY (keep as-is)
+  //   anything else                 → VoucherOrigin.MARKETING        (promo)
+  const campaignRow = await db.campaign.findUnique({
+    where: { id: params.campaignId },
+    select: { type: true },
+  });
+  if (!campaignRow) {
+    throw new Error(`Campaign ${params.campaignId} not found — voucher not issued.`);
+  }
+  const origin: VoucherOrigin =
+    campaignRow.type === "REFUND_CREDIT"
+      ? VoucherOrigin.REFUND_CREDIT
+      : campaignRow.type === "SERVICE_RECOVERY"
+        ? VoucherOrigin.SERVICE_RECOVERY
+        : VoucherOrigin.MARKETING;
+
+  // ── Fix 20 — PDPA marketingConsent gate (F22-refined) ──
   //
   // Households with `marketingConsent=false` have explicitly opted out
-  // of marketing communications. Issuing them a marketing voucher would
+  // of marketing communications. Issuing them a MARKETING voucher would
   // violate PDPA consent rules, so we short-circuit BEFORE creating any
-  // DiscountCode / Voucher / Notification rows. The check is placed at
-  // the top of `issueVoucher` so every caller is covered — including
-  // the segment-bulk path (issueVouchersToSegment) and the dispute
-  // compensation path (service-recovery → issueCompensationVoucher).
+  // DiscountCode / Voucher / Notification rows.
   //
-  // Throwing rather than returning a "soft" failure keeps the contract
-  // simple: callers that want to ignore the failure (e.g. the bulk
-  // issuer) wrap the call in try/catch, which is exactly what
-  // issueVouchersToSegment already does.
+  // F22 exemption: REFUND_CREDIT is the household's OWN money converted
+  // to platform credit (transactional, not marketing) — policy R3 rules
+  // it consent-exempt ("PDPA-safe to notify"). SERVICE_RECOVERY keeps
+  // the gate (policy: "keep as-is").
   const household = await db.household.findUnique({
     where: { id: params.householdId },
     select: { marketingConsent: true, name: true },
@@ -52,16 +71,26 @@ export async function issueVoucher(params: {
   if (!household) {
     throw new Error(`Household ${params.householdId} not found — voucher not issued.`);
   }
-  if (household.marketingConsent === false) {
+  if (household.marketingConsent === false && origin === VoucherOrigin.MARKETING) {
     throw new Error(
       "Household has opted out of marketing communications. Voucher not issued.",
     );
   }
 
+  // F22: per-origin expiry default — refund credit is store credit, standard
+  // practice (and policy sub-decision 3.2) is a 12-month TTL when the caller
+  // doesn't pin an explicit expiry. Marketing/service-recovery keep the
+  // code-level expiry as before.
+  const creditDefaultExpiry = new Date();
+  creditDefaultExpiry.setDate(creditDefaultExpiry.getDate() + 365);
+  const effectiveExpiry =
+    params.customExpiry ??
+    (origin === VoucherOrigin.REFUND_CREDIT ? creditDefaultExpiry : undefined);
+
   // Generate a unique code assigned to this household
   const code = await generateSingleCode(params.campaignId, {
     maxUses: 1, // single-use voucher
-    expiresAt: params.customExpiry?.toISOString(),
+    expiresAt: effectiveExpiry?.toISOString(),
   });
 
   // Set assignedHouseholdId on the code (so only this household can redeem it)
@@ -77,7 +106,8 @@ export async function issueVoucher(params: {
       discountCodeId: code.id,
       campaignId: params.campaignId,
       status: "CLAIMED",
-      expiresAt: params.customExpiry || code.expiresAt,
+      origin,
+      expiresAt: effectiveExpiry || code.expiresAt,
       notifiedAt: null, // will be set when the VOUCHER_ISSUED notification is sent
     },
     include: {
@@ -99,15 +129,19 @@ export async function issueVoucher(params: {
     },
   });
 
-  // Record campaign attribution
-  await db.campaignAttribution.create({
-    data: {
-      householdId: params.householdId,
-      campaignId: params.campaignId,
-      touchpoint: "VOUCHER_CLAIMED",
-      weight: 0.3,
-    },
-  });
+  // Record campaign attribution — F22: SKIP for REFUND_CREDIT. A refund is
+  // the household's own money returning as credit, not a campaign win:
+  // attribution/ROI/insights must not count it as marketing influence.
+  if (origin !== VoucherOrigin.REFUND_CREDIT) {
+    await db.campaignAttribution.create({
+      data: {
+        householdId: params.householdId,
+        campaignId: params.campaignId,
+        touchpoint: "VOUCHER_CLAIMED",
+        weight: 0.3,
+      },
+    });
+  }
 
   // Record campaign event
   await db.campaignEvent.create({
@@ -477,6 +511,7 @@ export async function getHouseholdVouchers(householdId: string) {
   return vouchers.map((v) => ({
     id: v.id,
     status: v.status,
+    origin: v.origin, // F22 — drives the wallet badge (Refund credit / Service recovery / Promo)
     code: v.discountCode.code,
     campaignName: v.campaign.name,
     campaignType: v.campaign.type,
@@ -615,13 +650,14 @@ export async function markVoucherUsed(voucherId: string, taskId: string, househo
     data: { status: "USED", usedAt: new Date() },
   });
 
-  // Record attribution
+  // Record attribution — F22: skip for REFUND_CREDIT (spending store credit
+  // is transactional, not a marketing win; policy R3 funnel exclusion).
   const voucher = await db.voucher.findUnique({
     where: { id: voucherId },
-    select: { campaignId: true },
+    select: { campaignId: true, campaign: { select: { type: true } } },
   });
 
-  if (voucher) {
+  if (voucher && voucher.campaign.type !== "REFUND_CREDIT") {
     await db.campaignAttribution.create({
       data: {
         householdId,

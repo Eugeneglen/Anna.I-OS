@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 interface Voucher {
   id: string;
   status: VoucherStatus;
+  origin?: "MARKETING" | "REFUND_CREDIT" | "SERVICE_RECOVERY" | null; // F22 — wallet badge
   code: string;
   campaignName: string;
   campaignType: string;
@@ -90,6 +91,18 @@ function VoucherCard({
             <span className="text-lg font-bold text-[var(--anna-sage-dark)]">
               {formatDiscount(voucher)}
             </span>
+            {/* F22 — origin badge so households understand what they're holding:
+                refund credit (their own money) vs service recovery vs promo. */}
+            {voucher.origin === "REFUND_CREDIT" && (
+              <Badge variant="outline" className="text-[10px] border-[var(--anna-slate-light)]/40 bg-[var(--anna-slate-light)]/10 text-[var(--anna-slate-light)] cursor-help" title="This is your own money returned as Anna.I credit — refunds are issued as store credit, not cash.">
+                Refund credit
+              </Badge>
+            )}
+            {voucher.origin === "SERVICE_RECOVERY" && (
+              <Badge variant="outline" className="text-[10px] border-[var(--anna-warning)]/40 bg-[var(--anna-warning)]/10 text-[var(--anna-warning)] cursor-help" title="Compensation voucher issued for a service issue.">
+                Service recovery
+              </Badge>
+            )}
             {isAvailable && (
               <Badge variant="outline" className="text-[10px] border-[var(--anna-sage)]/30 text-[var(--anna-sage-dark)]">
                 Available
@@ -213,9 +226,12 @@ function VoucherCard({
 }
 
 // ── Badge (inline — avoids import cycle issues) ──
-function Badge({ variant, className, children }: { variant?: string; className?: string; children: React.ReactNode }) {
+function Badge({ variant, className, children, title }: { variant?: string; className?: string; children: React.ReactNode; title?: string }) {
   return (
-    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", className)}>
+    <span
+      title={title}
+      className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", className)}
+    >
       {children}
     </span>
   );

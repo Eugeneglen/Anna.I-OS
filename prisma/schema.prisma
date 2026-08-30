@@ -497,6 +497,15 @@ model EscrowLedger {
   disputeResolvedAt     DateTime?
   voucherCompensationCents Int  @default(0) // cumulative voucher $ issued as service-recovery compensation
 
+  // ── F22 / F18 (R3 refund-as-credit): credit link ──
+  // When money owed to a household is converted to a REFUND_CREDIT voucher
+  // (cancellation, dispute-upheld refund, partial refund), the escrow row
+  // records how much became credit and which voucher carries it. Plain
+  // denormalised id (no FK — Voucher already relates to EscrowLedger via
+  // "VoucherCompensation"; a second relation would create a cycle).
+  refundCreditCents      Int     @default(0)
+  refundCreditVoucherId  String? // FK → Voucher.id (denormalised, no relation)
+
   task    Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id])
   refunds Refund[]
@@ -908,6 +917,10 @@ enum CampaignType {
   REFERRAL
   PUBLIC_PROMO
   SERVICE_RECOVERY
+  REFUND_CREDIT // F22 (R3): system-generated container campaigns that carry
+               // refund/cancellation credit — transactional, NOT marketing.
+               // Created only by lib/marketing/refund-credit.ts (never via the
+               // ops manual-create API, whose zod enum intentionally omits it).
   OTHER
 }
 
@@ -1087,6 +1100,7 @@ model Voucher {
   discountCodeId  String
   campaignId      String
   status          VoucherStatus @default(CLAIMED)
+  origin          VoucherOrigin @default(MARKETING) // F22 — derived from campaign.type at issuance
   claimedAt       DateTime     @default(now())
   usedAt          DateTime?
   expiresAt       DateTime?
@@ -1120,6 +1134,22 @@ enum VoucherStatus {
   USED       // redeemed on an order
   EXPIRED    // past expiry date
   REVOKED    // cancelled by ops
+}
+
+// ── F22 (policy R3): voucher origin separation ──
+// A voucher's origin determines its consent gate, attribution treatment,
+// expiry default and wallet badge:
+//   MARKETING       — platform-funded promo; PDPA marketingConsent gate applies;
+//                     counts as CampaignAttribution + behaviour engagement.
+//   REFUND_CREDIT   — the household's OWN money converted to platform credit
+//                     (transactional): consent-exempt, attribution-exempt,
+//                     default expiry 12 months, badge "Refund credit".
+//   SERVICE_RECOVERY — dispute goodwill compensation (transactional-adjacent,
+//                     policy: "keep as-is" — consent gate stays ON, badge added).
+enum VoucherOrigin {
+  MARKETING
+  REFUND_CREDIT
+  SERVICE_RECOVERY
 }
 
 // ── Segment (dynamic customer segment definition) ──

@@ -348,15 +348,18 @@ export async function POST(request: Request) {
               }
 
               // Record attribution (best-effort, non-fatal)
-              await tx.campaignAttribution.create({
-                data: {
-                  householdId,
-                  campaignId: discountCampaignId,
-                  taskId: created.id,
-                  touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
-                  weight: 1.0,
-                },
-              }).catch(() => {});
+              // F22: REFUND_CREDIT campaigns are transactional — skip.
+              if (campaignRow.type !== "REFUND_CREDIT") {
+                await tx.campaignAttribution.create({
+                  data: {
+                    householdId,
+                    campaignId: discountCampaignId,
+                    taskId: created.id,
+                    touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
+                    weight: 1.0,
+                  },
+                }).catch(() => {});
+              }
 
               // Record campaign event (best-effort, non-fatal)
               await tx.campaignEvent.create({

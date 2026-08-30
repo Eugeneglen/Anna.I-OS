@@ -605,15 +605,23 @@ async function writeRedemptionBookkeeping(
     }
 
     // Record attribution (CODE_REDEEMED or VOUCHER_USED depending on whether a voucher existed)
-    await tx.campaignAttribution.create({
-      data: {
-        householdId: params.householdId,
-        campaignId: params.campaignId,
-        taskId: params.bookingId || null,
-        touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
-        weight: 1.0,
-      },
-    }).catch(() => {}); // non-fatal — attribution is analytics, not transactional
+    // F22: REFUND_CREDIT campaigns are transactional (spending store credit),
+    // not marketing — skip attribution so ROI/funnels stay honest.
+    const creditCampaign = await tx.campaign.findUnique({
+      where: { id: params.campaignId },
+      select: { type: true },
+    });
+    if (creditCampaign?.type !== "REFUND_CREDIT") {
+      await tx.campaignAttribution.create({
+        data: {
+          householdId: params.householdId,
+          campaignId: params.campaignId,
+          taskId: params.bookingId || null,
+          touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
+          weight: 1.0,
+        },
+      }).catch(() => {}); // non-fatal — attribution is analytics, not transactional
+    }
 
     // Record campaign event
     await tx.campaignEvent.create({
