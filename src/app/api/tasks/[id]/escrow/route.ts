@@ -222,6 +222,12 @@ export async function PATCH(
               state: EscrowState.DISPUTED,
               disputedAt: now,
               disputeReason: reason ?? "No reason provided",
+              // police-2c f1: reset prior-resolution markers so a RE-dispute
+              // is claimable again (resolve_voucher's concurrency claim
+              // preconditions on disputeResolvedAt = null)
+              disputeResolution: null,
+              disputeResolvedBy: null,
+              disputeResolvedAt: null,
             },
           })
           disputedCount += claimed.count

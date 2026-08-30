@@ -103,6 +103,9 @@ const ESCROW_STYLES: Record<string, { bg: string; text: string; icon: typeof Shi
   RELEASED: { bg: "bg-emerald-50", text: "text-emerald-700", icon: CheckCircle2 },
   DISPUTED: { bg: "bg-red-50", text: "text-red-600", icon: AlertTriangle },
   REFUNDED: { bg: "bg-gray-100", text: "text-gray-600", icon: XCircle },
+  // police-2c f6: F19 terminal states — styled so ops badges don't render bare
+  VOIDED: { bg: "bg-gray-50", text: "text-gray-500", icon: XCircle },
+  DISPUTE_CLOSED: { bg: "bg-gray-100", text: "text-gray-600", icon: CheckCircle2 },
 };
 
 // ── Component ──

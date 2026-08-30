@@ -110,6 +110,14 @@ export async function POST(req: NextRequest) {
     if (error instanceof RedemptionLimitError) {
       return NextResponse.json({ valid: false, reason: error.message, code: error.code }, { status: 409 });
     }
+    // police-2c f3: serializer saturation (police-1b f2 cap) is "try again",
+    // not a server fault — 429 with a Retry-After hint.
+    if (error instanceof Error && error.message.includes("saturated")) {
+      return NextResponse.json(
+        { valid: false, reason: error.message, code: "redemption-busy" },
+        { status: 429, headers: { "Retry-After": "2" } }
+      );
+    }
     console.error("[/api/marketing/redeem POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

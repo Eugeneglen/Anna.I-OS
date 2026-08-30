@@ -612,6 +612,33 @@ export async function PATCH(
         );
       }
 
+      // ── police-2c f1: claim-first concurrency guard ──
+      //
+      // Live-proven hole: two PARALLEL resolve_voucher calls both passed the
+      // read-only state checks, both issued vouchers (E7 cap bypassed via
+      // read-then-write counter, double notifications). Fix: atomically
+      // claim the resolution BEFORE any issuance — updateMany with a
+      // state=DISPUTED + disputeResolvedAt=null precondition. Exactly one
+      // parallel caller wins; the loser gets a clean 409 with zero writes.
+      //
+      // Failure semantics: if issuance fails AFTER the claim, the entry
+      // stays DISPUTED (resolvable via dismiss / refund paths — those don't
+      // require disputeResolvedAt=null) but resolve_voucher retries 409.
+      // Safe-by-construction: no double issuance is possible.
+      const claim = await db.escrowLedger.updateMany({
+        where: { id, state: EscrowState.DISPUTED, disputeResolvedAt: null },
+        data: { disputeResolvedAt: now },
+      });
+      if (claim.count === 0) {
+        return NextResponse.json(
+          {
+            error: "This dispute was already resolved (or is being resolved right now) — refresh to see the current state.",
+            code: "ESCROW_ALREADY_RESOLVED",
+          },
+          { status: 409 }
+        );
+      }
+
       try {
         const result = await issueCompensationVoucher({
           householdId: task.householdId,

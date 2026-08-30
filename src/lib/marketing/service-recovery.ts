@@ -211,7 +211,6 @@ export async function issueCompensationVoucher(
     select: { disputeResolution: true, voucherCompensationCents: true },
   });
   const priorResolution = existingResolution?.disputeResolution ?? "";
-  const priorVoucherCents = existingResolution?.voucherCompensationCents ?? 0;
   const newResolutionAppendix = `Compensated by voucher $${voucherDollars} (code ${issued.code})${cash > 0 ? ` + refund credit $${(cash / 100).toFixed(2)}` : ""}`;
   const mergedResolution = priorResolution
     ? `${priorResolution} | ${newResolutionAppendix}`
@@ -220,7 +219,9 @@ export async function issueCompensationVoucher(
   await db.escrowLedger.update({
     where: { id: params.escrowLedgerId },
     data: {
-      voucherCompensationCents: priorVoucherCents + params.voucherAmountCents,
+      // police-2c f1: atomic increment (was read-then-write — corruptible
+      // under the pre-claim race; hygiene now that the claim serializes).
+      voucherCompensationCents: { increment: params.voucherAmountCents },
       disputeResolution: mergedResolution,
     },
   });

@@ -152,6 +152,15 @@ export async function PATCH(
         });
         for (const stale of staleEntries) {
           if (stale.booking?.status === "cancelled") {
+            // Void regardless of refundCents (police-2c f2 deliberation):
+            // a partially-refunded entry that reaches here (partial refund →
+            // dismiss → HELD with refundCents>0 → booking cancelled) has
+            // already returned its refunded portion to the household as
+            // credit, and the rematch creates a NEW FULL-amount hold for the
+            // task — so the stale remaining is a duplicate hold, not the
+            // household's money. Voiding keeps the exactly-one-live-hold
+            // invariant; NOT voiding would double-pay the remainder at
+            // release-all. No refundCents guard by design.
             // updateMany (not update): the state=HELD precondition is a
             // non-unique filter — Prisma only allows those in updateMany.
             await tx.escrowLedger.updateMany({
