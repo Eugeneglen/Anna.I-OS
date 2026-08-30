@@ -100,17 +100,24 @@ export async function PATCH(
         // Fix: Release ALL HELD escrow entries for this task (base + add-ons),
         // not just the one identified by `id`. Same pattern as the dispute
         // action — all entries must be released together.
+        //
+        // F19: each entry update is GUARDED on state=HELD — a concurrent
+        // release/dispute on the same entry can't double-transition or
+        // double-notify (B15). Zero entries claimed → someone else won.
         const allHeldEntries = await tx.escrowLedger.findMany({
           where: { taskId: task.id, state: EscrowState.HELD },
           select: { id: true, amountCents: true, vendorPayoutCents: true, discountCents: true, originalAmountCents: true },
         });
-        const updatedEscrows = [];
+        let claimedCount = 0;
         for (const entry of allHeldEntries) {
-          const updated = await tx.escrowLedger.update({
-            where: { id: entry.id },
+          const claimed = await tx.escrowLedger.updateMany({
+            where: { id: entry.id, state: EscrowState.HELD },
             data: { state: EscrowState.RELEASED, releasedAt: now },
           });
-          updatedEscrows.push(updated);
+          claimedCount += claimed.count;
+        }
+        if (claimedCount === 0) {
+          throw new Error("ESCROW_ALREADY_RESOLVED");
         }
         const updatedEscrow = await tx.escrowLedger.findUnique({ where: { id } });
 
@@ -204,20 +211,20 @@ export async function PATCH(
         // entries (base + add-ons), so dismiss must reset ALL of them.
         // Otherwise the add-on entries stay DISPUTED and can never be
         // released.
-        const allEntries = await tx.escrowLedger.findMany({
+        //
+        // F19: guarded on state=DISPUTED (B15) — zero claims → concurrent
+        // resolution won; nothing written, clean 409.
+        const dismissed = await tx.escrowLedger.updateMany({
           where: { taskId: task.id, state: EscrowState.DISPUTED },
-          select: { id: true },
+          data: {
+            state: EscrowState.HELD,
+            disputeResolution: resolution || "Dispute dismissed by ops",
+            disputeResolvedBy: session.name,
+            disputeResolvedAt: now,
+          },
         });
-        for (const entry of allEntries) {
-          await tx.escrowLedger.update({
-            where: { id: entry.id },
-            data: {
-              state: EscrowState.HELD,
-              disputeResolution: resolution || "Dispute dismissed by ops",
-              disputeResolvedBy: session.name,
-              disputeResolvedAt: now,
-            },
-          });
+        if (dismissed.count === 0) {
+          throw new Error("ESCROW_ALREADY_RESOLVED");
         }
         const updatedEscrow = await tx.escrowLedger.findUnique({ where: { id } });
 
@@ -570,11 +577,15 @@ export async function PATCH(
 
       // 2x cap validation (also enforced in the service layer, but we do it
       // here to give a clean 422 before any state changes).
+      // F19/E7: CUMULATIVE — includes prior compensation vouchers AND refund
+      // credits already granted on this escrow (sequential calls with fresh
+      // idempotency keys can no longer each grant the full 2×).
       const cash = voucherRefundAmountCents || 0;
-      if (voucherAmountCents + cash > 2 * orderTotalCents) {
+      const priorGranted = (escrow.voucherCompensationCents || 0) + (escrow.refundCreditCents || 0);
+      if (priorGranted + voucherAmountCents + cash > 2 * orderTotalCents) {
         return NextResponse.json(
           {
-            error: `Total compensation (voucher $${(voucherAmountCents / 100).toFixed(2)} + cash $${(cash / 100).toFixed(2)}) exceeds the 2× order value cap ($${((2 * orderTotalCents) / 100).toFixed(2)}).`,
+            error: `Total compensation would exceed the 2× order value cap ($${((2 * orderTotalCents) / 100).toFixed(2)}): already granted $${(priorGranted / 100).toFixed(2)}, requesting $${(((voucherAmountCents + cash) / 100)).toFixed(2)}.`,
             code: "COMPENSATION_CAP_EXCEEDED",
           },
           { status: 422 }
@@ -616,17 +627,21 @@ export async function PATCH(
           orderTotalCents,
         });
 
-        // After success: set ALL HELD escrow entries → RELEASED (vendor paid).
-        // Task → ESCROW_RELEASED. This mirrors the "release" action's pattern.
+        // After success: set ALL DISPUTED escrow entries → RELEASED (vendor paid).
+        // F19: guarded per-entry on state=DISPUTED (B15), and E5 terminal
+        // guard — if ANY entry for this task is REFUNDED (cannot happen on
+        // the current credit-only path, but defensively), the task must end
+        // DISPUTE_CLOSED, not ESCROW_RELEASED (inconsistent terminal state:
+        // "released" task with vendor paid 0).
         await db.$transaction(async (tx) => {
-          const heldEntries = await tx.escrowLedger.findMany({
+          const disputedEntries = await tx.escrowLedger.findMany({
             where: { taskId: task.id, state: EscrowState.DISPUTED },
             select: { id: true },
           });
           const now = new Date();
-          for (const entry of heldEntries) {
-            await tx.escrowLedger.update({
-              where: { id: entry.id },
+          for (const entry of disputedEntries) {
+            await tx.escrowLedger.updateMany({
+              where: { id: entry.id, state: EscrowState.DISPUTED },
               data: {
                 state: EscrowState.RELEASED,
                 releasedAt: now,
@@ -635,11 +650,16 @@ export async function PATCH(
               },
             });
           }
+          const allEntries = await tx.escrowLedger.findMany({
+            where: { taskId: task.id },
+            select: { id: true, state: true },
+          });
+          const hasRefunded = allEntries.some((e) => e.state === EscrowState.REFUNDED);
           await tx.task.update({
             where: { id: task.id },
             data: {
-              status: TaskStatus.ESCROW_RELEASED,
-              escrowReleasedAt: now,
+              status: hasRefunded ? TaskStatus.DISPUTE_CLOSED : TaskStatus.ESCROW_RELEASED,
+              escrowReleasedAt: hasRefunded ? undefined : now,
             },
           });
           // Unpause autonomy — household shouldn't be penalised
@@ -724,6 +744,17 @@ export async function PATCH(
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
+    // F19 (B15): guarded transitions abort with this sentinel when a
+    // concurrent resolution won the race — clean 409, zero side effects.
+    if (error instanceof Error && error.message === "ESCROW_ALREADY_RESOLVED") {
+      return NextResponse.json(
+        {
+          error: "Escrow entries were already resolved by a concurrent action — refresh to see the current state.",
+          code: "ESCROW_ALREADY_RESOLVED",
+        },
+        { status: 409 }
+      );
+    }
     console.error("[/api/ops/escrow/[id] PATCH]", error);
     return NextResponse.json(
       { error: "Failed to process escrow action" },

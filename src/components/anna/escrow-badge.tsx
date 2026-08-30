@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { EscrowState } from "@/lib/types";
 import { formatSgd } from "@/lib/types";
-import { ShieldCheck, AlertTriangle, Clock, RotateCcw } from "lucide-react";
+import { ShieldCheck, AlertTriangle, Clock, RotateCcw, XCircle } from "lucide-react";
 
 const stateConfig: Record<
   EscrowState,
@@ -29,6 +29,18 @@ const stateConfig: Record<
   },
   REFUNDED: {
     label: "Refunded",
+    className:
+      "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
+    icon: RotateCcw,
+  },
+  VOIDED: {
+    label: "Voided",
+    className:
+      "bg-[var(--anna-bg)] text-[var(--anna-slate-light)] border-[var(--anna-border)]",
+    icon: XCircle,
+  },
+  DISPUTE_CLOSED: {
+    label: "Dispute closed",
     className:
       "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
     icon: RotateCcw,

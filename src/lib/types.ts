@@ -25,7 +25,7 @@ export type TaskStatus =
   | "DISPUTED"
   | "CANCELLED";
 
-export type EscrowState = "HELD" | "RELEASED" | "DISPUTED" | "REFUNDED";
+export type EscrowState = "HELD" | "RELEASED" | "DISPUTED" | "DISPUTE_CLOSED" | "REFUNDED" | "VOIDED";
 
 export type RecurrencePattern =
   | "ONE_OFF"

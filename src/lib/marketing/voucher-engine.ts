@@ -453,6 +453,35 @@ export async function claimNextPendingIssuanceJob(
  * cron dispatcher endpoint (CRON_SECRET-authenticated) so both paths use
  * the exact same atomic claim + batch-issuance logic.
  */
+// ── F19 (police-1c f3): reap zombie RUNNING issuance jobs ──
+//
+// A hard process death mid-batch leaves a job RUNNING forever (dispatcher
+// claims PENDING only; retry handles FAILED only). Anything still RUNNING
+// after REAP_AFTER_MS is dead — flip it to FAILED so the retry path (and the
+// 409 duplicate-guard for partially-processed jobs) can take over.
+// processedCount>0 + FAILED = un-retryable by design (safe: re-running could
+// double-issue to already-served members); ops can inspect the job's
+// voucherIds list. Called from runNextPendingIssuanceJob — the single funnel
+// for both the ops-events cron tick and manual claims.
+const REAP_AFTER_MS = 15 * 60 * 1000; // 15 minutes
+export async function reapStaleIssuanceJobs(): Promise<number> {
+  const cutoff = new Date(Date.now() - REAP_AFTER_MS);
+  const reaped = await db.voucherIssuanceJob.updateMany({
+    where: {
+      status: "RUNNING",
+      OR: [{ startedAt: { lt: cutoff } }, { startedAt: null }],
+    },
+    data: {
+      status: "FAILED",
+      error: "Reaped: job stuck RUNNING >15min (process death / stuck batch) — auto-recovered by F19 reaper",
+    },
+  });
+  if (reaped.count > 0) {
+    console.warn(`[voucher-engine] reaped ${reaped.count} zombie RUNNING issuance job(s) → FAILED`);
+  }
+  return reaped.count;
+}
+
 export async function runNextPendingIssuanceJob(opts?: {
   createdById?: string;
 }): Promise<
@@ -460,6 +489,9 @@ export async function runNextPendingIssuanceJob(opts?: {
   | { processed: true; jobId: string; status: "COMPLETED"; issued: number; failedCount: number; skippedCount: number }
   | { processed: true; jobId: string; status: "FAILED"; error: string }
 > {
+  // F19: clear zombies first so a stuck RUNNING job can't block its segment
+  // (or sit unclaimable forever) while a fresh PENDING job waits behind it.
+  await reapStaleIssuanceJobs();
   const jobId = await claimNextPendingIssuanceJob(opts);
   if (!jobId) return { processed: false };
 

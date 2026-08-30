@@ -80,13 +80,26 @@ export async function issueCompensationVoucher(
     );
   }
 
-  // ── 2. Validate 2× cap ──
+  // ── 2. Validate 2× cap — F19/E7: CUMULATIVE across all compensations ──
+  // The old check was per-call only: sequential resolve_voucher calls with
+  // fresh idempotency keys could each grant up to 2× order value. The cap
+  // now includes everything previously granted on this escrow:
+  // voucherCompensationCents (compensation vouchers) + refundCreditCents
+  // (refund-as-credit conversions — conservative: includes dispute-refund
+  // credits, which are money-back rather than compensation, but the cap is
+  // a safety ceiling and erring strict is the right side).
   const cash = params.refundAmountCents || 0;
   const totalCompensation = params.voucherAmountCents + cash;
   const cap = 2 * params.orderTotalCents;
-  if (totalCompensation > cap) {
+  const escrowForCap = await db.escrowLedger.findUnique({
+    where: { id: params.escrowLedgerId },
+    select: { voucherCompensationCents: true, refundCreditCents: true },
+  });
+  const priorGranted =
+    (escrowForCap?.voucherCompensationCents ?? 0) + (escrowForCap?.refundCreditCents ?? 0);
+  if (priorGranted + totalCompensation > cap) {
     throw new RefundError(
-      `Total compensation (voucher $${(params.voucherAmountCents / 100).toFixed(2)} + cash $${(cash / 100).toFixed(2)}) exceeds the 2× order value cap ($${(cap / 100).toFixed(2)})`,
+      `Total compensation would exceed the 2× order value cap ($${(cap / 100).toFixed(2)}): already granted $${(priorGranted / 100).toFixed(2)}, requesting $${(totalCompensation / 100).toFixed(2)}.`,
       422,
       "COMPENSATION_CAP_EXCEEDED"
     );

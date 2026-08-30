@@ -48,6 +48,9 @@ enum EscrowState {
   DISPUTED
   DISPUTE_CLOSED
   REFUNDED
+  VOIDED // F19/E4: hold cancelled before any money moved (booking rejected /
+         // rematched) — never left escrow as release or credit; excluded
+         // from the R3 ledger formula (Σ held = Σ released + Σ credit + Σ held)
 }
 
 enum SubscriptionTier {

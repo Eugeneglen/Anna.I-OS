@@ -462,13 +462,32 @@ export async function validateRedemption(params: {
 // transaction run sequentially and complete in milliseconds — the burst
 // resolves as an ordered queue instead of a lock storm. Cross-process
 // contention (ops-events cron) is still handled by the retry shell.
+//
+// police-1b f2 (F19): chain-length cap — a single wedged job (up to 4
+// attempts × 20s tx timeout + backoffs ≈ 2min) used to hold the chain while
+// queued redemptions stacked unboundedly behind it. Past MAX_QUEUED pending
+// jobs we fail FAST: the caller maps this to a 4xx (busy) instead of the
+// client timing out. Redemption correctness is never at risk — the guarded
+// decrement (not the serializer) is the correctness mechanism.
+const MAX_QUEUED_REDEMPTIONS = 100;
+let redemptionQueueDepth = 0;
 let redemptionWriteChain: Promise<unknown> = Promise.resolve();
 function enqueueRedemptionWrite<T>(job: () => Promise<T>): Promise<T> {
+  if (redemptionQueueDepth >= MAX_QUEUED_REDEMPTIONS) {
+    throw new Error(
+      "Redemption queue is saturated — too many concurrent redemptions. Please retry in a moment.",
+    );
+  }
+  redemptionQueueDepth += 1;
   const run = redemptionWriteChain.then(job, job);
   // Keep the chain alive regardless of this job's outcome.
   redemptionWriteChain = run.then(
-    () => undefined,
-    () => undefined
+    () => {
+      redemptionQueueDepth -= 1;
+    },
+    () => {
+      redemptionQueueDepth -= 1;
+    }
   );
   return run;
 }

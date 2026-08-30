@@ -81,13 +81,28 @@ export async function PATCH(
         // Fix: Release ALL HELD escrow entries for this task (base + add-ons),
         // not just the first one. Each add-on creates a separate EscrowLedger
         // row that must be individually released.
-        const updatedEscrows = []
+        //
+        // F19 (B15): guarded on state=HELD per entry — a concurrent release
+        // or dispute can't double-transition/double-notify. Zero claims →
+        // a concurrent action won; abort with nothing written.
+        const updatedEscrows: { id: string; vendorPayoutCents: number; state: EscrowState }[] = []
+        let releasedCount = 0
         for (const entry of heldEntries) {
-          const updated = await tx.escrowLedger.update({
-            where: { id: entry.id },
+          const claimed = await tx.escrowLedger.updateMany({
+            where: { id: entry.id, state: EscrowState.HELD },
             data: { state: EscrowState.RELEASED, releasedAt: now },
           })
-          updatedEscrows.push(updated)
+          releasedCount += claimed.count
+          if (claimed.count > 0) {
+            const fresh = await tx.escrowLedger.findUnique({
+              where: { id: entry.id },
+              select: { id: true, vendorPayoutCents: true, state: true },
+            })
+            if (fresh) updatedEscrows.push(fresh)
+          }
+        }
+        if (releasedCount === 0) {
+          throw new Error("ESCROW_ALREADY_RESOLVED")
         }
         const updatedEscrow = updatedEscrows[0] // backward-compat: return first
 
@@ -195,17 +210,27 @@ export async function PATCH(
       const result = await db.$transaction(async (tx) => {
         // Fix #8: Dispute ALL escrow entries for this task (base + add-ons),
         // not just the first one. This ensures add-on escrows are also frozen.
+        //
+        // F19 (B15): guarded on state=HELD per entry — concurrent dispute or
+        // release can't double-transition. Zero claims → concurrent winner.
         const updatedEscrows: typeof task.escrowEntries[number][] = []
+        let disputedCount = 0
         for (const entry of heldEntries) {
-          const updated = await tx.escrowLedger.update({
-            where: { id: entry.id },
+          const claimed = await tx.escrowLedger.updateMany({
+            where: { id: entry.id, state: EscrowState.HELD },
             data: {
               state: EscrowState.DISPUTED,
               disputedAt: now,
               disputeReason: reason ?? "No reason provided",
             },
           })
-          updatedEscrows.push(updated)
+          disputedCount += claimed.count
+          if (claimed.count > 0) {
+            updatedEscrows.push((await tx.escrowLedger.findUnique({ where: { id: entry.id } }))!)
+          }
+        }
+        if (disputedCount === 0) {
+          throw new Error("ESCROW_ALREADY_RESOLVED")
         }
         const updatedEscrow = updatedEscrows[0] // backward-compat: return first
 
@@ -341,6 +366,17 @@ export async function PATCH(
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
+    // F19 (B15): guarded transitions abort with this sentinel when a
+    // concurrent action won the race — clean 409, zero side effects.
+    if (error instanceof Error && error.message === "ESCROW_ALREADY_RESOLVED") {
+      return NextResponse.json(
+        {
+          error: "Escrow entries were already actioned concurrently — refresh to see the current state.",
+          code: "ESCROW_ALREADY_RESOLVED",
+        },
+        { status: 409 }
+      );
+    }
     console.error("PATCH /api/tasks/[id]/escrow error:", error)
     return NextResponse.json(
       { error: "Failed to process escrow action" },

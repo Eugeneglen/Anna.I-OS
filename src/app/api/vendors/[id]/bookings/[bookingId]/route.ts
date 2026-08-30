@@ -128,20 +128,65 @@ export async function PATCH(
       const vendorPayoutCents = escrowAmountCents - commissionCents
 
       // Hold escrow (this is the ONLY place escrow is created)
-      await db.escrowLedger.create({
-        data: {
-          taskId: task.id,
-          bookingId,
-          amountCents: escrowAmountCents,       // the actual held amount (post-discount)
-          originalAmountCents,                   // pre-discount amount (for audit)
-          discountCents,                         // discount captured in this escrow
-          discountFundedBy: "PLATFORM",          // platform absorbs the discount cost
-          state: "HELD",
-          commissionRate: PLATFORM_COMMISSION_RATE,
-          commissionCents,
-          vendorPayoutCents,
-          heldAt: now,
-        },
+      //
+      // ── F19/E4: duplicate-escrow guard ──
+      // Old behavior created a HELD entry unconditionally: cancel →
+      // rematch → new accept left TWO live base entries for the task, and
+      // the release path (releases ALL HELD entries) paid both — paper
+      // double payout. New rules, inside one transaction:
+      //   1. VOID stale HELD entries on this task that belong to OTHER
+      //      bookings which are cancelled (their hold never left escrow as
+      //      release or credit — VOIDED is excluded from the R3 ledger
+      //      formula; nothing was actually paid in the pilot's NoOp ledger).
+      //   2. Never create a second live entry for THIS booking (parallel
+      //      accepts both pass the transition pre-check; SQLite tx
+      //      serialization means the second tx sees the first's entry).
+      await db.$transaction(async (tx) => {
+        const staleEntries = await tx.escrowLedger.findMany({
+          where: {
+            taskId: task.id,
+            state: "HELD",
+            bookingId: { not: bookingId },
+          },
+          select: { id: true, bookingId: true, booking: { select: { status: true } } },
+        });
+        for (const stale of staleEntries) {
+          if (stale.booking?.status === "cancelled") {
+            // updateMany (not update): the state=HELD precondition is a
+            // non-unique filter — Prisma only allows those in updateMany.
+            await tx.escrowLedger.updateMany({
+              where: { id: stale.id, state: "HELD" },
+              data: {
+                state: "VOIDED",
+                disputeResolution: "Hold voided — booking cancelled before start, task rematched (F19/E4)",
+                disputeResolvedBy: "system",
+                disputeResolvedAt: now,
+              },
+            });
+          }
+        }
+
+        const existingForBooking = await tx.escrowLedger.findFirst({
+          where: { bookingId, state: "HELD" },
+          select: { id: true },
+        });
+        if (!existingForBooking) {
+          await tx.escrowLedger.create({
+            data: {
+              taskId: task.id,
+              bookingId,
+              amountCents: escrowAmountCents,       // the actual held amount (post-discount)
+              originalAmountCents,                   // pre-discount amount (for audit)
+              discountCents,                         // discount captured in this escrow
+              discountFundedBy: "PLATFORM",          // platform absorbs the discount cost
+              state: "HELD",
+              commissionRate: PLATFORM_COMMISSION_RATE,
+              commissionCents,
+              vendorPayoutCents,
+              heldAt: now,
+            },
+          });
+        }
       })
 
       // Determine if task should go to SCHEDULED directly (if it has a scheduledStart)

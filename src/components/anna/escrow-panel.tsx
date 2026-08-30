@@ -148,6 +148,8 @@ function StateBadge({ state }: { state: EscrowState }) {
     RELEASED: "bg-[var(--anna-success)]/15 text-[var(--anna-success)] border-[var(--anna-success)]/20",
     DISPUTED: "bg-[var(--anna-error)]/15 text-[var(--anna-error)] border-[var(--anna-error)]/20",
     REFUNDED: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
+    VOIDED: "bg-[var(--anna-bg)] text-[var(--anna-slate-light)] border-[var(--anna-border)]",
+    DISPUTE_CLOSED: "bg-[var(--anna-muted)]/15 text-[var(--anna-muted)] border-[var(--anna-muted)]/20",
   };
 
   const labels: Record<EscrowState, string> = {
@@ -155,6 +157,8 @@ function StateBadge({ state }: { state: EscrowState }) {
     RELEASED: "Released",
     DISPUTED: "Disputed",
     REFUNDED: "Refunded",
+    VOIDED: "Voided",
+    DISPUTE_CLOSED: "Dispute closed",
   };
 
   return (

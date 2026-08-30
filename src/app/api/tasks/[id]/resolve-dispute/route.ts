@@ -52,19 +52,28 @@ export async function POST(
 
     // Resolve the dispute in a transaction
     const result = await db.$transaction(async (tx) => {
-      // Reset escrow back to HELD state
-      const escrow = task.escrowEntries[0]
-      if (escrow) {
-        await tx.escrowLedger.update({
-          where: { id: escrow.id },
-          data: {
-            state: "HELD",
-            disputeResolution: "Resolved by household member",
-            disputeResolvedBy: "household",
-            disputeResolvedAt: now,
-          },
-        })
+      // ── F19/E3: reset ALL DISPUTED escrow entries for this task, not just
+      // escrowEntries[0]. The dispute action disputes ALL entries (base +
+      // add-ons) — the household resolve must mirror it, or add-on entries
+      // stay DISPUTED forever once the task leaves DISPUTED (they can never
+      // be released/refunded). Guarded on state=DISPUTED per entry so a
+      // concurrent ops resolution loses cleanly with zero double effects.
+      const dismissedEntries = await tx.escrowLedger.findMany({
+        where: { taskId: task.id, state: "DISPUTED" },
+        select: { id: true },
+      })
+      if (dismissedEntries.length === 0) {
+        throw new Error("NO_DISPUTED_ENTRIES")
       }
+      await tx.escrowLedger.updateMany({
+        where: { taskId: task.id, state: "DISPUTED" },
+        data: {
+          state: "HELD",
+          disputeResolution: "Resolved by household member",
+          disputeResolvedBy: "household",
+          disputeResolvedAt: now,
+        },
+      })
 
       // Unpause autonomy promotion
       await tx.householdCategoryAutonomy.updateMany({
@@ -127,6 +136,17 @@ export async function POST(
 
     return NextResponse.json({ task: result })
   } catch (error) {
+    // F19/E3: a concurrent resolution (ops won the race) is a clean 409,
+    // not a 500 — the guarded updateMany found nothing to reset.
+    if (error instanceof Error && error.message === "NO_DISPUTED_ENTRIES") {
+      return NextResponse.json(
+        {
+          error: "No DISPUTED escrow entries found — the dispute may have just been resolved by ops. Refresh to see the current state.",
+          code: "NO_DISPUTED_ENTRIES",
+        },
+        { status: 409 }
+      )
+    }
     console.error("POST /api/tasks/[id]/resolve-dispute error:", error)
     return NextResponse.json(
       { error: "Failed to resolve dispute" },

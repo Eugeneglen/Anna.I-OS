@@ -959,8 +959,13 @@ export function CampaignCreateDialog({
                     {issuanceJob.status === "PENDING" && !issuanceStalled && "Queued voucher issuance…"}
                     {issuanceJob.status === "PENDING" && issuanceStalled &&
                       "Still queued — the background dispatcher will process it automatically. You can safely close this dialog."}
-                    {issuanceJob.status === "RUNNING" &&
+                    {issuanceJob.status === "RUNNING" && !issuanceStalled &&
                       `Issuing vouchers to ${issuanceJob.totalMembers} member${issuanceJob.totalMembers !== 1 ? "s" : ""}…`}
+                    {/* police-1c f6: stalled RUNNING copy — a 2-min-stalled
+                        RUNNING job is not still "issuing"; the F19 reaper
+                        (15 min) will flip a truly dead one to FAILED. */}
+                    {issuanceJob.status === "RUNNING" && issuanceStalled &&
+                      "Issuance is taking longer than expected — it may have stalled. It will auto-recover (or show as failed) within ~15 minutes; you can also click Check again."}
                     {issuanceJob.status === "COMPLETED" &&
                       `Issuance complete — ${issuanceJob.processedCount - issuanceJob.failedCount} of ${issuanceJob.totalMembers} voucher${issuanceJob.totalMembers !== 1 ? "s" : ""} issued`}
                     {issuanceJob.status === "FAILED" &&
@@ -987,8 +992,11 @@ export function CampaignCreateDialog({
                               body: JSON.stringify({ jobId: issuanceJob.jobId }),
                             });
                             const json = await res.json().catch(() => null);
-                            if (!res.ok && json?.message) {
-                              toast.error(json.message);
+                            // police-1c f6: fail LOUDLY on any error — the old
+                            // fall-through toasted a false "Retrying…" for
+                            // non-{message} failures (403 ownership, 429 rate-limit).
+                            if (!res.ok) {
+                              toast.error(json?.message || json?.error || `Retry failed (${res.status})`);
                               return;
                             }
                             toast.success("Retrying issuance…");
