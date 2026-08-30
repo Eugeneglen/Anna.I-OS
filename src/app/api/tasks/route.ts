@@ -7,6 +7,7 @@ import { triggerAutomationOnTaskCreated } from "@/lib/automation"
 import { isCategoryActive } from "@/lib/get-active-categories"
 import { validateRedemption } from "@/lib/marketing/campaign-service"
 import { generateJobNo } from "@/lib/job-number"
+import { resolveHouseholdScope } from "@/lib/api-guards"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -46,12 +47,14 @@ const createTaskSchema = z.object({
 // GET /api/tasks?householdId=xxx
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const householdId = searchParams.get("householdId")
-
-    if (!householdId) {
-      return NextResponse.json({ error: "householdId required" }, { status: 400 })
+    // ── F21 auth gate (audit C7 family) ── task lists expose vendor
+    // contact info + escrow amounts: household session sees ONLY its own
+    // tasks (query param must match the session); ops may list any home.
+    const scope = await resolveHouseholdScope(new URL(request.url).searchParams.get("householdId"))
+    if (!scope.ok) {
+      return NextResponse.json({ error: scope.error }, { status: scope.status })
     }
+    const householdId = scope.householdId
 
     const tasks = await db.task.findMany({
       where: {
@@ -110,7 +113,16 @@ export async function POST(request: Request) {
       )
     }
 
-    const { householdId, category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
+    // ── F21 auth gate (audit C7 family) ── task creation must not be
+    // spoofable: a household session always creates for ITSELF (body
+    // householdId ignored on mismatch); ops may create on behalf.
+    const scope = await resolveHouseholdScope(parsed.data.householdId)
+    if (!scope.ok) {
+      return NextResponse.json({ error: scope.error }, { status: scope.status })
+    }
+    const householdId = scope.householdId
+
+    const { category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
 
     // Category active guard — reject if category is currently unavailable
     const categoryActive = await isCategoryActive(category)

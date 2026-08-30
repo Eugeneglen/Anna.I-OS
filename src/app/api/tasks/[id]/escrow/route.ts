@@ -6,6 +6,7 @@ import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
 import { emitEscrowStateChanged, emitDisputeRaised, emitVendorNotification } from "@/lib/events"
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const escrowSchema = z.object({
   action: z.enum(["release", "dispute"]),
@@ -18,6 +19,13 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7) ──
+    // Escrow release/dispute moves money: only the owning household or an
+    // authenticated ops user may act. Previously this route had ZERO auth.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = escrowSchema.safeParse(body)
 

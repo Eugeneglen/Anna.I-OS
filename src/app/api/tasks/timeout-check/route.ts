@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { emitVendorNotification, emitTaskDispatched } from "@/lib/events"
+import { resolveApiActor } from "@/lib/api-guards"
 
 /**
  * POST /api/tasks/timeout-check
@@ -17,6 +18,13 @@ import { emitVendorNotification, emitTaskDispatched } from "@/lib/events"
  */
 export async function POST() {
   try {
+    // ── F21 auth gate (audit C7 family) ── system sweep: ops only.
+    // (No household should trigger global re-routing.)
+    const actor = await resolveApiActor()
+    if (!actor || actor.kind !== "ops") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const now = new Date()
 
     // Find all MATCHING tasks whose acceptance timeout has expired

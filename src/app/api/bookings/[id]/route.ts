@@ -5,6 +5,7 @@ import { TaskStatus, NotificationChannel, NotificationEventType, NotificationSta
 import { BOOKING_STATUS_TRANSITIONS } from "@/lib/constants"
 import { emitWorkCompleted } from "@/lib/events"
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
+import { guardBookingAccess, guardErrorResponse } from "@/lib/api-guards"
 
 // C-7 FIX: Extend schema to accept rating and ratingComment
 // Allow standalone rating updates (no status transition required)
@@ -22,6 +23,13 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7) ──
+    // Booking status/rating mutations (incl. cancellation): only the
+    // owning household or an authenticated ops user. Previously ZERO auth.
+    const guard = await guardBookingAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = patchBookingSchema.safeParse(body)
 

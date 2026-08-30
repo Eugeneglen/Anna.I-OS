@@ -7,6 +7,7 @@ import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { isCategoryActive } from "@/lib/get-active-categories"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const matchSchema = z.object({
   vendorId: z.string().min(1).optional(),
@@ -28,6 +29,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── dispatch moves a task into
+    // booking/escrow flow: owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = matchSchema.safeParse(body)
 

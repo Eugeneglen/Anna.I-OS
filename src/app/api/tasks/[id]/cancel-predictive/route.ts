@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { cancelPredictiveTask } from "@/lib/predictive-scheduler"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const schema = z.object({
   reason: z.string().optional(),
@@ -12,6 +13,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = schema.safeParse(body)
 

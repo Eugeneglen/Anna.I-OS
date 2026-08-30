@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import crypto from "crypto";
+import { resolveApiActor } from "@/lib/api-guards";
 
 // UPLOAD_DIR: writable root for file storage.
 // - Local dev: defaults to public/ (backward compatible)
@@ -30,6 +31,13 @@ const ALLOWED_VIDEO_TYPES = [
 
 export async function POST(request: Request) {
   try {
+    // ── F21 auth gate (audit C7 family) ── uploads require a session
+    // (files are attached to tasks on creation; no entity to scope yet).
+    const actor = await resolveApiActor();
+    if (!actor) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const fileType = formData.get("fileType") as string | null; // "PHOTO" | "VIDEO"

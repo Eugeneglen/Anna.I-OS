@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const resolveDisputeSchema = z.object({
   bookingId: z.string().min(1).optional(),
@@ -14,6 +15,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── resolving a dispute releases
+    // escrow: owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = resolveDisputeSchema.safeParse(body)
 

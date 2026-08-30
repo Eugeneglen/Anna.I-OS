@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { NotificationEventType, NotificationStatus } from "@prisma/client"
+import { getHouseholdSession } from "@/lib/household-auth"
+
+// F2 (audit C2): every query/mutation is scoped to the household SESSION.
+// A householdId query/body param is accepted only when it matches the
+// session (else ignored) — cross-household reads (IDOR) are impossible.
+// Unauthenticated callers get 401.
 
 const ANOMALY_EVENT_TYPES: NotificationEventType[] = [
   NotificationEventType.ANOMALY_VENDOR_LATE,
@@ -12,17 +18,32 @@ const ANOMALY_EVENT_TYPES: NotificationEventType[] = [
 
 export async function GET(request: Request) {
   try {
+    // ── F2 auth gate ──
+    const session = await getHouseholdSession()
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const householdId = searchParams.get("householdId")
+    // Query householdId is accepted only when it matches the session; a
+    // mismatched id is ignored (the session wins — no cross-household reads).
+    const requestedHouseholdId = searchParams.get("householdId")
+    const householdId =
+      requestedHouseholdId === session.householdId ? requestedHouseholdId : session.householdId
+
     const status = searchParams.get("status")
     const unreadOnly = searchParams.get("unreadOnly") === "true"
 
-    if (!householdId) {
-      return NextResponse.json({ error: "householdId is required" }, { status: 400 })
-    }
-
     // If no memberId provided, default to first household member to avoid duplicates
     let memberId = searchParams.get("memberId")
+    if (memberId) {
+      // F2: a memberId from another household must never scope the query.
+      const member = await db.familyMember.findFirst({
+        where: { id: memberId, householdId },
+        select: { id: true },
+      })
+      if (!member) memberId = null
+    }
     if (!memberId) {
       const firstMember = await db.familyMember.findFirst({
         where: { householdId },
@@ -72,19 +93,34 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // ── F2 auth gate ──
+    const session = await getHouseholdSession()
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { action, householdId } = body
+    const { action } = body
 
     if (action === "read-all") {
-      if (!householdId) {
-        return NextResponse.json({ error: "householdId required" }, { status: 400 })
+      // F2: scope unconditionally to the SESSION household — any body
+      // householdId is ignored (never trust client-supplied scope).
+      const householdId = session.householdId
+
+      // Also accept optional memberId for targeted mark-read — but only if
+      // the member belongs to the session household.
+      let memberId: string | null = body.memberId ?? null
+      if (memberId) {
+        const member = await db.familyMember.findFirst({
+          where: { id: memberId, householdId },
+          select: { id: true },
+        })
+        if (!member) memberId = null
       }
 
-      // Also accept optional memberId for targeted mark-read
-      const { memberId: bodyMemberId } = body
       const markWhere: Record<string, any> = { householdId, status: NotificationStatus.PENDING }
-      if (bodyMemberId) {
-        markWhere.memberId = bodyMemberId
+      if (memberId) {
+        markWhere.memberId = memberId
       }
 
       const result = await db.notification.updateMany({

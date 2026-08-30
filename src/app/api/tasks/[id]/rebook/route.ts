@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const REBOOKABLE_STATUSES = [TaskStatus.VERIFIED, TaskStatus.ESCROW_RELEASED]
 
@@ -10,6 +11,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── rebook clones the task into a
+    // new booking: owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
 
     // Fetch original task
     const originalTask = await db.task.findUnique({ where: { id } })

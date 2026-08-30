@@ -6,6 +6,7 @@ import { checkAndPromoteAutonomy } from "@/lib/autonomy"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged } from "@/lib/events"
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const verifySchema = z.object({
   bookingId: z.string().min(1),
@@ -17,6 +18,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── verification gates escrow
+    // release — must be the owning household or ops.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = verifySchema.safeParse(body)
 

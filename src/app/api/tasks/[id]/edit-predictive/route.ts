@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { editPredictiveTask } from "@/lib/predictive-scheduler"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 const schema = z.object({
   scheduledStart: z.string().datetime().optional(),
@@ -14,6 +15,12 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── predictive task edits change
+    // money-relevant fields (amountCents): owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
+
     const body = await request.json()
     const parsed = schema.safeParse(body)
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { TaskStatus } from "@prisma/client"
 import { getSuggestedVendors } from "@/lib/routing"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 export async function GET(
   _request: Request,
@@ -9,6 +10,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── vendor suggestions leak
+    // routing data: owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
 
     // Validate task exists
     const task = await db.task.findUnique({

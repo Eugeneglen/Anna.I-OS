@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
 export async function GET(
   _request: Request,
@@ -7,6 +8,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    // ── F21 auth gate (audit C7 family) ── the payload includes household
+    // address + vendor contact info: owning household or ops only.
+    const guard = await guardTaskAccess(id)
+    if (!guard.ok) return guardErrorResponse(guard)
 
     const task = await db.task.findUnique({
       where: { id },
