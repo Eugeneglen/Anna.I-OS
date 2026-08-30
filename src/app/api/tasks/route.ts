@@ -283,25 +283,41 @@ export async function POST(request: Request) {
           // a silently-dropped discount.
           if (discountCode && discountCodeId && discountCampaignId) {
             try {
-              // Decrement uses remaining
-              const code = await tx.discountCode.findUnique({
-                where: { id: discountCodeId },
+              // ── F3 (C3): atomic guarded decrement — the conditional ──
+              // updateMany is the compare-and-decrement; racing checkouts
+              // can no longer both consume the same remaining use.
+              const dec = await tx.discountCode.updateMany({
+                where: { id: discountCodeId, usesRemaining: { gt: 0 } },
+                data: { usesRemaining: { decrement: 1 } },
               });
-              if (code && code.usesRemaining !== null) {
-                if (code.usesRemaining <= 0) {
+              if (dec.count === 0) {
+                // count=0 → exhausted OR unlimited (null). Distinguish.
+                const codeRow = await tx.discountCode.findUnique({
+                  where: { id: discountCodeId },
+                  select: { usesRemaining: true },
+                });
+                if (codeRow && codeRow.usesRemaining !== null) {
                   throw new Error("This voucher's usage limit has been reached");
                 }
-                await tx.discountCode.update({
-                  where: { id: discountCodeId },
-                  data: { usesRemaining: code.usesRemaining - 1 },
-                });
               }
 
-              // Increment campaign redemption count
-              await tx.campaign.update({
+              // ── F3: campaign cap backstop (increment-then-verify; race- ──
+              // free under SQLite single-writer serialization — see
+              // campaign-service.ts applyRedemption for the full note)
+              const campaignRow = await tx.campaign.update({
                 where: { id: discountCampaignId },
                 data: { redemptionsCount: { increment: 1 } },
               });
+              if (
+                campaignRow.maxRedemptions !== null &&
+                campaignRow.redemptionsCount > campaignRow.maxRedemptions
+              ) {
+                await tx.campaign.update({
+                  where: { id: discountCampaignId },
+                  data: { redemptionsCount: { decrement: 1 } },
+                });
+                throw new Error("This campaign's redemption limit has been reached");
+              }
 
               // Write redemption record
               await tx.codeRedemption.create({

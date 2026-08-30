@@ -12,6 +12,19 @@ import { db } from "@/lib/db";
 import { CampaignStatus } from "@prisma/client";
 import * as crypto from "crypto";
 
+// ── F3: typed error for atomic limit enforcement ──
+// Routes map this to HTTP 409 (conflict) instead of a generic 500, so
+// callers can distinguish "someone else got the last use" from failures.
+export class RedemptionLimitError extends Error {
+  constructor(
+    public readonly code: "code-exhausted" | "campaign-cap-reached",
+    message: string
+  ) {
+    super(message);
+    this.name = "RedemptionLimitError";
+  }
+}
+
 // ── Campaign CRUD ──
 
 export interface CreateCampaignInput {
@@ -421,6 +434,25 @@ export async function validateRedemption(params: {
   };
 }
 
+// ── F3: in-process write serializer for redemptions ──
+// SQLite allows exactly ONE writer at a time. When many parallel
+// interactive transactions contend for the write lock they starve each
+// other into P1008 socket timeouts (observed with a 20-way burst).
+// Chaining all redemption writes through one promise queue lets each
+// transaction run sequentially and complete in milliseconds — the burst
+// resolves as an ordered queue instead of a lock storm. Cross-process
+// contention (ops-events cron) is still handled by the retry shell.
+let redemptionWriteChain: Promise<unknown> = Promise.resolve();
+function enqueueRedemptionWrite<T>(job: () => Promise<T>): Promise<T> {
+  const run = redemptionWriteChain.then(job, job);
+  // Keep the chain alive regardless of this job's outcome.
+  redemptionWriteChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 // ── Apply redemption (write to DB) ──
 
 export async function applyRedemption(params: {
@@ -432,24 +464,96 @@ export async function applyRedemption(params: {
   bookingId?: string;
   subscriptionId?: string;
 }) {
-  return db.$transaction(async (tx) => {
-    // Decrement uses remaining
-    const code = await tx.discountCode.findUnique({
-      where: { id: params.codeId },
-    });
-    if (code && code.usesRemaining !== null) {
-      await tx.discountCode.update({
-        where: { id: params.codeId },
-        data: { usesRemaining: code.usesRemaining - 1 },
+  return enqueueRedemptionWrite(async () => {
+  // F3: retry shell — SQLite (single writer, multi-process) serialises
+  // concurrent redemptions; under a burst, interactive transactions can
+  // lose their slot (P1008 socket timeout / expired-transaction errors).
+  // A failed interactive transaction is rolled back ENTIRELY, so retrying
+  // the whole body is safe (no partial state possible).
+  const MAX_ATTEMPTS = 4;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return await db.$transaction(async (tx) => {
+        // ── F3 (C3): atomic guarded decrement ─────────────────────────
+        // The conditional updateMany is the atomic compare-and-decrement:
+        // exactly one concurrent writer wins each remaining use. The old
+        // read-then-write (findUnique → usesRemaining - 1) allowed two racing
+        // requests to both read 1 and both write 0 → oversell.
+        const dec = await tx.discountCode.updateMany({
+          where: { id: params.codeId, usesRemaining: { gt: 0 } },
+          data: { usesRemaining: { decrement: 1 } },
+        });
+        if (dec.count === 0) {
+          // Either the code is exhausted OR it is unlimited (null never
+          // matches `gt: 0`). Distinguish with one read on the failure
+          // path only.
+          const codeRow = await tx.discountCode.findUnique({
+            where: { id: params.codeId },
+            select: { usesRemaining: true },
+          });
+          if (codeRow && codeRow.usesRemaining !== null) {
+            throw new RedemptionLimitError("code-exhausted", "This voucher's usage limit has been reached");
+          }
+        }
+
+        // ── F3: campaign-level cap backstop (increment-then-verify) ────
+        // SQLite cannot compare two columns inside updateMany (`lt: column`),
+        // but its single-writer serialization makes increment-then-verify
+        // race-free: if the increment pushed the counter past the cap, roll
+        // it back and reject. validateRedemption's pre-check (L7) covers the
+        // common path; this closes the concurrent window. Revisit if the DB
+        // engine ever changes.
+        const campaign = await tx.campaign.update({
+          where: { id: params.campaignId },
+          data: { redemptionsCount: { increment: 1 } },
+        });
+        if (campaign.maxRedemptions !== null && campaign.redemptionsCount > campaign.maxRedemptions) {
+          await tx.campaign.update({
+            where: { id: params.campaignId },
+            data: { redemptionsCount: { decrement: 1 } },
+          });
+          throw new RedemptionLimitError("campaign-cap-reached", "This campaign's redemption limit has been reached");
+        }
+
+        return await writeRedemptionBookkeeping(tx, params);
+      }, {
+        timeout: 20_000,
+        maxWait: 10_000,
       });
+    } catch (error) {
+      // Limit errors are real answers — never retried.
+      if (error instanceof RedemptionLimitError) throw error;
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+      const isContention =
+        msg.includes("Socket timeout") ||
+        msg.includes("Transaction already closed") ||
+        msg.includes("database is locked") ||
+        (error as { code?: string })?.code === "P1008" ||
+        (error as { code?: string })?.code === "P2024";
+      if (!isContention || attempt === MAX_ATTEMPTS - 1) throw error;
+      await new Promise((r) => setTimeout(r, 150 + attempt * 250));
     }
+  }
+  throw lastError;
+  });
+}
 
-    // Increment campaign redemption count
-    await tx.campaign.update({
-      where: { id: params.campaignId },
-      data: { redemptionsCount: { increment: 1 } },
-    });
-
+/** Bookkeeping half of a redemption (runs inside the transaction body). */
+async function writeRedemptionBookkeeping(
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  params: {
+    code: string;
+    householdId: string;
+    discountCents: number;
+    campaignId: string;
+    codeId: string;
+    bookingId?: string;
+    subscriptionId?: string;
+  }
+) {
+  {
     // Write redemption record
     const redemption = await tx.codeRedemption.create({
       data: {
@@ -516,7 +620,7 @@ export async function applyRedemption(params: {
     }
 
     return redemption;
-  });
+  }
 }
 
 // ── Campaign performance stats ──

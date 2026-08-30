@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { validateRedemption, applyRedemption } from "@/lib/marketing/campaign-service";
+import { validateRedemption, applyRedemption, RedemptionLimitError } from "@/lib/marketing/campaign-service";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
 import { resolveHouseholdScope } from "@/lib/api-guards";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -106,6 +106,10 @@ export async function POST(req: NextRequest) {
       discountedAmountCents: parsed.data.orderValueCents - result.discountCents!,
     });
   } catch (error) {
+    // F3: limit errors are conflicts (someone consumed the last use), not 500s.
+    if (error instanceof RedemptionLimitError) {
+      return NextResponse.json({ valid: false, reason: error.message, code: error.code }, { status: 409 });
+    }
     console.error("[/api/marketing/redeem POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

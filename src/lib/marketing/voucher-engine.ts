@@ -17,6 +17,7 @@
 import { db } from "@/lib/db";
 import { generateSingleCode } from "./campaign-service";
 import {
+  CampaignEventType,
   NotificationChannel,
   NotificationEventType,
   NotificationStatus,
@@ -650,54 +651,148 @@ export async function revokeVoucher(voucherId: string, reason: string): Promise<
   });
 }
 
-// ── Restore voucher on task cancellation ──
+// ── Restore voucher on task cancellation / refund (F3b, ruled R3) ──
+//
+// Ruled behaviour (download/voucher-policy-decision.md, R3):
+//   • single-use WALLET voucher → REISSUED: returned to CLAIMED so it
+//     reappears in the household wallet, spendable once more. (The
+//     @@unique(householdId, discountCodeId) constraint means a fresh
+//     Voucher row on the same code is impossible — restore-to-CLAIMED
+//     IS the reissue form for wallet vouchers.)
+//   • multi-use PUBLIC code → the consumed use is returned atomically.
+//   • Campaign.redemptionsCount is decremented (H5 reconciliation) and
+//     the task's CodeRedemption row is deleted so aggregates stay true.
+//   • Task.discountCodeId is detached.
+//   • Fully IDEMPOTENT: the task's CodeRedemption row is the marker —
+//     once gone, subsequent calls are no-ops (double-cancel safe).
 
-export async function restoreVoucherOnCancellation(taskId: string): Promise<void> {
-  await db.$transaction(async (tx) => {
+export interface VoucherRestoreResult {
+  restored: boolean;
+  voucherReissued: boolean; // wallet voucher back to CLAIMED
+  useRestored: boolean;     // code usesRemaining incremented
+  redemptionDeleted: boolean;
+}
+
+export async function restoreVoucherOnCancellation(
+  taskId: string
+): Promise<VoucherRestoreResult> {
+  return db.$transaction(async (tx) => {
     const task = await tx.task.findUnique({
       where: { id: taskId },
       select: { discountCodeId: true, householdId: true },
     });
+    if (!task || !task.discountCodeId) {
+      return { restored: false, voucherReissued: false, useRestored: false, redemptionDeleted: false };
+    }
 
-    if (!task || !task.discountCodeId) return;
-
-    // Find the voucher for this household + code
-    const voucher = await tx.voucher.findFirst({
+    // Idempotency marker: this task's CodeRedemption row. Note (C4 debt,
+    // to be fixed with F4): the /api/tasks flow currently stores the Task
+    // id in CodeRedemption.bookingId, so we match on that column.
+    const redemption = await tx.codeRedemption.findFirst({
       where: {
-        householdId: task.householdId,
         discountCodeId: task.discountCodeId,
-        status: "USED",
+        householdId: task.householdId,
+        bookingId: taskId,
       },
     });
+    if (!redemption) {
+      // Already reconciled (or nothing was redeemed on this task) — no-op.
+      return { restored: false, voucherReissued: false, useRestored: false, redemptionDeleted: false };
+    }
 
-    if (!voucher) return;
-
-    // Restore the voucher to CLAIMED
-    await tx.voucher.update({
-      where: { id: voucher.id },
-      data: { status: "CLAIMED", usedAt: null },
+    // 1) Wallet voucher (single-use, household-scoped): USED → CLAIMED.
+    const voucher = await tx.voucher.findUnique({
+      where: {
+        householdId_discountCodeId: {
+          householdId: task.householdId,
+          discountCodeId: task.discountCodeId,
+        },
+      },
     });
+    let voucherReissued = false;
+    if (voucher && voucher.status === "USED") {
+      await tx.voucher.update({
+        where: { id: voucher.id },
+        data: { status: "CLAIMED", usedAt: null },
+      });
+      voucherReissued = true;
+    }
 
-    // Restore usesRemaining on the code
+    // 2) Return the consumed use to the code — atomic increment, then a
+    //    hygiene clamp to maxUses (SQLite cannot compare two columns inside
+    //    updateMany; single-writer serialization keeps this race-free).
+    await tx.discountCode.updateMany({
+      where: { id: task.discountCodeId },
+      data: { usesRemaining: { increment: 1 } },
+    });
     const code = await tx.discountCode.findUnique({
       where: { id: task.discountCodeId },
-      select: { usesRemaining: true },
+      select: { usesRemaining: true, maxUses: true },
     });
-    if (code && code.usesRemaining !== null) {
+    if (
+      code &&
+      code.usesRemaining !== null &&
+      code.maxUses !== null &&
+      code.usesRemaining > code.maxUses
+    ) {
       await tx.discountCode.update({
         where: { id: task.discountCodeId },
-        data: { usesRemaining: code.usesRemaining + 1 },
+        data: { usesRemaining: code.maxUses },
       });
     }
 
-    // Record event
+    // 3) H5 reconciliation: campaign counter down (guarded, never below 0)
+    //    and the redemption row is removed so aggregates stay truthful.
+    await tx.campaign.updateMany({
+      where: { id: redemption.campaignId, redemptionsCount: { gt: 0 } },
+      data: { redemptionsCount: { decrement: 1 } },
+    });
+    await tx.codeRedemption.delete({ where: { id: redemption.id } });
+
+    // 4) Detach the discount from the task — it no longer applies.
+    await tx.task.update({
+      where: { id: taskId },
+      data: { discountCodeId: null },
+    });
+
+    // 5) Honest audit trail (the old event was mislabeled VOUCHER_REVOKED).
     await tx.campaignEvent.create({
       data: {
-        campaignId: voucher.campaignId,
+        campaignId: redemption.campaignId,
         householdId: task.householdId,
-        eventType: "VOUCHER_REVOKED",
-        metadata: { voucherId: voucher.id, reason: "Task cancelled", taskId },
+        eventType: CampaignEventType.VOUCHER_ISSUED,
+        metadata: {
+          reissuedForTaskId: taskId,
+          voucherId: voucher?.id ?? null,
+          discountCents: redemption.discountAppliedCents,
+          note: "voucher reissued on cancellation/refund (F3b)",
+        },
       },
     });
+
+    // 6) Tell the household their voucher is back (H5 gap: previously no
+    //    notification was sent for any voucher restore).
+    const members = await tx.familyMember.findMany({
+      where: { householdId: task.householdId },
+      select: { id: true },
+    });
+    for (const member of members) {
+      await tx.notification.create({
+        data: {
+          householdId: task.householdId,
+          recipientType: RecipientType.HOUSEHOLD_MEMBER,
+          memberId: member.id,
+          channel: NotificationChannel.WHATSAPP,
+          eventType: NotificationEventType.VOUCHER_ISSUED,
+          title: "Voucher Reissued",
+          body: `Your voucher has been returned to your wallet and is ready to use again (ref task ${taskId.slice(-6).toUpperCase()}).`,
+          status: NotificationStatus.PENDING,
+          referenceType: "task",
+          referenceId: taskId,
+        },
+      });
+    }
+
+    return { restored: true, voucherReissued, useRestored: true, redemptionDeleted: true };
   });
 }
