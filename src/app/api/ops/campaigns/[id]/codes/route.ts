@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { generateSingleCode, generateBulkCodes } from "@/lib/marketing/campaign-service";
+import { checkRateLimit, opsRateKey, rateLimitResponsePayload } from "@/lib/rate-limit";
 
 // GET — list codes for a campaign
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,14 +33,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 const generateSchema = z.object({
   mode: z.enum(["single", "bulk"]),
   // Single
-  code: z.string().optional(),
-  // Bulk
-  quantity: z.number().int().min(1).max(10000).optional(),
-  prefix: z.string().optional(),
+  code: z.string().max(64).optional(),
+  // Bulk — F8: ≤ 1000 codes per call (was 10,000)
+  quantity: z.number().int().min(1).max(1000).optional(),
+  prefix: z.string().max(16).optional(),
   codeLength: z.number().int().min(4).max(20).optional(),
   // Shared
-  maxUses: z.number().int().positive().optional(),
-  expiresAt: z.string().optional(),
+  maxUses: z.number().int().positive().max(1_000_000).optional(),
+  expiresAt: z.string().datetime().optional(),
 }).refine(
   (data) => data.mode === "single" || (data.mode === "bulk" && data.quantity),
   { message: "quantity is required for bulk mode" }
@@ -53,6 +54,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const allowed = await hasPermission(session, "marketing", "create");
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    // ── F8: 5 code-generation calls / min per ops user ──
+    const rlKey = opsRateKey(session.userId, "codes-generate");
+    if (!checkRateLimit(rlKey, 5, 60_000)) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
 
     const { id } = await params;
     const body = await req.json();

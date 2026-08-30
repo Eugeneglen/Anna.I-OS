@@ -3,6 +3,7 @@ import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { createSegment, type SegmentFilters } from "@/lib/marketing/segment-engine";
+import { segmentFiltersSchema } from "@/lib/marketing/schemas";
 import {
   checkRateLimit,
   opsRateKey,
@@ -64,10 +65,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name and filters are required" }, { status: 400 });
     }
 
+    // ── F8: shared filter schema — create/preview/compute cannot diverge ──
+    // (previously `filters: { totalSpendMin: 1e18 }` reached SQL and 500'd)
+    const parsedFilters = segmentFiltersSchema.safeParse(filters);
+    if (!parsedFilters.success) {
+      return NextResponse.json(
+        { error: "Invalid segment filters", details: parsedFilters.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
     const segment = await createSegment({
       name,
       description,
-      filters: filters as SegmentFilters,
+      filters: parsedFilters.data as SegmentFilters,
       createdById: session.userId,
       createdByName: session.name,
     });

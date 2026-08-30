@@ -4,6 +4,7 @@ import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { expireVouchers } from "@/lib/marketing/voucher-engine";
 import { invalidateBehaviourCache, invalidateAllCampaignPerfCaches } from "@/lib/cache";
+import { checkRateLimit, opsRateKey, rateLimitResponsePayload } from "@/lib/rate-limit";
 
 // POST /api/ops/marketing/expire-vouchers
 // Manually triggers voucher expiry + sends VOUCHER_EXPIRING notifications
@@ -17,6 +18,12 @@ export async function POST() {
     const allowed = await hasPermission(session, "marketing", "edit");
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // ── F8: expiry sweep is heavy (notification fan-out) — 2/min max ──
+    const rlKey = opsRateKey(session.userId, "expire-vouchers");
+    if (!checkRateLimit(rlKey, 2, 60_000)) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
     }
 
     // 1. Expire vouchers past their expiry date

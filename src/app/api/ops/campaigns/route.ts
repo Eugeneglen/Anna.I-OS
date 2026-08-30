@@ -11,6 +11,10 @@ import {
   RATE_LIMITS,
 } from "@/lib/rate-limit";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
+import {
+  discountRuleRefinement,
+  isoDateString,
+} from "@/lib/marketing/schemas";
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,37 +36,52 @@ export async function GET(req: NextRequest) {
   }
 }
 
-const createSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  type: z.enum(["FIRST_TIME", "CROSS_SELL", "UPGRADE", "REFERRAL", "PUBLIC_PROMO", "OTHER"]),
-  appliesTo: z.enum(["SUBSCRIPTION_FEE", "JOB_COMMISSION", "BOTH"]).optional(),
-  targetTier: z.string().optional(),
-  targetCategory: z.string().optional(),
-  maxRedemptions: z.number().int().positive().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]),
-  discountValue: z.number().positive(),
-  minOrderValueCents: z.number().int().positive().optional(),
-  maxDiscountCapCents: z.number().int().positive().optional(),
-  stackable: z.boolean().optional(),
-  eligibility: z.enum(["FIRST_TIME_HOUSEHOLD_ONLY", "EXISTING_HOUSEHOLD", "ANY"]).optional(),
-  minAutonomyLevel: z.number().int().optional(),
-  maxAutonomyLevel: z.number().int().optional(),
-  segmentId: z.string().optional(), // Phase 2: link campaign to a segment for voucher issuance
-  // Phase 2 Fix 10 — campaign content editor
-  subjectLine: z.string().max(200).optional(),
-  bodyText: z.string().max(10_000).optional(),
-  bodyHtml: z.string().max(50_000).optional(),
-  smsText: z.string().max(160).optional(),
-  // ── Fix 21 — timezone-aware scheduled send (additive) ──
-  // Optional ISO datetime; if absent, the campaign has no scheduled
-  // send (existing behaviour). `timezone` must be a valid IANA zone
-  // name when provided; we default to "Asia/Singapore" server-side.
-  sendAt: z.string().optional(),
-  timezone: z.string().max(64).optional(),
-});
+// F8: tightened campaign bounds —
+//   • discountValue: PERCENTAGE ≤ 100, FIXED_AMOUNT ≤ 100_000 ($100k)
+//   • maxDiscountCapCents ≤ $100k
+//   • autonomy levels 1–5
+//   • ISO date validation + endDate > startDate
+//   • name/description caps
+const createSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(120),
+    description: z.string().max(2_000).optional(),
+    type: z.enum(["FIRST_TIME", "CROSS_SELL", "UPGRADE", "REFERRAL", "PUBLIC_PROMO", "OTHER"]),
+    appliesTo: z.enum(["SUBSCRIPTION_FEE", "JOB_COMMISSION", "BOTH"]).optional(),
+    targetTier: z.string().max(40).optional(),
+    targetCategory: z.string().max(40).optional(),
+    maxRedemptions: z.number().int().positive().max(1_000_000).optional(),
+    startDate: isoDateString.optional(),
+    endDate: isoDateString.optional(),
+    discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]),
+    discountValue: z.number().positive(),
+    minOrderValueCents: z.number().int().positive().max(10_000_000).optional(),
+    maxDiscountCapCents: z.number().int().positive().max(10_000_000).optional(),
+    stackable: z.boolean().optional(),
+    eligibility: z.enum(["FIRST_TIME_HOUSEHOLD_ONLY", "EXISTING_HOUSEHOLD", "ANY"]).optional(),
+    minAutonomyLevel: z.number().int().min(1).max(5).optional(),
+    maxAutonomyLevel: z.number().int().min(1).max(5).optional(),
+    segmentId: z.string().max(60).optional(), // Phase 2: link campaign to a segment for voucher issuance
+    // Phase 2 Fix 10 — campaign content editor
+    subjectLine: z.string().max(200).optional(),
+    bodyText: z.string().max(10_000).optional(),
+    bodyHtml: z.string().max(50_000).optional(),
+    smsText: z.string().max(160).optional(),
+    // ── Fix 21 — timezone-aware scheduled send (additive) ──
+    // Optional ISO datetime; if absent, the campaign has no scheduled
+    // send (existing behaviour). `timezone` must be a valid IANA zone
+    // name when provided; we default to "Asia/Singapore" server-side.
+    sendAt: isoDateString.optional(),
+    timezone: z.string().max(64).optional(),
+  })
+  .superRefine(discountRuleRefinement)
+  .refine(
+    (d) =>
+      !d.startDate ||
+      !d.endDate ||
+      new Date(d.endDate).getTime() > new Date(d.startDate).getTime(),
+    { message: "endDate must be after startDate", path: ["endDate"] }
+  );
 
 export async function POST(req: NextRequest) {
   try {
@@ -127,12 +146,15 @@ export async function POST(req: NextRequest) {
       });
 
       // Create the issuance job row.
+      // ── F5: stamp the creator so the ownership-aware processor permission
+      // (marketing:create holders may finish what THEY started) can work.
       const job = await db.voucherIssuanceJob.create({
         data: {
           campaignId: campaign.id,
           segmentId: parsed.data.segmentId,
           status: "PENDING",
           totalMembers: memberCount,
+          createdById: session.userId,
         },
       });
 

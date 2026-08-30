@@ -6,6 +6,7 @@ import {
   type PromotionCandidate,
 } from "@/lib/promotion-engine";
 import { z } from "zod";
+import { checkRateLimit, opsRateKey, rateLimitResponsePayload } from "@/lib/rate-limit";
 
 const scanSchema = z.object({ action: z.literal("scan") });
 
@@ -31,6 +32,12 @@ export async function POST(request: Request) {
   const session = await getOpsSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ── F8: promotion scans walk every household — 10/min max ──
+  const rlKey = opsRateKey(session.userId, "promotions");
+  if (!checkRateLimit(rlKey, 10, 60_000)) {
+    return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
   }
 
   try {

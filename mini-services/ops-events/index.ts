@@ -236,6 +236,45 @@ setTimeout(() => {
 }, PREDICTIVE_LOCK_CRON_DELAY);
 
 // ─────────────────────────────────────────────────────────────
+// Issuance Dispatcher Cron (F5/F6)
+// Every 60 s, ask the Next.js app to process ONE pending
+// VoucherIssuanceJob. Authenticated with the shared CRON_SECRET
+// header — PENDING jobs now complete with zero browser tabs open.
+// ─────────────────────────────────────────────────────────────
+
+const ISSUANCE_DISPATCH_INTERVAL_MS = 60 * 1000; // 60 seconds
+const ISSUANCE_DISPATCH_CRON_DELAY = 45 * 1000; // stagger vs predictive lock
+const CRON_SECRET = process.env.CRON_SECRET || "anna-cron-dev-secret"; // must match the Next.js route's fallback
+
+async function runIssuanceDispatch() {
+  try {
+    const res = await fetch("http://127.0.0.1:3000/api/ops/marketing/dispatch-issuance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
+    });
+    if (res.status === 204) return; // nothing pending — normal case
+    const data: any = await res.json().catch(() => null);
+    if (res.ok && data?.processed) {
+      console.log(
+        `[cron] Issuance dispatch: job ${data.jobId} → ${data.status}` +
+          (data.status === "COMPLETED" ? ` (issued=${data.issued}, failed=${data.failedCount}, skipped=${data.skippedCount})` : ` error=${String(data.error).slice(0, 120)}`)
+      );
+    } else if (!res.ok && res.status !==  401) {
+      console.warn(`[cron] Issuance dispatch returned ${res.status}`);
+    }
+  } catch (err) {
+    // Non-critical — Next.js may not be up yet during startup
+    console.warn("[cron] Issuance dispatch failed (non-critical):", err instanceof Error ? err.message : err);
+  }
+}
+
+setTimeout(() => {
+  console.log(`[cron] Issuance dispatcher active (every ${ISSUANCE_DISPATCH_INTERVAL_MS / 1000}s)`);
+  runIssuanceDispatch();
+  setInterval(runIssuanceDispatch, ISSUANCE_DISPATCH_INTERVAL_MS);
+}, ISSUANCE_DISPATCH_CRON_DELAY);
+
+// ─────────────────────────────────────────────────────────────
 // Start server
 // ─────────────────────────────────────────────────────────────
 

@@ -163,6 +163,12 @@ export function CampaignCreateDialog({
     error?: string | null;
   } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── F5.3: stall detection — if polling shows no progress for 120 s we
+  // stop spinning and tell the user the background dispatcher owns the job.
+  const [issuanceStalled, setIssuanceStalled] = useState(false);
+  const pollStartedAtRef = useRef<number>(0);
+  const lastProgressRef = useRef<{ at: number; processed: number }>({ at: 0, processed: -1 });
+  const [retryingJob, setRetryingJob] = useState(false);
 
   // ── Phase 2 Fix 13 — estimated recipients preview ──
   // When a segment is selected, we fetch the segment's stored filters from
@@ -339,7 +345,11 @@ export function CampaignCreateDialog({
   });
 
   // Phase 2 Fix 11 — invoke the background processor + poll for status.
+  // ── F5.3: also reset stall tracking on every (re)start.
   async function triggerProcessorAndPoll(jobId: string) {
+    setIssuanceStalled(false);
+    pollStartedAtRef.current = Date.now();
+    lastProgressRef.current = { at: Date.now(), processed: -1 };
     try {
       // Fire-and-forget — the processor runs to completion server-side
       // while the client polls for status.
@@ -407,6 +417,21 @@ export function CampaignCreateDialog({
           );
           return true;
         }
+
+        // ── F5.3: stall timeout — 120 s with no progress change stops the
+        // spinner and hands ownership to the server-side dispatcher. The
+        // user may keep waiting via "Check again" or simply close the
+        // dialog; PENDING jobs complete with zero tabs open.
+        const now = Date.now();
+        if (job.processedCount !== lastProgressRef.current.processed) {
+          lastProgressRef.current = { at: now, processed: job.processedCount ?? 0 };
+        }
+        const stalledFor = now - Math.max(pollStartedAtRef.current, lastProgressRef.current.at);
+        if (stalledFor > 120_000) {
+          setIssuanceStalled(true);
+          return true; // stop polling; banner switches to "still queued"
+        }
+
         // Still RUNNING or PENDING — schedule next poll.
         pollTimerRef.current = setTimeout(pollOnce, 1500);
         return false;
@@ -927,11 +952,13 @@ export function CampaignCreateDialog({
             <div className="border-t border-[var(--anna-border)] pt-4">
               <div className="rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  {issuanceJob.status === "COMPLETED" ? null : (
+                  {issuanceJob.status === "COMPLETED" || issuanceJob.status === "FAILED" || issuanceStalled ? null : (
                     <Loader2 size={14} className="animate-spin text-[var(--anna-sage-dark)]" />
                   )}
                   <p className="text-xs font-semibold text-[var(--anna-slate)]">
-                    {issuanceJob.status === "PENDING" && "Queued voucher issuance…"}
+                    {issuanceJob.status === "PENDING" && !issuanceStalled && "Queued voucher issuance…"}
+                    {issuanceJob.status === "PENDING" && issuanceStalled &&
+                      "Still queued — the background dispatcher will process it automatically. You can safely close this dialog."}
                     {issuanceJob.status === "RUNNING" &&
                       `Issuing vouchers to ${issuanceJob.totalMembers} member${issuanceJob.totalMembers !== 1 ? "s" : ""}…`}
                     {issuanceJob.status === "COMPLETED" &&
@@ -940,6 +967,57 @@ export function CampaignCreateDialog({
                       `Issuance failed: ${issuanceJob.error || "unknown error"}`}
                   </p>
                 </div>
+
+                {/* F5.3: actions — Retry a FAILED job (server rejects unsafe
+                    retries); Check again after a stall. */}
+                {(issuanceJob.status === "FAILED" || issuanceStalled) && (
+                  <div className="flex items-center gap-2">
+                    {issuanceJob.status === "FAILED" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={retryingJob}
+                        onClick={async () => {
+                          setRetryingJob(true);
+                          try {
+                            const res = await fetch("/api/ops/marketing/process-issuance-job", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ jobId: issuanceJob.jobId }),
+                            });
+                            const json = await res.json().catch(() => null);
+                            if (!res.ok && json?.message) {
+                              toast.error(json.message);
+                              return;
+                            }
+                            toast.success("Retrying issuance…");
+                            triggerProcessorAndPoll(issuanceJob.jobId);
+                          } finally {
+                            setRetryingJob(false);
+                          }
+                        }}
+                        className="h-7 rounded-lg text-xs"
+                      >
+                        {retryingJob ? <Loader2 size={12} className="animate-spin" /> : "Retry"}
+                      </Button>
+                    )}
+                    {issuanceStalled && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIssuanceJob({ ...issuanceJob, status: "PENDING" });
+                          triggerProcessorAndPoll(issuanceJob.jobId);
+                        }}
+                        className="h-7 rounded-lg text-xs"
+                      >
+                        Check again
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 {/* Progress bar */}
                 {issuanceJob.totalMembers > 0 && (
@@ -985,7 +1063,7 @@ export function CampaignCreateDialog({
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}
-            disabled={!!issuanceJob && issuanceJob.status !== "COMPLETED" && issuanceJob.status !== "FAILED"}
+            disabled={!!issuanceJob && !issuanceStalled && issuanceJob.status !== "COMPLETED" && issuanceJob.status !== "FAILED"}
             className="rounded-xl"
           >
             Cancel

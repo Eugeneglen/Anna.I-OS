@@ -365,10 +365,17 @@ export async function getVoucherIssuanceJobStatus(jobId: string) {
 // This avoids race conditions if multiple processor requests arrive
 // concurrently. Returns null if no PENDING job exists.
 
-export async function claimNextPendingIssuanceJob(): Promise<string | null> {
+export async function claimNextPendingIssuanceJob(
+  opts?: { createdById?: string }
+): Promise<string | null> {
   // Find oldest PENDING job first (read).
+  // F5: optional createdById scope — creators with marketing:create may
+  // claim only their own jobs (ownership-aware processor permission).
   const pending = await db.voucherIssuanceJob.findFirst({
-    where: { status: "PENDING" },
+    where: {
+      status: "PENDING",
+      ...(opts?.createdById ? { createdById: opts.createdById } : {}),
+    },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
@@ -382,12 +389,62 @@ export async function claimNextPendingIssuanceJob(): Promise<string | null> {
   });
   if (result.count === 0) {
     // Another processor beat us to it — recurse to try the next one.
-    return claimNextPendingIssuanceJob();
+    return claimNextPendingIssuanceJob(opts);
   }
   return pending.id;
 }
 
 // ── Get all vouchers for a household ──
+
+/**
+ * F5/F6 dispatcher core: claim the oldest PENDING job and run it.
+ * Shared by the ops-manual processor route (session-authenticated) and the
+ * cron dispatcher endpoint (CRON_SECRET-authenticated) so both paths use
+ * the exact same atomic claim + batch-issuance logic.
+ */
+export async function runNextPendingIssuanceJob(opts?: {
+  createdById?: string;
+}): Promise<
+  | { processed: false }
+  | { processed: true; jobId: string; status: "COMPLETED"; issued: number; failedCount: number; skippedCount: number }
+  | { processed: true; jobId: string; status: "FAILED"; error: string }
+> {
+  const jobId = await claimNextPendingIssuanceJob(opts);
+  if (!jobId) return { processed: false };
+
+  const job = await db.voucherIssuanceJob.findUnique({
+    where: { id: jobId },
+    select: { id: true, campaignId: true, segmentId: true },
+  });
+  if (!job) return { processed: false };
+
+  try {
+    const result = await issueVouchersToSegment({
+      segmentId: job.segmentId,
+      campaignId: job.campaignId,
+      jobId: job.id,
+    });
+    return {
+      processed: true,
+      jobId: job.id,
+      status: "COMPLETED",
+      issued: result.issued,
+      failedCount: result.failedCount,
+      skippedCount: result.skippedCount,
+    };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "Unknown error during issuance";
+    try {
+      await db.voucherIssuanceJob.update({
+        where: { id: job.id },
+        data: { status: "FAILED", error: errMsg.slice(0, 1000), completedAt: new Date() },
+      });
+    } catch (updateErr) {
+      console.error("[runNextPendingIssuanceJob] failed to mark job FAILED:", updateErr);
+    }
+    return { processed: true, jobId: job.id, status: "FAILED", error: errMsg };
+  }
+}
 
 export async function getHouseholdVouchers(householdId: string) {
   const vouchers = await db.voucher.findMany({

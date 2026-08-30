@@ -1189,6 +1189,11 @@ model VoucherIssuanceJob {
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
 
+  // ── F5 (C5): who queued this job — a creator with marketing:create may
+  // process THEIR OWN jobs (create→process is one user intent), while
+  // processing anyone's job still requires marketing:edit. ──
+  createdById     String?
+
   campaign  Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
 
