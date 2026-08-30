@@ -16,7 +16,8 @@ const escrowActionSchema = z.object({
   idempotencyKey: z.string().min(1).max(200).optional(),
   // For resolve_voucher: the voucher amount (cents). Required for resolve_voucher.
   voucherAmountCents: z.number().int().positive().optional(),
-  // For resolve_voucher: optional cash refund amount (mixed mode).
+  // For resolve_voucher: optional refund amount (mixed mode) — issued
+  // as REFUND_CREDIT store credit per policy R3 §3.4.
   voucherRefundAmountCents: z.number().int().nonnegative().optional(),
   // For resolve_voucher: voucher expiry in days (default 90, min 1, max 365).
   voucherExpiryDays: z.number().int().min(1).max(365).optional(),
@@ -335,6 +336,29 @@ export async function PATCH(
           idempotencyKey: `resolve-refund-${id}-${Date.now()}`,
         });
 
+        // ── F18 (R3): the refund converts to store credit — no cash path.
+        // Keyed on the Refund row id (unique per refund event) so a retry
+        // after a partial failure can never double-issue.
+        let creditCode: string | null = null;
+        try {
+          const { issueRefundCreditVoucher } = await import("@/lib/marketing/refund-credit");
+          const credit = await issueRefundCreditVoucher({
+            householdId: task.householdId,
+            taskId: task.id,
+            creditAmountCents: refundResult.refundedCents,
+            reason: resolution || "Dispute upheld — refunded as credit",
+            idempotencyKey: `refund-credit-${refundResult.refundId}`,
+            escrowLedgerId: id,
+            issuedById: session.userId,
+            issuedByName: session.name,
+          });
+          creditCode = credit.code;
+        } catch (creditError) {
+          // Refund itself succeeded; credit issuance is retry-safe (unique
+          // Refund id in the key) — surface loudly for ops follow-up.
+          console.error("[escrow resolve_refund] refund-credit issuance failed:", creditError);
+        }
+
         // Notify household members of the refund
         const members = await db.familyMember.findMany({
           where: { householdId: task.householdId },
@@ -348,8 +372,8 @@ export async function PATCH(
               memberId: member.id,
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.DISPUTE_RESOLVED,
-              title: "Refund Issued",
-              body: `Your dispute on the ${task.category.toLowerCase()} task has been upheld. A full refund of SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been issued.`,
+              title: "Refund Issued as Credit",
+              body: `Your dispute on the ${task.category.toLowerCase()} task has been upheld. SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been refunded as Anna.I credit${creditCode ? ` (code ${creditCode})` : ""} — it's in your wallet, valid for 12 months.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
@@ -391,6 +415,7 @@ export async function PATCH(
 
         return NextResponse.json({
           refund: refundResult,
+          creditCode,
           escrow: await db.escrowLedger.findUnique({ where: { id } }),
         });
       } catch (e) {
@@ -407,6 +432,7 @@ export async function PATCH(
     // ── ACTION: Partial Refund — refund a portion of the held amount ──
     // Recalculates commission/payout on the adjusted (remaining) amount.
     // Idempotent: same idempotencyKey returns the original result (no double refund).
+    // F18 (R3, sub-decision 3.1): partials ALSO convert to credit — prorated.
     if (action === "partial_refund") {
       // Validate required params
       if (!refundAmountCents) {
@@ -432,6 +458,26 @@ export async function PATCH(
           idempotencyKey,
         });
 
+        // F18 (R3 §3.1): partial refunds convert to prorated credit.
+        // Same Refund-row-id idempotency key as resolve_refund.
+        let creditCode: string | null = null;
+        try {
+          const { issueRefundCreditVoucher } = await import("@/lib/marketing/refund-credit");
+          const credit = await issueRefundCreditVoucher({
+            householdId: task.householdId,
+            taskId: task.id,
+            creditAmountCents: refundAmountCents,
+            reason: resolution || "Partial refund — credited",
+            idempotencyKey: `refund-credit-${refundResult.refundId}`,
+            escrowLedgerId: id,
+            issuedById: session.userId,
+            issuedByName: session.name,
+          });
+          creditCode = credit.code;
+        } catch (creditError) {
+          console.error("[escrow partial_refund] refund-credit issuance failed:", creditError);
+        }
+
         // Notify household members of the refund
         const members = await db.familyMember.findMany({
           where: { householdId: task.householdId },
@@ -445,10 +491,10 @@ export async function PATCH(
               memberId: member.id,
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.DISPUTE_RESOLVED,
-              title: refundResult.isFullyRefunded ? "Refund Issued" : "Partial Refund Issued",
+              title: refundResult.isFullyRefunded ? "Refund Issued as Credit" : "Partial Refund Issued as Credit",
               body: refundResult.isFullyRefunded
-                ? `Your dispute on the ${task.category.toLowerCase()} task has been upheld. A full refund of SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been issued.`
-                : `A partial refund of SGD $${(refundResult.refundedCents / 100).toFixed(2)} has been issued for your ${task.category.toLowerCase()} task. Remaining payable: SGD $${(refundResult.effectiveAmountCents / 100).toFixed(2)}.`,
+                ? `Your dispute on the ${task.category.toLowerCase()} task has been upheld. SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been refunded as Anna.I credit${creditCode ? ` (code ${creditCode})` : ""}.`
+                : `A partial refund of SGD $${(refundResult.refundedCents / 100).toFixed(2)} has been credited to your wallet${creditCode ? ` (code ${creditCode})` : ""} for your ${task.category.toLowerCase()} task. Remaining payable: SGD $${(refundResult.effectiveAmountCents / 100).toFixed(2)}.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
@@ -458,6 +504,7 @@ export async function PATCH(
 
         return NextResponse.json({
           refund: refundResult,
+          creditCode,
           escrow: await db.escrowLedger.findUnique({ where: { id } }),
         });
       } catch (e) {
@@ -473,8 +520,9 @@ export async function PATCH(
 
     // ── ACTION: Resolve Dispute (Voucher) — issue a marketing voucher as
     // compensation, then release the escrow to the vendor (vendor gets paid).
-    // Optionally also issues a partial cash refund (mixed mode). Does NOT modify
-    // the existing 4 actions — this is a 5th action added to the enum.
+    // Optionally also issues a partial refund (mixed mode) — F18/R3 §3.4:
+    // the refund portion converts to REFUND_CREDIT store credit (no cash path).
+    // Does NOT modify the existing 4 actions — this is a 5th action added to the enum.
     if (action === "resolve_voucher") {
       // Validate required params for resolve_voucher
       if (!voucherAmountCents) {
@@ -594,7 +642,7 @@ export async function PATCH(
           day: "numeric", month: "short", year: "numeric",
         });
         const cashText = cash > 0
-          ? ` plus a cash refund of SGD $${(cash / 100).toFixed(2)}`
+          ? ` plus SGD $${(cash / 100).toFixed(2)} refunded as Anna.I credit (code ${result.cashCreditCode ?? "pending"})`
           : "";
         for (const member of members) {
           await db.notification.create({
@@ -638,7 +686,7 @@ export async function PATCH(
           code: result.code,
           campaignId: result.campaignId,
           expiresAt: result.expiresAt,
-          cashRefundId: result.cashRefundId,
+          cashCreditCode: result.cashCreditCode,
           isDuplicate: result.isDuplicate,
           escrowState: "RELEASED",
           escrow: await db.escrowLedger.findUnique({ where: { id } }),

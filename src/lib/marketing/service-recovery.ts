@@ -25,9 +25,9 @@
 
 import { db } from "@/lib/db";
 import { RefundError } from "@/lib/payments/refund-service";
-import { processRefund } from "@/lib/payments/refund-service";
 import { issueVoucher, revokeVoucher } from "@/lib/marketing/voucher-engine";
 import { createCampaign } from "@/lib/marketing/campaign-service";
+import { issueRefundCreditVoucher } from "@/lib/marketing/refund-credit";
 
 // ── Types ──
 
@@ -51,6 +51,9 @@ export interface IssueCompensationVoucherResult {
   campaignId: string;
   expiresAt: Date;
   cashRefundId?: string;
+  /** F18 (R3 §3.4): the mixed-mode "cash" portion now converts to store
+   *  credit — this is the resulting credit voucher's code (no cash path). */
+  cashCreditCode?: string;
   isDuplicate: boolean;
 }
 
@@ -116,19 +119,24 @@ export async function issueCompensationVoucher(
     };
   }
 
-  // ── 4. Mixed mode: optional cash refund FIRST ──
-  // Reuse processRefund as-is (NOT modified). Capture the refundId.
-  let cashRefundId: string | undefined;
+  // ── 4. Mixed mode: optional refund portion FIRST — as CREDIT (R3 §3.4) ──
+  // Policy sub-decision 3.4: "Yes" — one refund policy, no exceptions to
+  // explain to ops. The former processRefund cash call is replaced by a
+  // REFUND_CREDIT voucher issuance (processRefund itself is untouched —
+  // its contract with resolve_refund/partial_refund stands).
+  let cashCreditCode: string | undefined;
   if (cash > 0) {
-    const refundResult = await processRefund({
+    const creditResult = await issueRefundCreditVoucher({
+      householdId: params.householdId,
+      taskId: params.taskId,
+      creditAmountCents: cash,
+      reason: `${params.reason} (mixed mode — refund portion as credit)`,
+      idempotencyKey: `${params.idempotencyKey}-cash`,
       escrowLedgerId: params.escrowLedgerId,
-      refundAmountCents: cash,
-      reason: `${params.reason} (mixed mode — cash portion)`,
       issuedById: params.issuedById,
       issuedByName: params.issuedByName,
-      idempotencyKey: `${params.idempotencyKey}-cash`,
     });
-    cashRefundId = refundResult.refundId;
+    cashCreditCode = creditResult.code;
   }
 
   // ── 5. Look up the task to get jobNo (for campaign name) ──
@@ -191,7 +199,7 @@ export async function issueCompensationVoucher(
   });
   const priorResolution = existingResolution?.disputeResolution ?? "";
   const priorVoucherCents = existingResolution?.voucherCompensationCents ?? 0;
-  const newResolutionAppendix = `Compensated by voucher $${voucherDollars} (code ${issued.code})${cash > 0 ? ` + cash $${(cash / 100).toFixed(2)}` : ""}`;
+  const newResolutionAppendix = `Compensated by voucher $${voucherDollars} (code ${issued.code})${cash > 0 ? ` + refund credit $${(cash / 100).toFixed(2)}` : ""}`;
   const mergedResolution = priorResolution
     ? `${priorResolution} | ${newResolutionAppendix}`
     : newResolutionAppendix;
@@ -218,7 +226,7 @@ export async function issueCompensationVoucher(
         campaignId: campaign.id,
         voucherAmountCents: params.voucherAmountCents,
         refundAmountCents: cash,
-        cashRefundId: cashRefundId ?? null,
+        cashCreditCode: cashCreditCode ?? null,
         taskId: params.taskId,
         orderTotalCents: params.orderTotalCents,
         reason: params.reason,
@@ -232,7 +240,7 @@ export async function issueCompensationVoucher(
     code: issued.code,
     campaignId: campaign.id,
     expiresAt,
-    cashRefundId,
+    cashCreditCode,
     isDuplicate: false,
   };
 }

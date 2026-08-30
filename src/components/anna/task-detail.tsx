@@ -75,11 +75,23 @@ const actionButtons: Record<
     { label: "Edit Prediction", icon: Pencil, variant: "outline", action: "edit-predicted" },
     { label: "Cancel Prediction", icon: X, variant: "destructive", action: "cancel-predicted" },
   ],
-  CREATED: [{ label: "Start Matching", icon: Send, variant: "default", action: "dispatch" }],
-  MATCHING: [],
-  ACCEPTED: [{ label: "View Schedule", icon: Eye, variant: "outline", action: "view-schedule" }],
-  SCHEDULED: [{ label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" }],
-  IN_PROGRESS: [{ label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" }],
+  CREATED: [
+    { label: "Start Matching", icon: Send, variant: "default", action: "dispatch" },
+    { label: "Cancel Task", icon: X, variant: "destructive", action: "cancel-task" },
+  ],
+  MATCHING: [{ label: "Cancel Task", icon: X, variant: "destructive", action: "cancel-task" }],
+  ACCEPTED: [
+    { label: "View Schedule", icon: Eye, variant: "outline", action: "view-schedule" },
+    { label: "Cancel Task", icon: X, variant: "destructive", action: "cancel-task" },
+  ],
+  SCHEDULED: [
+    { label: "Mark In Progress", icon: Play, variant: "outline", action: "in-progress" },
+    { label: "Cancel Task", icon: X, variant: "destructive", action: "cancel-task" },
+  ],
+  IN_PROGRESS: [
+    { label: "Mark Complete", icon: CheckCircle, variant: "outline", action: "complete" },
+    { label: "Cancel Task", icon: X, variant: "destructive", action: "cancel-task" },
+  ],
   COMPLETED: [
     { label: "Verify Photo", icon: ThumbsUp, variant: "default", action: "verify" },
     { label: "Reject & Dispute", icon: ThumbsDown, variant: "destructive", action: "dispute" },
@@ -285,6 +297,47 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
     },
   });
 
+  // F18 (R3): cancel task — escrow refunded as Anna.I credit + original
+  // voucher reissued. Two-step confirm (money movement involved).
+  const cancelTaskMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tasks/${taskId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Cancelled by household" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to cancel task");
+      }
+      return res.json() as Promise<{
+        refundedCents: number;
+        credit: { code: string; amountCents: number } | null;
+        voucherRestored: boolean;
+      }>;
+    },
+    onSuccess: (data) => {
+      const parts: string[] = [];
+      if (data.credit) {
+        parts.push(`$${(data.credit.amountCents / 100).toFixed(2)} refunded as credit (code ${data.credit.code})`);
+      }
+      if (data.voucherRestored) parts.push("voucher returned to your wallet");
+      toast({
+        title: "Task cancelled",
+        description: parts.length ? parts.join(" · ") : undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["household"] });
+      queryClient.invalidateQueries({ queryKey: ["household-vouchers"] });
+      queryClient.invalidateQueries({ queryKey: ["household-notifications"] });
+      closeTaskDetail();
+    },
+    onError: (err) => {
+      toast({ title: err.message || "Failed to cancel task", variant: "destructive" });
+    },
+  });
+
   // Phase 4: Cancel predicted task mutation
   const cancelPredictedMutation = useMutation({
     mutationFn: async () => {
@@ -452,6 +505,16 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       case "cancel-predicted":
         cancelPredictedMutation.mutate();
         break;
+      case "cancel-task": {
+        const escrowHeld = (task?.escrowEntries ?? []).some((e: { state?: string }) => e.state === "HELD");
+        const confirmed = window.confirm(
+          escrowHeld
+            ? "Cancel this task? Any amount held in escrow will be refunded to you as Anna.I credit (valid 12 months), and your voucher (if used) will be returned to your wallet."
+            : "Cancel this task?"
+        );
+        if (confirmed) cancelTaskMutation.mutate();
+        break;
+      }
       case "edit-predicted":
         setEditPredictedOpen(true);
         break;
