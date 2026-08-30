@@ -144,11 +144,31 @@ export async function updateCampaign(id: string, data: Record<string, unknown>) 
     });
 
     if (discountRule) {
-      await tx.discountRule.upsert({
+      // Police-1c follow-up: the old single `upsert` validated the CREATE
+      // branch (which requires discountType + discountValue) even when the
+      // rule already existed — partial edits like { discountValue: 10 }
+      // always 500'd. Split the branches: existing rule → partial update;
+      // no rule yet → create (and demand the required fields).
+      const existingRule = await tx.discountRule.findUnique({
         where: { campaignId: id },
-        create: { ...discountRule, campaignId: id },
-        update: discountRule,
+        select: { id: true },
       });
+      if (existingRule) {
+        await tx.discountRule.update({
+          where: { campaignId: id },
+          data: discountRule,
+        });
+      } else {
+        const rule = discountRule as Record<string, unknown>;
+        if (rule.discountType === undefined || rule.discountValue === undefined) {
+          throw new Error(
+            "discountRule requires discountType and discountValue when the campaign has no rule yet"
+          );
+        }
+        await tx.discountRule.create({
+          data: { ...rule, campaignId: id },
+        });
+      }
     }
 
     return tx.campaign.findUnique({

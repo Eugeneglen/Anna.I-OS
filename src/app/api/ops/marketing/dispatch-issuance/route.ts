@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { runNextPendingIssuanceJob } from "@/lib/marketing/voucher-engine";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
 import { db } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/ops/marketing/dispatch-issuance
 //
@@ -12,40 +14,59 @@ import { db } from "@/lib/db";
 // route no longer relies on client polling to trigger processing —
 // client polling remains only as a status READ.
 //
-// Authentication: shared-secret header `x-cron-secret` (CRON_SECRET env).
-// NOTE: this is deliberately NOT the unauthenticated pattern used by
-// /api/predictive/lock (flagged as follow-up debt outside marketing scope).
+// Authentication (police-1c finding #2 hardened):
+//   • header `x-cron-secret` only (no query-param fallback — secrets in
+//     URLs leak via logs/referrers)
+//   • timing-safe comparison
+//   • PROD with unset CRON_SECRET → endpoint is CLOSED (401 always);
+//     the dev fallback secret exists only outside production.
+//   • rate-limited (6/min) so a leaked secret cannot hammer the issuer
 //
 // Idempotent + concurrency-safe: the claim is the same atomic
 // updateMany PENDING→RUNNING used by the manual processor route.
 
 const DEV_FALLBACK_SECRET = "anna-cron-dev-secret";
 
-function cronSecret(): string {
-  const s = process.env.CRON_SECRET;
-  if (!s && process.env.NODE_ENV === "production") {
-    // Loud, but non-fatal here: the comparison below will simply never
-    // match, so the endpoint stays closed in prod until CRON_SECRET is set.
-    console.error(
-      "[dispatch-issuance] CRON_SECRET is not set — the cron dispatcher endpoint is effectively DISABLED. Set CRON_SECRET to enable it."
-    );
-  } else if (!s) {
-    console.warn(
-      "[dispatch-issuance] CRON_SECRET not set — using dev fallback secret. Do NOT ship this to production."
-    );
+function secretsMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) {
+    // Still do a comparison to keep timing roughly constant.
+    timingSafeEqual(b, b);
+    return false;
   }
-  return s || DEV_FALLBACK_SECRET;
+  return timingSafeEqual(a, b);
+}
+
+function resolveSecret(): string | null {
+  const s = process.env.CRON_SECRET;
+  if (s) return s;
+  if (process.env.NODE_ENV === "production") {
+    // Police-1c: the old code claimed "disabled" but still returned the
+    // hardcoded dev secret — in prod the endpoint must actually be closed.
+    console.error(
+      "[dispatch-issuance] CRON_SECRET is not set — endpoint CLOSED (401) until it is configured."
+    );
+    return null;
+  }
+  console.warn(
+    "[dispatch-issuance] CRON_SECRET not set — using dev fallback secret. Do NOT ship this to production."
+  );
+  return DEV_FALLBACK_SECRET;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const provided =
-      req.headers.get("x-cron-secret") ??
-      new URL(req.url).searchParams.get("secret") ??
-      "";
-    const expected = cronSecret();
-    if (provided !== expected) {
+    const expected = resolveSecret();
+    const provided = req.headers.get("x-cron-secret") ?? "";
+    if (!expected || !provided || !secretsMatch(provided, expected)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 6 calls/min is far above the 60s tick rate — anything faster is abuse.
+    const rlKey = `cron:dispatch-issuance`;
+    if (!checkRateLimit(rlKey, 6, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
     const result = await runNextPendingIssuanceJob();

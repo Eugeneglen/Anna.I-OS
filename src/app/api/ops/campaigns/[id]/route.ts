@@ -5,6 +5,13 @@ import { hasPermission } from "@/lib/permissions";
 import { getCampaign, updateCampaign, transitionCampaignStatus, getCampaignStats } from "@/lib/marketing/campaign-service";
 import { CampaignStatus } from "@prisma/client";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
+import {
+  discountRuleRefinement,
+  isoDateString,
+  MAX_PERCENT_DISCOUNT,
+  MAX_FIXED_DISCOUNT_VALUE,
+  MAX_SPEND_CENTS,
+} from "@/lib/marketing/schemas";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,27 +33,62 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-const updateSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ENDED"]).optional(),
-  appliesTo: z.enum(["SUBSCRIPTION_FEE", "JOB_COMMISSION", "BOTH"]).optional(),
-  targetTier: z.string().nullable().optional(),
-  targetCategory: z.string().nullable().optional(),
-  maxRedemptions: z.number().int().positive().nullable().optional(),
-  startDate: z.string().nullable().optional(),
-  endDate: z.string().nullable().optional(),
-  discountRule: z.object({
-    discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional(),
-    discountValue: z.number().positive().optional(),
-    minOrderValueCents: z.number().int().positive().nullable().optional(),
-    maxDiscountCapCents: z.number().int().positive().nullable().optional(),
-    stackable: z.boolean().optional(),
-    eligibility: z.enum(["FIRST_TIME_HOUSEHOLD_ONLY", "EXISTING_HOUSEHOLD", "ANY"]).optional(),
-    minAutonomyLevel: z.number().int().nullable().optional(),
-    maxAutonomyLevel: z.number().int().nullable().optional(),
-  }).optional(),
-});
+// F8 (police-1c finding #1): the EDIT path now enforces the exact same
+// bounds as POST — previously pct-500 / fixed-$1B / end-before-start were
+// ACCEPTED here while POST 400'd them (H10 half-open on edit).
+const updateSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    description: z.string().max(2_000).nullable().optional(),
+    status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ENDED"]).optional(),
+    appliesTo: z.enum(["SUBSCRIPTION_FEE", "JOB_COMMISSION", "BOTH"]).optional(),
+    targetTier: z.string().max(40).nullable().optional(),
+    targetCategory: z.string().max(40).nullable().optional(),
+    maxRedemptions: z.number().int().positive().max(1_000_000).nullable().optional(),
+    startDate: isoDateString.nullable().optional(),
+    endDate: isoDateString.nullable().optional(),
+    discountRule: z
+      .object({
+        discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional(),
+        discountValue: z.number().positive().optional(),
+        minOrderValueCents: z.number().int().positive().max(MAX_SPEND_CENTS).nullable().optional(),
+        maxDiscountCapCents: z.number().int().positive().max(MAX_SPEND_CENTS).nullable().optional(),
+        stackable: z.boolean().optional(),
+        eligibility: z.enum(["FIRST_TIME_HOUSEHOLD_ONLY", "EXISTING_HOUSEHOLD", "ANY"]).optional(),
+        minAutonomyLevel: z.number().int().min(1).max(5).nullable().optional(),
+        maxAutonomyLevel: z.number().int().min(1).max(5).nullable().optional(),
+      })
+      .superRefine((rule, ctx) => {
+        // Same discount bounds as create; applies when the edit includes a
+        // discountType/value pair (or edits value alone — the EXISTING rule
+        // from the DB is merged below before validation).
+        if (rule.discountType || rule.discountValue !== undefined) {
+          discountRuleRefinement(
+            {
+              discountType: rule.discountType ?? "",
+              discountValue: rule.discountValue ?? 0,
+              maxDiscountCapCents: rule.maxDiscountCapCents ?? undefined,
+            },
+            ctx
+          );
+        }
+        if (
+          rule.discountType === undefined &&
+          rule.discountValue !== undefined &&
+          rule.discountValue > Math.max(MAX_PERCENT_DISCOUNT, MAX_FIXED_DISCOUNT_VALUE)
+        ) {
+          ctx.addIssue({ code: "custom", path: ["discountValue"], message: "Discount value out of range" });
+        }
+      })
+      .optional(),
+  })
+  .refine(
+    (d) =>
+      !d.startDate ||
+      !d.endDate ||
+      new Date(d.endDate).getTime() > new Date(d.startDate).getTime(),
+    { message: "endDate must be after startDate", path: ["endDate"] }
+  );
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -85,9 +127,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     invalidateBehaviourCache();
     return NextResponse.json({ campaign: updated });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Internal error";
     console.error("[/api/ops/campaigns/[id] PATCH]", error);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    // Police-1c: unknown id previously leaked Prisma internals via
+    // error.message → generic 500 message + a 404 fast-path is handled by
+    // updateCampaign throwing — keep the generic message.
+    return NextResponse.json({ error: "Failed to update campaign" }, { status: 500 });
   }
 }
 
