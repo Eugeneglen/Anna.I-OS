@@ -249,11 +249,14 @@ export function CampaignDetailSheet({
                         variant="secondary"
                         className={cn(
                           "text-[10px] font-medium",
-                          TYPE_STYLES[campaign.type].bg,
-                          TYPE_STYLES[campaign.type].text
+                          // police-2a f2: fallback for any future type not in
+                          // TYPE_STYLES (detail sheet is the one TYPE_STYLES
+                          // consumer with NO || fallback — table/mobile do).
+                          (TYPE_STYLES[campaign.type] ?? TYPE_STYLES.OTHER).bg,
+                          (TYPE_STYLES[campaign.type] ?? TYPE_STYLES.OTHER).text
                         )}
                       >
-                        {TYPE_STYLES[campaign.type].label}
+                        {(TYPE_STYLES[campaign.type] ?? TYPE_STYLES.OTHER).label}
                       </Badge>
                     }
                   />

@@ -15,6 +15,8 @@ export type CampaignType =
   | "UPGRADE"
   | "REFERRAL"
   | "PUBLIC_PROMO"
+  | "SERVICE_RECOVERY" // system container (dispute compensation) — pre-existing in TYPE_STYLES
+  | "REFUND_CREDIT" // system container (refund-as-credit, policy R3) — F22
   | "OTHER";
 
 export type CampaignAppliesTo =

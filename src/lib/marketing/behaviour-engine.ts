@@ -277,7 +277,9 @@ type BehaviourTask = {
 type BehaviourVoucher = {
   householdId: string;
   status: string;
-  origin?: string | null; // F22 — undefined/null treated as MARKETING (pre-F22 rows)
+  // F22 — NOT NULL in DB; `undefined` covers in-memory callers that omit
+  // it (treated as MARKETING). Null is unreachable from DB reads.
+  origin?: string | null;
 };
 
 type BehaviourAutonomyRow = {
@@ -371,6 +373,8 @@ function computeBehaviourFromData(params: {
   // (policy R3: "behaviour segmentation counts only marketing-voucher
   // engagement"). REFUND_CREDIT is the household's own money and
   // SERVICE_RECOVERY is dispute goodwill — neither is promo engagement.
+  // (origin is NOT NULL in the DB; `undefined` = MARKETING for in-memory
+  // callers that omit the field.)
   const marketingVouchers = vouchers.filter((v) => v.origin === undefined || v.origin === "MARKETING");
   const vouchersClaimed = marketingVouchers.filter((v) => v.status === "CLAIMED").length;
   const vouchersRedeemed = marketingVouchers.filter((v) => v.status === "USED").length;

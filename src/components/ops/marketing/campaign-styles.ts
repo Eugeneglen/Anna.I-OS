@@ -86,6 +86,11 @@ export const TYPE_STYLES: Record<
     text: "text-violet-700",
     label: "Service Recovery",
   },
+  REFUND_CREDIT: {
+    bg: "bg-[var(--anna-slate-light)]/15",
+    text: "text-[var(--anna-slate-light)]",
+    label: "Refund Credit",
+  },
 };
 
 export const APPLIES_TO_LABELS: Record<CampaignAppliesTo, string> = {

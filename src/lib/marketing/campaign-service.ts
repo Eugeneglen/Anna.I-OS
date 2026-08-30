@@ -634,10 +634,18 @@ async function writeRedemptionBookkeeping(
     }).catch(() => {});
 
     // Update household acquisition source if this is their first redemption
+    // F22 (police-2a finding 3): REFUND_CREDIT redemptions are transactional
+    // (spending one's own refund credit) — they must NOT reclassify the
+    // household's acquisition source or attribute acquisition to the
+    // credit container campaign ("a refund is not a campaign win").
     const household = await tx.household.findUnique({
       where: { id: params.householdId },
     });
-    if (household && household.acquisitionSource === "ORGANIC") {
+    if (
+      household &&
+      household.acquisitionSource === "ORGANIC" &&
+      creditCampaign?.type !== "REFUND_CREDIT"
+    ) {
       await tx.household.update({
         where: { id: params.householdId },
         data: {

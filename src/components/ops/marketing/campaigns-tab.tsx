@@ -20,9 +20,11 @@ import type { CampaignListItem, CampaignListResponse } from "@/components/ops/ma
 // ============================================================
 // Campaigns Tab — existing campaign list (extracted from page)
 // ============================================================
-// Adds a toggle to hide/show SERVICE_RECOVERY campaigns. These are
-// auto-created by the dispute-resolution flow (one per compensation
-// voucher); they clutter the list, so we hide them by default.
+// Adds a toggle to hide/show system-container campaigns (SERVICE_RECOVERY
+// and REFUND_CREDIT). These are auto-created per compensation voucher /
+// refund-credit conversion; they clutter the list, so we hide them by
+// default (police-2a f2: credit containers join service-recovery in the
+// hidden set).
 // ============================================================
 
 const STATUS_PILL_OPTIONS: { value: string; label: string }[] = [
@@ -71,14 +73,15 @@ export function CampaignsTab({
 
   const allCampaigns: CampaignListItem[] = data?.campaigns || [];
 
-  // Split into marketing campaigns (default) vs service-recovery
-  // compensation vouchers (hidden unless toggled on).
+  // Split into marketing campaigns (default) vs system containers
+  // (service-recovery compensation + refund-credit conversions — hidden
+  // unless toggled on).
   const marketingCampaigns = useMemo(
-    () => allCampaigns.filter((c) => c.type !== "SERVICE_RECOVERY"),
+    () => allCampaigns.filter((c) => c.type !== "SERVICE_RECOVERY" && c.type !== "REFUND_CREDIT"),
     [allCampaigns],
   );
   const serviceRecoveryCampaigns = useMemo(
-    () => allCampaigns.filter((c) => c.type === "SERVICE_RECOVERY"),
+    () => allCampaigns.filter((c) => c.type === "SERVICE_RECOVERY" || c.type === "REFUND_CREDIT"),
     [allCampaigns],
   );
 
@@ -159,16 +162,16 @@ export function CampaignsTab({
 
       <OpsStatusPillRow options={pillOptions} value={statusFilter} onChange={setStatusFilter} />
 
-      {/* Toggle: show service-recovery vouchers */}
+      {/* Toggle: show system-container campaigns (service recovery + refund credit) */}
       {serviceRecoveryCampaigns.length > 0 && (
         <div className="flex items-center gap-2 p-3 rounded-xl border border-violet-200 bg-violet-50/40">
           <Sparkles size={14} className="text-violet-600 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-violet-700">
-              Service-recovery vouchers
+              System vouchers
             </p>
             <p className="text-[10px] text-[var(--anna-muted)]">
-              Auto-created when ops issues a compensation voucher during dispute resolution. {serviceRecoveryCampaigns.length} total.
+              Auto-created containers: dispute compensation (service recovery) and refund-as-credit conversions. {serviceRecoveryCampaigns.length} total.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

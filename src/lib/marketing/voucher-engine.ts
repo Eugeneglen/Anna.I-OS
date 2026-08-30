@@ -60,10 +60,17 @@ export async function issueVoucher(params: {
   // violate PDPA consent rules, so we short-circuit BEFORE creating any
   // DiscountCode / Voucher / Notification rows.
   //
-  // F22 exemption: REFUND_CREDIT is the household's OWN money converted
-  // to platform credit (transactional, not marketing) — policy R3 rules
-  // it consent-exempt ("PDPA-safe to notify"). SERVICE_RECOVERY keeps
-  // the gate (policy: "keep as-is").
+  // ── Fix 20 — PDPA marketingConsent gate (F22-refined, police-2a) ──
+  //
+  // Households with `marketingConsent=false` have explicitly opted out
+  // of marketing communications. Issuing them a MARKETING or
+  // SERVICE_RECOVERY voucher would violate PDPA consent rules (policy:
+  // service recovery "keep as-is" = gate stays ON), so we short-circuit
+  // BEFORE creating any DiscountCode / Voucher / Notification rows.
+  //
+  // F22 exemption: REFUND_CREDIT ONLY — it is the household's OWN money
+  // converted to platform credit (transactional, not marketing); policy
+  // R3 rules it consent-exempt ("PDPA-safe to notify").
   const household = await db.household.findUnique({
     where: { id: params.householdId },
     select: { marketingConsent: true, name: true },
@@ -71,7 +78,7 @@ export async function issueVoucher(params: {
   if (!household) {
     throw new Error(`Household ${params.householdId} not found — voucher not issued.`);
   }
-  if (household.marketingConsent === false && origin === VoucherOrigin.MARKETING) {
+  if (household.marketingConsent === false && origin !== VoucherOrigin.REFUND_CREDIT) {
     throw new Error(
       "Household has opted out of marketing communications. Voucher not issued.",
     );
@@ -251,9 +258,19 @@ export async function issueVouchersToSegment(params: {
   // distinct `skippedCount` to the caller / job log, instead of lumping
   // consent opt-outs into `failedCount` (which would surface as a
   // misleading red error in the issuance-job UI).
+  //
+  // F22 (police-2a finding 4): the pre-filter is type-aware — only
+  // marketing campaigns lose consent-off members up-front. REFUND_CREDIT
+  // is consent-exempt (transactional), so those members pass through and
+  // issueVoucher enforces the final semantics per member.
+  const campaignForConsent = await db.campaign.findUnique({
+    where: { id: params.campaignId },
+    select: { type: true },
+  });
+  const consentExemptCampaign = campaignForConsent?.type === "REFUND_CREDIT";
   const householdIds = members.map((m) => m.householdId);
   const optedOutHouseholdIds = new Set<string>();
-  if (householdIds.length > 0) {
+  if (householdIds.length > 0 && !consentExemptCampaign) {
     const optedOut = await db.household.findMany({
       where: {
         id: { in: householdIds },
@@ -667,7 +684,12 @@ export async function markVoucherUsed(voucherId: string, taskId: string, househo
         weight: 1.0,
       },
     });
+  }
 
+  // Campaign event kept for ALL origins (police-2a nit 5: event handling
+  // symmetric with writeRedemptionBookkeeping/tasks-inline — the audit
+  // trail is transactional; attribution is the marketing signal).
+  if (voucher) {
     await db.campaignEvent.create({
       data: {
         campaignId: voucher.campaignId,

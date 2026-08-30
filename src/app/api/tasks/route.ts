@@ -372,8 +372,14 @@ export async function POST(request: Request) {
               }).catch(() => {});
 
               // Update household acquisition source if first redemption
+              // F22 (police-2a f3): REFUND_CREDIT spends are transactional —
+              // never reclassify acquisition from a credit redemption.
               const hh = await tx.household.findUnique({ where: { id: householdId } });
-              if (hh && hh.acquisitionSource === "ORGANIC") {
+              if (
+                hh &&
+                hh.acquisitionSource === "ORGANIC" &&
+                campaignRow.type !== "REFUND_CREDIT"
+              ) {
                 await tx.household.update({
                   where: { id: householdId },
                   data: {
