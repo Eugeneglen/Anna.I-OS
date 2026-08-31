@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -42,6 +42,14 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Anna.I",
   },
+};
+
+// viewport-fit=cover activates env(safe-area-inset-*) on notched iOS devices
+// (required by the .safe-area-inset-bottom bottom-nav padding).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

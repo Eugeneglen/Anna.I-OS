@@ -451,7 +451,7 @@ export function AutonomyPanel() {
   }
 
   return (
-    <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
+    <div className="p-4 lg:p-6 pb-24 md:pb-0 anna-fade-in">
       <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
         Autonomy Ladder
       </h1>

@@ -54,13 +54,13 @@ export function JobNoBadge({
       onClick={handleCopy}
       title={`Copy job number: ${display}`}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-[var(--anna-border)] bg-[var(--anna-bg)] font-mono text-[var(--anna-slate-light)] hover:border-[var(--anna-sage)]/40 hover:bg-[var(--anna-sage-light)]/40 transition-colors",
-        isMd ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[10px]",
+        "inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--anna-border)] bg-[var(--anna-bg)] font-mono text-[var(--anna-slate-light)] hover:border-[var(--anna-sage)]/40 hover:bg-[var(--anna-sage-light)]/40 transition-colors",
+        isMd ? "px-2 py-1 text-xs" : "px-2 py-1 text-[11px]",
         className
       )}
     >
       <Hash size={isMd ? 11 : 9} className="text-[var(--anna-muted)] shrink-0" />
-      <span className="font-medium tracking-wide">{display}</span>
+      <span className="font-medium tracking-wide whitespace-nowrap">{display}</span>
       {copied ? (
         <Check size={isMd ? 12 : 10} className="text-emerald-600 shrink-0" />
       ) : (

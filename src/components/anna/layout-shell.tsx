@@ -169,7 +169,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 <span className="text-xs font-medium text-[var(--anna-slate)] leading-tight">
                   {currentHouseholdName}
                 </span>
-                <span className="text-[10px] text-[var(--anna-muted)] leading-tight">
+                <span className="text-[11px] text-[var(--anna-muted)] leading-tight">
                   {member?.role === "OWNER" ? "Owner" : "Member"}
                 </span>
               </div>
@@ -181,7 +181,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             {/* Logout button — hidden on mobile (moved to Settings page) */}
             <button
               onClick={() => setLogoutDialogOpen(true)}
-              className="hidden md:flex p-2 rounded-xl hover:bg-[var(--anna-error)]/10 hover:text-[var(--anna-error)] text-[var(--anna-slate-light)] transition-colors"
+              className="hidden md:flex p-2.5 rounded-xl hover:bg-[var(--anna-error)]/10 hover:text-[var(--anna-error)] text-[var(--anna-slate-light)] transition-colors"
               title="Sign out"
             >
               <LogOut size={18} />
@@ -190,7 +190,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setActiveTab("settings")}
               className={cn(
-                "md:hidden p-2 rounded-xl transition-colors",
+                "md:hidden p-2.5 rounded-xl transition-colors",
                 activeTab === "settings"
                   ? "bg-[var(--anna-sage)] text-white"
                   : "hover:bg-[var(--anna-sage-light)]"
@@ -202,7 +202,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             </button>
             <button
               onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
-              className="relative p-2 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
+              className="relative p-2.5 rounded-xl hover:bg-[var(--anna-sage-light)] transition-colors"
             >
               <Bell size={18} className="text-[var(--anna-slate-light)]" />
               {unreadCount > 0 && (
@@ -216,7 +216,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                 </span>
               )}
               {anomalyUnreadCount > 0 && unreadCount !== anomalyUnreadCount && (
-                <span className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5 ring-2 ring-[var(--anna-white)]">
+                <span className="absolute -bottom-0.5 -right-0.5 min-w-[16px] h-[16px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 ring-2 ring-[var(--anna-white)]">
                   {anomalyUnreadCount > 9 ? "9+" : anomalyUnreadCount}
                 </span>
               )}
@@ -238,12 +238,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
                 {member?.name || "User"}
               </p>
-              <p className="text-[10px] text-[var(--anna-muted)] truncate">
+              <p className="text-[11px] text-[var(--anna-muted)] truncate">
                 {currentHouseholdName}
               </p>
             </div>
             <span className={cn(
-              "text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md",
+              "text-[11px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md",
               member?.role === "OWNER"
                 ? "bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"
                 : "bg-gray-100 text-gray-500"

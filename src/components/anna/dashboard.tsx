@@ -327,7 +327,7 @@ export function Dashboard() {
   const regularItems = upcomingItems.filter((i) => !i.isPredicted);
 
   return (
-    <div className="pb-20 md:pb-0">
+    <div className="pb-24 md:pb-0">
       {/* Header */}
       <div className="p-4 lg:p-6 pb-0">
         <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)]">

@@ -243,13 +243,13 @@ function PhoneEditableField({
           {isEmpty ? "No phone" : displayPhone}
         </span>
         {isEmpty && (
-          <Badge variant="outline" className="text-[9px] px-1 py-0 border-[var(--anna-warning)]/40 text-[var(--anna-warning)] flex-shrink-0">
+          <Badge variant="outline" className="text-[10px] px-1 py-0 border-[var(--anna-warning)]/40 text-[var(--anna-warning)] flex-shrink-0">
             Required
           </Badge>
         )}
         <button
           onClick={startEditing}
-          className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
+          className="p-2 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
           aria-label="Edit phone"
         >
           <Pencil size={12} />
@@ -294,7 +294,7 @@ function AddressCard({
           {!address.isDefault && (
             <button
               onClick={() => onSetDefault(address)}
-              className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
+              className="p-2 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
               aria-label="Set as default address"
               title="Set as default"
             >
@@ -303,7 +303,7 @@ function AddressCard({
           )}
           <button
             onClick={() => onEdit(address)}
-            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
+            className="p-2 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors"
             aria-label="Edit address"
           >
             <Pencil size={12} />
@@ -514,7 +514,7 @@ function EditableField({
               setDraft(value);
               setEditing(true);
             }}
-            className="p-1 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
+            className="p-2 rounded-md hover:bg-[var(--anna-sage-light)] text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 md:opacity-0"
             aria-label={`Edit ${label}`}
           >
             <Pencil size={12} />
@@ -776,7 +776,7 @@ export function SettingsPanel() {
   }
 
   return (
-    <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
+    <div className="p-4 lg:p-6 pb-24 md:pb-0 anna-fade-in">
       <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">
         Settings
       </h1>

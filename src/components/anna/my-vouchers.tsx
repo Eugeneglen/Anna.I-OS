@@ -136,7 +136,7 @@ function VoucherCard({
             {voucher.issuedFromTaskId && (
               <Badge
                 variant="outline"
-                className="text-[9px] border-violet-300 bg-violet-100 text-violet-700 cursor-help"
+                className="text-[10px] border-violet-300 bg-violet-100 text-violet-700 cursor-help"
                 title={voucher.compensationReason
                   ? `Issued by Anna.I as compensation — ${voucher.compensationReason}`
                   : "Issued by Anna.I as compensation for a service issue"}
@@ -149,7 +149,7 @@ function VoucherCard({
             {voucher.campaignName}
           </p>
           {voucher.compensationReason && (
-            <p className="text-[10px] text-[var(--anna-muted)] italic mt-0.5 line-clamp-2">
+            <p className="text-[11px] text-[var(--anna-muted)] italic mt-0.5 line-clamp-2">
               “{voucher.compensationReason}”
             </p>
           )}
@@ -157,7 +157,7 @@ function VoucherCard({
         {isAvailable && voucher.expiresAt && (
           <div className="text-right shrink-0">
             <Clock size={12} className="text-[var(--anna-muted)] inline mr-1" />
-            <span className="text-[10px] text-[var(--anna-muted)]">
+            <span className="text-[11px] text-[var(--anna-muted)]">
               Exp {formatDate(voucher.expiresAt)}
             </span>
           </div>
@@ -167,12 +167,12 @@ function VoucherCard({
       {/* Details */}
       <div className="flex flex-wrap gap-1.5 mb-2">
         {voucher.targetCategory && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--anna-white)] text-[var(--anna-slate-light)] border border-[var(--anna-border)]">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--anna-white)] text-[var(--anna-slate-light)] border border-[var(--anna-border)]">
             {voucher.targetCategory.replace(/_/g, " ")}
           </span>
         )}
         {voucher.minOrderValueCents > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--anna-white)] text-[var(--anna-slate-light)] border border-[var(--anna-border)]">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--anna-white)] text-[var(--anna-slate-light)] border border-[var(--anna-border)]">
             Min {formatSgd(voucher.minOrderValueCents)}
           </span>
         )}
@@ -195,7 +195,7 @@ function VoucherCard({
         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[var(--anna-border)]">
           <Button
             size="sm"
-            className="h-7 text-xs rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
+            className="h-9 text-xs rounded-lg bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white"
             onClick={onView}
           >
             Book Now
@@ -204,7 +204,7 @@ function VoucherCard({
           <button
             type="button"
             onClick={() => setShowTerms(!showTerms)}
-            className="text-[10px] text-[var(--anna-muted)] hover:text-[var(--anna-slate)]"
+            className="text-[11px] text-[var(--anna-muted)] hover:text-[var(--anna-slate)] py-1.5 px-1 -m-1"
           >
             {showTerms ? "Hide Terms" : "View Terms"}
           </button>
@@ -276,7 +276,7 @@ export function MyVouchers({ onBookNow }: MyVouchersProps) {
   }
 
   return (
-    <div className="space-y-5 anna-fade-in">
+    <div className="space-y-5 pb-24 md:pb-0 anna-fade-in">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-[var(--anna-slate)]">My Vouchers</h2>

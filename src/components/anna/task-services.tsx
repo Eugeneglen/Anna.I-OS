@@ -188,7 +188,7 @@ function JobTypeCard({
       <Button
         onClick={onBook}
         size="sm"
-        className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-9 text-xs font-semibold"
+        className="w-full bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white rounded-xl h-11 text-xs font-semibold"
       >
         Book Now
         <ArrowRight size={14} className="ml-1.5" />
@@ -223,7 +223,7 @@ function RebookView({ data }: { data: RebookData }) {
   }
 
   return (
-    <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
+    <div className="p-4 lg:p-6 pb-24 md:pb-0 anna-fade-in">
       <BookingForm
         category={data.category}
         initialInstructions={data.instructions}
@@ -314,7 +314,7 @@ function ServicesBrowse() {
     const initialPromoCode = preselectMatchesCategory ? preselectVoucher!.code : undefined;
 
     return (
-      <div className="p-4 lg:p-6 pb-20 md:pb-0">
+      <div className="p-4 lg:p-6 pb-24 md:pb-0">
         <BookingForm
           category={view.category}
           initialJobType={view.jobType ?? null}
@@ -335,7 +335,7 @@ function ServicesBrowse() {
 
   // --- RENDER: Category Browse / Category Detail ---
   return (
-    <div className="p-4 lg:p-6 pb-20 md:pb-0 anna-fade-in">
+    <div className="p-4 lg:p-6 pb-24 md:pb-0 anna-fade-in">
       {view.mode === "browse" ? (
         <>
           <h1 className="text-xl lg:text-2xl font-bold text-[var(--anna-slate)] mb-1">

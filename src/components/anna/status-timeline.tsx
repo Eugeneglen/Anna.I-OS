@@ -72,7 +72,7 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
               {/* Label — hidden on mobile except current/next steps so the 9
                   nodes fit the viewport (nodes stay aligned via items-start) */}
               <span
-                className={`text-[10px] text-center leading-tight max-w-[52px] ${
+                className={`text-[10px] sm:text-[11px] text-center leading-tight max-w-[52px] sm:max-w-[64px] ${
                   isCompleted || isCurrent
                     ? "text-[var(--anna-slate)] font-medium"
                     : isDisputedStep

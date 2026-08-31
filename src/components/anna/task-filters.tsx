@@ -263,7 +263,7 @@ export function TaskFiltersBar({ filters, onChange, resultCount, totalCount }: T
               variant="outline"
               size="sm"
               className={cn(
-                "h-8 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
+                "h-9 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
                 filters.statuses.length > 0 &&
                   "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 text-[var(--anna-sage-dark)]"
               )}
@@ -343,7 +343,7 @@ export function TaskFiltersBar({ filters, onChange, resultCount, totalCount }: T
               variant="outline"
               size="sm"
               className={cn(
-                "h-8 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
+                "h-9 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
                 filters.categories.length > 0 &&
                   "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 text-[var(--anna-sage-dark)]"
               )}
@@ -406,7 +406,7 @@ export function TaskFiltersBar({ filters, onChange, resultCount, totalCount }: T
               variant="outline"
               size="sm"
               className={cn(
-                "h-8 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
+                "h-9 gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)]",
                 (filters.dateFrom || filters.dateTo) &&
                   "border-[var(--anna-sage)] bg-[var(--anna-sage-light)]/40 text-[var(--anna-sage-dark)]"
               )}
@@ -470,7 +470,7 @@ export function TaskFiltersBar({ filters, onChange, resultCount, totalCount }: T
           value={filters.sort}
           onValueChange={(v) => update({ sort: v as TaskFilters["sort"] })}
         >
-          <SelectTrigger className="h-8 w-auto min-w-[120px] gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)] bg-transparent">
+          <SelectTrigger className="h-9 w-auto min-w-[120px] gap-1.5 rounded-lg text-xs font-medium border-[var(--anna-border)] bg-transparent">
             <span className="truncate">
               {filters.sort === "newest" && "Newest first"}
               {filters.sort === "oldest" && "Oldest first"}

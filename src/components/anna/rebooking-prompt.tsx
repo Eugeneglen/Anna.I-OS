@@ -96,7 +96,7 @@ function RebookingCard({
       <button
         type="button"
         onClick={() => onDismiss(task.id)}
-        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/80 hover:bg-white flex items-center justify-center transition-colors z-10"
+        className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-white/80 hover:bg-white flex items-center justify-center transition-colors z-10"
         aria-label="Dismiss"
       >
         <X size={12} className="text-[var(--anna-muted)]" />
@@ -149,7 +149,7 @@ function RebookingCard({
           </p>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               onClick={handleOneClickRebook}

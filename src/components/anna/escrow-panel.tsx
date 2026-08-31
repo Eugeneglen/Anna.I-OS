@@ -248,7 +248,7 @@ export function EscrowPanel() {
   const hasEscrow = allTasks.some((t) => t.escrowEntries && t.escrowEntries.length > 0);
 
   return (
-    <div className="pb-20 md:pb-0">
+    <div className="pb-24 md:pb-0">
       {/* Header */}
       <div className="p-4 lg:p-6 pb-0">
         <div className="flex items-center gap-2">
