@@ -593,13 +593,49 @@ async function writeRedemptionBookkeeping(
   }
 ) {
   {
+    // ── F4: resolve the redemption reference to a REAL Task id ──
+    // `bookingId` is a free client-controlled string with no FK. Callers
+    // may pass a Task id (the checkout marker convention), a genuine
+    // Booking id, or nothing. CodeRedemption.taskId and
+    // CampaignAttribution.taskId must hold a real Task id, so resolve
+    // the reference before writing (previously the raw bookingId string
+    // was stored in CampaignAttribution.taskId — genuine Booking ids
+    // failed the Task FK and were silently dropped by the .catch).
+    let resolvedTaskId: string | null = null;
+    let resolvedBookingId: string | null = params.bookingId ?? null;
+    if (params.bookingId) {
+      const refTask = await tx.task.findUnique({
+        where: { id: params.bookingId },
+        select: { id: true },
+      });
+      if (refTask) {
+        // Marker convention: the caller passed a Task id — key the
+        // redemption on taskId, not on the bookingId string.
+        resolvedTaskId = refTask.id;
+        resolvedBookingId = null;
+      } else {
+        const refBooking = await tx.booking.findUnique({
+          where: { id: params.bookingId },
+          select: { taskId: true },
+        });
+        if (refBooking) {
+          // Genuine booking redemption — keep bookingId, and attribute
+          // to the booking's task.
+          resolvedTaskId = refBooking.taskId;
+          resolvedBookingId = params.bookingId;
+        }
+        // Neither: unresolvable free string — preserved in bookingId as-is.
+      }
+    }
+
     // Write redemption record
     const redemption = await tx.codeRedemption.create({
       data: {
         discountCodeId: params.codeId,
         campaignId: params.campaignId,
         householdId: params.householdId,
-        bookingId: params.bookingId,
+        taskId: resolvedTaskId,
+        bookingId: resolvedBookingId,
         subscriptionId: params.subscriptionId,
         discountAppliedCents: params.discountCents,
       },
@@ -635,7 +671,9 @@ async function writeRedemptionBookkeeping(
         data: {
           householdId: params.householdId,
           campaignId: params.campaignId,
-          taskId: params.bookingId || null,
+          // F4 attribution swap fix: store the resolved Task id (was the raw
+          // bookingId string — genuine Booking ids silently failed the Task FK).
+          taskId: resolvedTaskId,
           touchpoint: voucher ? "VOUCHER_USED" : "CODE_REDEEMED",
           weight: 1.0,
         },
@@ -648,7 +686,7 @@ async function writeRedemptionBookkeeping(
         campaignId: params.campaignId,
         householdId: params.householdId,
         eventType: "VOUCHER_REDEEMED",
-        metadata: { code: params.code, discountCents: params.discountCents, taskId: params.bookingId },
+        metadata: { code: params.code, discountCents: params.discountCents, taskId: resolvedTaskId },
       },
     }).catch(() => {});
 

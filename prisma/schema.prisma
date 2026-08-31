@@ -1069,7 +1069,8 @@ model CodeRedemption {
   discountCodeId       String
   campaignId           String
   householdId          String
-  bookingId            String? // the job the discount applied to (if job_commission)
+  taskId               String? // F4 — the Task this redemption was applied to (checkout marker key; plain string, no FK to avoid cycles)
+  bookingId            String? // a genuine Booking id (if job_commission) — legacy rows may hold a Task id here pre-F4
   subscriptionId       String? // the subscription event (if subscription_fee)
   discountAppliedCents Int // actual $ value discounted, for reconciliation
   redeemedAt           DateTime @default(now())
@@ -1080,6 +1081,7 @@ model CodeRedemption {
   @@index([discountCodeId])
   @@index([householdId])
   @@index([campaignId])
+  @@index([taskId])
 }
 
 // ======================== PLATFORM CONFIG ========================

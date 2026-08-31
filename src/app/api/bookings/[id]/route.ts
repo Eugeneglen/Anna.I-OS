@@ -27,7 +27,10 @@ export async function PATCH(
     // ── F21 auth gate (audit C7) ──
     // Booking status/rating mutations (incl. cancellation): only the
     // owning household or an authenticated ops user. Previously ZERO auth.
-    const guard = await guardBookingAccess(id)
+    // ── F9 (police-1a f1): ops actors must be ADMIN — the same tier the
+    // ops console enforces on its own booking mutations (/api/ops/bookings/
+    // [id] is admin-only); the household branch is unchanged.
+    const guard = await guardBookingAccess(id, { opsMinRole: "ADMIN" })
     if (!guard.ok) return guardErrorResponse(guard)
 
     const body = await request.json()

@@ -111,6 +111,12 @@ export const RATE_LIMITS = {
   campaignRedeem: { limit: 20, windowMs: 60_000 }, // 20 / minute / ops user
   segmentCreate: { limit: 10, windowMs: 60_000 }, // 10 / minute
   behaviourInsights: { limit: 30, windowMs: 60_000 }, // 30 / minute
+  // F17 (police-1a f8): task attachment uploads — 10 / minute per session
+  // identity (household id for household sessions, ops user id for ops),
+  // the same identity pattern /api/marketing/redeem keys on. Generous
+  // enough for the legit 5-photo + 2-video flow (max 7 files per task)
+  // while capping runaway/malicious multipart spam.
+  taskAttachmentUpload: { limit: 10, windowMs: 60_000 }, // 10 / minute / session identity
 } as const;
 
 /** Build a stable rate-limit key from the ops session. */

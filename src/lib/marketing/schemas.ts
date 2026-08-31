@@ -27,7 +27,7 @@ const spendCents = intNonNegative.max(MAX_SPEND_CENTS);
 const shortString = z.string().max(120);
 const boundedStringArray = z.array(z.string().max(60)).max(20);
 
-export const segmentFiltersSchema = z
+const segmentFiltersObject = z
   .object({
     // Recency
     lastOrderDaysMin: intNonNegative.max(3650).optional(),
@@ -80,7 +80,9 @@ export const segmentFiltersSchema = z
     marketingEngagement: z.enum(["ENGAGED", "NOT_ENGAGED"]).optional(),
     minAutonomyLevel: z.number().int().min(1).max(5).optional(),
   })
-  .strict() // reject unknown keys — filters shape is closed
+  .strict(); // reject unknown keys — filters shape is closed
+
+export const segmentFiltersSchema = segmentFiltersObject
   .refine(
     (f) =>
       f.lastOrderDaysMin === undefined ||
@@ -110,7 +112,71 @@ export const segmentFiltersSchema = z
     { message: "minAccountAgeDays must be ≤ maxAccountAgeDays" }
   );
 
-export type SegmentFiltersInput = z.infer<typeof segmentFiltersSchema>;
+export type SegmentFiltersInput = z.infer<typeof segmentFiltersObject>;
+
+/**
+ * F4 — tolerant legacy-filter sanitizer.
+ *
+ * Segments created before the F8 zod hardening (and junk stored by the
+ * pre-auth audit era) can hold filter JSON that `segmentFiltersSchema`
+ * rejects outright — previewing such a segment 400s with no way to fix it
+ * from the UI. This sanitizer NEVER throws: it keeps every known key whose
+ * value individually parses, drops unknown/malformed keys with a warning,
+ * and resolves min>max pairs by keeping the min bound. Callers surface the
+ * warnings instead of failing the request.
+ *
+ * Strict validation for NEW segment creation stays on
+ * `segmentFiltersSchema` — junk must not be persisted going forward.
+ */
+export function sanitizeSegmentFilters(
+  input: unknown
+): { filters: SegmentFiltersInput; warnings: string[] } {
+  const warnings: string[] = [];
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return {
+      filters: {},
+      warnings: ["filters: not an object — all filters ignored"],
+    };
+  }
+
+  const shape = segmentFiltersObject.shape as Record<string, z.ZodTypeAny>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const fieldSchema = shape[key];
+    if (!fieldSchema) {
+      warnings.push(`"${key}": unknown filter (legacy) — dropped`);
+      continue;
+    }
+    const parsed = fieldSchema.safeParse(value);
+    if (!parsed.success) {
+      warnings.push(
+        `"${key}": invalid value ${JSON.stringify(value)?.slice(0, 80)} — dropped`
+      );
+      continue;
+    }
+    if (parsed.data !== undefined) out[key] = parsed.data;
+  }
+
+  // min≤max pairs: keep the min bound, drop the violated max (deterministic).
+  const pairs: Array<[string, string]> = [
+    ["lastOrderDaysMin", "lastOrderDaysMax"],
+    ["minOrders", "maxOrders"],
+    ["minTotalSpendCents", "maxTotalSpendCents"],
+    ["minAccountAgeDays", "maxAccountAgeDays"],
+  ];
+  for (const [minKey, maxKey] of pairs) {
+    if (
+      out[minKey] !== undefined &&
+      out[maxKey] !== undefined &&
+      (out[minKey] as number) > (out[maxKey] as number)
+    ) {
+      delete out[maxKey];
+      warnings.push(`"${maxKey}": below "${minKey}" — dropped (min kept)`);
+    }
+  }
+
+  return { filters: out as SegmentFiltersInput, warnings };
+}
 
 /**
  * Discount rule bounds applied wherever a campaign is created (or its

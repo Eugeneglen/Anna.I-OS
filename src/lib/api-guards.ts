@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getHouseholdSession } from "@/lib/household-auth";
-import { getOpsSession, type OpsSession } from "@/lib/ops-auth";
+import { getOpsSession, hasMinRole, type OpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 
 /**
@@ -18,7 +18,9 @@ import { hasPermission } from "@/lib/permissions";
  *                                         query householdId is ignored.
  *   - Ops session (any role)            → allowed for task/booking guards
  *                                         (ops console acts on all homes);
- *                                         marketing redeem additionally
+ *                                         routes that move money may opt
+ *                                         into a role tier via opsMinRole
+ *                                         (F9); marketing redeem additionally
  *                                         requires marketing:edit.
  *
  * Vendor sessions are intentionally NOT accepted here — vendors have their
@@ -51,13 +53,54 @@ export async function resolveApiActor(): Promise<ApiActor | null> {
 }
 
 /**
- * Guard access to a task-scoped route. Household must own the task;
- * ops is always allowed. 404 leaks nothing (same message as before gating).
+ * Optional ops role-tiering for task/booking guards (F9, police-1a f1 +
+ * police-2b f13).
+ *
+ * By default the ops branch of these guards accepts ANY ops session (the
+ * console acts on all homes). Routes that move money or destroy state can
+ * declare a minimum legacy ops role tier via `opsMinRole`; ops actors
+ * below the tier then get 403 while household actors are unaffected.
+ *
+ * This mirrors the ops console's OWN gating for the equivalent actions:
+ * /api/ops/escrow/[id] + /api/ops/escrow/vouchers/[voucherId] gate escrow
+ * money actions at hasMinRole(role, "COORDINATOR") (which seed-rbac.ts
+ * documents as the `escrow:approve` permission), and /api/ops/bookings/[id]
+ * gates booking mutations at ADMIN. A hasPermission("escrow", "approve")
+ * check would CONTRADICT the console: the seeded coordinator RBAC role
+ * carries only escrow:view, yet COORDINATOR-tier sessions legitimately
+ * act via the console routes — so the tier check is the faithful mirror.
  */
-export async function guardTaskAccess(taskId: string): Promise<GuardResult> {
+export type GuardAccessOptions = {
+  /** Minimum legacy ops role (ANALYST < COORDINATOR < ADMIN) for ops actors. */
+  opsMinRole?: "ADMIN" | "COORDINATOR";
+};
+
+function opsTierGuard(session: OpsSession, opts?: GuardAccessOptions): GuardFail | null {
+  if (!opts?.opsMinRole) return null;
+  if (hasMinRole(session.role, opts.opsMinRole)) return null;
+  return {
+    ok: false,
+    status: 403,
+    error: `Forbidden — this action requires an ops ${opts.opsMinRole} role or above`,
+  };
+}
+
+/**
+ * Guard access to a task-scoped route. Household must own the task;
+ * ops is allowed (optionally tiered via `opts.opsMinRole`). 404 leaks
+ * nothing (same message as before gating).
+ */
+export async function guardTaskAccess(
+  taskId: string,
+  opts?: GuardAccessOptions
+): Promise<GuardResult> {
   const actor = await resolveApiActor();
   if (!actor) return { ok: false, status: 401, error: "Unauthorized" };
-  if (actor.kind === "ops") return { ok: true, actor };
+  if (actor.kind === "ops") {
+    const tierFail = opsTierGuard(actor.session, opts);
+    if (tierFail) return tierFail;
+    return { ok: true, actor };
+  }
 
   const task = await db.task.findUnique({
     where: { id: taskId },
@@ -71,10 +114,17 @@ export async function guardTaskAccess(taskId: string): Promise<GuardResult> {
 }
 
 /** Guard access to a booking-scoped route (via booking.task.householdId). */
-export async function guardBookingAccess(bookingId: string): Promise<GuardResult> {
+export async function guardBookingAccess(
+  bookingId: string,
+  opts?: GuardAccessOptions
+): Promise<GuardResult> {
   const actor = await resolveApiActor();
   if (!actor) return { ok: false, status: 401, error: "Unauthorized" };
-  if (actor.kind === "ops") return { ok: true, actor };
+  if (actor.kind === "ops") {
+    const tierFail = opsTierGuard(actor.session, opts);
+    if (tierFail) return tierFail;
+    return { ok: true, actor };
+  }
 
   const booking = await db.booking.findUnique({
     where: { id: bookingId },

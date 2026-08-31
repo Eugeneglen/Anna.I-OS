@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { previewSegmentMembers, type SegmentFilters } from "@/lib/marketing/segment-engine";
-import { segmentFiltersSchema } from "@/lib/marketing/schemas";
+import {
+  segmentFiltersSchema,
+  sanitizeSegmentFilters,
+  type SegmentFiltersInput,
+} from "@/lib/marketing/schemas";
 import {
   checkRateLimit,
   opsRateKey,
@@ -32,16 +36,27 @@ export async function POST(req: NextRequest) {
     }
 
     // ── F8: same schema as create — preview and compute cannot diverge.
+    // ── F4: legacy junk tolerance — if the strict schema rejects (e.g. a
+    // pre-F8 stored segment replayed through preview), sanitize instead of
+    // 400ing: keep the keys that individually validate, drop the rest with
+    // warnings. New segments still cannot persist junk (create stays strict).
     const parsedFilters = segmentFiltersSchema.safeParse(filters);
-    if (!parsedFilters.success) {
-      return NextResponse.json(
-        { error: "Invalid segment filters", details: parsedFilters.error.flatten().fieldErrors },
-        { status: 400 }
+    let effectiveFilters: SegmentFiltersInput;
+    let warnings: string[] = [];
+    if (parsedFilters.success) {
+      effectiveFilters = parsedFilters.data;
+    } else {
+      const sanitized = sanitizeSegmentFilters(filters);
+      effectiveFilters = sanitized.filters;
+      warnings = sanitized.warnings;
+      console.warn(
+        "[/api/ops/marketing/segments/preview] legacy/malformed filters normalized:",
+        warnings
       );
     }
 
-    const result = await previewSegmentMembers(parsedFilters.data as SegmentFilters);
-    return NextResponse.json(result);
+    const result = await previewSegmentMembers(effectiveFilters as SegmentFilters);
+    return NextResponse.json(warnings.length > 0 ? { ...result, warnings } : result);
   } catch (error) {
     console.error("[/api/ops/marketing/segments/preview POST]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

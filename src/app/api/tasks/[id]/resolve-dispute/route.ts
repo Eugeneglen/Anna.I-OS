@@ -18,7 +18,9 @@ export async function POST(
 
     // ── F21 auth gate (audit C7 family) ── resolving a dispute releases
     // escrow: owning household or ops only.
-    const guard = await guardTaskAccess(id)
+    // ── F9 (police-1a f1): ops actors must be COORDINATOR+ — same tier the
+    // ops console itself enforces on escrow actions (/api/ops/escrow/[id]).
+    const guard = await guardTaskAccess(id, { opsMinRole: "COORDINATOR" })
     if (!guard.ok) return guardErrorResponse(guard)
 
     const body = await request.json()

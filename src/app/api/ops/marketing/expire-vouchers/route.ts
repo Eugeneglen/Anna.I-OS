@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
-import { db } from "@/lib/db";
-import { expireVouchers } from "@/lib/marketing/voucher-engine";
+import { runExpirySweep } from "@/lib/marketing/voucher-engine";
 import { invalidateBehaviourCache, invalidateAllCampaignPerfCaches } from "@/lib/cache";
 import { checkRateLimit, opsRateKey, rateLimitResponsePayload } from "@/lib/rate-limit";
 
 // POST /api/ops/marketing/expire-vouchers
-// Manually triggers voucher expiry + sends VOUCHER_EXPIRING notifications
-// for vouchers expiring within 3 days. Also called by Railway cron.
+// Manually triggers the voucher expiry lifecycle pass (F20): flip past-expiry
+// CLAIMED vouchers → EXPIRED + send "expiring soon" reminders inside the
+// configured notice window (config.voucherExpiryNoticeDays, default 3).
+// The sweep logic lives in the voucher engine (runExpirySweep) so the
+// ops-events cron tick (/api/ops/marketing/dispatch-expiry) runs the exact
+// same code path.
 export async function POST() {
   try {
     const session = await getOpsSession();
@@ -26,60 +29,10 @@ export async function POST() {
       return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
     }
 
-    // 1. Expire vouchers past their expiry date
-    const expired = await expireVouchers();
-
-    // 2. Send VOUCHER_EXPIRING notifications for vouchers expiring in 3 days
-    const threeDaysFromNow = new Date();
-    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-
-    const expiringVouchers = await db.voucher.findMany({
-      where: {
-        status: "CLAIMED",
-        expiresAt: {
-          gte: new Date(),
-          lte: threeDaysFromNow,
-        },
-        notifiedAt: null, // haven't been notified about expiry yet
-      },
-      include: {
-        household: { select: { id: true } },
-        campaign: { select: { name: true } },
-      },
-      take: 100,
-    });
-
-    let notified = 0;
-    for (const voucher of expiringVouchers) {
-      const members = await db.familyMember.findMany({
-        where: { householdId: voucher.householdId },
-        select: { id: true },
-      });
-
-      for (const member of members) {
-        await db.notification.create({
-          data: {
-            householdId: voucher.householdId,
-            recipientType: "HOUSEHOLD_MEMBER",
-            memberId: member.id,
-            channel: "WEB_PUSH",
-            eventType: "REBOOKING_PROMPT", // reuse existing type — TODO: add VOUCHER_EXPIRING to enum
-            title: "Voucher Expiring Soon",
-            body: `Your voucher from "${voucher.campaign.name}" expires on ${new Date(voucher.expiresAt!).toLocaleDateString("en-SG")}. Use it before it's gone!`,
-            status: "PENDING",
-            referenceType: "voucher",
-            referenceId: voucher.id,
-          },
-        });
-      }
-
-      // Mark as notified
-      await db.voucher.update({
-        where: { id: voucher.id },
-        data: { notifiedAt: new Date() },
-      });
-      notified++;
-    }
+    // F20: expiry pass + reminder sweep (previously dead code inline in this
+    // route — notifiedAt was pre-stamped at issuance so the reminder filter
+    // never matched; see sendVoucherExpiryReminders in the voucher engine).
+    const sweep = await runExpirySweep();
 
     // ── Fix 19 — bulk voucher expiry sweep touches multiple campaigns ──
     // Voucher status flips (CLAIMED → EXPIRED) change the behaviour
@@ -91,8 +44,8 @@ export async function POST() {
     invalidateAllCampaignPerfCaches();
 
     return NextResponse.json({
-      expired: expired.expired,
-      expiringNotified: notified,
+      expired: sweep.expired,
+      expiringNotified: sweep.remindersSent,
     });
   } catch (error) {
     console.error("[/api/ops/marketing/expire-vouchers POST]", error);

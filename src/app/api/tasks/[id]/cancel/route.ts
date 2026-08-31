@@ -61,7 +61,10 @@ export async function POST(
     const { id } = await params;
 
     // ── F21 auth gate: owning household or ops only ──
-    const guard = await guardTaskAccess(id);
+    // ── F9 (police-2b f13): cancel is a money action (HELD → REFUNDED +
+    // REFUND_CREDIT issuance) — ops actors must be COORDINATOR+ (mirrors
+    // the console's escrow money-action tier in /api/ops/escrow/[id]).
+    const guard = await guardTaskAccess(id, { opsMinRole: "COORDINATOR" });
     if (!guard.ok) return guardErrorResponse(guard);
     const actor = guard.actor;
 

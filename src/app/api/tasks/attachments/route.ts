@@ -3,6 +3,12 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import crypto from "crypto";
 import { resolveApiActor } from "@/lib/api-guards";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  secondsUntilReset,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 // UPLOAD_DIR: writable root for file storage.
 // - Local dev: defaults to public/ (backward compatible)
@@ -36,6 +42,24 @@ export async function POST(request: Request) {
     const actor = await resolveApiActor();
     if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── F17 (police-1a f8): rate-limit uploads ── 10/min keyed on the
+    // session identity (same pattern as /api/marketing/redeem: actor kind
+    // + household id / ops user id), checked BEFORE the expensive
+    // multipart formData parse. LIMIT: see RATE_LIMITS.taskAttachmentUpload.
+    const rlKey = `uploads:${actor.kind}:${actor.kind === "household" ? actor.householdId : actor.userId}`;
+    if (
+      !checkRateLimit(
+        rlKey,
+        RATE_LIMITS.taskAttachmentUpload.limit,
+        RATE_LIMITS.taskAttachmentUpload.windowMs
+      )
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), {
+        status: 429,
+        headers: { "Retry-After": String(secondsUntilReset(rlKey)) },
+      });
     }
 
     const formData = await request.formData();

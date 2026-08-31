@@ -23,7 +23,9 @@ export async function PATCH(
     // ── F21 auth gate (audit C7) ──
     // Escrow release/dispute moves money: only the owning household or an
     // authenticated ops user may act. Previously this route had ZERO auth.
-    const guard = await guardTaskAccess(id)
+    // ── F9 (police-1a f1): ops actors must be COORDINATOR+ — same tier the
+    // ops console itself enforces on escrow actions (/api/ops/escrow/[id]).
+    const guard = await guardTaskAccess(id, { opsMinRole: "COORDINATOR" })
     if (!guard.ok) return guardErrorResponse(guard)
 
     const body = await request.json()

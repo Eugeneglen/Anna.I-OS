@@ -103,7 +103,20 @@ export async function GET(request: Request) {
 // POST /api/tasks
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    // ── F17 (police-1a f4): auth gate BEFORE body validation ── an
+    // unauthenticated caller with an invalid body must get 401, not 400.
+    // The raw body is only READ here (parse failures fall through to the
+    // schema check below); only the householdId hint is peeked at, and a
+    // household session ignores it anyway (F1: scope is session-derived).
+    const body = await request.json().catch(() => ({}))
+    const scope = await resolveHouseholdScope(
+      typeof body?.householdId === "string" ? body.householdId : undefined
+    )
+    if (!scope.ok) {
+      return NextResponse.json({ error: scope.error }, { status: scope.status })
+    }
+    const householdId = scope.householdId
+
     const parsed = createTaskSchema.safeParse(body)
 
     if (!parsed.success) {
@@ -112,15 +125,6 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-
-    // ── F21 auth gate (audit C7 family) ── task creation must not be
-    // spoofable: a household session always creates for ITSELF (body
-    // householdId ignored on mismatch); ops may create on behalf.
-    const scope = await resolveHouseholdScope(parsed.data.householdId)
-    if (!scope.ok) {
-      return NextResponse.json({ error: scope.error }, { status: scope.status })
-    }
-    const householdId = scope.householdId
 
     const { category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
 
@@ -320,12 +324,17 @@ export async function POST(request: Request) {
               }
 
               // Write redemption record
+              // F4: the checkout marker is keyed on the REAL taskId column
+              // (was bookingId: created.id — the task id never was a booking
+              // id; the cancellation-restore lookup now filters on taskId, so
+              // a spoofed bookingId string can no longer fabricate/consume
+              // the marker).
               await tx.codeRedemption.create({
                 data: {
                   discountCodeId,
                   campaignId: discountCampaignId,
                   householdId,
-                  bookingId: created.id,
+                  taskId: created.id,
                   discountAppliedCents: discountCents,
                 },
               });

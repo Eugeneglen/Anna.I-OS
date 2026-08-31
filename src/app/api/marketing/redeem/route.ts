@@ -3,7 +3,12 @@ import { z } from "zod";
 import { validateRedemption, applyRedemption, RedemptionLimitError } from "@/lib/marketing/campaign-service";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
 import { resolveHouseholdScope } from "@/lib/api-guards";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  secondsUntilReset,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 import { auditLog } from "@/lib/permissions";
 
 // POST /api/marketing/redeem — households redeem discount codes.
@@ -32,25 +37,38 @@ const redeemSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const parsed = redeemSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
-    }
+    // ── F17 (police-1a f4): auth gate BEFORE body validation ── an
+    // unauthenticated caller with an invalid body must get 401, not 400.
+    // Only the householdId hint is peeked at from the raw body; household
+    // sessions ignore it anyway (F1: scope is session-derived).
+    const body = await req.json().catch(() => ({}));
 
     // ── F1 auth gate ──────────────────────────────────────────────
-    const scope = await resolveHouseholdScope(parsed.data.householdId, {
-      opsPermission: ["marketing", "edit"],
-    });
+    const scope = await resolveHouseholdScope(
+      typeof body?.householdId === "string" ? body.householdId : undefined,
+      {
+        opsPermission: ["marketing", "edit"],
+      }
+    );
     if (!scope.ok) {
       return NextResponse.json({ error: scope.error }, { status: scope.status });
     }
     const householdId = scope.householdId;
 
+    const parsed = redeemSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
+    }
+
     // Rate limit: 20/min per caller (mirrors ops campaignRedeem limit).
     const rateKey = `redeem:${scope.actor.kind}:${scope.actor.kind === "household" ? scope.actor.householdId : scope.actor.userId}`;
     if (!checkRateLimit(rateKey, RATE_LIMITS.campaignRedeem.limit, RATE_LIMITS.campaignRedeem.windowMs)) {
-      return NextResponse.json({ error: "Too many redemption attempts. Try again shortly." }, { status: 429 });
+      // F17 (police-1a f6): standard 429 payload + Retry-After header
+      // (integer seconds) so callers know when the window resets.
+      return NextResponse.json(rateLimitResponsePayload(rateKey), {
+        status: 429,
+        headers: { "Retry-After": String(secondsUntilReset(rateKey)) },
+      });
     }
 
     const result = await validateRedemption({

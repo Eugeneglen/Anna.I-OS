@@ -275,6 +275,45 @@ setTimeout(() => {
 }, ISSUANCE_DISPATCH_CRON_DELAY);
 
 // ─────────────────────────────────────────────────────────────
+// Voucher Expiry Sweep Cron (F20)
+// Every 60 s, ask the Next.js app to run the voucher expiry
+// lifecycle pass: flip past-expiry CLAIMED vouchers → EXPIRED and
+// send "expiring soon" reminders (config.voucherExpiryNoticeDays
+// window, notifiedAt watermark). Authenticated with the shared
+// CRON_SECRET header — mirrors the issuance dispatcher above.
+// ─────────────────────────────────────────────────────────────
+
+const EXPIRY_DISPATCH_INTERVAL_MS = 60 * 1000; // 60 seconds
+const EXPIRY_DISPATCH_CRON_DELAY = 55 * 1000; // stagger vs the other ticks
+
+async function runExpiryDispatch() {
+  try {
+    const res = await fetch("http://127.0.0.1:3000/api/ops/marketing/dispatch-expiry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
+    });
+    if (res.status === 204) return; // nothing to expire or remind — normal case
+    const data: any = await res.json().catch(() => null);
+    if (res.ok && data && (data.expired > 0 || data.remindersSent > 0)) {
+      console.log(
+        `[cron] Voucher expiry sweep: ${data.expired} expired, ${data.remindersSent} reminder(s) sent`
+      );
+    } else if (!res.ok && res.status !== 401) {
+      console.warn(`[cron] Voucher expiry sweep returned ${res.status}`);
+    }
+  } catch (err) {
+    // Non-critical — Next.js may not be up yet during startup
+    console.warn("[cron] Voucher expiry sweep failed (non-critical):", err instanceof Error ? err.message : err);
+  }
+}
+
+setTimeout(() => {
+  console.log(`[cron] Voucher expiry sweep active (every ${EXPIRY_DISPATCH_INTERVAL_MS / 1000}s)`);
+  runExpiryDispatch();
+  setInterval(runExpiryDispatch, EXPIRY_DISPATCH_INTERVAL_MS);
+}, EXPIRY_DISPATCH_CRON_DELAY);
+
+// ─────────────────────────────────────────────────────────────
 // Start server
 // ─────────────────────────────────────────────────────────────
 

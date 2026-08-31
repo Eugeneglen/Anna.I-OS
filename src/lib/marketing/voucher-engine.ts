@@ -16,6 +16,7 @@
 
 import { db } from "@/lib/db";
 import { generateSingleCode } from "./campaign-service";
+import { getMarketingConfig } from "./config";
 import {
   CampaignEventType,
   NotificationChannel,
@@ -115,7 +116,11 @@ export async function issueVoucher(params: {
       status: "CLAIMED",
       origin,
       expiresAt: effectiveExpiry || code.expiresAt,
-      notifiedAt: null, // will be set when the VOUCHER_ISSUED notification is sent
+      // F20 (E2): notifiedAt is the expiry-REMINDER watermark. It stays null
+      // at issuance and is stamped ONLY by the expiry-reminder sweep
+      // (sendVoucherExpiryReminders) when a "voucher expiring soon"
+      // notification is actually sent.
+      notifiedAt: null,
     },
     include: {
       campaign: {
@@ -189,7 +194,6 @@ export async function issueVoucher(params: {
       select: { id: true },
     });
 
-    const now = new Date();
     for (const member of members) {
       await db.notification.create({
         data: {
@@ -207,11 +211,11 @@ export async function issueVoucher(params: {
       });
     }
 
-    // Mark the voucher as notified now that the notification(s) have been created
-    await db.voucher.update({
-      where: { id: voucher.id },
-      data: { notifiedAt: now },
-    });
+    // F20 (E2): deliberately NOT stamping voucher.notifiedAt here. The old
+    // code stamped it right after the VOUCHER_ISSUED notification fan-out,
+    // which pre-armed the expiry-reminder watermark — the reminder sweep
+    // (which matches on notifiedAt: null) could never fire. notifiedAt now
+    // belongs exclusively to sendVoucherExpiryReminders below.
   } catch (error) {
     console.error(
       `[voucher-engine] Failed to create VOUCHER_ISSUED notification for voucher ${voucher.id}:`,
@@ -265,8 +269,30 @@ export async function issueVouchersToSegment(params: {
   // issueVoucher enforces the final semantics per member.
   const campaignForConsent = await db.campaign.findUnique({
     where: { id: params.campaignId },
-    select: { type: true },
+    select: { type: true, endDate: true },
   });
+
+  // ── F20 (E1): default expiry for segment-issued vouchers ──
+  //
+  // The issuance-job path (process-issuance-job / dispatch-issuance →
+  // runNextPendingIssuanceJob) never passes customExpiry, so segment
+  // vouchers used to be born with expiresAt=NULL — they sat in the wallet
+  // as "Available" forever and the expiry sweep could never flip them.
+  // Default, in priority order:
+  //   1. an explicit customExpiry from the caller (unchanged behaviour);
+  //   2. the campaign's endDate — the voucher dies with its campaign
+  //      (natural marketing semantics);
+  //   3. else a 365-day TTL — the SAME constant default issueVoucher applies
+  //      to REFUND_CREDIT (policy sub-decision 3.2 / F22).
+  // Edge case: a campaign whose endDate has already passed yields
+  // born-expired vouchers — honest (the campaign window is over and
+  // validateRedemption would reject the code anyway); the expiry sweep
+  // flips them on the next tick.
+  const segmentDefaultExpiry = new Date();
+  segmentDefaultExpiry.setDate(segmentDefaultExpiry.getDate() + 365);
+  const effectiveCustomExpiry =
+    params.customExpiry ?? campaignForConsent?.endDate ?? segmentDefaultExpiry;
+
   const consentExemptCampaign = campaignForConsent?.type === "REFUND_CREDIT";
   const householdIds = members.map((m) => m.householdId);
   const optedOutHouseholdIds = new Set<string>();
@@ -325,7 +351,7 @@ export async function issueVouchersToSegment(params: {
         const result = await issueVoucher({
           householdId: member.householdId,
           campaignId: params.campaignId,
-          customExpiry: params.customExpiry,
+          customExpiry: effectiveCustomExpiry,
         });
         voucherIds.push(result.voucherId);
       } catch (error) {
@@ -734,36 +760,167 @@ export async function markVoucherUsed(voucherId: string, taskId: string, househo
 }
 
 // ── Expire vouchers (cron job) ──
+//
+// ── F20 (H4) fix: the re-query bug ──
+//
+// The old implementation flipped eligible vouchers with one guarded
+// updateMany and then RE-QUERIED `{ status: "EXPIRED", expiresAt: { lt: now } }`
+// to write the VOUCHER_EXPIRED campaign events. That re-query matched every
+// voucher that had EVER been expired — not just the ones flipped by this
+// pass — so any sweep that expired ≥1 voucher re-created duplicate
+// VOUCHER_EXPIRED events for the ENTIRE historical expired set (unbounded
+// audit-row spam), and the event set was decoupled from the flip set.
+//
+// F7-style idempotency (status-flip as the watermark): each voucher is
+// flipped with its own guarded updateMany (CLAIMED → EXPIRED) and only the
+// sweep that WINS the flip writes the event. A second run selects nothing →
+// zero writes. Concurrent sweeps are safe — the loser of a flip sees
+// count 0 and skips both the event and the counter.
 
 export async function expireVouchers(): Promise<{ expired: number }> {
-  const result = await db.voucher.updateMany({
+  const now = new Date();
+  const eligible = await db.voucher.findMany({
+    where: { status: "CLAIMED", expiresAt: { lt: now } },
+    select: { id: true, campaignId: true, householdId: true },
+    take: 500, // bounded per sweep; a larger backlog drains on subsequent ticks
+  });
+  if (eligible.length === 0) return { expired: 0 };
+
+  let expired = 0;
+  for (const v of eligible) {
+    // Guarded status-flip — the flip itself is the idempotency watermark.
+    const flipped = await db.voucher.updateMany({
+      where: { id: v.id, status: "CLAIMED" },
+      data: { status: "EXPIRED" },
+    });
+    if (flipped.count === 0) continue; // another actor flipped/used/revoked it first
+
+    await db.campaignEvent.create({
+      data: {
+        campaignId: v.campaignId,
+        householdId: v.householdId,
+        eventType: "VOUCHER_EXPIRED",
+        metadata: { voucherId: v.id },
+      },
+    }).catch(() => {}); // non-fatal — the status flip already happened
+    expired++;
+  }
+
+  return { expired };
+}
+
+// ── Expiry-reminder sweep (F20 / E2) ──
+//
+// REVIVED + RELOCATED from /api/ops/marketing/expire-vouchers (where this
+// logic was dead code): the old route-level sweep filtered `notifiedAt: null`,
+// but issueVoucher stamped notifiedAt at issuance, so no voucher ever matched.
+// notifiedAt now belongs exclusively to this sweep — it is the idempotency
+// watermark, stamped atomically BEFORE the notification fan-out (claim-first,
+// mirroring the F19 resolve_voucher claim pattern) and released again if the
+// fan-out fails, so a failed reminder is retried on the next sweep.
+//
+// The notice window comes from the marketing config (voucherExpiryNoticeDays,
+// default 3) instead of the old hardcoded 3 days.
+//
+// Vouchers with expiresAt=NULL (legacy E1 rows issued before the default
+// landed) never match — they have no expiry to be reminded about.
+
+export async function sendVoucherExpiryReminders(): Promise<number> {
+  const config = await getMarketingConfig();
+  const noticeDays = config.voucherExpiryNoticeDays ?? 3;
+  const now = new Date();
+  const windowEnd = new Date(now.getTime() + noticeDays * 24 * 60 * 60 * 1000);
+
+  const expiring = await db.voucher.findMany({
     where: {
       status: "CLAIMED",
-      expiresAt: { lt: new Date() },
+      expiresAt: { gte: now, lte: windowEnd },
+      notifiedAt: null, // reminder watermark — not yet reminded
     },
-    data: { status: "EXPIRED" },
+    select: { id: true, householdId: true, expiresAt: true, campaignId: true },
+    take: 100, // bounded fan-out per sweep; the rest goes on the next tick
   });
+  if (expiring.length === 0) return 0;
 
-  // Record campaign events for expired vouchers
-  if (result.count > 0) {
-    const expiredVouchers = await db.voucher.findMany({
-      where: { status: "EXPIRED", expiresAt: { lt: new Date() } },
-      select: { id: true, campaignId: true, householdId: true },
+  let sent = 0;
+  for (const voucher of expiring) {
+    // Claim the watermark FIRST (atomic null → now, still-CLAIMED guard so a
+    // voucher redeemed in the meantime is not reminded). Exactly one sweep
+    // wins per voucher.
+    const claimed = await db.voucher.updateMany({
+      where: { id: voucher.id, notifiedAt: null, status: "CLAIMED" },
+      data: { notifiedAt: new Date() },
     });
+    if (claimed.count === 0) continue;
 
-    for (const v of expiredVouchers) {
-      await db.campaignEvent.create({
-        data: {
-          campaignId: v.campaignId,
-          householdId: v.householdId,
-          eventType: "VOUCHER_EXPIRED",
-          metadata: { voucherId: v.id },
-        },
-      }).catch(() => {}); // non-fatal
+    try {
+      const campaign = await db.campaign.findUnique({
+        where: { id: voucher.campaignId },
+        select: { name: true },
+      });
+      const expiryLabel = voucher.expiresAt!.toLocaleDateString("en-SG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      // Notify every household member (same fan-out pattern as the
+      // VOUCHER_ISSUED notification in issueVoucher).
+      const members = await db.familyMember.findMany({
+        where: { householdId: voucher.householdId },
+        select: { id: true },
+      });
+      for (const member of members) {
+        await db.notification.create({
+          data: {
+            householdId: voucher.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WEB_PUSH,
+            // No VOUCHER_EXPIRING value exists in NotificationEventType and
+            // this task allows no schema changes — REBOOKING_PROMPT (the
+            // "come back and use this" nudge type) is the closest existing
+            // semantic; the panel renders voucher-referenced ones without the
+            // task action-link. TODO (schema change allowed): add
+            // VOUCHER_EXPIRING to the enum and switch.
+            eventType: NotificationEventType.REBOOKING_PROMPT,
+            title: "Voucher Expiring Soon",
+            body: `Your voucher from "${campaign?.name ?? "a campaign"}" expires on ${expiryLabel}. Use it before it's gone!`,
+            status: NotificationStatus.PENDING,
+            referenceType: "voucher",
+            referenceId: voucher.id,
+          },
+        });
+      }
+      sent++;
+    } catch (error) {
+      // Fan-out failed — release the watermark so the next sweep retries.
+      await db.voucher
+        .update({ where: { id: voucher.id }, data: { notifiedAt: null } })
+        .catch(() => {});
+      console.error(
+        `[voucher-engine] Failed to send expiry reminder for voucher ${voucher.id}:`,
+        error,
+      );
     }
   }
 
-  return { expired: result.count };
+  return sent;
+}
+
+// ── Full expiry lifecycle pass (F20) ──
+//
+// Single funnel shared by the ops-manual expire-vouchers route and the
+// ops-events 60s cron tick (via /api/ops/marketing/dispatch-expiry):
+//   1. flip past-expiry CLAIMED vouchers → EXPIRED (H4-fixed, idempotent);
+//   2. send "expiring soon" reminders inside the configured notice window
+//      (E2, notifiedAt watermark).
+// Safe to run every tick: both passes are no-ops when there is nothing to do.
+
+export async function runExpirySweep(): Promise<{ expired: number; remindersSent: number }> {
+  const { expired } = await expireVouchers();
+  const remindersSent = await sendVoucherExpiryReminders();
+  return { expired, remindersSent };
 }
 
 // ── Revoke a voucher ──
@@ -832,15 +989,19 @@ export async function restoreVoucherOnCancellation(
       return { restored: false, voucherReissued: false, useRestored: false, redemptionDeleted: false };
     }
 
-    // Idempotency marker: this task's CodeRedemption row. Note (C4 debt,
-    // to be fixed with F4): the /api/tasks flow currently stores the Task
-    // id in CodeRedemption.bookingId, so we match on that column.
+    // Idempotency marker: this task's CodeRedemption row, keyed on the
+    // REAL taskId column (F4). Pre-F4 rows stored the Task id in the
+    // free bookingId string — spoofable and unordered (C4); the F4
+    // backfill (scripts/ops/f4-backfill.ts) re-keys those rows onto
+    // taskId. A deliberate bookingId=<taskId> spoof row (taskId=null)
+    // can no longer be consumed by this lookup.
     const redemption = await tx.codeRedemption.findFirst({
       where: {
         discountCodeId: task.discountCodeId,
         householdId: task.householdId,
-        bookingId: taskId,
+        taskId: taskId,
       },
+      orderBy: { redeemedAt: "asc" }, // deterministic if duplicates ever exist
     });
     if (!redemption) {
       // Already reconciled (or nothing was redeemed on this task) — no-op.
