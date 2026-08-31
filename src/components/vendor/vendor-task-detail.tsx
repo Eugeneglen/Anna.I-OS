@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { VendorPhotoUpload } from "./vendor-photo-upload";
 import { cn } from "@/lib/utils";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
+import { payoutBaseCents } from "@/lib/payments/calculations";
 import type { VendorScheduleItem, VendorInfo } from "./vendor-schedule";
 import { JobNoBadge } from "@/components/shared/job-no-badge";
 import {
@@ -477,12 +478,30 @@ function VendorTaskDetailContent({
       {!isDisputed && b.escrow && (() => {
         // Compute order total + total refunded across ALL escrow entries
         // (base + add-ons) so the vendor sees the same numbers as the customer.
+        //
+        // PAYOUT BASE: platform-funded discounts (promo codes / refund
+        // credits funded by Anna.I) never reduce the vendor's earnings —
+        // job value, commission and payout are all computed on the
+        // pre-discount base. The customer-paid cash is shown as separate,
+        // clearly-labeled context so the two figures are never confused.
         const allEntries = b.escrowEntries && b.escrowEntries.length > 0
           ? b.escrowEntries
           : [b.escrow];
+        // Job value = payout base (pre-discount, incl. add-ons)
         const orderTotalCents = allEntries.reduce(
+          (sum, e) => sum + payoutBaseCents({
+            amountCents: e.amountCents || 0,
+            originalAmountCents: e.originalAmountCents || 0,
+            discountCents: e.discountCents || 0,
+            discountFundedBy: e.discountFundedBy,
+          }), 0
+        );
+        // Customer cash actually held in escrow (post-discount)
+        const escrowCashCents = allEntries.reduce(
           (sum, e) => sum + (e.amountCents || 0), 0
         );
+        // Anna.I-funded discount portion (what the platform subsidises)
+        const platformSubsidyCents = Math.max(0, orderTotalCents - escrowCashCents);
         const totalRefundCents = allEntries.reduce(
           (sum, e) => sum + (e.refundCents || 0), 0
         );
@@ -495,13 +514,19 @@ function VendorTaskDetailContent({
         const totalDiscountCents = allEntries.reduce(
           (sum, e) => sum + (e.discountCents || 0), 0
         );
-        const totalOriginalCents = allEntries.reduce(
-          (sum, e) => sum + (e.originalAmountCents || 0), 0
+        // Remaining order value = effective payout base, derived from the
+        // stored recalculated figures (payout + commission = effective base;
+        // REFUNDED/VOIDED entries contribute nothing).
+        const remainingCents = allEntries.reduce(
+          (sum, e) => sum + (
+            e.state === "REFUNDED" || e.state === "VOIDED"
+              ? 0
+              : (e.vendorPayoutCents || 0) + (e.commissionCents || 0)
+          ), 0
         );
-        const remainingCents = orderTotalCents - totalRefundCents;
         const hasRefund = totalRefundCents > 0;
         const hasMultipleEntries = allEntries.length > 1;
-        const hasDiscount = totalDiscountCents > 0 && totalOriginalCents > 0;
+        const hasDiscount = platformSubsidyCents > 0;
         // When the escrow has been released (household verified & released the
         // final agreed amount), the vendor has been paid — switch the bottom
         // row from "Remaining Payable" to "PAID" showing the actual payout.
@@ -540,11 +565,11 @@ function VendorTaskDetailContent({
                 </Badge>
               </div>
 
-              {/* Order total (only when there are multiple escrow entries) */}
+              {/* Order total (job value — what commission/payout are based on) */}
               {hasMultipleEntries && (
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-[var(--anna-muted)] font-medium">
-                    Order Total (incl. add-ons)
+                    Order Total (job value, incl. add-ons)
                   </span>
                   <span className="text-sm font-bold text-[var(--anna-slate)] font-data">
                     {formatSgd(orderTotalCents)}
@@ -552,31 +577,32 @@ function VendorTaskDetailContent({
                 </div>
               )}
 
-              {/* Discount breakdown (when a promo/voucher was applied) */}
+              {/* Platform-funded discount context (informational — never reduces the payout) */}
               {hasDiscount && (
                 <div className="mb-1 space-y-0.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[var(--anna-muted)]">Original Amount</span>
-                    <span className="text-[10px] font-data text-[var(--anna-muted)] line-through">
-                      {formatSgd(totalOriginalCents)}
+                    <span className="text-[10px] text-emerald-600">
+                      Promo / credit discount (funded by Anna.I)
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-emerald-600">Promo Discount</span>
                     <span className="text-[10px] font-data text-emerald-600">
                       −{formatSgd(totalDiscountCents)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[var(--anna-slate-light)] font-medium">Held Amount</span>
-                    <span className="text-[10px] font-data text-[var(--anna-slate-light)] font-medium">
-                      {formatSgd(orderTotalCents)}
+                    <span className="text-[10px] text-[var(--anna-muted)]">
+                      Customer paid (held in escrow)
+                    </span>
+                    <span className="text-[10px] font-data text-[var(--anna-muted)]">
+                      {formatSgd(escrowCashCents)}
                     </span>
                   </div>
+                  <p className="text-[9px] text-[var(--anna-muted)] leading-tight">
+                    Covered by Anna.I — does not affect your payout below.
+                  </p>
                 </div>
               )}
 
-              {/* Commission + Payout breakdown */}
+              {/* Commission + Payout breakdown (on the full job value) */}
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-[var(--anna-muted)]">Platform Commission (10%)</span>
@@ -641,19 +667,22 @@ function VendorTaskDetailContent({
       })()}
 
       {/* Amount — with approved addon breakdown */}
+      {/* The VENDOR's primary figure is the full job value (what payout is
+          computed on). The post-discount customer-paid amount is secondary,
+          clearly labeled — platform-funded discounts never reduce earnings. */}
       <div className="bg-[var(--anna-sage-light)] rounded-2xl p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[var(--anna-slate-light)]">Job Amount</span>
+          <span className="text-sm text-[var(--anna-slate-light)]">Job Value</span>
           <div className="text-right">
+            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
+              {formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}
+            </span>
             {(b.discountCents || 0) > 0 && (
-              <div className="text-[10px] text-[var(--anna-muted)] mb-0.5">
-                <span className="line-through">{formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}</span>
-                <span className="text-emerald-600 ml-1">−{formatSgd(b.discountCents)}</span>
+              <div className="text-[10px] text-[var(--anna-muted)] mt-0.5">
+                Customer paid {formatSgd((b.finalAmountCents || b.amountCents) + (b.approvedAddonsTotal || 0))}
+                <span className="text-emerald-600 ml-1">(−{formatSgd(b.discountCents)} funded by Anna.I)</span>
               </div>
             )}
-            <span className="font-data text-xl font-bold text-[var(--anna-slate)]">
-              {formatSgd((b.finalAmountCents || b.amountCents) + (b.approvedAddonsTotal || 0))}
-            </span>
           </div>
         </div>
         {(b.approvedAddonsTotal || 0) > 0 && (
@@ -663,7 +692,7 @@ function VendorTaskDetailContent({
             </p>
             <div className="flex items-center justify-between text-xs">
               <span className="text-[var(--anna-slate-light)]">Original service</span>
-              <span className="font-data font-medium">{formatSgd(b.finalAmountCents || b.amountCents)}</span>
+              <span className="font-data font-medium">{formatSgd(b.amountCents)}</span>
             </div>
             {(b.addons || [])
               .filter((a) => a.status === "approved")
@@ -676,7 +705,7 @@ function VendorTaskDetailContent({
             <div className="border-t border-[var(--anna-border)]/40 pt-1.5 flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--anna-slate)]">Total</span>
               <span className="font-data text-sm font-bold text-[var(--anna-sage-dark)]">
-                {formatSgd((b.finalAmountCents || b.amountCents) + (b.approvedAddonsTotal || 0))}
+                {formatSgd(b.amountCents + (b.approvedAddonsTotal || 0))}
               </span>
             </div>
           </div>

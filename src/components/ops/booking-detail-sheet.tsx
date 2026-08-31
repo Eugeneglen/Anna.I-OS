@@ -198,15 +198,38 @@ export function BookingDetailSheet({
   const vendor = booking?.vendor as Record<string, unknown> | undefined;
   const allEscrowEntries = (task?.escrowEntries as Record<string, unknown>[]) || [];
   const escrow = allEscrowEntries[0];
-  // Order Total = sum of ALL escrow entries (base + add-ons)
+  // Order Total = sum of ALL escrow entries (base + add-ons) — CUSTOMER CASH
+  // (post-discount). Used for the escrow-action dialogs (refund caps are
+  // cash-based) and the "held in escrow" display.
   const orderTotalCents = allEscrowEntries.reduce(
     (sum, e) => sum + (e.amountCents as number || 0), 0
   ) || (escrow?.amountCents as number || 0);
+  // Job value = sum of PAYOUT BASES (full pre-discount value incl. add-ons).
+  // Commission + vendor payout are computed on this base — platform-funded
+  // discounts (promo codes / refund credits, absorbed by Anna.I) never
+  // reduce it. Mirrors the vendor + household portal figures.
+  const jobValueCents = allEscrowEntries.reduce(
+    (sum, e) => sum + (
+      ((e.discountCents as number) || 0) > 0 &&
+      ((e.originalAmountCents as number) || 0) > 0 &&
+      (e.discountFundedBy as string) !== "VENDOR"
+        ? (e.originalAmountCents as number)
+        : (e.amountCents as number || 0)
+    ), 0
+  ) || orderTotalCents;
   // Total refunded = sum of ALL escrow entries' cumulative refundCents
   const totalRefundCents = allEscrowEntries.reduce(
     (sum, e) => sum + ((e.refundCents as number) || 0), 0
   );
-  const remainingPayableCents = orderTotalCents - totalRefundCents;
+  // Remaining payable = effective payout base from the stored recalculated
+  // figures (payout + commission per entry); REFUNDED/VOIDED contribute 0.
+  const remainingPayableCents = allEscrowEntries.reduce(
+    (sum, e) => sum + (
+      e.state === "REFUNDED" || e.state === "VOIDED"
+        ? 0
+        : ((e.vendorPayoutCents as number) || 0) + ((e.commissionCents as number) || 0)
+    ), 0
+  );
   const hasRefund = totalRefundCents > 0;
   const taskStatus = task?.status as string;
   const escrowState = escrow?.state as string;
@@ -794,10 +817,10 @@ export function BookingDetailSheet({
                         {allEscrowEntries.length > 1 && (
                           <div className="flex items-center justify-between pb-1">
                             <span className="text-xs text-[var(--anna-muted)] font-medium">
-                              Order Total (incl. add-ons)
+                              Order Total (job value, incl. add-ons)
                             </span>
                             <span className="text-sm font-bold text-[var(--anna-slate)] font-data">
-                              {formatSgd(orderTotalCents)}
+                              {formatSgd(jobValueCents)}
                             </span>
                           </div>
                         )}
@@ -811,17 +834,26 @@ export function BookingDetailSheet({
                               </span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-emerald-600">Promo Discount</span>
+                              <span className="text-[10px] text-emerald-600">Promo Discount (funded by Anna.I)</span>
                               <span className="text-[10px] font-data text-emerald-600">
                                 −{formatSgd(totalDiscountCents)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-[var(--anna-slate-light)] font-medium">Held Amount</span>
+                              <span className="text-[10px] text-[var(--anna-slate-light)] font-medium">Job Value (payout base)</span>
                               <span className="text-[10px] font-data text-[var(--anna-slate-light)] font-medium">
+                                {formatSgd(jobValueCents)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-[var(--anna-muted)]">Held in escrow (customer paid)</span>
+                              <span className="text-[10px] font-data text-[var(--anna-muted)]">
                                 {formatSgd(orderTotalCents)}
                               </span>
                             </div>
+                            <p className="text-[9px] text-[var(--anna-muted)] leading-tight">
+                              Discount funded by Anna.I — vendor payout is unaffected.
+                            </p>
                           </div>
                         )}
                         <div className="flex items-center justify-between">

@@ -44,7 +44,8 @@ export interface ProcessRefundResult {
   refundId: string;
   refundedCents: number;
   cumulativeRefundCents: number;
-  effectiveAmountCents: number;
+  effectiveAmountCents: number; // effective PAYOUT BASE (job value remaining)
+  remainingCashCents: number;   // customer cash still held after refunds
   newCommissionCents: number;
   newVendorPayoutCents: number;
   escrowState: EscrowState;
@@ -108,6 +109,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       refundedCents: existing.amountCents,
       cumulativeRefundCents: escrow.refundCents,
       effectiveAmountCents: escrow.amountCents - escrow.refundCents,
+      remainingCashCents: Math.max(0, escrow.amountCents - escrow.refundCents),
       newCommissionCents: escrow.commissionCents,
       newVendorPayoutCents: escrow.vendorPayoutCents,
       escrowState: escrow.state,
@@ -163,6 +165,11 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       // Calculate the refund impact using the FRESH refundCents from the locked read.
       // This is the concurrency-safe calculation: if another transaction committed
       // a refund between our idempotency check and this read, we see the updated value.
+      //
+      // Payout-base context (platform-funded discount): commission/payout recalc
+      // on the pre-discount value — a vendor-fault refund reduces the vendor's
+      // earnings on the FULL job value, and exhausting the customer cash zeroes
+      // them (the consumed discount reverses to the household via voucher restore).
       let calc: RefundCalcResult;
       try {
         calc = calculateRefundImpact({
@@ -170,6 +177,9 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           existingRefundCents: escrow.refundCents,
           refundAmountCents: input.refundAmountCents,
           commissionRate: escrow.commissionRate,
+          originalAmountCents: escrow.originalAmountCents || undefined,
+          discountCents: escrow.discountCents || 0,
+          discountFundedBy: escrow.discountFundedBy,
         });
       } catch (e) {
         throw new RefundError((e as Error).message, 400, "REFUND_CALC_FAILED");
@@ -279,6 +289,11 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
             cumulativeRefund: calc.newRefundCents,
             originalAmount: escrow.amountCents,
             effectiveAmount: calc.effectiveAmountCents,
+            remainingCashCents: calc.remainingCashCents,
+            // Payout-base context (platform-funded discount bookkeeping)
+            payoutBaseCents: escrow.originalAmountCents || escrow.amountCents,
+            discountCents: escrow.discountCents || 0,
+            discountFundedBy: escrow.discountFundedBy,
             newCommission: calc.newCommissionCents,
             newPayout: calc.newVendorPayoutCents,
             isFullyRefunded: calc.isFullyRefunded,
@@ -303,6 +318,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       refundedCents: input.refundAmountCents,
       cumulativeRefundCents: result.calc.newRefundCents,
       effectiveAmountCents: result.calc.effectiveAmountCents,
+      remainingCashCents: result.calc.remainingCashCents,
       newCommissionCents: result.calc.newCommissionCents,
       newVendorPayoutCents: result.calc.newVendorPayoutCents,
       escrowState: result.updatedEscrow.state,
@@ -344,6 +360,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           refundedCents: existing.amountCents,
           cumulativeRefundCents: e.refundCents,
           effectiveAmountCents: e.amountCents - e.refundCents,
+          remainingCashCents: Math.max(0, e.amountCents - e.refundCents),
           newCommissionCents: e.commissionCents,
           newVendorPayoutCents: e.vendorPayoutCents,
           escrowState: e.state,

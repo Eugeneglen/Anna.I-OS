@@ -106,13 +106,50 @@ export async function PATCH(
         // double-notify (B15). Zero entries claimed → someone else won.
         const allHeldEntries = await tx.escrowLedger.findMany({
           where: { taskId: task.id, state: EscrowState.HELD },
-          select: { id: true, amountCents: true, vendorPayoutCents: true, discountCents: true, originalAmountCents: true },
+          select: {
+            id: true, amountCents: true, vendorPayoutCents: true,
+            discountCents: true, originalAmountCents: true,
+            commissionRate: true, refundCents: true, discountFundedBy: true,
+            commissionCents: true,
+          },
         });
         let claimedCount = 0;
+        // ── Payout-base heal (platform-funded discounts) ──
+        // Entries created before the payout-base business rule carry
+        // commission/payout computed on the post-discount cash. They haven't
+        // been paid yet (still HELD), so recompute them on the payout base
+        // at release — honoring the rule immediately without a data
+        // migration. No-op for entries already on the new math (identical
+        // values), and never applied to non-discounted entries.
+        let subsidyDrawnCents = 0;
+        let payoutBaseTotalCents = 0;
+        let payoutTotalCents = 0;
+        let commissionTotalCents = 0;
         for (const entry of allHeldEntries) {
+          const platformFunded =
+            (entry.discountCents || 0) > 0 &&
+            (entry.originalAmountCents || 0) > 0 &&
+            entry.discountFundedBy !== "VENDOR";
+          const payoutBase = platformFunded
+            ? (entry.originalAmountCents as number)
+            : entry.amountCents;
+          let commissionCents = entry.commissionCents;
+          let vendorPayoutCents = entry.vendorPayoutCents;
+          if (platformFunded) {
+            const effectiveBase = Math.max(0, payoutBase - (entry.refundCents || 0));
+            commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100);
+            vendorPayoutCents = effectiveBase - commissionCents;
+          }
+          subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents);
+          payoutBaseTotalCents += payoutBase;
+          payoutTotalCents += vendorPayoutCents;
+          commissionTotalCents += commissionCents;
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
-            data: { state: EscrowState.RELEASED, releasedAt: now },
+            data: {
+              state: EscrowState.RELEASED, releasedAt: now,
+              ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
+            },
           });
           claimedCount += claimed.count;
         }
@@ -144,9 +181,41 @@ export async function PATCH(
               discountCents: totalDiscountCents,
               entriesReleased: allHeldEntries.length,
               resolution: resolution || "Released by ops",
+              // Payout-base context (platform-funded discount bookkeeping)
+              payoutBaseCents: payoutBaseTotalCents,
+              vendorPayoutTotalCents: payoutTotalCents,
+              commissionTotalCents,
+              platformSubsidyDrawnCents: subsidyDrawnCents,
             },
           },
         });
+
+        // ── PLATFORM_SUBSIDY_DRAWN: first-class ledger event ──
+        // Every release that pays a vendor more than the escrow held (the
+        // platform-funded discount portion) must be auditable, otherwise
+        // the ledger reconciliation Σ releases ≠ Σ held breaks with no
+        // explanation. Only written when a subsidy was actually drawn.
+        if (subsidyDrawnCents > 0) {
+          await tx.auditLog.create({
+            data: {
+              userId: session.userId,
+              userName: session.name,
+              action: "PLATFORM_SUBSIDY_DRAWN",
+              entityType: "EscrowLedger",
+              entityId: id,
+              metadata: {
+                taskId: task.id,
+                entryIds: allHeldEntries.map((e) => e.id),
+                platformSubsidyDrawnCents: subsidyDrawnCents,
+                escrowCashReleasedCents: totalAmountCents,
+                payoutBaseCents: payoutBaseTotalCents,
+                vendorPayoutTotalCents: payoutTotalCents,
+                commissionTotalCents,
+                reason: "Platform-funded discount paid out at release (vendor paid on full job value)",
+              },
+            },
+          });
+        }
 
         // Notify household members
         const members = await tx.familyMember.findMany({
@@ -501,7 +570,9 @@ export async function PATCH(
               title: refundResult.isFullyRefunded ? "Refund Issued as Credit" : "Partial Refund Issued as Credit",
               body: refundResult.isFullyRefunded
                 ? `Your dispute on the ${task.category.toLowerCase()} task has been upheld. SGD $${(refundResult.cumulativeRefundCents / 100).toFixed(2)} has been refunded as Anna.I credit${creditCode ? ` (code ${creditCode})` : ""}.`
-                : `A partial refund of SGD $${(refundResult.refundedCents / 100).toFixed(2)} has been credited to your wallet${creditCode ? ` (code ${creditCode})` : ""} for your ${task.category.toLowerCase()} task. Remaining payable: SGD $${(refundResult.effectiveAmountCents / 100).toFixed(2)}.`,
+                // remainingCashCents = the household's remaining stake in escrow
+                // (NOT the effective payout base, which is the vendor-side view)
+                : `A partial refund of SGD $${(refundResult.refundedCents / 100).toFixed(2)} has been credited to your wallet${creditCode ? ` (code ${creditCode})` : ""} for your ${task.category.toLowerCase()} task. Remaining payable: SGD $${(refundResult.remainingCashCents / 100).toFixed(2)}.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
@@ -660,13 +731,46 @@ export async function PATCH(
         // the current credit-only path, but defensively), the task must end
         // DISPUTE_CLOSED, not ESCROW_RELEASED (inconsistent terminal state:
         // "released" task with vendor paid 0).
+        //
+        // Payout-base heal (same rule as the release action): platform-
+        // discounted entries are recomputed on the full pre-discount value
+        // so the vendor is paid in full. No-op for entries already on the
+        // new math; non-discounted entries are never touched.
         await db.$transaction(async (tx) => {
           const disputedEntries = await tx.escrowLedger.findMany({
             where: { taskId: task.id, state: EscrowState.DISPUTED },
-            select: { id: true },
+            select: {
+              id: true, amountCents: true, discountCents: true,
+              originalAmountCents: true, commissionRate: true,
+              refundCents: true, discountFundedBy: true,
+              commissionCents: true, vendorPayoutCents: true,
+            },
           });
           const now = new Date();
+          let subsidyDrawnCents = 0;
+          let subsidyPayoutTotalCents = 0;
+          const subsidyEntryIds: string[] = [];
           for (const entry of disputedEntries) {
+            const platformFunded =
+              (entry.discountCents || 0) > 0 &&
+              (entry.originalAmountCents || 0) > 0 &&
+              entry.discountFundedBy !== "VENDOR";
+            const payoutBase = platformFunded
+              ? (entry.originalAmountCents as number)
+              : entry.amountCents;
+            let commissionCents = entry.commissionCents;
+            let vendorPayoutCents = entry.vendorPayoutCents;
+            if (platformFunded) {
+              const effectiveBase = Math.max(0, payoutBase - (entry.refundCents || 0));
+              commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100);
+              vendorPayoutCents = effectiveBase - commissionCents;
+            }
+            const draw = Math.max(0, payoutBase - entry.amountCents);
+            if (draw > 0) {
+              subsidyDrawnCents += draw;
+              subsidyPayoutTotalCents += vendorPayoutCents;
+              subsidyEntryIds.push(entry.id);
+            }
             await tx.escrowLedger.updateMany({
               where: { id: entry.id, state: EscrowState.DISPUTED },
               data: {
@@ -674,6 +778,26 @@ export async function PATCH(
                 releasedAt: now,
                 disputeResolvedBy: session.name,
                 disputeResolvedAt: now,
+                ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
+              },
+            });
+          }
+          // PLATFORM_SUBSIDY_DRAWN ledger event (see release action)
+          if (subsidyDrawnCents > 0) {
+            await tx.auditLog.create({
+              data: {
+                userId: session.userId,
+                userName: session.name,
+                action: "PLATFORM_SUBSIDY_DRAWN",
+                entityType: "EscrowLedger",
+                entityId: id,
+                metadata: {
+                  taskId: task.id,
+                  entryIds: subsidyEntryIds,
+                  platformSubsidyDrawnCents: subsidyDrawnCents,
+                  vendorPayoutTotalCents: subsidyPayoutTotalCents,
+                  reason: "Platform-funded discount paid out at dispute resolution (vendor paid on full job value)",
+                },
               },
             });
           }

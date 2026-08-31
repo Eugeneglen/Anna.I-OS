@@ -124,8 +124,18 @@ export async function PATCH(
       const escrowAmountCents = hasDiscount ? task.finalAmountCents : task.amountCents
       const discountCents = task.discountCents || 0
       const originalAmountCents = task.amountCents
-      const commissionCents = Math.round((escrowAmountCents * PLATFORM_COMMISSION_RATE) / 100)
-      const vendorPayoutCents = escrowAmountCents - commissionCents
+      // ── Payout base (business rule): promo codes and refund credits are
+      // funded by Anna.I, NOT by the vendor. Escrow still holds only the
+      // post-discount customer cash, but commission and vendor payout are
+      // computed on the FULL pre-discount job value. The difference
+      // (original − held) is a platform subsidy absorbed by Anna.I at
+      // release and audited as PLATFORM_SUBSIDY_DRAWN. See
+      // src/lib/payments/calculations.ts (payoutBaseCents) — this route
+      // always stamps discountFundedBy: "PLATFORM", so the base is the
+      // pre-discount amount whenever a discount exists. ──
+      const commissionBaseCents = hasDiscount ? originalAmountCents : escrowAmountCents
+      const commissionCents = Math.round((commissionBaseCents * PLATFORM_COMMISSION_RATE) / 100)
+      const vendorPayoutCents = commissionBaseCents - commissionCents
 
       // Hold escrow (this is the ONLY place escrow is created)
       //

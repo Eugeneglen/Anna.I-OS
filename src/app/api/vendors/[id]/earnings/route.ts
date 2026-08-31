@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { EscrowState } from "@prisma/client"
 import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
+import { payoutBaseCents } from "@/lib/payments/calculations"
 
 export async function GET(
   _request: Request,
@@ -64,9 +65,12 @@ export async function GET(
       0
     )
 
+    // ── Total order value: sum of PAYOUT BASES (full pre-discount job value)
+    // across all entries. Platform-funded discounts don't reduce the value of
+    // jobs this vendor served, so the "order value" the vendor sees is the
+    // full job value their payout is computed on — not the discounted cash.
     const totalOrderValue = allEntries.reduce(
-      (sum, e) => sum + e.amountCents,
-      0
+      (sum, e) => sum + payoutBaseCents(e), 0
     )
 
     const totalCommission = allEntries
@@ -170,8 +174,17 @@ export async function GET(
         .reduce((sum, e) => sum + e.vendorPayoutCents, 0)
       const refunded = b.escrowEntries
         .reduce((sum, e) => sum + (e.refundCents || 0), 0)
+      // Order total = payout base (full job value incl. add-ons)
       const orderTotal = b.escrowEntries
-        .reduce((sum, e) => sum + e.amountCents, 0)
+        .reduce((sum, e) => sum + payoutBaseCents(e), 0)
+      // Remaining = effective payout base from the stored recalculated
+      // figures (payout + commission); REFUNDED/VOIDED entries contribute 0.
+      const remaining = b.escrowEntries
+        .reduce((sum, e) => sum + (
+          e.state === EscrowState.REFUNDED || e.state === EscrowState.VOIDED
+            ? 0
+            : e.vendorPayoutCents + e.commissionCents
+        ), 0)
 
       const payout = released || held || disputed || 0
       const payoutState = released > 0 ? "released" : held > 0 ? "held" : disputed > 0 ? "disputed" : "none"
@@ -187,7 +200,7 @@ export async function GET(
         payoutState,
         orderTotalCents: orderTotal,
         refundedCents: refunded,
-        remainingCents: orderTotal - refunded,
+        remainingCents: remaining,
       }
     })
 

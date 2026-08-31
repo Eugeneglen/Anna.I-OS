@@ -18,6 +18,46 @@ src/lib/payments/
 └── README.md         ← this file
 ```
 
+## Payout Base & Platform-Funded Discounts
+
+**Business rule**: promo codes and refund credits are funded by Anna.I, not
+by the vendor. Vendors are always paid on the **full job value** less the
+standard commission — never on the discounted cash the customer paid.
+
+Two distinct amounts live on every `EscrowLedger` row:
+
+| Field | Meaning |
+|---|---|
+| `amountCents` | customer cash actually held (post-discount) |
+| `originalAmountCents` | full pre-discount job value — the **payout base** when the discount is platform-funded |
+
+The payout base (see `payoutBaseCents()` in `calculations.ts`) equals
+`originalAmountCents` when a platform-funded discount exists, and
+`amountCents` otherwise. Commission and vendor payout are computed on the
+payout base; the difference between the two amounts is a **platform subsidy**
+absorbed by Anna.I. Example — $120 job, $50 refund credit applied:
+
+- Escrow holds: **$70** (customer cash)
+- Payout base: **$120** → commission **$12** (10%) → vendor payout **$108**
+- Platform subsidy drawn at release: **$50** (Anna.I absorbs)
+
+Funding invariant per entry:
+`commission + payout + refundCents + reversed discount (when applied) = payoutBase`.
+
+**Refunds** return customer cash only (capped at `amountCents`) and convert
+to refund credit per policy R3. On a platform-discounted entry, exhausting
+the customer cash also reverses the consumed discount (the household's
+voucher is restored on the full-refund/cancel paths), which zeroes the
+payout — a fully refunded job pays the vendor nothing and makes the
+household whole.
+
+**Release bookkeeping**: every release pays out the base-derived figures and
+records a `PLATFORM_SUBSIDY_DRAWN` audit event whenever a subsidy was drawn,
+so the ledger stays reconcilable: Σ released payouts = Σ escrow cash
+released + Σ platform subsidy drawn. (Historical rows settled under the old
+math are never restated; HELD entries created before the rule are healed to
+the payout base at release time.)
+
 ## Current State (MVP)
 
 - **NoOpPaymentService** is the active implementation.

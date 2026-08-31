@@ -43,7 +43,10 @@ export async function PATCH(
     // Validate task exists
     const task = await db.task.findUnique({
       where: { id },
-      include: { escrowEntries: true },
+      include: {
+        escrowEntries: true,
+        household: { select: { name: true } },
+      },
     })
 
     if (!task) {
@@ -87,12 +90,47 @@ export async function PATCH(
         // F19 (B15): guarded on state=HELD per entry — a concurrent release
         // or dispute can't double-transition/double-notify. Zero claims →
         // a concurrent action won; abort with nothing written.
+        //
+        // Payout-base rule (platform-funded discounts): commission/payout
+        // are recomputed on the pre-discount job value at release. No-op for
+        // entries already on the new math (created after the rule) and never
+        // applied to non-discounted entries. The discount portion is drawn
+        // from the platform's own funds and audited as PLATFORM_SUBSIDY_DRAWN
+        // so the ledger stays reconcilable (Σ released payouts ≤ Σ held cash
+        // + Σ subsidy drawn).
         const updatedEscrows: { id: string; vendorPayoutCents: number; state: EscrowState }[] = []
         let releasedCount = 0
+        let subsidyDrawnCents = 0
+        let payoutBaseTotalCents = 0
+        let payoutTotalCents = 0
+        let commissionTotalCents = 0
+        let escrowCashTotalCents = 0
         for (const entry of heldEntries) {
+          const platformFunded =
+            (entry.discountCents || 0) > 0 &&
+            (entry.originalAmountCents || 0) > 0 &&
+            entry.discountFundedBy !== "VENDOR"
+          const payoutBase = platformFunded
+            ? (entry.originalAmountCents as number)
+            : entry.amountCents
+          let commissionCents = entry.commissionCents
+          let vendorPayoutCents = entry.vendorPayoutCents
+          if (platformFunded) {
+            const effectiveBase = Math.max(0, payoutBase - (entry.refundCents || 0))
+            commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100)
+            vendorPayoutCents = effectiveBase - commissionCents
+          }
+          subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents)
+          payoutBaseTotalCents += payoutBase
+          payoutTotalCents += vendorPayoutCents
+          commissionTotalCents += commissionCents
+          escrowCashTotalCents += entry.amountCents
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
-            data: { state: EscrowState.RELEASED, releasedAt: now },
+            data: {
+              state: EscrowState.RELEASED, releasedAt: now,
+              ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
+            },
           })
           releasedCount += claimed.count
           if (claimed.count > 0) {
@@ -113,6 +151,33 @@ export async function PATCH(
           where: { id },
           data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
         })
+
+        // PLATFORM_SUBSIDY_DRAWN ledger event — written only when the
+        // release paid out more than the escrow held (platform-funded
+        // discount). Keeps Σ released payouts reconcilable against Σ held
+        // cash + Σ subsidy. (userId is an OpsUser FK — null for household
+        // actors; the human label lives in userName.)
+        if (subsidyDrawnCents > 0) {
+          await tx.auditLog.create({
+            data: {
+              userId: null,
+              userName: `${task.household?.name ?? "household"} (household)`,
+              action: "PLATFORM_SUBSIDY_DRAWN",
+              entityType: "EscrowLedger",
+              entityId: escrow.id,
+              metadata: {
+                taskId: task.id,
+                entryIds: heldEntries.map((e) => e.id),
+                platformSubsidyDrawnCents: subsidyDrawnCents,
+                escrowCashReleasedCents: escrowCashTotalCents,
+                payoutBaseCents: payoutBaseTotalCents,
+                vendorPayoutTotalCents: payoutTotalCents,
+                commissionTotalCents,
+                reason: "Platform-funded discount paid out at household release (vendor paid on full job value)",
+              },
+            },
+          })
+        }
 
         // H-5 FIX: Create ESCROW_RELEASED notification for ALL members
         const members = await tx.familyMember.findMany({

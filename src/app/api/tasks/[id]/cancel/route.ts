@@ -143,9 +143,17 @@ export async function POST(
         // (commission/payout recomputed to 0 — vendor gets nothing, policy
         // §2 row 1). Guarded per-entry on state=HELD so a concurrent
         // release/dispute on the same entry can't double-transition.
+        //
+        // Payout-base context: for platform-discounted entries the refund
+        // (customer cash) + the restored voucher (step 2) together zero the
+        // vendor's payout — calculateRefundImpact applies the reversal
+        // automatically once the customer cash is exhausted.
         const heldEntries = await tx.escrowLedger.findMany({
           where: { taskId: task.id, state: EscrowState.HELD },
-          select: { id: true, amountCents: true, refundCents: true, commissionRate: true },
+          select: {
+            id: true, amountCents: true, refundCents: true, commissionRate: true,
+            originalAmountCents: true, discountCents: true, discountFundedBy: true,
+          },
         });
         const refunded: { id: string; amountCents: number }[] = [];
         for (const entry of heldEntries) {
@@ -156,6 +164,9 @@ export async function POST(
             existingRefundCents: entry.refundCents,
             refundAmountCents: remaining,
             commissionRate: entry.commissionRate,
+            originalAmountCents: entry.originalAmountCents || undefined,
+            discountCents: entry.discountCents || 0,
+            discountFundedBy: entry.discountFundedBy,
           });
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
