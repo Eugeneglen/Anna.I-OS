@@ -6,6 +6,7 @@ import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, No
 import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
 import { processRefund, RefundError } from "@/lib/payments/refund-service";
 import { issueCompensationVoucher } from "@/lib/marketing/service-recovery";
+import { isPlatformFundedDiscount, payoutBaseCents } from "@/lib/payments/calculations";
 
 const escrowActionSchema = z.object({
   action: z.enum(["release", "resolve_dismiss", "resolve_refund", "partial_refund", "resolve_voucher"]),
@@ -125,14 +126,17 @@ export async function PATCH(
         let payoutBaseTotalCents = 0;
         let payoutTotalCents = 0;
         let commissionTotalCents = 0;
+        // f3-family (police-payout-base-1): audit totals track CLAIMED
+        // entries only — a partial claim (concurrent winner on an entry)
+        // must not inflate the subsidy bookkeeping.
+        let escrowCashTotalCents = 0;
+        let discountTotalCents = 0;
+        let originalTotalCents = 0;
+        const claimedEntryIds: string[] = [];
         for (const entry of allHeldEntries) {
-          const platformFunded =
-            (entry.discountCents || 0) > 0 &&
-            (entry.originalAmountCents || 0) > 0 &&
-            entry.discountFundedBy !== "VENDOR";
-          const payoutBase = platformFunded
-            ? (entry.originalAmountCents as number)
-            : entry.amountCents;
+          // Shared predicate (was hand-inlined — police INFO).
+          const platformFunded = isPlatformFundedDiscount(entry);
+          const payoutBase = payoutBaseCents(entry);
           let commissionCents = entry.commissionCents;
           let vendorPayoutCents = entry.vendorPayoutCents;
           if (platformFunded) {
@@ -140,10 +144,6 @@ export async function PATCH(
             commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100);
             vendorPayoutCents = effectiveBase - commissionCents;
           }
-          subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents);
-          payoutBaseTotalCents += payoutBase;
-          payoutTotalCents += vendorPayoutCents;
-          commissionTotalCents += commissionCents;
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
             data: {
@@ -151,7 +151,17 @@ export async function PATCH(
               ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
             },
           });
-          claimedCount += claimed.count;
+          if (claimed.count > 0) {
+            claimedCount += claimed.count;
+            claimedEntryIds.push(entry.id);
+            subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents);
+            payoutBaseTotalCents += payoutBase;
+            payoutTotalCents += vendorPayoutCents;
+            commissionTotalCents += commissionCents;
+            escrowCashTotalCents += entry.amountCents;
+            discountTotalCents += entry.discountCents || 0;
+            originalTotalCents += entry.originalAmountCents || 0;
+          }
         }
         if (claimedCount === 0) {
           throw new Error("ESCROW_ALREADY_RESOLVED");
@@ -163,10 +173,7 @@ export async function PATCH(
           data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
         });
 
-        // Create audit log
-        const totalAmountCents = allHeldEntries.reduce((s, e) => s + e.amountCents, 0);
-        const totalDiscountCents = allHeldEntries.reduce((s, e) => s + (e.discountCents || 0), 0);
-        const totalOriginalCents = allHeldEntries.reduce((s, e) => s + (e.originalAmountCents || 0), 0);
+        // Create audit log (figures = claimed entries only)
         await tx.auditLog.create({
           data: {
             userId: session.userId,
@@ -176,10 +183,10 @@ export async function PATCH(
             entityId: id,
             metadata: {
               taskId: task.id,
-              amountCents: totalAmountCents,
-              originalAmountCents: totalOriginalCents,
-              discountCents: totalDiscountCents,
-              entriesReleased: allHeldEntries.length,
+              amountCents: escrowCashTotalCents,
+              originalAmountCents: originalTotalCents,
+              discountCents: discountTotalCents,
+              entriesReleased: claimedCount,
               resolution: resolution || "Released by ops",
               // Payout-base context (platform-funded discount bookkeeping)
               payoutBaseCents: payoutBaseTotalCents,
@@ -205,9 +212,9 @@ export async function PATCH(
               entityId: id,
               metadata: {
                 taskId: task.id,
-                entryIds: allHeldEntries.map((e) => e.id),
+                entryIds: claimedEntryIds,
                 platformSubsidyDrawnCents: subsidyDrawnCents,
-                escrowCashReleasedCents: totalAmountCents,
+                escrowCashReleasedCents: escrowCashTotalCents,
                 payoutBaseCents: payoutBaseTotalCents,
                 vendorPayoutTotalCents: payoutTotalCents,
                 commissionTotalCents,
@@ -232,7 +239,11 @@ export async function PATCH(
               channel: NotificationChannel.WHATSAPP,
               eventType: NotificationEventType.ESCROW_RELEASED,
               title: "Payment Released",
-              body: `Payment of SGD $${(escrow.vendorPayoutCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
+              // f5 (police-payout-base-1): POST-heal total payout across the
+              // released entries (the pre-tx escrow row carries the stale,
+              // lower old-math figure on healed rows) — same semantics as the
+              // household release route's notification.
+              body: `Payment of SGD $${(payoutTotalCents / 100).toFixed(2)} has been released to the vendor for your ${task.category.toLowerCase()} task.`,
               status: NotificationStatus.PENDING,
               referenceType: "task",
               referenceId: task.id,
@@ -244,6 +255,7 @@ export async function PATCH(
       });
 
       // Fire-and-forget: push real-time event to household
+      // f5 (police-payout-base-1): emit the POST-heal payout for this entry.
       emitEscrowStateChanged({
         id,
         state: "RELEASED",
@@ -252,7 +264,7 @@ export async function PATCH(
         category: task.category,
         householdId: task.householdId,
         householdName: task.household?.name,
-        vendorPayoutCents: escrow.vendorPayoutCents,
+        vendorPayoutCents: result.updatedEscrow?.vendorPayoutCents ?? escrow.vendorPayoutCents,
       }).catch(() => {});
 
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow });
@@ -401,8 +413,158 @@ export async function PATCH(
       // A server-generated idempotency key makes this call idempotent per
       // escrow+timestamp (but the old "Refund" button is a one-shot action —
       // retrying it after success is blocked by the state guard above).
+      const fullRemainingCents = escrow.amountCents - escrow.refundCents;
+
+      // ── f6a (police-payout-base-1): zero-cash entries ──
+      // A 100% platform-funded discount holds amountCents = 0, so the "full
+      // remaining refund" is 0 — processRefund rejects amounts ≤ 0, which
+      // dead-ended resolve_refund on these disputes (400 INVALID_AMOUNT).
+      // Terminalize directly instead: full-refund semantics with no cash
+      // movement (commission/payout → 0, vendor paid nothing, no Refund row
+      // and no refund credit — the household paid no cash). The consumed
+      // promo voucher is restored below, exactly like the normal full-refund
+      // path, so the household is made whole.
+      if (fullRemainingCents <= 0) {
+        const zeroCash = await db.$transaction(async (tx) => {
+          const claimed = await tx.escrowLedger.updateMany({
+            where: { id, state: EscrowState.DISPUTED },
+            data: {
+              state: EscrowState.REFUNDED,
+              refundedAt: now,
+              commissionCents: 0,
+              vendorPayoutCents: 0,
+              disputeResolution: resolution || "Dispute upheld — full refund (no cash held)",
+              disputeResolvedBy: session.name,
+              disputeResolvedAt: now,
+            },
+          });
+          if (claimed.count === 0) {
+            throw new Error("ESCROW_ALREADY_RESOLVED");
+          }
+
+          // Close the task only when every OTHER entry is also resolved
+          // (same rule as processRefund's add-on handling).
+          const unresolved = await tx.escrowLedger.findMany({
+            where: { taskId: task.id, state: EscrowState.DISPUTED, id: { not: id } },
+            select: { id: true },
+          });
+          let taskClosed = false;
+          if (unresolved.length === 0) {
+            await tx.task.update({
+              where: { id: task.id },
+              data: { status: TaskStatus.DISPUTE_CLOSED },
+            });
+            taskClosed = true;
+            // Unpause autonomy (household shouldn't be penalised)
+            await tx.householdCategoryAutonomy.updateMany({
+              where: {
+                householdId: task.householdId,
+                category: task.category,
+                promotionPaused: true,
+              },
+              data: { promotionPaused: false },
+            });
+          }
+
+          await tx.auditLog.create({
+            data: {
+              userId: session.userId,
+              userName: session.name,
+              action: "DISPUTE_REFUNDED",
+              entityType: "EscrowLedger",
+              entityId: id,
+              metadata: {
+                taskId: task.id,
+                refundId: null,
+                zeroCashEntry: true,
+                amountCents: escrow.amountCents,
+                payoutBaseCents: escrow.originalAmountCents || escrow.amountCents,
+                commissionZeroedCents: escrow.commissionCents,
+                payoutZeroedCents: escrow.vendorPayoutCents,
+                taskClosed,
+                resolution: resolution || "Dispute upheld — full refund (no cash held)",
+              },
+            },
+          });
+
+          return { taskClosed };
+        });
+
+        // Notify household members (no credit — no cash was ever held)
+        const members = await db.familyMember.findMany({
+          where: { householdId: task.householdId },
+          select: { id: true },
+        });
+        for (const member of members) {
+          await db.notification.create({
+            data: {
+              householdId: task.householdId,
+              recipientType: RecipientType.HOUSEHOLD_MEMBER,
+              memberId: member.id,
+              channel: NotificationChannel.WHATSAPP,
+              eventType: NotificationEventType.DISPUTE_RESOLVED,
+              title: "Refund Issued",
+              body: `Your dispute on the ${task.category.toLowerCase()} task has been upheld. No cash payment was held for this booking${task.discountCodeId ? " — your original promo voucher has been restored" : ""}.`,
+              status: NotificationStatus.PENDING,
+              referenceType: "task",
+              referenceId: task.id,
+            },
+          }).catch(() => {});
+        }
+
+        emitDisputeResolved({
+          taskId: task.id,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          category: task.category,
+          resolution: "refunded",
+          escrowAmountCents: escrow.amountCents,
+        }).catch(() => {});
+        emitEscrowStateChanged({
+          id,
+          state: "REFUNDED",
+          previousState: "DISPUTED",
+          amountCents: escrow.amountCents,
+          category: task.category,
+          householdId: task.householdId,
+          householdName: task.household?.name,
+          disputeResolution: resolution || "Dispute upheld — refund issued",
+        }).catch(() => {});
+
+        // Restore the consumed promo voucher (same as the normal full-refund
+        // path — non-fatal; ops can restore manually on failure)
+        if (task.discountCodeId) {
+          try {
+            const { restoreVoucherOnCancellation } = await import("@/lib/marketing/voucher-engine");
+            await restoreVoucherOnCancellation(task.id);
+          } catch (restoreError) {
+            console.error("[escrow resolve_refund zero-cash] Failed to restore voucher:", restoreError);
+          }
+        }
+
+        return NextResponse.json({
+          refund: {
+            refundId: null, // no Refund row — no cash was moved
+            refundedCents: 0,
+            cumulativeRefundCents: escrow.refundCents,
+            effectiveAmountCents: 0,
+            remainingCashCents: 0,
+            newCommissionCents: 0,
+            newVendorPayoutCents: 0,
+            escrowState: EscrowState.REFUNDED,
+            taskStatus: zeroCash.taskClosed ? TaskStatus.DISPUTE_CLOSED : TaskStatus.DISPUTED,
+            paymentProviderRefundId: "",
+            paymentStatus: "succeeded",
+            isFullyRefunded: true,
+            isDuplicate: false,
+            zeroCashEntry: true,
+          },
+          creditCode: null,
+          escrow: await db.escrowLedger.findUnique({ where: { id } }),
+        });
+      }
+
       try {
-        const fullRemainingCents = escrow.amountCents - escrow.refundCents;
         const refundResult = await processRefund({
           escrowLedgerId: id,
           refundAmountCents: fullRemainingCents,
@@ -751,13 +913,9 @@ export async function PATCH(
           let subsidyPayoutTotalCents = 0;
           const subsidyEntryIds: string[] = [];
           for (const entry of disputedEntries) {
-            const platformFunded =
-              (entry.discountCents || 0) > 0 &&
-              (entry.originalAmountCents || 0) > 0 &&
-              entry.discountFundedBy !== "VENDOR";
-            const payoutBase = platformFunded
-              ? (entry.originalAmountCents as number)
-              : entry.amountCents;
+            // Shared predicate (was hand-inlined — police INFO).
+            const platformFunded = isPlatformFundedDiscount(entry);
+            const payoutBase = payoutBaseCents(entry);
             let commissionCents = entry.commissionCents;
             let vendorPayoutCents = entry.vendorPayoutCents;
             if (platformFunded) {
@@ -765,13 +923,7 @@ export async function PATCH(
               commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100);
               vendorPayoutCents = effectiveBase - commissionCents;
             }
-            const draw = Math.max(0, payoutBase - entry.amountCents);
-            if (draw > 0) {
-              subsidyDrawnCents += draw;
-              subsidyPayoutTotalCents += vendorPayoutCents;
-              subsidyEntryIds.push(entry.id);
-            }
-            await tx.escrowLedger.updateMany({
+            const claimed = await tx.escrowLedger.updateMany({
               where: { id: entry.id, state: EscrowState.DISPUTED },
               data: {
                 state: EscrowState.RELEASED,
@@ -781,6 +933,16 @@ export async function PATCH(
                 ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
               },
             });
+            // f3-family (police-payout-base-1): subsidy bookkeeping counts
+            // only entries actually claimed.
+            if (claimed.count > 0) {
+              const draw = Math.max(0, payoutBase - entry.amountCents);
+              if (draw > 0) {
+                subsidyDrawnCents += draw;
+                subsidyPayoutTotalCents += vendorPayoutCents;
+                subsidyEntryIds.push(entry.id);
+              }
+            }
           }
           // PLATFORM_SUBSIDY_DRAWN ledger event (see release action)
           if (subsidyDrawnCents > 0) {

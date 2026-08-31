@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+// Pure functions (no server imports) — safe for the client bundle.
+import { payoutBaseCents } from "@/lib/payments/calculations";
 import {
   X,
   ShieldCheck,
@@ -208,14 +210,15 @@ export function BookingDetailSheet({
   // Commission + vendor payout are computed on this base — platform-funded
   // discounts (promo codes / refund credits, absorbed by Anna.I) never
   // reduce it. Mirrors the vendor + household portal figures.
+  // Shared predicate via payoutBaseCents() (was hand-inlined — police INFO).
   const jobValueCents = allEscrowEntries.reduce(
-    (sum, e) => sum + (
-      ((e.discountCents as number) || 0) > 0 &&
-      ((e.originalAmountCents as number) || 0) > 0 &&
-      (e.discountFundedBy as string) !== "VENDOR"
-        ? (e.originalAmountCents as number)
-        : (e.amountCents as number || 0)
-    ), 0
+    (sum, e) => sum + payoutBaseCents({
+      amountCents: (e.amountCents as number) || 0,
+      originalAmountCents: (e.originalAmountCents as number) || undefined,
+      discountCents: (e.discountCents as number) || undefined,
+      discountFundedBy: (e.discountFundedBy as string) || undefined,
+    }),
+    0
   ) || orderTotalCents;
   // Total refunded = sum of ALL escrow entries' cumulative refundCents
   const totalRefundCents = allEscrowEntries.reduce(

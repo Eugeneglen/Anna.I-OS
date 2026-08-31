@@ -52,11 +52,16 @@ payout — a fully refunded job pays the vendor nothing and makes the
 household whole.
 
 **Release bookkeeping**: every release pays out the base-derived figures and
-records a `PLATFORM_SUBSIDY_DRAWN` audit event whenever a subsidy was drawn,
-so the ledger stays reconcilable: Σ released payouts = Σ escrow cash
-released + Σ platform subsidy drawn. (Historical rows settled under the old
-math are never restated; HELD entries created before the rule are healed to
-the payout base at release time.)
+records a `PLATFORM_SUBSIDY_DRAWN` audit event whenever a subsidy was drawn
+(`subsidy = payoutBase − amountCents` on platform-discounted entries, 0
+otherwise), so the ledger stays reconcilable per released entry:
+`commission + payout = (amountCents − refundCents) + subsidy drawn` — i.e.
+Σ released payouts + commissions = Σ escrow cash still held + Σ subsidy
+drawn. (Historical rows settled under the old math are never restated; HELD
+entries created before the rule are healed to the payout base at release
+time. Fully-discounted entries hold `amountCents = 0`: refunds/cancellations
+on them terminalize with zeroed figures and no cash movement — the consumed
+voucher is restored instead.)
 
 ## Current State (MVP)
 

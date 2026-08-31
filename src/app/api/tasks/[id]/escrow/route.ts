@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
+import { isPlatformFundedDiscount, payoutBaseCents } from "@/lib/payments/calculations"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
 import { emitEscrowStateChanged, emitDisputeRaised, emitVendorNotification } from "@/lib/events"
@@ -91,6 +92,14 @@ export async function PATCH(
         // or dispute can't double-transition/double-notify. Zero claims →
         // a concurrent action won; abort with nothing written.
         //
+        // f3 (police-payout-base-1): the HELD entries are RE-QUERIED inside
+        // the transaction. The pre-tx fetch can go stale when a
+        // dispute → partial refund → dismiss interleave commits between the
+        // fetch and the claim — healing with stale refundCents would
+        // overwrite the refund-recalculated figures with full-base figures
+        // (invariant break + vendor overpay). In-tx reads are the same
+        // pattern the ops release route uses.
+        //
         // Payout-base rule (platform-funded discounts): commission/payout
         // are recomputed on the pre-discount job value at release. No-op for
         // entries already on the new math (created after the rule) and never
@@ -98,6 +107,17 @@ export async function PATCH(
         // from the platform's own funds and audited as PLATFORM_SUBSIDY_DRAWN
         // so the ledger stays reconcilable (Σ released payouts ≤ Σ held cash
         // + Σ subsidy drawn).
+        const txHeldEntries = await tx.escrowLedger.findMany({
+          where: { taskId: task.id, state: EscrowState.HELD },
+          select: {
+            id: true, amountCents: true, vendorPayoutCents: true,
+            commissionCents: true, commissionRate: true, refundCents: true,
+            originalAmountCents: true, discountCents: true, discountFundedBy: true,
+          },
+        })
+        if (txHeldEntries.length === 0) {
+          throw new Error("ESCROW_ALREADY_RESOLVED")
+        }
         const updatedEscrows: { id: string; vendorPayoutCents: number; state: EscrowState }[] = []
         let releasedCount = 0
         let subsidyDrawnCents = 0
@@ -105,14 +125,12 @@ export async function PATCH(
         let payoutTotalCents = 0
         let commissionTotalCents = 0
         let escrowCashTotalCents = 0
-        for (const entry of heldEntries) {
-          const platformFunded =
-            (entry.discountCents || 0) > 0 &&
-            (entry.originalAmountCents || 0) > 0 &&
-            entry.discountFundedBy !== "VENDOR"
-          const payoutBase = platformFunded
-            ? (entry.originalAmountCents as number)
-            : entry.amountCents
+        const claimedEntryIds: string[] = []
+        for (const entry of txHeldEntries) {
+          // Shared predicate (was hand-inlined — police INFO): identical
+          // semantics to isPlatformFundedDiscount()/payoutBaseCents().
+          const platformFunded = isPlatformFundedDiscount(entry)
+          const payoutBase = payoutBaseCents(entry)
           let commissionCents = entry.commissionCents
           let vendorPayoutCents = entry.vendorPayoutCents
           if (platformFunded) {
@@ -120,11 +138,6 @@ export async function PATCH(
             commissionCents = Math.round((effectiveBase * entry.commissionRate) / 100)
             vendorPayoutCents = effectiveBase - commissionCents
           }
-          subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents)
-          payoutBaseTotalCents += payoutBase
-          payoutTotalCents += vendorPayoutCents
-          commissionTotalCents += commissionCents
-          escrowCashTotalCents += entry.amountCents
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
             data: {
@@ -132,8 +145,17 @@ export async function PATCH(
               ...(platformFunded ? { commissionCents, vendorPayoutCents } : {}),
             },
           })
-          releasedCount += claimed.count
+          // Audit totals count only entries actually claimed — a partial
+          // claim (concurrent winner on some entry) must not inflate the
+          // PLATFORM_SUBSIDY_DRAWN bookkeeping.
           if (claimed.count > 0) {
+            releasedCount += claimed.count
+            claimedEntryIds.push(entry.id)
+            subsidyDrawnCents += Math.max(0, payoutBase - entry.amountCents)
+            payoutBaseTotalCents += payoutBase
+            payoutTotalCents += vendorPayoutCents
+            commissionTotalCents += commissionCents
+            escrowCashTotalCents += entry.amountCents
             const fresh = await tx.escrowLedger.findUnique({
               where: { id: entry.id },
               select: { id: true, vendorPayoutCents: true, state: true },
@@ -167,7 +189,7 @@ export async function PATCH(
               entityId: escrow.id,
               metadata: {
                 taskId: task.id,
-                entryIds: heldEntries.map((e) => e.id),
+                entryIds: claimedEntryIds,
                 platformSubsidyDrawnCents: subsidyDrawnCents,
                 escrowCashReleasedCents: escrowCashTotalCents,
                 payoutBaseCents: payoutBaseTotalCents,
@@ -228,6 +250,9 @@ export async function PATCH(
       triggerPredictiveScheduling(task.householdId, task.category as any, task.id)
 
       // Fire-and-forget: push real-time event to household
+      // f5 (police-payout-base-1): emit the POST-heal payout for this entry —
+      // the pre-tx snapshot carries the stale (lower) old-math figure on
+      // healed rows.
       emitEscrowStateChanged({
         id: escrow.id,
         state: "RELEASED",
@@ -235,7 +260,7 @@ export async function PATCH(
         amountCents: escrow.amountCents,
         category: task.category,
         householdId: task.householdId,
-        vendorPayoutCents: escrow.vendorPayoutCents,
+        vendorPayoutCents: result.updatedEscrow?.vendorPayoutCents ?? escrow.vendorPayoutCents,
       }).catch(() => {})
 
       // Phase 1 P1-4 fix: refresh cached household marketing stats now that

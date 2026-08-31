@@ -102,6 +102,31 @@ export function payoutBaseCents(entry: PayoutBaseInput): number {
 }
 
 /**
+ * Effective payout base remaining on an entry given its CUMULATIVE refunds:
+ * payoutBase − refundCents, with the platform-funded reversal applied once
+ * the customer cash is exhausted (mirrors calculateRefundImpact's math).
+ *
+ * Read-side companion: used where the effective base must be reported from
+ * STORED figures without computing a new refund event — e.g. idempotent
+ * refund retries, which previously reported the cash-remaining figure and
+ * gave API consumers inconsistent semantics (police-payout-base-1 f4).
+ */
+export function effectivePayoutBaseCents(
+  entry: PayoutBaseInput & { refundCents?: number }
+): number {
+  if (isPlatformFundedDiscount(entry)) {
+    const base = entry.originalAmountCents as number;
+    const refunded = entry.refundCents || 0;
+    // Cash exhausted → the consumed discount reverses to the household and
+    // the effective payout base is zero (full refund, vendor earns nothing).
+    return refunded >= entry.amountCents
+      ? 0
+      : Math.max(0, base - refunded);
+  }
+  return Math.max(0, entry.amountCents - (entry.refundCents || 0));
+}
+
+/**
  * Calculate commission + payout for a given amount and rate.
  *   commission = round(amount × rate / 100)
  *   payout     = amount − commission

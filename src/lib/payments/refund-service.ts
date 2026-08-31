@@ -28,7 +28,11 @@
 
 import { db } from "@/lib/db";
 import { getPaymentService } from "@/lib/payments/factory";
-import { calculateRefundImpact, type RefundCalcResult } from "@/lib/payments/calculations";
+import {
+  calculateRefundImpact,
+  effectivePayoutBaseCents,
+  type RefundCalcResult,
+} from "@/lib/payments/calculations";
 import { EscrowState, TaskStatus } from "@prisma/client";
 
 export interface ProcessRefundInput {
@@ -98,6 +102,12 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
         commissionCents: true,
         vendorPayoutCents: true,
         state: true,
+        // f4 (police-payout-base-1): payout-base context so the duplicate
+        // path reports the same effective PAYOUT BASE semantics as the
+        // primary path (previously: cash-remaining — inconsistent).
+        originalAmountCents: true,
+        discountCents: true,
+        discountFundedBy: true,
         task: { select: { status: true } },
       },
     });
@@ -108,7 +118,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       refundId: existing.id,
       refundedCents: existing.amountCents,
       cumulativeRefundCents: escrow.refundCents,
-      effectiveAmountCents: escrow.amountCents - escrow.refundCents,
+      effectiveAmountCents: effectivePayoutBaseCents(escrow),
       remainingCashCents: Math.max(0, escrow.amountCents - escrow.refundCents),
       newCommissionCents: escrow.commissionCents,
       newVendorPayoutCents: escrow.vendorPayoutCents,
@@ -348,6 +358,11 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
               commissionCents: true,
               vendorPayoutCents: true,
               state: true,
+              // f4 (police-payout-base-1): same payout-base semantics as
+              // the primary path and the early idempotency return above.
+              originalAmountCents: true,
+              discountCents: true,
+              discountFundedBy: true,
               task: { select: { status: true } },
             },
           },
@@ -359,7 +374,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           refundId: existing.id,
           refundedCents: existing.amountCents,
           cumulativeRefundCents: e.refundCents,
-          effectiveAmountCents: e.amountCents - e.refundCents,
+          effectiveAmountCents: effectivePayoutBaseCents(e),
           remainingCashCents: Math.max(0, e.amountCents - e.refundCents),
           newCommissionCents: e.commissionCents,
           newVendorPayoutCents: e.vendorPayoutCents,

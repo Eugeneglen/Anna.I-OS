@@ -120,7 +120,7 @@ export async function POST(
         : `${task.household?.name ?? "household"} (household)`;
 
     // ── Step 1: terminal state transition (all-or-nothing) ──
-    let step1: { refundedEntries: { id: string; amountCents: number }[]; refundedTotalCents: number; cancelledBookings: number };
+    let step1: { refundedEntries: { id: string; amountCents: number }[]; refundedTotalCents: number; cancelledBookings: number; zeroCashTerminalized: string[] };
     try {
       step1 = await db.$transaction(async (tx) => {
         // Cancel live bookings for this task (assigned/accepted — booking
@@ -156,9 +156,32 @@ export async function POST(
           },
         });
         const refunded: { id: string; amountCents: number }[] = [];
+        // f6b (police-payout-base-1): 0-cash entries (a 100% platform-funded
+        // discount holds amountCents = 0) have no cash to return, but policy
+        // R3 still requires the terminal HELD → REFUNDED transition: the
+        // entry carries base-derived commission/payout that would otherwise
+        // sit in the vendor's "Pending Payout" forever — its release is
+        // blocked for CANCELLED tasks, so no money can ever move. Zeroed
+        // figures + REFUNDED state = terminal, nothing owed to anyone.
+        const zeroCashTerminalized: string[] = [];
         for (const entry of heldEntries) {
           const remaining = entry.amountCents - entry.refundCents;
-          if (remaining <= 0) continue;
+          if (remaining <= 0) {
+            const claimed = await tx.escrowLedger.updateMany({
+              where: { id: entry.id, state: EscrowState.HELD },
+              data: {
+                state: EscrowState.REFUNDED,
+                refundedAt: now,
+                commissionCents: 0,
+                vendorPayoutCents: 0,
+                disputeResolution: `${reason} — cancelled, no cash held (policy R3)`,
+                disputeResolvedBy: actor.kind === "ops" ? actorLabel : "household",
+                disputeResolvedAt: now,
+              },
+            });
+            if (claimed.count > 0) zeroCashTerminalized.push(entry.id);
+            continue;
+          }
           const calc = calculateRefundImpact({
             amountCents: entry.amountCents,
             existingRefundCents: entry.refundCents,
@@ -238,6 +261,7 @@ export async function POST(
               reason,
               refundedCents: refundedTotal,
               refundedEntries: refunded.length,
+              zeroCashTerminalized: zeroCashTerminalized.length,
               cancelledBookings: liveBookings.length,
               actorType: actor.kind,
               actorHouseholdId: actor.kind === "household" ? actor.householdId : undefined,
@@ -249,6 +273,7 @@ export async function POST(
           refundedEntries: refunded,
           refundedTotalCents: refundedTotal,
           cancelledBookings: liveBookings.length,
+          zeroCashTerminalized,
         };
       });
     } catch (txError) {
@@ -266,7 +291,7 @@ export async function POST(
       }
       throw txError;
     }
-    const { refundedEntries, refundedTotalCents, cancelledBookings } = step1;
+    const { refundedEntries, refundedTotalCents, cancelledBookings, zeroCashTerminalized } = step1;
 
     // ── Step 2: credit conversion + original-voucher reissue (idempotent,
     //    non-fatal — step 1 already reached terminal state) ──
@@ -342,6 +367,9 @@ export async function POST(
       creditPending, // true = refund landed but credit issuance failed; recover via backfill mode-2
       voucherRestored,
       cancelledBookings,
+      // f6b: entries terminalized with zeroed figures (100% platform-funded
+      // discounts — no cash was held, nothing to refund or credit)
+      zeroCashTerminalized: zeroCashTerminalized.length,
     });
   } catch (error) {
     console.error("POST /api/tasks/[id]/cancel error:", error);

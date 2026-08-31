@@ -55,9 +55,16 @@ export async function GET(
     )
 
     // ── Total refunded: sum of refundCents across all entries ──
+    // f1 (police-payout-base-1): the select must carry the payout-base
+    // fields, otherwise payoutBaseCents() silently falls back to the cash
+    // amountCents and totalOrderValue under-reports by the subsidy.
     const allEntries = await db.escrowLedger.findMany({
       where: { bookingId: { in: bookingIds } },
-      select: { amountCents: true, refundCents: true, vendorPayoutCents: true, commissionCents: true, state: true },
+      select: {
+        amountCents: true, refundCents: true, vendorPayoutCents: true,
+        commissionCents: true, state: true,
+        originalAmountCents: true, discountCents: true, discountFundedBy: true,
+      },
     })
 
     const totalRefunded = allEntries.reduce(
@@ -157,7 +164,15 @@ export async function GET(
           },
         },
         escrowEntries: {
-          select: { vendorPayoutCents: true, state: true, amountCents: true, refundCents: true },
+          // f2 (police-payout-base-1): commissionCents is required by the
+          // remaining calc below (its absence made remainingCents NaN →
+          // JSON null → "$0.00 remaining" on partially-refunded rows);
+          // the payout-base fields make orderTotal the true job value.
+          select: {
+            vendorPayoutCents: true, state: true, amountCents: true,
+            refundCents: true, commissionCents: true,
+            originalAmountCents: true, discountCents: true, discountFundedBy: true,
+          },
         },
       },
     })
