@@ -1201,10 +1201,10 @@ export function VendorTaskDetail({
         </div>
       )}
 
-      {/* Mobile: Sheet overlay */}
+      {/* Mobile: Sheet overlay — scrolls when content exceeds 85vh */}
       {isMobile && (
         <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl anna-scroll">
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl overflow-y-auto anna-scroll pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <SheetHeader className="sr-only">
               <SheetTitle>Booking Detail</SheetTitle>
               <SheetDescription>View and manage this booking</SheetDescription>

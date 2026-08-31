@@ -2,6 +2,7 @@
 
 import { Check, AlertTriangle } from "lucide-react";
 import type { TaskStatus } from "@/lib/types";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STEPS: { key: TaskStatus; label: string }[] = [
   { key: "PREDICTED", label: "AI Suggested" },
@@ -27,10 +28,17 @@ interface StatusTimelineProps {
 export function StatusTimeline({ status }: StatusTimelineProps) {
   const currentIndex = getStepIndex(status);
   const isDisputed = status === "DISPUTED";
+  const isMobile = useIsMobile();
+
+  // Mobile has room for ~2 labels under 9 nodes — show labels only for the
+  // current step and the next one (the "you are here / what's next" story).
+  // Everything else stays a dot. Desktop shows all labels.
+  const showLabel = (i: number) =>
+    !isMobile || i === currentIndex || i === currentIndex + 1 || (isDisputed && i === 5);
 
   return (
     <div className="relative">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         {STEPS.map((step, i) => {
           const isCompleted = i < currentIndex;
           const isCurrent = i === currentIndex && !isDisputed;
@@ -61,15 +69,16 @@ export function StatusTimeline({ status }: StatusTimelineProps) {
                   <span className="text-[10px]">{i + 1}</span>
                 )}
               </div>
-              {/* Label */}
+              {/* Label — hidden on mobile except current/next steps so the 9
+                  nodes fit the viewport (nodes stay aligned via items-start) */}
               <span
-                className={`text-[10px] text-center leading-tight max-w-[56px] ${
+                className={`text-[10px] text-center leading-tight max-w-[52px] ${
                   isCompleted || isCurrent
                     ? "text-[var(--anna-slate)] font-medium"
                     : isDisputedStep
                     ? "text-[var(--anna-error)] font-medium"
                     : "text-[var(--anna-muted)]"
-                }`}
+                } ${showLabel(i) ? "" : "hidden"}`}
               >
                 {isDisputedStep ? "Disputed" : step.label}
               </span>

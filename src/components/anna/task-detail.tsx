@@ -1409,10 +1409,14 @@ export function TaskDetailPanel() {
         </div>
       )}
 
-      {/* Mobile: Sheet overlay */}
+      {/* Mobile: Sheet overlay — h-[85vh] with real scrolling (content can
+          exceed the height when instructions/routing/bookings stack up) */}
       {isMobile && (
         <Sheet open={taskDetailOpen} onOpenChange={(open) => !open && closeTaskDetail()}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl anna-scroll">
+          <SheetContent
+            side="bottom"
+            className="h-[85vh] rounded-t-3xl overflow-y-auto anna-scroll pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>Task Detail</SheetTitle>
               <SheetDescription>View and manage this task</SheetDescription>
