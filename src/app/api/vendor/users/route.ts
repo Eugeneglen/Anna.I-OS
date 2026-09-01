@@ -8,14 +8,27 @@ import * as bcrypt from "bcryptjs";
 // GET /api/vendor/users — List HQ staff (VendorUser) for this vendor
 // These are back-office users (finance, auditors, analysts, ops managers)
 // who can log in to the vendor portal. They are NOT field roster members.
+// Optional ?search= filters by name / email / contact (matches the
+// "Search name, contact..." placeholder on the users page).
 // ═════════════════════════════════════════════════════
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const auth = await requireVendorPermission("v_users", "view");
     if (!auth.success) return auth.response;
 
+    const search = req.nextUrl.searchParams.get("search")?.trim() || "";
+
     const users = await db.vendorUser.findMany({
-      where: { vendorId: auth.vendorId },
+      where: {
+        vendorId: auth.vendorId,
+        ...(search && {
+          OR: [
+            { name: { contains: search } },
+            { email: { contains: search } },
+            { contact: { contains: search } },
+          ],
+        }),
+      },
       orderBy: { createdAt: "desc" },
       include: {
         roleRel: { select: { id: true, name: true, slug: true, level: true } },

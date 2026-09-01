@@ -557,9 +557,10 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 hover:bg-[var(--anna-sage-light)]"
+                      className="h-10 w-10 hover:bg-[var(--anna-sage-light)]"
+                      aria-label="Open navigation menu"
                     >
-                      <Menu className="h-4 w-4 text-[var(--anna-slate-light)]" />
+                      <Menu className="h-5 w-5 text-[var(--anna-slate-light)]" />
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="left" className="w-60 p-0 bg-[var(--anna-white)]">
@@ -580,7 +581,7 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
                 )}>
                   {isConnected ? <Wifi size={8} /> : <WifiOff size={8} />}
                 </div>
-                <VendorNotificationPanel vendorId={user.id} />
+                <VendorNotificationPanel vendorId={user.id} compact />
                 <Badge
                   variant="secondary"
                   className="text-[10px] font-medium px-1.5 py-0 bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]"

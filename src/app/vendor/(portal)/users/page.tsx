@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -114,19 +115,24 @@ function LoadingRows({ count = 4 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] px-4 py-3 flex items-center gap-3"
+          className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
         >
-          <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
-          <div className="flex-1 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-5 w-16 rounded-full" />
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-40" />
             </div>
-            <Skeleton className="h-3 w-40" />
           </div>
-          <div className="flex items-center gap-1">
-            <Skeleton className="h-8 w-8 rounded-lg" />
-            <Skeleton className="h-8 w-8 rounded-lg" />
+          <div className="flex items-center justify-between sm:justify-end gap-1">
+            <Skeleton className="h-3 w-14" />
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <Skeleton className="h-10 w-10 rounded-xl" />
+            </div>
           </div>
         </div>
       ))}
@@ -258,7 +264,9 @@ export default function VendorUsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vendor-users"] });
+      toast.success("User deleted");
     },
+    onError: (e: Error) => toast.error(e.message || "Failed to delete user"),
   });
 
   const toggleActiveMutation = useMutation({
@@ -281,6 +289,8 @@ export default function VendorUsersPage() {
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetTarget, setResetTarget] = useState<string | null>(null);
   const [auditTarget, setAuditTarget] = useState<UserItem | null>(null);
+  // Delete confirmation — destructive action must never fire from a single icon tap
+  const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
   const resetPasswordMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/vendor/users/${id}/reset-password`, { method: "POST" });
@@ -396,14 +406,14 @@ export default function VendorUsersPage() {
               placeholder="Search name, contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-60 pl-9 h-9 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] text-sm text-[var(--anna-slate)] placeholder:text-[var(--anna-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30 focus:border-transparent transition"
+              className="w-full sm:w-60 pl-9 h-10 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] text-sm text-[var(--anna-slate)] placeholder:text-[var(--anna-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30 focus:border-transparent transition"
             />
           </div>
           {can?.("v_users", "create") && (
             <Button
               size="sm"
               onClick={openAddSheet}
-              className="rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white text-xs font-medium"
+              className="rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white text-xs font-medium h-10"
             >
               <UserPlus size={14} className="mr-1.5" />
               Add User
@@ -436,51 +446,56 @@ export default function VendorUsersPage() {
           {users.map((u) => (
             <div
               key={u.id}
-              className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] px-4 py-3 flex items-center gap-3"
+              className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
             >
-              {/* Avatar */}
-              <div className="h-9 w-9 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center text-xs font-semibold text-[var(--anna-sage-dark)] shrink-0">
-                {u.name
-                  .split(" ")
-                  .map((w) => w[0])
-                  .join("")
-                  .toUpperCase()
-                  .slice(0, 2)}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
-                    {u.name}
-                  </p>
-                  <RoleBadge
-                    roleName={u.roleRel?.name || null}
-                    slug={u.roleRel?.slug || u.role.toLowerCase()}
-                  />
-                  {u.hasPassword && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Login enabled
-                    </span>
-                  )}
+              {/* Avatar + info — takes the full card width on mobile instead of
+                  competing with the action cluster for a single squeezed row */}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {/* Avatar */}
+                <div className="h-9 w-9 rounded-xl bg-[var(--anna-sage-light)] flex items-center justify-center text-xs font-semibold text-[var(--anna-sage-dark)] shrink-0">
+                  {u.name
+                    .split(" ")
+                    .map((w) => w[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2)}
                 </div>
-                <p className="text-xs text-[var(--anna-muted)] truncate mt-0.5">
-                  {u.email || u.contact}
-                </p>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-[var(--anna-slate)] truncate">
+                      {u.name}
+                    </p>
+                    <RoleBadge
+                      roleName={u.roleRel?.name || null}
+                      slug={u.roleRel?.slug || u.role.toLowerCase()}
+                    />
+                    {u.hasPassword && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Login enabled
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--anna-muted)] truncate mt-0.5">
+                    {u.email || u.contact}
+                  </p>
+                </div>
               </div>
 
-              {/* Status */}
-              <div className="hidden sm:flex items-center shrink-0">
-                <StatusDot active={u.isActive} />
-              </div>
+              {/* Status + actions — on its own row on mobile (status is visible
+                  there, not hidden), right-aligned alongside the actions on desktop */}
+              <div className="flex items-center justify-between sm:justify-end gap-1 shrink-0">
+                <div className="flex items-center sm:mr-3">
+                  <StatusDot active={u.isActive} />
+                </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1">
                 {can?.("v_users", "edit") && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:bg-[var(--anna-sage-light)]"
+                    className="h-10 w-10 hover:bg-[var(--anna-sage-light)]"
                     onClick={() => openEditSheet(u)}
                   >
                     <Pencil size={14} className="text-[var(--anna-slate-light)]" />
@@ -490,7 +505,7 @@ export default function VendorUsersPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:bg-red-50"
+                    className="h-10 w-10 hover:bg-red-50"
                     onClick={() => toggleActiveMutation.mutate({ id: u.id, isActive: false })}
                   >
                     <Ban size={14} className="text-red-400" />
@@ -500,7 +515,7 @@ export default function VendorUsersPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:bg-emerald-50"
+                    className="h-10 w-10 hover:bg-emerald-50"
                     onClick={() => toggleActiveMutation.mutate({ id: u.id, isActive: true })}
                   >
                     <CheckCircle2 size={14} className="text-emerald-500" />
@@ -510,8 +525,9 @@ export default function VendorUsersPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 hover:bg-red-50"
-                    onClick={() => deleteMutation.mutate(u.id)}
+                    className="h-10 w-10 hover:bg-red-50"
+                    aria-label={`Delete ${u.name}`}
+                    onClick={() => setDeleteTarget(u)}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -534,7 +550,7 @@ export default function VendorUsersPage() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More actions">
                       <MoreVertical size={14} className="text-[var(--anna-slate-light)]" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -552,6 +568,7 @@ export default function VendorUsersPage() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               </div>
             </div>
           ))}
@@ -560,8 +577,8 @@ export default function VendorUsersPage() {
 
       {/* Add/Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md">
-          <SheetHeader>
+        <SheetContent className="w-full sm:max-w-md overflow-hidden gap-0">
+          <SheetHeader className="pb-3">
             <SheetTitle>{editingUser ? "Edit User" : "Add User"}</SheetTitle>
             <SheetDescription>
               {editingUser
@@ -570,7 +587,9 @@ export default function VendorUsersPage() {
             </SheetDescription>
           </SheetHeader>
 
-          <div className="mt-6 space-y-4">
+          {/* Scrollable form body — inner scroll keeps the header and the pinned
+              save action reachable on small screens and with the keyboard open */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain anna-scroll px-4 pt-1 pb-4 space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[var(--anna-slate)]">Name</Label>
               <Input
@@ -623,7 +642,8 @@ export default function VendorUsersPage() {
                 <button
                   type="button"
                   onClick={() => setShowFormPassword(!showFormPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] cursor-pointer"
+                  aria-label={showFormPassword ? "Hide password" : "Show password"}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 -m-1 p-2 text-[var(--anna-muted)] hover:text-[var(--anna-slate)] cursor-pointer"
                 >
                   {showFormPassword ? (
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -659,11 +679,17 @@ export default function VendorUsersPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {formError && <p className="text-xs text-red-500">{formError}</p>}
+          {/* Pinned footer — the primary action stays visible above the fold
+              (and above the safe-area inset) instead of living at the mercy of
+              the scrollable body; validation/mutation errors render here too so
+              they can never scroll out of sight */}
+          <div className="p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-[var(--anna-border)]">
+            {formError && <p className="text-xs text-red-500 mb-3">{formError}</p>}
 
             {(createMutation.error || updateMutation.error) && (
-              <p className="text-xs text-red-500">
+              <p className="text-xs text-red-500 mb-3">
                 {(createMutation.error as Error)?.message ||
                   (updateMutation.error as Error)?.message}
               </p>
@@ -723,6 +749,37 @@ export default function VendorUsersPage() {
           <AuditLogList userId={auditTarget?.id} scope="vendor" />
         </SheetContent>
       </Sheet>
+
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes{" "}
+              <span className="font-semibold text-[var(--anna-slate)]">
+                {deleteTarget?.name}
+              </span>{" "}
+              from the vendor account. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
+              onClick={() => {
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
