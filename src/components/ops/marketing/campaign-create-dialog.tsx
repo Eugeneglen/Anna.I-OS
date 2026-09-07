@@ -297,6 +297,20 @@ export function CampaignCreateDialog({
       // Don't close the dialog — switch to polling mode so the user sees
       // progress, and trigger the processor immediately.
       if (status === 202 && data?.issuanceJobId) {
+        // ── P3 (AUDIT-3, POLICE-4 f1): scheduled campaigns stay PENDING ──
+        // until their sendAt passes (both processor claim paths enforce it
+        // server-side). Don't trigger the processor or start the progress
+        // polling — nothing will move until the schedule opens; show an
+        // honest "scheduled" toast instead and close cleanly.
+        if (data?.scheduledFor) {
+          toast.success(
+            `Campaign “${data?.campaign?.name || "Created"}” scheduled — vouchers will be issued automatically at ${new Date(data.scheduledFor).toLocaleString()}.`
+          );
+          queryClient.invalidateQueries({ queryKey: CAMPAIGN_QUERY_KEYS.list });
+          resetForm();
+          onOpenChange(false);
+          return;
+        }
         const n = data.totalMembers ?? 0;
         toast.success(
           `Campaign “${data?.campaign?.name || "Created"}” created — issuing vouchers to ${n} member${n === 1 ? "" : "s"} in the background.`

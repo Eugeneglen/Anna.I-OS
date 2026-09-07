@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { logAction } from "@/lib/audit-log";
 import { createSegment, type SegmentFilters } from "@/lib/marketing/segment-engine";
 import { segmentFiltersSchema } from "@/lib/marketing/schemas";
 import {
@@ -81,6 +82,31 @@ export async function POST(req: NextRequest) {
       filters: parsedFilters.data as SegmentFilters,
       createdById: session.userId,
       createdByName: session.name,
+    });
+
+    // createSegment returns { id, name } only — count the freshly computed
+    // members for the audit metadata (POLICE-4 finding #4: the previous
+    // `segment.memberCount` reference was always undefined).
+    const memberCount = await db.segmentMember.count({
+      where: { segmentId: segment.id },
+    });
+
+    // ── P6 (AUDIT-3): segment writes were previously invisible in the ──
+    // audit trail (segments feed campaigns → voucher issuance, so who
+    // created which audience matters). Same logAction pattern as every
+    // other ops CMS write route.
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "segment.create",
+      entityType: "Segment",
+      entityId: segment.id,
+      metadata: {
+        name,
+        description: description ?? null,
+        memberCount,
+        filters: parsedFilters.data as Record<string, unknown>,
+      },
     });
 
     return NextResponse.json({ segment }, { status: 201 });

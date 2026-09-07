@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,23 @@ interface JobTypesTabProps {
   onToggle: (id: string, isActive: boolean) => void;
   onEdit: (jobType: ServiceJobType) => void;
   onCreate: () => void;
-  onUpdatePrice: (id: string, priceCents: number) => void;
+  /** Saves an inline price edit; resolves false when the server rejects it
+   *  (the caller's mutation already surfaced the error toast) so this
+   *  component can revert the displayed draft. */
+  onUpdatePrice: (id: string, priceCents: number) => Promise<boolean> | boolean;
 }
+
+// ── P1 (AUDIT-3): debounced inline price editor ──
+// The inline price input used to fire onUpdatePrice on EVERY keystroke,
+// and the backing API action (update_job_type_price) didn't even exist —
+// each keystroke 400'd with "Unknown action". The action is now wired
+// server-side; this side debounces (700ms) so a typed "$85" sends ONE
+// write, not "8", "80", "85". Local edits keep the input responsive;
+// the debounced value must differ from the server value to fire.
+const PRICE_DEBOUNCE_MS = 700;
+// Mirrors the server-side P7 bounds ($1–$100k in cents).
+const MIN_PRICE_CENTS = 100;
+const MAX_PRICE_CENTS = 10_000_000;
 
 export function JobTypesTab({
   jobTypes,
@@ -30,6 +45,64 @@ export function JobTypesTab({
   onCreate,
   onUpdatePrice,
 }: JobTypesTabProps) {
+  // ── P1: local price-edit state + debounce timers ──
+  const [priceEdits, setPriceEdits] = useState<Record<string, number>>({});
+  const priceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const schedulePriceSave = (id: string, priceCents: number, serverValue: number) => {
+    setPriceEdits((prev) => ({ ...prev, [id]: priceCents }));
+    clearTimeout(priceTimers.current[id]);
+    if (priceCents === serverValue) return; // no-op edit
+    if (
+      !Number.isFinite(priceCents) ||
+      priceCents < MIN_PRICE_CENTS ||
+      priceCents > MAX_PRICE_CENTS ||
+      !Number.isInteger(priceCents)
+    ) {
+      return; // invalid draft — never sent; reverted on blur
+    }
+    priceTimers.current[id] = setTimeout(async () => {
+      // POLICE-4 finding #5: revert the draft when the server rejects the
+      // save (validation bounds, concurrent delete, …) — a failed save
+      // must never keep displaying as if it persisted.
+      let ok: boolean;
+      try {
+        ok = await onUpdatePrice(id, priceCents);
+      } catch {
+        ok = false;
+      }
+      if (!ok) revertPriceEdit(id);
+      // On success, keep the local edit until the ops-config refetch
+      // lands so the input never flickers back to the stale server value
+      // mid-save.
+    }, PRICE_DEBOUNCE_MS);
+  };
+
+  // Blur with an invalid (or empty) draft → revert the display to the
+  // server value; nothing was ever sent for it.
+  const revertPriceEdit = (id: string) => {
+    clearTimeout(priceTimers.current[id]);
+    setPriceEdits((prev) => {
+      if (prev[id] === undefined) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  // Note on stale drafts: after a successful save the ops-config query
+  // refetches and the server value equals the draft, so the display stays
+  // correct; the no-op check in schedulePriceSave compares against the
+  // FRESH server value from props, so re-editing works correctly too.
+
+  // Clear any pending timers on unmount so navigations can't fire
+  // orphaned writes after the component is gone.
+  useEffect(() => {
+    const timers = priceTimers.current;
+    return () => {
+      for (const t of Object.values(timers)) clearTimeout(t);
+    };
+  }, []);
   const grouped = jobTypes.reduce<Record<string, Record<string, unknown>[]>>((acc, j) => {
     const cat = j.category as string;
     if (!acc[cat]) acc[cat] = [];
@@ -145,12 +218,31 @@ export function JobTypesTab({
                                   <span className="text-xs text-[var(--anna-muted)]">SGD $</span>
                                   <Input
                                     type="number"
-                                    min={0}
+                                    min={1}
                                     step={1}
-                                    value={Math.round(jt.basePriceCents / 100)}
-                                    onChange={(e) =>
-                                      onUpdatePrice(jt.id, Math.round((parseFloat(e.target.value) || 0) * 100))
+                                    value={
+                                      priceEdits[jt.id] !== undefined
+                                        ? Math.round(priceEdits[jt.id] / 100)
+                                        : Math.round(jt.basePriceCents / 100)
                                     }
+                                    onChange={(e) =>
+                                      schedulePriceSave(
+                                        jt.id,
+                                        Math.round((parseFloat(e.target.value) || 0) * 100),
+                                        jt.basePriceCents
+                                      )
+                                    }
+                                    onBlur={() => {
+                                      const draft = priceEdits[jt.id];
+                                      if (
+                                        draft === undefined ||
+                                        draft === jt.basePriceCents ||
+                                        draft < MIN_PRICE_CENTS ||
+                                        draft > MAX_PRICE_CENTS
+                                      ) {
+                                        revertPriceEdit(jt.id);
+                                      }
+                                    }}
                                     className="w-20 h-7 text-right text-xs font-data rounded-lg border-[var(--anna-border)]"
                                   />
                                 </div>

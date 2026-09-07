@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       // Verify the job exists and is still PENDING before processing.
       const job = await db.voucherIssuanceJob.findUnique({
         where: { id: body.jobId },
-        select: { id: true, status: true, campaignId: true, segmentId: true, createdById: true, error: true },
+        select: { id: true, status: true, campaignId: true, segmentId: true, createdById: true, error: true, campaign: { select: { sendAt: true } } },
       });
       if (!job) {
         return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -76,6 +76,26 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { error: "Forbidden — you may only process issuance jobs you created (requires marketing:edit for others)" },
           { status: 403 }
+        );
+      }
+      // ── P3 (AUDIT-3, POLICE-4 finding #1): scheduled campaigns are not ──
+      // claimable on ANY path. claimNextPendingIssuanceJob already gates
+      // the oldest-PENDING path, but this explicit-jobId path (which the
+      // campaign-create dialog always fires immediately after creation)
+      // used to claim the job directly with no sendAt check — a scheduled
+      // campaign created via the UI still issued its vouchers instantly.
+      // The gate also covers the FAILED-retry branch below: a failed job
+      // for a future-scheduled campaign cannot be force-run early either.
+      if (job.campaign?.sendAt && new Date() < job.campaign.sendAt) {
+        return NextResponse.json(
+          {
+            processed: false,
+            jobId: job.id,
+            status: job.status,
+            scheduledFor: job.campaign.sendAt.toISOString(),
+            message: `Campaign is scheduled to send at ${job.campaign.sendAt.toISOString()} — the issuance job stays ${job.status} until then (the 60s dispatcher picks it up automatically once the send time passes).`,
+          },
+          { status: 202 }
         );
       }
       if (job.status !== "PENDING") {

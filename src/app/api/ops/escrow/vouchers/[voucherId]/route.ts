@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
+import { logAction } from "@/lib/audit-log";
 import {
   suspendCompensationVoucher,
   reactivateCompensationVoucher,
@@ -46,6 +47,20 @@ export async function PATCH(
       } else if (parsed.data.action === "remove") {
         await removeCompensationVoucher(voucherId, parsed.data.reason);
       }
+      // ── P6 (AUDIT-3): voucher lifecycle writes were previously invisible ──
+      // in the audit trail — suspend/reactivate/remove change what a
+      // household can spend, so they must be attributable like every
+      // other ops CMS write.
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: `voucher.${parsed.data.action}`,
+        entityType: "Voucher",
+        entityId: voucherId,
+        metadata: {
+          reason: parsed.data.action === "reactivate" ? null : parsed.data.reason,
+        },
+      });
       return NextResponse.json({ ok: true, action: parsed.data.action });
     } catch (e) {
       if (e instanceof RefundError) {

@@ -5,6 +5,44 @@ import { logAction } from "@/lib/audit-log";
 import { getCommissionRate, invalidateCommissionRateCache } from "@/lib/commission";
 import { CATEGORIES, ACTIVE_CATEGORIES, MAX_AUTONOMY_LEVEL } from "@/lib/constants";
 import { CATEGORY_DEFAULTS, ServiceJobType as ServiceJobTypeT } from "@/lib/types";
+import {
+  getRequireVerificationPhotos,
+  invalidatePlatformConfig,
+  PLATFORM_CONFIG_KEYS,
+} from "@/lib/platform-config";
+
+// ── Validation bounds (AUDIT-3 P7: price/cycles were previously unbounded) ──
+// basePriceCents is accepted as an integer number of cents between $1 and
+// $100,000 — matching the F8 campaign bound convention (10_000_000 cents).
+const BASE_PRICE_MIN_CENTS = 100;
+const BASE_PRICE_MAX_CENTS = 10_000_000;
+// cyclesRequired: how many verified cycles a household must complete before
+// an autonomy promotion. 0 (immediate) through 1,000 (effectively never) —
+// anything beyond that is almost certainly a typo/misentry.
+const CYCLES_MIN = 0;
+const CYCLES_MAX = 1_000;
+
+function isValidBasePriceCents(v: unknown): v is number {
+  return (
+    typeof v === "number" &&
+    Number.isInteger(v) &&
+    v >= BASE_PRICE_MIN_CENTS &&
+    v <= BASE_PRICE_MAX_CENTS
+  );
+}
+
+function isValidCyclesRequired(v: unknown): v is number {
+  return (
+    typeof v === "number" &&
+    Number.isInteger(v) &&
+    v >= CYCLES_MIN &&
+    v <= CYCLES_MAX
+  );
+}
+
+function basePriceError(): string {
+  return `Price must be an integer number of cents between $${(BASE_PRICE_MIN_CENTS / 100).toFixed(2)} and $${(BASE_PRICE_MAX_CENTS / 100).toLocaleString()}`;
+}
 
 // ── README keys & labels for the Autonomy tab ──
 const README_KEYS = ["readme_autonomy_levels", "readme_threshold_guide", "readme_api_automation"] as const;
@@ -147,6 +185,11 @@ export async function GET() {
       readmes[row.key] = row.value;
     }
 
+    // ── P2 (AUDIT-3): require_verification_photos — read via the SAME ──
+    // cached reader the vendor completion path uses, so the UI toggle can
+    // never show a value the completion gate doesn't enforce.
+    const requireVerificationPhotos = await getRequireVerificationPhotos();
+
     return NextResponse.json({
       categories,
       jobTypes,
@@ -156,6 +199,7 @@ export async function GET() {
       categoryPricing,
       blendedJobValueCents,
       readmes,
+      requireVerificationPhotos,
     });
   } catch (error) {
     console.error("[/api/ops/config GET]", error);
@@ -192,6 +236,17 @@ export async function POST(req: NextRequest) {
       });
     } else if (action === "save_thresholds") {
       const { thresholds } = body as { thresholds: { category: string; level: number; cyclesRequired: number }[] };
+      if (!Array.isArray(thresholds) || thresholds.length === 0) {
+        return NextResponse.json({ error: "thresholds array is required" }, { status: 400 });
+      }
+      for (const t of thresholds) {
+        if (!isValidCyclesRequired(t.cyclesRequired)) {
+          return NextResponse.json(
+            { error: `Invalid cyclesRequired for ${t.category} L${t.level}: must be an integer ${CYCLES_MIN}–${CYCLES_MAX}` },
+            { status: 400 }
+          );
+        }
+      }
       for (const t of thresholds) {
         await db.autonomyLevelThreshold.upsert({
           where: { category_level: { category: t.category, level: t.level } },
@@ -205,6 +260,73 @@ export async function POST(req: NextRequest) {
         action: "config.save_thresholds",
         entityType: "AutonomyLevelThreshold",
         metadata: { count: thresholds.length },
+      });
+    } else if (action === "save_require_verification_photos") {
+      // ── P2 (AUDIT-3): the write path for require_verification_photos ──
+      // The flag was read live by the vendor job-completion gate
+      // (getRequireVerificationPhotos → vendors bookings + j/share complete)
+      // but had NO Ops write action — it was stuck at the default forever.
+      // This action persists it and invalidates the runtime cache so the
+      // completion path honours the change within the same process.
+      const { requireVerificationPhotos } = body as { requireVerificationPhotos: boolean };
+      if (typeof requireVerificationPhotos !== "boolean") {
+        return NextResponse.json({ error: "requireVerificationPhotos must be a boolean" }, { status: 400 });
+      }
+      await db.platformConfig.upsert({
+        where: { key: PLATFORM_CONFIG_KEYS.requireVerificationPhotos },
+        create: {
+          key: PLATFORM_CONFIG_KEYS.requireVerificationPhotos,
+          value: String(requireVerificationPhotos),
+          label: "Require vendors to upload verification photos before completing a job (true/false)",
+        },
+        update: { value: String(requireVerificationPhotos) },
+      });
+      invalidatePlatformConfig(PLATFORM_CONFIG_KEYS.requireVerificationPhotos);
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "config.save_require_verification_photos",
+        entityType: "PlatformConfig",
+        entityId: PLATFORM_CONFIG_KEYS.requireVerificationPhotos,
+        metadata: { requireVerificationPhotos },
+      });
+    } else if (action === "update_job_type_price") {
+      // ── P1 (AUDIT-3): wire the inline job-type price editor ──
+      // The Job Types tab fires this action from its inline price input,
+      // but it was never implemented — every keystroke 400'd with
+      // "Unknown action". Prices only persisted through the full edit
+      // dialog (update_job_type). This dedicated action is the debounced
+      // write target for the inline editor: minimal field set, same
+      // validation bounds, full audit trail with old→new value.
+      const { id, priceCents } = body as { id: string; priceCents: number };
+      if (!id) {
+        return NextResponse.json({ error: "Job type id is required" }, { status: 400 });
+      }
+      if (!isValidBasePriceCents(priceCents)) {
+        return NextResponse.json({ error: basePriceError() }, { status: 400 });
+      }
+      const existing = await db.serviceJobType.findUnique({
+        where: { id },
+        select: { basePriceCents: true, name: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ error: "Job type not found" }, { status: 404 });
+      }
+      await db.serviceJobType.update({
+        where: { id },
+        data: { basePriceCents: priceCents },
+      });
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "config.update_job_type_price",
+        entityType: "ServiceJobType",
+        entityId: id,
+        metadata: {
+          name: existing.name,
+          previousPriceCents: existing.basePriceCents,
+          newPriceCents: priceCents,
+        },
       });
     } else if (action === "save_pricing") {
       // ── RETIRED (FIX-1c pricing authority consolidation) ──
@@ -253,6 +375,10 @@ export async function POST(req: NextRequest) {
       if (existing) {
         return NextResponse.json({ error: `Slug "${slug}" already exists` }, { status: 409 });
       }
+      // P7 (AUDIT-3): negative/absurd prices were previously accepted.
+      if (!isValidBasePriceCents(basePriceCents)) {
+        return NextResponse.json({ error: basePriceError() }, { status: 400 });
+      }
       const jobType = await db.serviceJobType.create({
         data: {
           name, category, slug, description, basePriceCents, unitLabel,
@@ -283,6 +409,10 @@ export async function POST(req: NextRequest) {
         if (existing) {
           return NextResponse.json({ error: `Slug "${slug}" already exists` }, { status: 409 });
         }
+      }
+      // P7 (AUDIT-3): same price bounds on the full edit dialog path.
+      if (basePriceCents !== undefined && !isValidBasePriceCents(basePriceCents)) {
+        return NextResponse.json({ error: basePriceError() }, { status: 400 });
       }
       const updateData: Record<string, unknown> = {};
       if (name !== undefined) updateData.name = name;

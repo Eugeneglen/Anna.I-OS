@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { db } from "@/lib/db"
 import { editPredictiveTask } from "@/lib/predictive-scheduler"
 import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
 
@@ -8,6 +9,16 @@ const schema = z.object({
   instructions: z.string().optional(),
   amountCents: z.number().int().positive().optional(),
 })
+
+// ── P5b (AUDIT-3, POLICE-4 finding #2): catalog price authority on ──
+// predicted-task edits. Predicted tasks can carry a jobTypeId (copied from
+// their anchor task by the predictive scheduler), and this route used to
+// accept ANY positive client amountCents — a household could set a $0.01
+// price on a predicted task, let it auto-lock → dispatch → escrow at the
+// forged price. Same precedence as POST /api/tasks (P5):
+//   jobTypeId present → ServiceJobType.basePriceCents is authoritative
+//   no jobTypeId      → ad-hoc amount, sanity-capped.
+const MAX_ADHOC_TASK_CENTS = 10_000_000 // $100k — matches the manual-create cap
 
 export async function PATCH(
   request: Request,
@@ -39,7 +50,41 @@ export async function PATCH(
       updates.instructions = parsed.data.instructions
     }
     if (parsed.data.amountCents !== undefined) {
-      updates.amountCents = parsed.data.amountCents
+      // ── P5b: catalog authority + ad-hoc cap (see header comment) ──
+      const task = await db.task.findUnique({
+        where: { id },
+        select: { jobTypeId: true },
+      })
+      if (task?.jobTypeId) {
+        const jobType = await db.serviceJobType.findUnique({
+          where: { id: task.jobTypeId },
+          select: { basePriceCents: true },
+        })
+        if (jobType) {
+          // Ops catalog price wins — the client-sent amount is ignored.
+          updates.amountCents = jobType.basePriceCents
+        } else {
+          // Job type vanished (shouldn't happen — delete is referentially
+          // guarded); reject rather than persist an unanchored price.
+          return NextResponse.json(
+            { error: "Catalog job type for this task no longer exists", code: "JOB_TYPE_NOT_FOUND" },
+            { status: 409 }
+          )
+        }
+      } else {
+        // Ad-hoc predicted task (no catalog job type): keep the client
+        // amount but sanity-cap it like the manual-create path.
+        if (parsed.data.amountCents > MAX_ADHOC_TASK_CENTS) {
+          return NextResponse.json(
+            {
+              error: `Amount exceeds the maximum allowed (SGD $${(MAX_ADHOC_TASK_CENTS / 100).toLocaleString()}).`,
+              code: "AMOUNT_TOO_LARGE",
+            },
+            { status: 400 }
+          )
+        }
+        updates.amountCents = parsed.data.amountCents
+      }
     }
 
     if (Object.keys(updates).length === 0) {

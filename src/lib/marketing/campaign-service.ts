@@ -380,6 +380,17 @@ export async function validateRedemption(params: {
     return { valid: false, reason: "This voucher has expired" };
   }
 
+  // 6.5 ── P3 (AUDIT-3): scheduled-send gate ──
+  // Campaign.sendAt is the wall-clock time the campaign should be
+  // ACTIVATED / dispatched (schema Fix 21). The issuance runner now
+  // honours it (claimNextPendingIssuanceJob), and this check keeps the
+  // redemption side consistent: a code from a scheduled campaign cannot
+  // be redeemed before its send time. Without it, ops-scheduled
+  // campaigns were immediately redeemable the moment they were created.
+  if (campaign.sendAt && now < campaign.sendAt) {
+    return { valid: false, reason: "This voucher is not yet active" };
+  }
+
   // 7. Campaign-level cap
   if (campaign.maxRedemptions !== null && campaign.redemptionsCount >= campaign.maxRedemptions) {
     return { valid: false, reason: "This voucher's usage limit has been reached" };
@@ -413,6 +424,50 @@ export async function validateRedemption(params: {
       });
       if (existingBookings === 0) {
         return { valid: false, reason: "This offer is for existing households only" };
+      }
+    }
+
+    // 10.5 ── P4 (AUDIT-3): autonomy level bounds ──
+    // DiscountRule.minAutonomyLevel / maxAutonomyLevel have been WRITTEN
+    // by the campaign create/update routes (zod-validated 1–5) since the
+    // campaign editor shipped, but were never READ at redemption — a rule
+    // meant to target "L1–L2 households only" silently applied to everyone.
+    // Enforced here against the household's CURRENT autonomy level for the
+    // order's category (falling back to the campaign's targetCategory when
+    // the order carries no category). Autonomy is a per-service-category
+    // level, so bounds without any category context (e.g. subscription-fee
+    // campaigns with no targetCategory) cannot be evaluated and are
+    // skipped deliberately rather than guessed.
+    if (rule.minAutonomyLevel !== null || rule.maxAutonomyLevel !== null) {
+      const categoryKey = category ?? campaign.targetCategory ?? undefined;
+      if (categoryKey) {
+        // categoryKey is a runtime string (route-validated enum name or the
+        // campaign's stored targetCategory); Prisma validates the enum value
+        // and the .catch below degrades invalid strings to the L1 default.
+        const autonomy = await db.householdCategoryAutonomy
+          .findUnique({
+            where: {
+              householdId_category: {
+                householdId,
+                category: categoryKey as never,
+              },
+            },
+            select: { currentLevel: true },
+          })
+          .catch(() => null);
+        const level = autonomy?.currentLevel ?? 1; // new households start at L1
+        if (rule.minAutonomyLevel !== null && level < rule.minAutonomyLevel) {
+          return {
+            valid: false,
+            reason: `This offer is for households at autonomy level ${rule.minAutonomyLevel}+ in ${categoryKey.replace(/_/g, " ").toLowerCase()} — you are at level ${level}`,
+          };
+        }
+        if (rule.maxAutonomyLevel !== null && level > rule.maxAutonomyLevel) {
+          return {
+            valid: false,
+            reason: `This offer is for households up to autonomy level ${rule.maxAutonomyLevel} in ${categoryKey.replace(/_/g, " ").toLowerCase()} — you are at level ${level}`,
+          };
+        }
       }
     }
 

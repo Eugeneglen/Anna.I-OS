@@ -19,6 +19,7 @@ import { PricingTab } from "@/components/ops/config/pricing-tab";
 import { CategoriesTab } from "@/components/ops/config/categories-tab";
 import { JobTypesTab } from "@/components/ops/config/job-types-tab";
 import { ThresholdsTab } from "@/components/ops/config/thresholds-tab";
+import { RulesTab } from "@/components/ops/config/rules-tab";
 import { JobTypeEditDialog } from "@/components/ops/job-type-edit-dialog";
 import type { ServiceJobType } from "@/lib/types";
 
@@ -57,6 +58,27 @@ export default function ConfigPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // ── P1 (POLICE-4 finding #5): dedicated price mutation ──
+  // Inline price saves report success/failure to the caller (JobTypesTab
+  // reverts the displayed draft when the save fails), instead of the
+  // fire-and-forget shared mutation that left a failed draft looking saved.
+  const priceMutation = useMutation({
+    mutationFn: async (body: { id: string; priceCents: number }) => {
+      const res = await fetch("/api/ops/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_job_type_price", ...body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops-config"] });
+    },
+    onError: (e: Error) => toast.error(`Price not saved — ${e.message}`),
+  });
+
   const categories = data?.categories || [];
   const jobTypes = data?.jobTypes || [];
   const thresholds = data?.thresholds || [];
@@ -64,6 +86,7 @@ export default function ConfigPage() {
   const readmes: Record<string, string> = data?.readmes || {};
   const effectiveCommission = data?.commissionRate ?? PLATFORM_COMMISSION_RATE;
   const blendedJobValueCents = data?.blendedJobValueCents ?? 0;
+  const requireVerificationPhotos: boolean = data?.requireVerificationPhotos ?? true;
   const isAdmin = user?.role === "ADMIN";
 
   // ── Threshold editing state ──
@@ -144,8 +167,19 @@ export default function ConfigPage() {
   const handleDeleteJobType = (id: string) =>
     configMutation.mutate({ action: "delete_job_type", id });
 
-  const handleUpdateJobTypePrice = (id: string, priceCents: number) =>
-    configMutation.mutate({ action: "update_job_type_price", id, priceCents });
+  const handleUpdateJobTypePrice = async (id: string, priceCents: number): Promise<boolean> => {
+    try {
+      await priceMutation.mutateAsync({ id, priceCents });
+      return true;
+    } catch {
+      // onError already toasts the reason.
+      return false;
+    }
+  };
+
+  // ── P2 (AUDIT-3): verification-photo gate toggle ──
+  const handleToggleVerificationPhotos = (requireVerificationPhotos: boolean) =>
+    configMutation.mutate({ action: "save_require_verification_photos", requireVerificationPhotos });
 
   const hasThresholdChanges = localEdits !== null;
 
@@ -182,6 +216,7 @@ export default function ConfigPage() {
     { value: "categories", label: "Categories" },
     { value: "job-types", label: "Job Types" },
     { value: "thresholds", label: "Autonomy" },
+    { value: "rules", label: "Rules" },
   ] as const;
 
   const categoryNames = categories.map((c: Record<string, unknown>) => c.name as string);
@@ -274,6 +309,15 @@ export default function ConfigPage() {
             readmes={readmes}
             onSaveReadme={(key, content) => readmeMutation.mutate({ key, content })}
             isSavingReadme={readmeMutation.isPending}
+          />
+        </TabsContent>
+
+        {/* ===== RULES TAB (P2 — operational rules Ops can change without a developer) ===== */}
+        <TabsContent value="rules">
+          <RulesTab
+            requireVerificationPhotos={requireVerificationPhotos}
+            isAdmin={isAdmin}
+            onToggleVerificationPhotos={handleToggleVerificationPhotos}
           />
         </TabsContent>
       </Tabs>

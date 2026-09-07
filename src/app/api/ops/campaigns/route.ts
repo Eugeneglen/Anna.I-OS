@@ -176,12 +176,23 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // ── P3 (AUDIT-3, POLICE-4 finding #1): surface the schedule ──
+      // When the campaign is scheduled for a future sendAt, the job stays
+      // PENDING until the 60s cron dispatcher's sendAt gate opens (both
+      // claim paths now enforce this). Tell the UI so it doesn't claim
+      // the "issuing now" flow / misleading progress toast.
+      const scheduledFor =
+        campaign.sendAt && new Date() < campaign.sendAt
+          ? campaign.sendAt.toISOString()
+          : null;
+
       return NextResponse.json(
         {
           campaign,
           issuanceJobId: job.id,
           issuanceStatus: "PENDING",
           totalMembers: memberCount,
+          scheduledFor,
         },
         { status: 202 },
       );

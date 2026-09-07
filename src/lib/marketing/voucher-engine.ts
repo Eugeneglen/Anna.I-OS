@@ -448,9 +448,22 @@ export async function claimNextPendingIssuanceJob(
   // Find oldest PENDING job first (read).
   // F5: optional createdById scope — creators with marketing:create may
   // claim only their own jobs (ownership-aware processor permission).
+  //
+  // ── P3 (AUDIT-3): honour Campaign.sendAt ──
+  // A PENDING job whose campaign is scheduled for a future sendAt must NOT
+  // be claimable yet — the campaign's vouchers go out at sendAt, not at
+  // creation. Both claim paths (cron dispatcher + manual processor route)
+  // run through here, so the schedule is enforced everywhere. Jobs whose
+  // campaign has no sendAt (null) behave exactly as before: claimable
+  // immediately. Once wall-clock passes sendAt, the next 60s cron tick
+  // claims the job and scheduled sends actually fire (previously sendAt
+  // was stored + displayed but never honoured).
   const pending = await db.voucherIssuanceJob.findFirst({
     where: {
       status: "PENDING",
+      campaign: {
+        OR: [{ sendAt: null }, { sendAt: { lte: new Date() } }],
+      },
       ...(opts?.createdById ? { createdById: opts.createdById } : {}),
     },
     orderBy: { createdAt: "asc" },
@@ -637,6 +650,7 @@ export async function getEligibleVouchers(params: {
           targetCategory: true,
           startDate: true,
           endDate: true,
+          sendAt: true,
           discountRule: {
             select: {
               discountType: true,
@@ -644,6 +658,8 @@ export async function getEligibleVouchers(params: {
               minOrderValueCents: true,
               maxDiscountCapCents: true,
               eligibility: true,
+              minAutonomyLevel: true,
+              maxAutonomyLevel: true,
             },
           },
         },
@@ -653,41 +669,96 @@ export async function getEligibleVouchers(params: {
 
   const now = new Date();
 
-  return vouchers
-    .filter((v) => {
-      // Basic checks
-      if (!v.discountCode.isActive) return false;
-      if (v.expiresAt && now > v.expiresAt) return false;
-      if (v.campaign.status !== "ACTIVE") return false;
-      if (v.campaign.startDate && now < v.campaign.startDate) return false;
-      if (v.campaign.endDate && now > v.campaign.endDate) return false;
+  // ── P3/P4 consistency (AUDIT-3, POLICE-4 finding #3) ──
+  // getEligibleVouchers powers the wallet / booking-form "eligible" list,
+  // but it ignored campaign.sendAt and the DiscountRule autonomy bounds —
+  // showing vouchers that validateRedemption would then reject. Mirror
+  // both checks here so the preview matches the enforcement.
+  //
+  // Autonomy levels are per-category; resolve the household's level lazily
+  // per distinct category (cached per call) only when some rule has bounds.
+  const autonomyLevels = new Map<string, number>();
+  const getAutonomyLevel = async (categoryKey: string): Promise<number> => {
+    const cached = autonomyLevels.get(categoryKey);
+    if (cached !== undefined) return cached;
+    const row = await db.householdCategoryAutonomy
+      .findUnique({
+        where: {
+          householdId_category: {
+            householdId: params.householdId,
+            category: categoryKey as never,
+          },
+        },
+        select: { currentLevel: true },
+      })
+      .catch(() => null); // invalid category strings → level 1 (new household)
+    const level = row?.currentLevel ?? 1;
+    autonomyLevels.set(categoryKey, level);
+    return level;
+  };
 
-      // Target category check
-      if (v.campaign.targetCategory && params.category && v.campaign.targetCategory !== params.category) {
-        return false;
+  const eligible: {
+    voucherId: string;
+    code: string;
+    campaignName: string;
+    campaignType: string;
+    targetCategory: string | null;
+    discountType: string | null;
+    discountValue: number | null;
+    minOrderValueCents: number;
+    maxDiscountCapCents: number;
+    expiresAt: Date | null;
+    ineligibleReason: string | null;
+  }[] = [];
+
+  for (const v of vouchers) {
+    // Basic checks
+    if (!v.discountCode.isActive) continue;
+    if (v.expiresAt && now > v.expiresAt) continue;
+    if (v.campaign.status !== "ACTIVE") continue;
+    if (v.campaign.startDate && now < v.campaign.startDate) continue;
+    if (v.campaign.endDate && now > v.campaign.endDate) continue;
+    // P3: scheduled-send gate — not redeemable before sendAt
+    if (v.campaign.sendAt && now < v.campaign.sendAt) continue;
+
+    // Target category check
+    if (v.campaign.targetCategory && params.category && v.campaign.targetCategory !== params.category) {
+      continue;
+    }
+
+    // P4: autonomy bounds — mirror validateRedemption step 10.5
+    const rule = v.campaign.discountRule;
+    if (rule && (rule.minAutonomyLevel !== null || rule.maxAutonomyLevel !== null)) {
+      const categoryKey = params.category ?? v.campaign.targetCategory ?? undefined;
+      if (categoryKey) {
+        const level = await getAutonomyLevel(categoryKey);
+        if (rule.minAutonomyLevel !== null && level < rule.minAutonomyLevel) continue;
+        if (rule.maxAutonomyLevel !== null && level > rule.maxAutonomyLevel) continue;
       }
+    }
 
-      // Min order value check
-      const minOrder = v.campaign.discountRule?.minOrderValueCents;
-      if (minOrder && params.orderValueCents < minOrder) {
-        return false;
-      }
+    // Min order value check
+    const minOrder = rule?.minOrderValueCents;
+    if (minOrder && params.orderValueCents < minOrder) {
+      continue;
+    }
 
-      return true;
-    })
-    .map((v) => ({
+    eligible.push({
       voucherId: v.id,
       code: v.discountCode.code,
       campaignName: v.campaign.name,
       campaignType: v.campaign.type,
       targetCategory: v.campaign.targetCategory,
-      discountType: v.campaign.discountRule?.discountType,
-      discountValue: v.campaign.discountRule?.discountValue,
-      minOrderValueCents: v.campaign.discountRule?.minOrderValueCents || 0,
-      maxDiscountCapCents: v.campaign.discountRule?.maxDiscountCapCents || 0,
+      discountType: rule?.discountType ?? null,
+      discountValue: rule?.discountValue ?? null,
+      minOrderValueCents: rule?.minOrderValueCents || 0,
+      maxDiscountCapCents: rule?.maxDiscountCapCents || 0,
       expiresAt: v.expiresAt,
       ineligibleReason: null, // eligible
-    }));
+    });
+  }
+
+  return eligible;
 }
 
 // ── Mark voucher as viewed ──

@@ -190,6 +190,61 @@ export async function POST(request: Request) {
       finalAmountCents = quotation.totalCents;
     }
 
+    // ── P5 (AUDIT-3): catalog price authority on manual task create ──
+    // Pricing precedence (Ops is the sole pricing authority — Principle B,
+    // enforced for the AI path in Wave 2-A A-2; this closes the manual
+    // HTTP path that still accepted ANY client-supplied amountCents):
+    //   1. quotationId  → quotation.totalCents (server-calculated from the
+    //                     catalog by the quote calculator, includes add-ons)
+    //   2. jobTypeId    → ServiceJobType.basePriceCents from the catalog —
+    //                     the client-sent amountCents is IGNORED for priced
+    //                     job types. A tampered client can no longer create
+    //                     a SGD $5 task for a SGD $80 service.
+    //   3. neither      → ad-hoc amount (custom/no-catalog services), still
+    //                     client-supplied but sanity-capped.
+    if (jobTypeId && !quotationId) {
+      const jobType = await db.serviceJobType.findUnique({
+        where: { id: jobTypeId },
+        select: { basePriceCents: true, category: true, isActive: true, name: true },
+      });
+      if (!jobType) {
+        return NextResponse.json(
+          { error: "Unknown job type", code: "JOB_TYPE_NOT_FOUND" },
+          { status: 400 }
+        );
+      }
+      if (jobType.category !== category) {
+        return NextResponse.json(
+          {
+            error: `Job type "${jobType.name}" belongs to category ${jobType.category}, not ${category}`,
+            code: "JOB_TYPE_CATEGORY_MISMATCH",
+          },
+          { status: 400 }
+        );
+      }
+      if (!jobType.isActive) {
+        return NextResponse.json(
+          { error: `Job type "${jobType.name}" is currently inactive`, code: "JOB_TYPE_INACTIVE" },
+          { status: 403 }
+        );
+      }
+      finalAmountCents = jobType.basePriceCents;
+    }
+
+    // Ad-hoc tasks (no catalog job type, no quotation): the amount stays
+    // client-supplied, but is sanity-capped so a tampered/buggy client
+    // cannot mint a six-figure charge into the escrow flow.
+    const MAX_ADHOC_TASK_CENTS = 10_000_000; // $100k — matches F8 campaign bound convention
+    if (!jobTypeId && !quotationId && finalAmountCents > MAX_ADHOC_TASK_CENTS) {
+      return NextResponse.json(
+        {
+          error: `Task amount exceeds the maximum allowed (SGD $${(MAX_ADHOC_TASK_CENTS / 100).toLocaleString()}). Use a quoted service for larger jobs.`,
+          code: "AMOUNT_TOO_LARGE",
+        },
+        { status: 400 }
+      );
+    }
+
     // Validate discount code if provided (before creating the task).
     // The result is fed into the same transaction that creates the task
     // AND applies the redemption — so if applyRedemption fails, the task

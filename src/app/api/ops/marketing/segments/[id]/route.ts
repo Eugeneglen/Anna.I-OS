@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { logAction } from "@/lib/audit-log";
 import { computeSegmentMembers, archiveSegment, unarchiveSegment } from "@/lib/marketing/segment-engine";
 
 // GET /api/ops/marketing/segments/[id] — segment details + paginated members
@@ -61,11 +62,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (action === "recompute") {
       const result = await computeSegmentMembers(id);
+      // ── P6 (AUDIT-3): audit row for segment membership recompute ──
+      const seg = await db.segment.findUnique({
+        where: { id },
+        select: { name: true },
+      });
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "segment.recompute",
+        entityType: "Segment",
+        entityId: id,
+        metadata: {
+          name: seg?.name ?? null,
+          total: result.total,
+          added: result.added,
+          removed: result.removed,
+        },
+      });
       return NextResponse.json(result);
     }
 
     if (action === "archive") {
       await archiveSegment(id);
+      // ── P6 (AUDIT-3): audit row for segment archive ──
+      const seg = await db.segment.findUnique({
+        where: { id },
+        select: { name: true },
+      });
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "segment.archive",
+        entityType: "Segment",
+        entityId: id,
+        metadata: { name: seg?.name ?? null, via: "PATCH" },
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -87,6 +119,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         );
       }
       const result = await unarchiveSegment(id);
+      // ── P6 (AUDIT-3): audit row for segment reactivation ──
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "segment.unarchive",
+        entityType: "Segment",
+        entityId: id,
+        metadata: {
+          total: result.total,
+          added: result.added,
+          removed: result.removed,
+        },
+      });
       return NextResponse.json({
         success: true,
         total: result.total,
@@ -112,6 +157,21 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { id } = await params;
     await archiveSegment(id);
+    // ── P6 (AUDIT-3): audit row for segment archive via DELETE ──
+    // (DELETE archives rather than hard-deleting — membership history is
+    // retained; the audit row records which ops user triggered it and how.)
+    const seg = await db.segment.findUnique({
+      where: { id },
+      select: { name: true },
+    });
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "segment.archive",
+      entityType: "Segment",
+      entityId: id,
+      metadata: { name: seg?.name ?? null, via: "DELETE" },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[/api/ops/marketing/segments/[id] DELETE]", error);
