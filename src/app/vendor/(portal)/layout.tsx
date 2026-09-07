@@ -612,8 +612,10 @@ export default function VendorPortalLayout({ children }: { children: ReactNode }
           </AnimatePresence>
         </div>
 
-        {/* Vendor AI Chat */}
-        <VendorAiChat />
+        {/* Vendor AI Chat — AI Wave 2-A (A-6): gated on the v_ai:view
+            permission (grandfathered to system roles via vendor-rbac
+            backfill, so existing users see no change). */}
+        {can("v_ai", "view") && <VendorAiChat />}
       </VendorUserContext.Provider>
     </VendorLiveContext.Provider>
   );

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getZAI } from "@/lib/zai";
+import { getHouseholdSession } from "@/lib/household-auth";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 const EXPLAIN_SYSTEM_PROMPT = `You are Anna.I, the AI operating system for modern households in Singapore. You are explaining a service quotation to a homeowner.
 
@@ -31,7 +37,29 @@ interface ExplainRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // ── AI Wave 2-A (A-1): this route was FULLY UNAUTHENTICATED. A live
+    // probe during the AI audit returned HTTP 200 with a REAL quotation's
+    // contents (SGD 350 base + SGD 25 add-on) to an anonymous caller —
+    // the LLM was acting as a free data-leak + token-burn proxy. Guarded
+    // now: household session required, quotation lookups scoped to the
+    // session's own household, rate-limited.
+    const session = await getHouseholdSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rlKey = `quote-explain:hh:${session.householdId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.quoteExplain.limit, RATE_LIMITS.quoteExplain.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
     const body: ExplainRequest = await request.json();
+    const { quotationId } = body;
+
+    // A-1: strip client-supplied householdId — never trusted for scoping.
+    delete (body as Record<string, unknown>).householdId;
 
     let contextData: {
       jobTypeName: string;
@@ -43,16 +71,18 @@ export async function POST(request: NextRequest) {
       fieldValues: Record<string, number>;
     };
 
-    // If quotationId is provided, fetch from DB
-    if (body.quotationId) {
+    // If quotationId is provided, fetch from DB — ownership-scoped (A-1:
+    // a quotationId from ANY household previously explained fine).
+    if (quotationId) {
       const quotation = await db.quotation.findUnique({
-        where: { id: body.quotationId },
+        where: { id: quotationId },
         include: {
           jobType: { select: { name: true, category: true } },
         },
       });
 
-      if (!quotation) {
+      if (!quotation || quotation.householdId !== session.householdId) {
+        // 404 (not 403) — don't confirm existence of other households' data.
         return NextResponse.json(
           { error: "Quotation not found" },
           { status: 404 }

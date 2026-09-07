@@ -16,6 +16,14 @@ export interface OpsToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  /**
+   * AI Wave 2-A (A-6): RBAC gate. Required "module:action" permission —
+   * the ops route only exposes (and only executes) tools whose permission
+   * the session actually holds. Previously ANY ops session — including
+   * limited roles — could read all households/vendors/escrow through the
+   * AI, bypassing the RBAC every other ops module enforces.
+   */
+  permission: string;
 }
 
 /**
@@ -25,6 +33,7 @@ export interface OpsToolDefinition {
 export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   {
     name: "get_platform_summary",
+    permission: "analytics:view",
     description:
       "Get platform-wide KPI summary: total households, vendors, active bookings, escrow state, task status distribution. Use for general platform health checks, dashboard-style overviews, or 'how is the platform doing?' questions.",
     parameters: {
@@ -34,6 +43,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_vendor_overview",
+    permission: "vendors:view",
     description:
       "Get all vendors with key metrics: status, type, capacity utilisation, ratings, completed jobs, zones. Use when asked about vendor fleet health, which vendors are underperforming, or vendor landscape overview.",
     parameters: {
@@ -50,6 +60,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_vendor_detail",
+    permission: "vendors:view",
     description:
       "Get detailed information about a specific vendor: profile, staff, bookings stats, earnings breakdown, recent ratings, verification compliance. Use when asking about a particular vendor by name or ID.",
     parameters: {
@@ -65,6 +76,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_household_overview",
+    permission: "households:view",
     description:
       "Get all households with autonomy levels, task counts, spending. Use when asked about household landscape, autonomy distribution, or which households need attention.",
     parameters: {
@@ -74,6 +86,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_household_detail",
+    permission: "households:view",
     description:
       "Get detailed information about a specific household: profile, autonomy levels per category, task history, spending, preferences, active bookings. Use when asking about a particular household by name or ID.",
     parameters: {
@@ -89,6 +102,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_booking_health",
+    permission: "bookings:view",
     description:
       "Get booking pipeline health: active bookings by status, acceptance rate, completion rate, average time-to-complete. Use when asked about booking pipeline, dispatch success, or completion metrics.",
     parameters: {
@@ -98,6 +112,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_anomaly_report",
+    permission: "analytics:view",
     description:
       "Get active and recent anomalies: type, severity, affected entity, timestamp, status. Use when asked about platform issues, anomalies, or things needing attention.",
     parameters: {
@@ -114,6 +129,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_escrow_summary",
+    permission: "escrow:view",
     description:
       "Get escrow state across the platform: total held, total released, total disputed, pending releases. Use when asked about money, escrow, payouts, or financial health.",
     parameters: {
@@ -123,6 +139,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_autonomy_distribution",
+    permission: "analytics:view",
     description:
       "Get autonomy level distribution across households per category: how many households at each level (1-5). Use when asked about autonomy promotion progress, household maturity, or Memory mechanism effectiveness.",
     parameters: {
@@ -132,6 +149,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_vendor_search",
+    permission: "vendors:view",
     description:
       "Search for a vendor by name or email. Returns matching vendor(s) with basic profile info. Use when the ops user mentions a vendor by name or email but doesn't have the ID.",
     parameters: {
@@ -147,6 +165,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_household_search",
+    permission: "households:view",
     description:
       "Search for a household by name or email. Returns matching household(s) with basic info. Use when the ops user mentions a household by name or email but doesn't have the ID.",
     parameters: {
@@ -162,6 +181,7 @@ export const OPS_AI_TOOLS: OpsToolDefinition[] = [
   },
   {
     name: "get_recent_activity",
+    permission: "bookings:view",
     description:
       "Get recent platform activity: latest bookings, task completions, escrow releases, vendor sign-ups. Use when asked about recent activity, what happened today, or a timeline of events.",
     parameters: {

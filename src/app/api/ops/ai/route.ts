@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OPS_AI_TOOLS, executeOpsToolCall } from "@/lib/ops-ai-tools";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasMinRole } from "@/lib/ops-auth";
+import { getUserPermissions } from "@/lib/permissions";
 import { getZAI } from "@/lib/zai";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ops AI
@@ -65,6 +72,30 @@ HARD BOUNDARIES:
 - Currency: SGD (e.g., SGD $68.00)`;
 
 // ─────────────────────────────────────────────────────────────
+// A-6: RBAC resolution — which tools may this session use?
+// ─────────────────────────────────────────────────────────────
+
+async function resolveAllowedOpsTools(
+  session: { roleId?: string; role?: string }
+): Promise<Set<string>> {
+  // New RBAC path: permission list decides.
+  if (session.roleId) {
+    const perms = await getUserPermissions(session.roleId);
+    const permSet = new Set(perms);
+    return new Set(
+      OPS_AI_TOOLS.filter((t) => permSet.has(t.permission)).map((t) => t.name)
+    );
+  }
+
+  // Legacy path (no roleId): coarse ADMIN-only, same fallback semantics
+  // as lib/permissions.ts hasPermission.
+  if (session.role !== undefined && hasMinRole(session.role, "ADMIN")) {
+    return new Set(OPS_AI_TOOLS.map((t) => t.name));
+  }
+  return new Set<string>();
+}
+
+// ─────────────────────────────────────────────────────────────
 // Request/Response Types
 // ─────────────────────────────────────────────────────────────
 
@@ -96,6 +127,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── AI Wave 2-A (A-5): LLM cost cap — this endpoint was unmetered. ──
+    const rlKey = `ops-ai:ops:${session.userId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.opsAi.limit, RATE_LIMITS.opsAi.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
+    // ── AI Wave 2-A (A-6): RBAC alignment. Previously the route checked
+    // ONLY that an ops session existed — any limited role could read all
+    // households/vendors/escrow through the AI tools, bypassing the RBAC
+    // enforced on every other ops module. Now only the tools whose
+    // permission the session holds are exposed to the LLM — and the same
+    // allow-list is enforced at execution time (defense in depth: a
+    // hallucinated tool name can't escape it either).
+    const allowedTools = await resolveAllowedOpsTools(session);
+    if (allowedTools.size === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Your role has no AI assistant permissions. Ask an admin to grant analytics:view, households:view, vendors:view, bookings:view or escrow:view.",
+        },
+        { status: 403 }
+      );
+    }
+    const exposedTools = OPS_AI_TOOLS.filter((t) => allowedTools.has(t.name));
+
     const body: OpsAiRequest = await request.json();
     const { message } = body;
 
@@ -114,13 +172,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── LLM call with tools ──
+    // ── LLM call with tools (only the permitted subset) ──
     const completion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: message },
       ],
-      tools: OPS_AI_TOOLS.map((tool) => ({
+      tools: exposedTools.map((tool) => ({
         type: "function" as const,
         function: {
           name: tool.name,
@@ -145,7 +203,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Execute tool calls ──
+    // ── Execute tool calls (permission-enforced) ──
     const results: string[] = [];
 
     for (const tc of toolCalls) {
@@ -155,6 +213,15 @@ export async function POST(request: NextRequest) {
         args = JSON.parse(tc.function.arguments);
       } catch {
         args = {};
+      }
+
+      // A-6: execution-time guard — even a hallucinated tool name outside
+      // the permitted subset is refused, not executed.
+      if (!allowedTools.has(toolName)) {
+        results.push(
+          JSON.stringify({ error: `Permission denied: ${toolName} is not available to your role.` })
+        );
+        continue;
       }
 
       const result = await executeOpsToolCall(toolName, args);

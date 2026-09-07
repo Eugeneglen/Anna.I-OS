@@ -7,6 +7,7 @@ import {
   rateLimitResponsePayload,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
+import { db } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ask Anna (Household NLU)
@@ -69,6 +70,61 @@ HARD BOUNDARIES:
 - Never override/suggest overriding escrow or verification steps
 - Never claim a capability the build doesn't have
 - Currency: SGD (e.g., SGD $68.00)`;
+
+// ── AI Wave 2-A (A-3): date grounding. The LLM previously had NO idea of
+// the current date, so "tomorrow"/"next Friday" resolved to hallucinated
+// dates (a live audit test produced "11 Jan 2024" on a 2026 server). The
+// current date/time (Asia/Singapore) is now injected per request so
+// relative dates resolve to real ones.
+function buildSystemPrompt(): string {
+  const now = new Date();
+  const dateLine = now
+    .toLocaleString("en-SG", {
+      timeZone: "Asia/Singapore",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .replace(",", " ·");
+  return `${SYSTEM_PROMPT}\n\nCURRENT DATE & TIME: ${dateLine} (Asia/Singapore, UTC+8). Resolve every relative date ("today", "tomorrow", "next Friday", "this weekend") against THIS date. When calling create_task, pass scheduledDate as YYYY-MM-DD derived from this date — never from memory or guesses. Prices come from the Anna.I catalog; never state or invent a price yourself.`;
+}
+
+// ── AI Wave 2-A (A-8): AI actions are attributable. Every confirmed AI
+// write gets an AuditLog row (actor = household member via Ask Anna) —
+// previously AI writes left no audit trace at all.
+async function auditAiAction(
+  session: { memberName: string; memberEmail: string; householdId: string; householdName: string },
+  action: string,
+  entityType: string,
+  entityId: string | null | undefined,
+  metadata: Record<string, unknown>
+): Promise<void> {
+  try {
+    await db.auditLog.create({
+      data: {
+        userId: null, // OpsUser FK — null for household actors
+        userName: `${session.memberName} (household, via Ask Anna)`,
+        action,
+        entityType,
+        entityId: entityId ?? null,
+        metadata: {
+          ...metadata,
+          via: "ask-anna",
+          actorHouseholdId: session.householdId,
+          actorEmail: session.memberEmail,
+        },
+      },
+    });
+  } catch (err) {
+    // Non-fatal — the action itself already succeeded; a failed audit row
+    // must not turn a success into a user-facing error.
+    console.error("[AskAnna NLU] audit log failed:", err);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Request/Response Types
@@ -148,6 +204,29 @@ export async function POST(request: NextRequest) {
         true // executeWrites = true
       );
 
+      // A-8: audit the confirmed write (success or failure — attempts matter).
+      // cancel_task is audited inside the canonical cancel service already
+      // (TASK_CANCELLED with via: "ask-anna"), so only create_task is
+      // audited here to avoid double rows.
+      if (confirmAction.toolName === "create_task") {
+        await auditAiAction(
+          session,
+          "AI_TASK_CREATED",
+          "task",
+          (result.data?.taskId as string) ?? null,
+          {
+            tool: "create_task",
+            success: result.success,
+            category: confirmAction.action.category ?? null,
+            jobTypeId: confirmAction.action.jobTypeId ?? null,
+            amountCents: confirmAction.action.amountCents ?? null,
+            scheduledStart: confirmAction.action.scheduledStart ?? null,
+            recurrence: confirmAction.action.recurrence ?? null,
+            instructions: confirmAction.action.instructions ?? null,
+          }
+        );
+      }
+
       const completion = await zai.chat.completions.create({
         messages: [
           {
@@ -176,7 +255,7 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "system",
-          content: SYSTEM_PROMPT,
+          content: buildSystemPrompt(),
         },
         {
           role: "user",
@@ -275,7 +354,7 @@ export async function POST(request: NextRequest) {
 
     const finalCompletion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: buildSystemPrompt() },
         { role: "user", content: message },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,

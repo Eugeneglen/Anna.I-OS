@@ -7,6 +7,12 @@ import {
   type JobTypeRequiredField,
   type JobTypeAddOn,
 } from "@/lib/quote-calculator";
+import { getHouseholdSession } from "@/lib/household-auth";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 const createQuotationSchema = z.object({
   householdId: z.string().min(1),
@@ -16,8 +22,26 @@ const createQuotationSchema = z.object({
 });
 
 // POST /api/quote
+// AI Wave 2-A (A-1): previously FULLY UNAUTHENTICATED — any anonymous
+// caller could create quotations against any householdId and burn LLM
+// tokens via the background explanation. Now guarded like every other
+// household route, rate-limited, and householdId is DERIVED from the
+// session (the body value is validated against it, not trusted).
 export async function POST(request: Request) {
   try {
+    const session = await getHouseholdSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // A-5: LLM cost cap — the background explanation spends real tokens.
+    const rlKey = `quote-create:hh:${session.householdId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.quoteCreate.limit, RATE_LIMITS.quoteCreate.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
     const body = await request.json();
     const parsed = createQuotationSchema.safeParse(body);
 
@@ -30,6 +54,14 @@ export async function POST(request: Request) {
 
     const { householdId, jobTypeId, fieldValues, selectedAddOns } =
       parsed.data;
+
+    // A-1: ownership — the session decides whose quotation this is.
+    if (householdId !== session.householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — quotations can only be created for your own household" },
+        { status: 403 }
+      );
+    }
 
     // Validate household exists
     const household = await db.household.findUnique({

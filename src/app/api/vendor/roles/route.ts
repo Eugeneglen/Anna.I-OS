@@ -24,6 +24,9 @@ const VENDOR_PERMISSIONS = [
   { module: "v_users", action: "assign" },
   { module: "v_roles", action: "view" }, { module: "v_roles", action: "edit" },
   { module: "v_roles", action: "assign" },
+  // AI Wave 2-A (A-6): AI assistant permission — previously the chat had
+  // no permission key at all (unconditional mount + route check).
+  { module: "v_ai", action: "view" },
   { module: "vendors", action: "view" }, { module: "vendors", action: "create" },
   { module: "vendors", action: "edit" }, { module: "vendors", action: "delete" },
   { module: "vendors", action: "export" },
@@ -53,6 +56,7 @@ const VENDOR_ROLE_DEFS = [
       ...perm("v_settings", ["view"]),
       ...perm("v_users", ["view"]),
       ...perm("v_roles", ["view"]),
+      ...perm("v_ai", ["view"]),
     ],
   },
   {
@@ -61,6 +65,7 @@ const VENDOR_ROLE_DEFS = [
       ...perm("v_schedule", ["view"]),
       ...perm("v_calendar", ["view"]),
       ...perm("v_bookings", ["view"]),
+      ...perm("v_ai", ["view"]),
     ],
   },
 ];

@@ -6,6 +6,9 @@
 // ============================================================
 
 import { CATEGORY_DEFAULTS, type ServiceCategory } from "./types";
+import { CANCELLABLE_STATUSES, cancelTask } from "./task-cancel-service";
+import { generateJobNo } from "./job-number";
+import type { ServiceJobType } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────
 // Tool Definitions (OpenAI-compatible function calling format)
@@ -27,7 +30,7 @@ export const ANNA_TOOLS: ToolDefinition[] = [
   {
     name: "create_task",
     description:
-      "Create a new service task for the household. Use when the user wants to book, schedule, or request a service (e.g., 'book a cleaning', 'schedule aircon servicing', 'I need a plumber').",
+      "Create a new service task for the household. Use when the user wants to book, schedule, or request a service (e.g., 'book a cleaning', 'schedule aircon servicing', 'I need a plumber'). Price is set by the Anna.I service catalog (never invented).",
     parameters: {
       type: "object",
       properties: {
@@ -44,7 +47,7 @@ export const ANNA_TOOLS: ToolDefinition[] = [
         scheduledDate: {
           type: "string",
           description:
-            "Preferred date for the job in YYYY-MM-DD format. If the user says 'tomorrow', 'next Friday', 'this weekend', etc., calculate the actual date. Default to tomorrow if not specified.",
+            "Preferred date for the job in YYYY-MM-DD format. Resolve relative dates ('tomorrow', 'next Friday', 'this weekend') against the CURRENT DATE given in the system prompt — never guess. Default to tomorrow if not specified.",
         },
         recurrence: {
           type: "string",
@@ -222,11 +225,10 @@ async function executeCreateTask(
   const { db } = await import("@/lib/db");
   const { CATEGORY_DEFAULTS } = await import("./types");
   const { triggerAutomationOnTaskCreated } = await import("./automation");
-  const { ServiceCategory, TaskStatus } = await import("@prisma/client");
+  const { ServiceCategory } = await import("@prisma/client");
 
   const category = args.category as ServiceCategory;
   const instructions = (args.instructions as string) || null;
-  const scheduledDate = (args.scheduledDate as string) || null;
   const recurrence = (args.recurrence as string) || "ONE_OFF";
 
   // Validate category
@@ -234,59 +236,145 @@ async function executeCreateTask(
     return { success: false, toolName: "create_task", error: `Unknown service category: ${category}` };
   }
 
-  const defaultAmount = CATEGORY_DEFAULTS[category].amount;
-
-  // Build scheduled start (default: tomorrow 10am SGT)
-  let scheduledStart: Date | null = null;
-  if (scheduledDate) {
-    const [y, m, d] = scheduledDate.split("-").map(Number);
-    scheduledStart = new Date(y, m - 1, d, 10, 0, 0);
-    // If the date is in the past, move to next day
-    const now = new Date();
-    if (scheduledStart < now) {
-      scheduledStart.setDate(scheduledStart.getDate() + 1);
+  // ── AI Wave 2-A (A-2): Ops is the sole pricing authority. The old code
+  // took the amount from the hard-coded CATEGORY_DEFAULTS constant (SGD
+  // $80 for cleaning etc.), bypassing the Ops-managed ServiceJobType
+  // catalog and leaving jobTypeId NULL. Now the catalog is the ONLY price
+  // source — if no active job type exists for the category, we REFUSE to
+  // book rather than fall back to a hard-coded price (Principle B).
+  //
+  // Police (POLICE-1, must-fix #2): on the CONFIRM pass the user has
+  // already approved a specific jobTypeId + amountCents on the card. We
+  // must honor EXACTLY those — re-resolving the catalog fresh could book a
+  // different price than the one approved if Ops edited the catalog in the
+  // meantime. If the approved entry no longer matches (deactivated,
+  // re-categorized, or price changed), REFUSE with a clear message instead
+  // of silently booking different terms.
+  const approvedJobTypeId = args.jobTypeId as string | undefined;
+  const approvedAmountCents = args.amountCents as number | undefined;
+  let jobType: Pick<ServiceJobType, "id" | "name" | "basePriceCents" | "isActive" | "category"> | null =
+    null;
+  if (executeWrites && approvedJobTypeId) {
+    // Confirm pass — verify the approved catalog entry is still exactly
+    // what the user signed off on.
+    const approved = await db.serviceJobType.findUnique({
+      where: { id: approvedJobTypeId },
+    });
+    if (
+      !approved ||
+      !approved.isActive ||
+      approved.category !== category ||
+      (approvedAmountCents !== undefined && approved.basePriceCents !== approvedAmountCents)
+    ) {
+      return {
+        success: false,
+        toolName: "create_task",
+        error:
+          "The service catalog changed since you approved this booking (service removed or price updated by Anna.I Ops). Nothing was booked — please ask again to see the current catalog price.",
+      };
     }
+    jobType = approved;
   } else {
-    scheduledStart = new Date();
-    scheduledStart.setDate(scheduledStart.getDate() + 1);
-    scheduledStart.setHours(10, 0, 0, 0);
+    // Draft pass (or a confirm without card payload) — resolve fresh.
+    jobType = await db.serviceJobType.findFirst({
+      where: { category, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
   }
+  if (!jobType) {
+    return {
+      success: false,
+      toolName: "create_task",
+      error: `No active service catalog entry for ${category} — pricing is set by Anna.I Ops, so I can't book this category until it's added to the catalog. Please use the booking flow or contact support.`,
+    };
+  }
+  const priceCents = jobType.basePriceCents;
 
-  // If not executing writes, return confirmation request
+  // ── AI Wave 2-A (A-3): date resolution + confirmation round-trip.
+  // The old bug: the confirmation card showed a date derived from the
+  // LLM's scheduledDate arg, but the confirm pass received
+  // confirmationAction.scheduledStart (a DIFFERENT field name) → the
+  // executor silently fell back to "tomorrow" and the task landed on a
+  // date the user never approved. Now:
+  //   - draft pass: parse scheduledDate (YYYY-MM-DD) → 10:00 SGT
+  //   - confirm pass: reuse the exact scheduledStart ISO from the card
+  const scheduledStart = resolveScheduledStart(args);
+  const dateAdjusted = scheduledStart.adjusted;
+
+  // If not executing writes, return confirmation request — the card now
+  // shows the EXACT values (catalog price + resolved date) that the
+  // executor will store on confirmation.
   if (!executeWrites) {
     return {
       success: true,
       toolName: "create_task",
       requiresConfirmation: true,
-      confirmationMessage: `Book a ${CATEGORY_DEFAULTS[category].label} service for ${fmtDate(scheduledStart)}?${instructions ? ` Instructions: "${instructions}"` : ""}${recurrence !== "ONE_OFF" ? ` (${recurrence})` : ""}`,
+      confirmationMessage: `Book ${jobType.name} (${CATEGORY_DEFAULTS[category].label}) for ${fmtDate(scheduledStart.date)} at SGD ${(priceCents / 100).toFixed(2)} (Anna.I catalog price)?${instructions ? ` Instructions: "${instructions}"` : ""}${recurrence !== "ONE_OFF" ? ` (${recurrence})` : ""}${dateAdjusted ? " — note: the requested date already passed, so I moved it to tomorrow." : ""}`,
       confirmationAction: {
         category,
         instructions,
-        scheduledStart: scheduledStart.toISOString(),
+        scheduledStart: scheduledStart.date.toISOString(),
         recurrence,
-        amountCents: defaultAmount,
+        amountCents: priceCents,
+        jobTypeId: jobType.id,
       },
     };
   }
 
-  // Execute: create the task
+  // Execute: create the task with catalog pricing + catalog linkage.
   const { TaskStatus: TS } = await import("@prisma/client");
   const recurrencePattern = recurrence !== "ONE_OFF"
     ? { type: recurrence, interval: recurrence === "WEEKLY" ? 7 : recurrence === "FORTNIGHTLY" ? 14 : 30 }
     : null;
 
-  const task = await db.task.create({
-    data: {
-      householdId,
-      category,
-      status: TS.CREATED,
-      instructions,
-      instructionsSource: "nlu",
-      amountCents: defaultAmount,
-      recurrencePattern,
-      scheduledStart,
-    },
-  });
+  // Police (POLICE-1, must-fix #1): generateJobNo + task.create must run in
+  // ONE transaction with a P2002 retry, mirroring POST /api/tasks
+  // (MAX_JOB_NO_RETRIES). Task.jobNo is @unique — a concurrent form booking
+  // and AI booking can otherwise collide and hard-fail the AI create.
+  const MAX_JOB_NO_RETRIES = 5;
+  let task: { id: string; jobNo: string | null } | null = null;
+  let lastCreateError: unknown = null;
+  for (let attempt = 0; attempt < MAX_JOB_NO_RETRIES; attempt++) {
+    try {
+      task = await db.$transaction(async (tx) => {
+        const jobNo = await generateJobNo(tx);
+        return await tx.task.create({
+          data: {
+            jobNo,
+            householdId,
+            category,
+            status: TS.CREATED,
+            instructions,
+            instructionsSource: "nlu",
+            amountCents: priceCents,
+            finalAmountCents: priceCents,
+            jobTypeId: jobType.id,
+            recurrencePattern,
+            scheduledStart: scheduledStart.date,
+            metadata: {
+              source: "nlu",
+              autoDispatched: false,
+              jobTypeName: jobType.name,
+            },
+          },
+          select: { id: true, jobNo: true },
+        });
+      });
+      break;
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === "P2002") {
+        // jobNo unique collision with a concurrent creation — retry picks
+        // the next sequence number.
+        lastCreateError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!task) {
+    throw lastCreateError ?? new Error("Could not allocate a job number after retries");
+  }
 
   // Ensure autonomy record exists
   await db.householdCategoryAutonomy.upsert({
@@ -305,28 +393,71 @@ async function executeCreateTask(
   // Fire automation (auto-dispatch if L3+)
   triggerAutomationOnTaskCreated(task.id, householdId, category);
 
-  // Set NLU source flag
-  await db.task.update({
-    where: { id: task.id },
-    data: {
-      metadata: {
-        source: "nlu",
-        autoDispatched: false,
-      },
-    },
-  });
-
   return {
     success: true,
     toolName: "create_task",
     data: {
       taskId: task.id,
+      jobNo: task.jobNo,
       category,
-      amount: sgd(defaultAmount),
-      scheduledDate: fmtDate(scheduledStart!),
+      jobTypeName: jobType.name,
+      amount: sgd(priceCents),
+      scheduledDate: fmtDate(scheduledStart.date),
       recurrence,
     },
   };
+}
+
+/**
+ * A-3: single source of truth for date resolution, shared by the draft
+ * (card) and confirm (execute) passes so both can never disagree.
+ *
+ * Priority:
+ *   1. args.scheduledStart — the ISO string round-tripped from the
+ *      confirmation card (confirm pass — this is exactly what the user
+ *      approved)
+ *   2. args.scheduledDate — "YYYY-MM-DD" from the LLM (draft pass)
+ *   3. tomorrow @ 10:00 local (default)
+ *
+ * A resolved date in the past moves to tomorrow @ 10:00 with adjusted=true
+ * so the card can tell the user (no silent surprises).
+ */
+function resolveScheduledStart(args: Record<string, unknown>): {
+  date: Date;
+  adjusted: boolean;
+} {
+  const now = new Date();
+  let date: Date | null = null;
+
+  const iso = args.scheduledStart as string | undefined;
+  if (iso) {
+    const parsed = new Date(iso);
+    if (!isNaN(parsed.getTime())) date = parsed;
+  }
+
+  if (!date) {
+    const ymd = args.scheduledDate as string | undefined;
+    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      const [y, m, d] = ymd.split("-").map(Number);
+      date = new Date(y, m - 1, d, 10, 0, 0);
+    }
+  }
+
+  if (!date) {
+    date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(10, 0, 0, 0);
+    return { date, adjusted: false };
+  }
+
+  if (date.getTime() < now.getTime()) {
+    const bumped = new Date();
+    bumped.setDate(bumped.getDate() + 1);
+    bumped.setHours(10, 0, 0, 0);
+    return { date: bumped, adjusted: true };
+  }
+
+  return { date, adjusted: false };
 }
 
 async function executeCancelTask(
@@ -337,7 +468,11 @@ async function executeCancelTask(
   const { db } = await import("@/lib/db");
 
   const taskId = args.taskId as string;
-  const reason = (args.reason as string) || "Cancelled via Ask Anna";
+  // Police (POLICE-1, risk #7): clamp the LLM-controlled reason — the
+  // canonical route zod-caps it at 500 chars; the AI path must too (it
+  // lands in disputeResolution text + audit metadata).
+  const rawReason = (args.reason as string) || "Cancelled via Ask Anna";
+  const reason = rawReason.slice(0, 500);
 
   // Validate task exists and belongs to this household
   const task = await db.task.findUnique({
@@ -352,8 +487,10 @@ async function executeCancelTask(
     return { success: false, toolName: "cancel_task", error: "This task belongs to a different household" };
   }
 
-  // Can only cancel CREATED, PREDICTED, or MATCHING tasks
-  if (!["CREATED", "PREDICTED", "MATCHING", "ACCEPTED", "SCHEDULED"].includes(task.status)) {
+  // ── AI Wave 2-A (A-4): use the SAME cancellable-status list as the
+  // canonical service (previously the tool had its own slightly different
+  // list, and its own divergent state semantics on execution).
+  if (!CANCELLABLE_STATUSES.includes(task.status as never)) {
     return { success: false, toolName: "cancel_task", error: `Cannot cancel a task that is already ${task.status}` };
   }
 
@@ -362,33 +499,36 @@ async function executeCancelTask(
       success: true,
       toolName: "cancel_task",
       requiresConfirmation: true,
-      confirmationMessage: `Cancel the ${task.category.toLowerCase()} task scheduled for ${task.scheduledStart ? fmtDate(new Date(task.scheduledStart)) : "pending"}?`,
+      confirmationMessage: `Cancel the ${task.category.toLowerCase()} task #${task.jobNo ?? ""} scheduled for ${task.scheduledStart ? fmtDate(new Date(task.scheduledStart)) : "pending"}?${task.bookings.length > 0 ? " The vendor assignment will be cancelled and any escrowed amount refunded as Anna.I credit." : ""}`,
       confirmationAction: { taskId, reason },
     };
   }
 
-  // Execute cancellation
-  await db.task.update({
-    where: { id: taskId },
-    data: {
-      status: "CREATED", // revert to created if was dispatched
-      cancelledAt: new Date(),
-      cancelReason: reason,
-    },
+  // ── AI Wave 2-A (A-4): delegate to the canonical cancellation service
+  // (src/lib/task-cancel-service.ts — the exact F18/R3 money path used by
+  // POST /api/tasks/[id]/cancel). The old inline code just set
+  // status back to "CREATED", skipping the CANCELLED state machine,
+  // refund-as-credit, voucher restore, notifications and events.
+  const outcome = await cancelTask({
+    taskId,
+    reason,
+    actor: { kind: "household", householdId, via: "ask-anna" },
   });
 
-  // Cancel any active bookings
-  if (task.bookings.length > 0) {
-    await db.booking.updateMany({
-      where: { taskId, status: { in: ["assigned", "accepted", "in_progress"] } },
-      data: { status: "cancelled", cancelledAt: new Date() },
-    });
+  if (!outcome.ok) {
+    return { success: false, toolName: "cancel_task", error: outcome.error };
   }
 
   return {
     success: true,
     toolName: "cancel_task",
-    data: { taskId, cancelled: true },
+    data: {
+      taskId,
+      status: "CANCELLED",
+      refundedCents: outcome.data.refundedCents,
+      creditCode: outcome.data.credit?.code ?? null,
+      voucherRestored: outcome.data.voucherRestored,
+    },
   };
 }
 

@@ -254,6 +254,9 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
   });
 
   // AI Photo Analysis
+  // AI Wave 2-A (A-7): the API now takes the taskId only — photos are
+  // resolved server-side from this task (object-level authz). The old
+  // client sent raw photo URLs, which the API no longer accepts.
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
 
   // Rating form state
@@ -268,20 +271,15 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
       if (!task?.verificationPhotos || task.verificationPhotos.length === 0) {
         throw new Error("No photos to analyze");
       }
-      const photos = task.verificationPhotos.map((p) => ({
-        url: p.fileUrl,
-        type: p.uploadedBy?.includes("before") ? "before" : "after",
-      }));
       const res = await fetch("/api/analyze-photos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          photos,
-          category: task.category,
-          instructions: task.instructions,
-        }),
+        body: JSON.stringify({ taskId }),
       });
-      if (!res.ok) throw new Error("AI analysis failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "AI analysis failed");
+      }
       return res.json();
     },
     onSuccess: (data) => {

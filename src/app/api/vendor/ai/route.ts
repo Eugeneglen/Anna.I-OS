@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { VENDOR_AI_TOOLS, executeVendorToolCall } from "@/lib/vendor-ai-tools";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { getZAI } from "@/lib/zai";
+import { vendorHasAiAccess } from "@/lib/vendor-rbac";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Vendor AI
@@ -99,6 +105,29 @@ export async function POST(request: NextRequest) {
     }
 
     const vendorId = session.vendorId;
+
+    // ── AI Wave 2-A (A-5): LLM cost cap — this endpoint was unmetered. ──
+    const rlKey = `vendor-ai:vendor:${vendorId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.vendorAi.limit, RATE_LIMITS.vendorAi.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
+    // ── AI Wave 2-A (A-6): RBAC gate — the vendor permission catalogue
+    // previously had no key for the AI at all; any staff member of any
+    // role could use it. Enforced server-side here (the layout also gates
+    // the chat mount via can("v_ai", "view")). System roles are
+    // grandfathered the permission by lib/vendor-rbac.ts on session load.
+    if (!(await vendorHasAiAccess(session))) {
+      return NextResponse.json(
+        {
+          error:
+            "Your vendor role does not include AI assistant access (v_ai:view). Ask a vendor admin to grant it via Role Management.",
+        },
+        { status: 403 }
+      );
+    }
 
     const body: VendorAiRequest = await request.json();
     const { message } = body;

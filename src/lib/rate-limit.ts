@@ -138,6 +138,14 @@ export const RATE_LIMITS = {
   forgotPassword: { limit: 5, windowMs: 15 * 60_000 }, // 5 / 15 min / email+IP
   // FIX-1a: household AI assistant (LLM cost abuse cap).
   askAnna: { limit: 20, windowMs: 60_000 }, // 20 / minute / household
+  // AI Wave 2-A (A-5): remaining AI endpoints were unmetered — every one of
+  // them spends real LLM tokens, so each gets a per-identity cost cap.
+  opsAi: { limit: 20, windowMs: 60_000 }, // 20 / minute / ops user
+  vendorAi: { limit: 20, windowMs: 60_000 }, // 20 / minute / vendor
+  analyzePhotos: { limit: 10, windowMs: 60_000 }, // 10 / minute / household (VLM is expensive)
+  // AI Wave 2-A (A-1): quote routes were fully unauthenticated AND unmetered.
+  quoteCreate: { limit: 10, windowMs: 60_000 }, // 10 / minute / household
+  quoteExplain: { limit: 10, windowMs: 60_000 }, // 10 / minute / household
   // FIX-1a: cron-driven anomaly detection sweep (cron ticks are 60s).
   anomalyCheck: { limit: 30, windowMs: 60_000 },
 } as const;

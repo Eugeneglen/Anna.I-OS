@@ -3,17 +3,48 @@ import { z } from "zod";
 import { getZAI } from "@/lib/zai";
 import { getHouseholdSession } from "@/lib/household-auth";
 import { signServeUrl } from "@/lib/serve-auth";
+import { db } from "@/lib/db";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
+// ── AI Wave 2-A (A-7): the old contract accepted a client-supplied array
+// of arbitrary photo URLs. Object-level authorization was missing:
+//   1. Photos were never validated to belong to the caller's tasks — a
+//      signed household token was stamped on ANY /api/serve/ URL the
+//      client sent (cross-household probing if paths are guessable).
+//   2. Arbitrary EXTERNAL URLs passed through untouched — the VLM acted
+//      as a server-side fetch relay.
+// The new contract takes a taskId only; photos are loaded server-side
+// from the caller's OWN task and before/after is derived from the DB's
+// uploadedBy field ("vendor:before" | "vendor:after" | "staff:*").
 const analyzePhotosSchema = z.object({
-  photos: z.array(
-    z.object({
-      url: z.string().min(1),
-      type: z.enum(["before", "after"]),
-    })
-  ).min(1).max(10),
-  category: z.string().optional(),
-  instructions: z.string().optional(),
+  taskId: z.string().min(1),
 });
+
+// VLM context cap — matches the previous max(10) photos limit.
+const MAX_PHOTOS = 10;
+
+/**
+ * AI Wave 2-A (A-7): the vision backend ONLY accepts absolute, publicly
+ * reachable https URLs (verified empirically: relative URLs and base64
+ * data URLs are rejected with code 1210). Serve-hosted photos are stored
+ * as relative "/api/serve/..." paths, so the absolute URL is constructed
+ * from the request's forwarded proto/host — correct behind the Railway
+ * proxy (x-forwarded-proto: https, x-forwarded-host: <public domain>).
+ */
+function absoluteUrl(path: string, request: Request): string {
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    (request.headers.get("host")?.includes("localhost") ? "http" : "https");
+  const host =
+    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    request.headers.get("host");
+  if (!host) return path;
+  return `${proto}://${host}${path}`;
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,28 +55,81 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // AI Wave 2-A (A-5): VLM calls are expensive — 10/min/household cap.
+    const rlKey = `analyze-photos:hh:${session.householdId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.analyzePhotos.limit, RATE_LIMITS.analyzePhotos.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
     const body = await request.json();
     const parsed = analyzePhotosSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.issues.map((i) => i.message).join(", ") },
+        { error: "taskId is required — photos are resolved from the task record" },
         { status: 400 }
       );
     }
 
-    const { photos, category, instructions } = parsed.data;
+    const { taskId } = parsed.data;
+
+    // A-7: load the task + its photos server-side, ownership-scoped.
+    // 404 (not 403) on mismatch — don't confirm other households' tasks exist.
+    const task = await db.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        category: true,
+        instructions: true,
+        householdId: true,
+        verificationPhotos: {
+          orderBy: { createdAt: "asc" },
+          select: { fileUrl: true, uploadedBy: true },
+        },
+      },
+    });
+
+    if (!task || task.householdId !== session.householdId) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    if (task.verificationPhotos.length === 0) {
+      return NextResponse.json(
+        { error: "No verification photos on this task yet" },
+        { status: 400 }
+      );
+    }
+
+    // Build the photo list from DB records only. Only /api/serve/ URLs are
+    // eligible (signed with a short TTL for the vision model); anything
+    // else is skipped — external URLs are NEVER fetched (A-7).
+    const dbPhotos = task.verificationPhotos.slice(0, MAX_PHOTOS);
+    const photos = dbPhotos
+      .map((p) => ({
+        url: p.fileUrl,
+        type: p.uploadedBy?.includes("before") ? ("before" as const) : ("after" as const),
+      }))
+      .filter((p) => p.url?.startsWith("/api/serve/"));
+
+    if (photos.length === 0) {
+      return NextResponse.json(
+        { error: "No analysable platform-hosted photos on this task" },
+        { status: 400 }
+      );
+    }
 
     // Separate before and after photos
     const beforePhotos = photos.filter((p) => p.type === "before");
     const afterPhotos = photos.filter((p) => p.type === "after");
 
     // Build analysis prompt
-    const categoryContext = category
-      ? `Service category: ${category.toLowerCase()}.`
+    const categoryContext = task.category
+      ? `Service category: ${task.category.toLowerCase()}.`
       : "";
-    const instructionsContext = instructions
-      ? `Work instructions: "${instructions}".`
+    const instructionsContext = task.instructions
+      ? `Work instructions: "${task.instructions}".`
       : "";
 
     const hasBeforeAndAfter = beforePhotos.length > 0 && afterPhotos.length > 0;
@@ -95,10 +179,14 @@ Respond in JSON format only:
     // Build image content array
     // FIX-1a: /api/serve now requires auth. The VLM fetches these URLs
     // server-side WITHOUT cookies, so sign short-TTL access tokens onto
-    // any /api/serve URL before handing it to the vision model.
+    // the /api/serve URLs before handing them to the vision model.
+    // (A-7: URLs now originate from the DB, not the client; and are made
+    // ABSOLUTE — the vision backend rejects relative URLs outright.)
     const imageContent = photos.map((photo) => ({
       type: "image_url" as const,
-      image_url: { url: signServeUrl(photo.url, 10 * 60) ?? photo.url },
+      image_url: {
+        url: absoluteUrl(signServeUrl(photo.url, 10 * 60) ?? photo.url, request),
+      },
     }));
 
     // Call VLM
@@ -151,6 +239,35 @@ Respond in JSON format only:
         concerns: "Parsing error in AI response",
         recommendation: "review",
       };
+    }
+
+    // ── AI Wave 2-A (A-8): VLM analyses are attributable. The analysis is
+    // advisory only (household still verifies; escrow release stays human)
+    // but the audit row records what the model recommended, on which task.
+    try {
+      await db.auditLog.create({
+        data: {
+          userId: null, // OpsUser FK — null for household actors
+          userName: `${session.memberName} (household, via photo analysis)`,
+          action: "AI_PHOTO_ANALYSIS",
+          entityType: "task",
+          entityId: task.id,
+          metadata: {
+            via: "ai-photo-analysis",
+            actorHouseholdId: session.householdId,
+            actorEmail: session.memberEmail,
+            photoCount: photos.length,
+            beforeCount: beforePhotos.length,
+            afterCount: afterPhotos.length,
+            completionStatus: analysis.completionStatus ?? null,
+            qualityScore: analysis.qualityScore ?? null,
+            recommendation: analysis.recommendation ?? null,
+          },
+        },
+      });
+    } catch (err) {
+      // Non-fatal — analysis result still returns to the household.
+      console.error("[/api/analyze-photos] audit log failed:", err);
     }
 
     return NextResponse.json({

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { db } from "@/lib/db";
 import { vendorJson } from "@/lib/vendor-guard";
+import { ensureVendorAiPermission } from "@/lib/vendor-rbac";
 
 export async function GET() {
   try {
@@ -9,6 +10,11 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // AI Wave 2-A (A-6): idempotent v_ai:view backfill BEFORE the role is
+    // loaded, so the layout's can("v_ai", "view") reflects the gate for
+    // system roles immediately (grandfathered — nobody loses access).
+    await ensureVendorAiPermission();
 
     // ── HQ staff (VendorUser): resolve identity + RBAC from VendorUser ──
     if (session.isStaff && session.userId) {

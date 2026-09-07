@@ -268,6 +268,10 @@ const VENDOR_PERMISSIONS: PermDef[] = [
   { module: "v_roles", action: "edit", description: "Edit vendor role permissions" },
   { module: "v_roles", action: "assign", description: "Assign roles to vendor staff" },
 
+  // v_ai: 1 (AI Wave 2-A A-6 — vendor AI assistant access; matches the
+  // runtime backfill in src/lib/vendor-rbac.ts and the roles-route catalog)
+  { module: "v_ai", action: "view", description: "Use the vendor AI assistant" },
+
   // vendors: 5 (shared module — vendor self-management)
   { module: "vendors", action: "view", description: "View vendor profiles" },
   { module: "vendors", action: "create", description: "Create vendor profiles" },
@@ -305,6 +309,7 @@ const VENDOR_ROLE_DEFS: RoleDef[] = [
       ...perm("v_settings", ["view"]),
       ...perm("v_users", ["view"]),
       ...perm("v_roles", ["view"]),
+      ...perm("v_ai", ["view"]),
     ],
   },
   {
@@ -316,6 +321,7 @@ const VENDOR_ROLE_DEFS: RoleDef[] = [
       ...perm("v_schedule", ["view"]),
       ...perm("v_calendar", ["view"]),
       ...perm("v_bookings", ["view"]),
+      ...perm("v_ai", ["view"]),
     ],
   },
 ];
