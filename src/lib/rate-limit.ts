@@ -101,6 +101,20 @@ export function checkRateLimit(
   return true;
 }
 
+/**
+ * Peek whether a caller is CURRENTLY blocked WITHOUT counting a new
+ * request (FIX-1a login throttling). Use for "failed attempts only"
+ * semantics: check this before verifying credentials, then call
+ * checkRateLimit(...) on the FAILURE path to record the attempt.
+ */
+export function isRateLimited(key: string, limit: number): boolean {
+  if (!key) return false;
+  const b = buckets.get(key);
+  if (!b) return false;
+  if (b.resetAt <= Date.now()) return false;
+  return b.count >= limit;
+}
+
 // ── Convenience helpers ──
 //
 // Pre-defined per-endpoint limits so call sites stay declarative and
@@ -117,11 +131,33 @@ export const RATE_LIMITS = {
   // enough for the legit 5-photo + 2-video flow (max 7 files per task)
   // while capping runaway/malicious multipart spam.
   taskAttachmentUpload: { limit: 10, windowMs: 60_000 }, // 10 / minute / session identity
+  // FIX-1a: brute-force protection on the three login endpoints — counted
+  // per FAILED attempt, keyed by identifier + client IP.
+  loginFailures: { limit: 10, windowMs: 15 * 60_000 }, // 10 failed attempts / 15 min
+  // FIX-1a: forgot-password token generation (all three portals).
+  forgotPassword: { limit: 5, windowMs: 15 * 60_000 }, // 5 / 15 min / email+IP
+  // FIX-1a: household AI assistant (LLM cost abuse cap).
+  askAnna: { limit: 20, windowMs: 60_000 }, // 20 / minute / household
+  // FIX-1a: cron-driven anomaly detection sweep (cron ticks are 60s).
+  anomalyCheck: { limit: 30, windowMs: 60_000 },
 } as const;
 
 /** Build a stable rate-limit key from the ops session. */
 export function opsRateKey(userId: string | undefined, endpoint: string): string {
   return `ops:${userId ?? "anon"}:${endpoint}`;
+}
+
+/**
+ * Best-effort client IP from proxy headers (sandbox sits behind Caddy,
+ * which sets x-forwarded-for). Falls back to "unknown".
+ */
+export function clientIpFromHeaders(headers: Headers): string {
+  const fwd = headers.get("x-forwarded-for");
+  if (fwd) {
+    const first = fwd.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return headers.get("x-real-ip")?.trim() || "unknown";
 }
 
 /**

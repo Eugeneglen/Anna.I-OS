@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { isAuthRejection, fetchEventToken } from "@/hooks/socket-auth";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -53,6 +54,13 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef(handlers);
   const onEventRef = useRef(onEvent);
+  // FIX-1b: auth fallback / log-once state (see socket-auth.ts)
+  const authFallbackArmedRef = useRef(true);
+  const connectErrorLoggedRef = useRef(false);
+  const fallbackLoggedRef = useRef(false);
+  // Latest connect callback, so the auth-fallback path can re-enter connect
+  // without a self-referencing closure.
+  const connectRef = useRef<((eventToken?: string) => void) | null>(null);
 
   // Keep refs up to date without triggering reconnects
   useEffect(() => {
@@ -60,7 +68,7 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
     onEventRef.current = onEvent;
   }, [handlers, onEvent]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback((eventToken?: string) => {
     if (socketRef.current?.connected) return;
 
     try {
@@ -76,12 +84,25 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
         reconnectionDelay: 2000,
         reconnectionDelayMax: 30000,
         timeout: 30000,
+        auth: {
+          type: "ops",
+          // FIX-1b: the service verifies the ops session cookie on the
+          // handshake (same-origin, forwarded by the gateway) and joins the
+          // socket into the ops broadcast room. eventToken is the short-lived
+          // fallback from /api/events/token, used only when the cookie was
+          // unavailable.
+          ...(eventToken ? { token: eventToken } : {}),
+        },
       });
       console.log("[useOpsEvents] Socket created, connecting...");
 
     socket.on("connect", () => {
       console.log("[useOpsEvents] Connected!");
       setIsConnected(true);
+      // Re-arm the one-shot auth fallback + log-once flags for the NEXT
+      // connection lifecycle (e.g. a token expiring after 5 minutes).
+      authFallbackArmedRef.current = true;
+      connectErrorLoggedRef.current = false;
     });
 
     socket.on("disconnect", () => {
@@ -90,7 +111,34 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
     });
 
     socket.on("connect_error", (err) => {
-      console.warn("[useOpsEvents] Connect error:", err.message);
+      // FIX-1b: the service rejects unauthenticated handshakes with an
+      // "unauthorized..." error. Socket.io does NOT auto-reconnect after
+      // a middleware rejection, so there is no reconnect spam — we get
+      // exactly one shot at a token fallback per connection lifecycle.
+      if (authFallbackArmedRef.current && isAuthRejection(err)) {
+        authFallbackArmedRef.current = false;
+        socket.disconnect();
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+        }
+        fetchEventToken().then((token) => {
+          if (token) {
+            connectRef.current?.(token);
+          } else if (!fallbackLoggedRef.current) {
+            fallbackLoggedRef.current = true;
+            console.warn(
+              "[useOpsEvents] Auth fallback failed — realtime updates disabled for this session"
+            );
+          }
+        });
+        return;
+      }
+      // Other errors (network, service down): socket.io retries with
+      // backoff on its own — log once per lifecycle to avoid spam.
+      if (!connectErrorLoggedRef.current) {
+        connectErrorLoggedRef.current = true;
+        console.warn("[useOpsEvents] Connect error:", err.message);
+      }
     });
 
     // Online count
@@ -147,6 +195,11 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
     }
   }, []);
 
+  // Keep the latest connect callback reachable from the fallback path
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -158,7 +211,7 @@ export function useOpsEvents(options: UseOpsEventsOptions = {}): UseOpsEventsRet
 
   const reconnect = useCallback(() => {
     disconnect();
-    setTimeout(connect, 500);
+    setTimeout(() => connect(), 500);
   }, [connect, disconnect]);
 
   // Connect on mount if enabled

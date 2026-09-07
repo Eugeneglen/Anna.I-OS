@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import { stripVendorSecrets } from "@/lib/sanitize";
 import * as bcrypt from "bcryptjs";
 
 type VendorUpdateData = {
@@ -54,7 +55,8 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ vendor });
+    // FIX-1a: strip passwordHash + verificationData before serialising.
+    return NextResponse.json({ vendor: stripVendorSecrets(vendor) });
   } catch (error) {
     console.error("[/api/ops/vendors/[id] GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -166,7 +168,11 @@ export async function PATCH(
       action: "vendor.update",
       entityType: "Vendor",
       entityId: id,
-      metadata: { changes: updateData },
+      // FIX-1a: never persist the (new) passwordHash into the audit trail —
+      // log a boolean marker instead.
+      metadata: {
+        changes: { ...updateData, ...(body.password !== undefined ? { passwordHash: "[redacted]" } : {}) },
+      },
     });
 
     // Re-fetch with staff and addresses
@@ -181,7 +187,8 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ vendor: updated });
+    // FIX-1a: strip passwordHash + verificationData before serialising.
+    return NextResponse.json({ vendor: stripVendorSecrets(updated) });
   } catch (error: unknown) {
     console.error("[/api/ops/vendors/[id] PATCH]", error);
     if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002") {

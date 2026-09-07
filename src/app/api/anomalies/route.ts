@@ -1,10 +1,34 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getHouseholdSession } from "@/lib/household-auth";
+import { getOpsSession } from "@/lib/ops-auth";
 
 export async function GET(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated. The household portal's
+    // anomaly banner fetches its OWN anomalies (householdId query param);
+    // ops may query any household. Household sessions are pinned to their
+    // own householdId — a foreign householdId param yields 403.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ]);
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const householdId = searchParams.get("householdId");
+    let householdId = searchParams.get("householdId");
+    if (hhSession && !opsSession) {
+      if (householdId && householdId !== hhSession.householdId) {
+        return NextResponse.json(
+          { error: "Forbidden — you can only view your own household's anomalies" },
+          { status: 403 }
+        );
+      }
+      householdId = hhSession.householdId;
+    }
+
     const status = searchParams.get("status") || "ACTIVE";
     const severity = searchParams.get("severity");
 

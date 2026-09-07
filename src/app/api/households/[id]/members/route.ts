@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { z } from "zod"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 const addMemberSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -15,6 +17,24 @@ export async function POST(
 ) {
   try {
     const { id: householdId } = await params
+
+    // FIX-1a: previously unauthenticated — anyone could add members to
+    // any household. The household settings panel is the only consumer:
+    // own household session OR ops session required.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — this household belongs to another account" },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const parsed = addMemberSchema.parse(body)
 
@@ -34,7 +54,10 @@ export async function POST(
       },
     })
 
-    return NextResponse.json({ member }, { status: 201 })
+    // FIX-1a: strip passwordHash from the returned member row
+    const { passwordHash: _stripped, ...safeMember } = member
+
+    return NextResponse.json({ member: safeMember }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

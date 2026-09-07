@@ -3,6 +3,8 @@ import { writeFile, mkdir } from "fs/promises"
 import { join } from "path"
 import crypto from "crypto"
 import { db } from "@/lib/db"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 // UPLOAD_DIR: writable root for file storage.
 // - Local dev: defaults to public/ (backward compatible)
@@ -40,12 +42,32 @@ export async function POST(request: Request) {
       )
     }
 
+    // FIX-1a ownership check — previously ANYONE could overwrite ANY
+    // member's avatar (IDOR). Household sessions may only upload for
+    // members of their OWN household; ops may act for any member. Vendors
+    // use their own /api/vendor/upload-avatar route (already session-
+    // scoped to their own vendorId).
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     // Verify member exists
     const member = await db.familyMember.findUnique({
       where: { id: memberId },
     })
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
+    }
+
+    if (hhSession && !opsSession && member.householdId !== hhSession.householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — you can only upload avatars for members of your own household" },
+        { status: 403 }
+      )
     }
 
     // Generate unique filename

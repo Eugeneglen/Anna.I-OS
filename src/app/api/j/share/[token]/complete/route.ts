@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { TaskStatus } from "@prisma/client";
+import { getRequireVerificationPhotos } from "@/lib/platform-config";
 import { triggerAnomalyDetection } from "@/lib/notify";
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine";
 
@@ -39,6 +40,28 @@ export async function POST(
         { error: `Cannot complete booking with status "${booking.status}". Only accepted bookings can be completed.` },
         { status: 409 }
       );
+    }
+
+    // ── Server-side verification-photo requirement (FIX-1c) ──
+    // Same gate as the vendor portal completion route: reject completion
+    // with a clear 400 when the task has ZERO verification photos. Gated on
+    // the Ops-controlled PlatformConfig key "require_verification_photos"
+    // (default TRUE when absent). Checked BEFORE any state mutation.
+    const requirePhotos = await getRequireVerificationPhotos();
+    if (requirePhotos) {
+      const photoCount = await db.verificationPhoto.count({
+        where: { taskId: booking.taskId },
+      });
+      if (photoCount === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Cannot complete this job: at least 1 verification photo is required. Upload a before/after photo first, then mark the work complete.",
+            code: "VERIFICATION_PHOTOS_REQUIRED",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // ── Parse JSON body ──

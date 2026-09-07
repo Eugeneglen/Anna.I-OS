@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
+import { resolveSecret } from "@/lib/secrets";
 
-const JWT_SECRET = process.env.HOUSEHOLD_JWT_SECRET || "anna-household-dev-secret";
+const JWT_SECRET = resolveSecret("HOUSEHOLD_JWT_SECRET", "anna-household-dev-secret", {
+  owner: "household-auth",
+});
 const secret = new TextEncoder().encode(JWT_SECRET);
 
 export interface HouseholdSession {

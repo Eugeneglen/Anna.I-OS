@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL, CATEGORIES } from "@/lib/constants"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 // C-6 FIX: Use all 10 categories from constants instead of hardcoded 4
 const ALL_CATEGORIES = CATEGORIES as readonly string[]
@@ -11,6 +13,23 @@ export async function GET(
 ) {
   try {
     const { householdId } = await params
+
+    // FIX-1a: previously unauthenticated — anyone could read (and lazily
+    // create) autonomy records for any household. Own household session
+    // OR ops session required (same rule as the [category] PATCH route).
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — you can only view autonomy for your own household" },
+        { status: 403 }
+      )
+    }
 
     // Ensure all categories have an autonomy record (upsert missing ones)
     await db.$transaction(

@@ -5,6 +5,7 @@ import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
 import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
 import { processRefund, RefundError } from "@/lib/payments/refund-service";
+import { recordEscrowReleaseEffect, logNoProviderEffect } from "@/lib/payments/escrow-effects";
 import { issueCompensationVoucher } from "@/lib/marketing/service-recovery";
 import { isPlatformFundedDiscount, payoutBaseCents } from "@/lib/payments/calculations";
 
@@ -111,7 +112,7 @@ export async function PATCH(
             id: true, amountCents: true, vendorPayoutCents: true,
             discountCents: true, originalAmountCents: true,
             commissionRate: true, refundCents: true, discountFundedBy: true,
-            commissionCents: true,
+            commissionCents: true, stripePaymentIntentId: true,
           },
         });
         let claimedCount = 0;
@@ -133,6 +134,14 @@ export async function PATCH(
         let discountTotalCents = 0;
         let originalTotalCents = 0;
         const claimedEntryIds: string[] = [];
+        // FIX-1c: per-entry figures for the post-commit adapter effects
+        // (release/capture + vendor payout — see escrow-effects.ts).
+        const claimedEntryEffects: {
+          escrowLedgerId: string;
+          heldAmountCents: number;
+          payoutCents: number;
+          providerHoldRef: string | null;
+        }[] = [];
         for (const entry of allHeldEntries) {
           // Shared predicate (was hand-inlined — police INFO).
           const platformFunded = isPlatformFundedDiscount(entry);
@@ -161,6 +170,12 @@ export async function PATCH(
             escrowCashTotalCents += entry.amountCents;
             discountTotalCents += entry.discountCents || 0;
             originalTotalCents += entry.originalAmountCents || 0;
+            claimedEntryEffects.push({
+              escrowLedgerId: entry.id,
+              heldAmountCents: entry.amountCents,
+              payoutCents: vendorPayoutCents,
+              providerHoldRef: entry.stripePaymentIntentId,
+            });
           }
         }
         if (claimedCount === 0) {
@@ -251,8 +266,25 @@ export async function PATCH(
           });
         }
 
-        return { updatedTask, updatedEscrow };
+        return { updatedTask, updatedEscrow, claimedEntryEffects, vendorId: escrow.booking?.vendorId ?? null, bookingId: escrow.bookingId };
       });
+
+      // ── Payment adapter effects (FIX-1c wiring) ──
+      // Release/capture the held cash + transfer the vendor payout through
+      // the provider-agnostic PaymentService (NoOp today — Pending Payment
+      // Gateway Decision). Ledger-authoritative: post-commit, never throws,
+      // adapter failures are logged as reconciliation cases.
+      for (const effect of result.claimedEntryEffects) {
+        await recordEscrowReleaseEffect({
+          escrowLedgerId: effect.escrowLedgerId,
+          taskId: task.id,
+          bookingId: result.bookingId,
+          vendorId: result.vendorId,
+          heldAmountCents: effect.heldAmountCents,
+          payoutCents: effect.payoutCents,
+          providerHoldRef: effect.providerHoldRef,
+        });
+      }
 
       // Fire-and-forget: push real-time event to household
       // f5 (police-payout-base-1): emit the POST-heal payout for this entry.
@@ -426,6 +458,14 @@ export async function PATCH(
       // path, so the household is made whole.
       if (fullRemainingCents <= 0) {
         const zeroCash = await db.$transaction(async (tx) => {
+          // FIX-1c (payments wiring): the zero-cash resolution moves NO
+          // provider money by construction — no customer cash was ever held
+          // (amountCents = 0 on a 100% platform-funded discount), the vendor
+          // is paid nothing, and the household is made whole via the voucher
+          // restore below. The provider-agnostic adapter therefore has no
+          // refund/release effect to perform here; logged for the audit trail
+          // (Pending Payment Gateway Decision).
+          logNoProviderEffect(id, "zero-cash dispute resolution — no customer cash held, no refund effect");
           const claimed = await tx.escrowLedger.updateMany({
             where: { id, state: EscrowState.DISPUTED },
             data: {
@@ -898,7 +938,7 @@ export async function PATCH(
         // discounted entries are recomputed on the full pre-discount value
         // so the vendor is paid in full. No-op for entries already on the
         // new math; non-discounted entries are never touched.
-        await db.$transaction(async (tx) => {
+        const releaseEffects = await db.$transaction(async (tx) => {
           const disputedEntries = await tx.escrowLedger.findMany({
             where: { taskId: task.id, state: EscrowState.DISPUTED },
             select: {
@@ -906,12 +946,21 @@ export async function PATCH(
               originalAmountCents: true, commissionRate: true,
               refundCents: true, discountFundedBy: true,
               commissionCents: true, vendorPayoutCents: true,
+              stripePaymentIntentId: true,
             },
           });
           const now = new Date();
           let subsidyDrawnCents = 0;
           let subsidyPayoutTotalCents = 0;
           const subsidyEntryIds: string[] = [];
+          // FIX-1c: per-entry figures for the post-commit adapter effects
+          // (release/capture + vendor payout — see escrow-effects.ts).
+          const claimedEntryEffects: {
+            escrowLedgerId: string;
+            heldAmountCents: number;
+            payoutCents: number;
+            providerHoldRef: string | null;
+          }[] = [];
           for (const entry of disputedEntries) {
             // Shared predicate (was hand-inlined — police INFO).
             const platformFunded = isPlatformFundedDiscount(entry);
@@ -936,6 +985,12 @@ export async function PATCH(
             // f3-family (police-payout-base-1): subsidy bookkeeping counts
             // only entries actually claimed.
             if (claimed.count > 0) {
+              claimedEntryEffects.push({
+                escrowLedgerId: entry.id,
+                heldAmountCents: entry.amountCents,
+                payoutCents: vendorPayoutCents,
+                providerHoldRef: entry.stripePaymentIntentId,
+              });
               const draw = Math.max(0, payoutBase - entry.amountCents);
               if (draw > 0) {
                 subsidyDrawnCents += draw;
@@ -984,7 +1039,25 @@ export async function PATCH(
             },
             data: { promotionPaused: false },
           });
+          return { claimedEntryEffects };
         });
+
+        // ── Payment adapter effects (FIX-1c wiring) ──
+        // resolve_voucher releases the escrow to the vendor (entries →
+        // RELEASED, vendor paid): release/capture + vendor transfer through
+        // the provider-agnostic PaymentService (NoOp today — Pending Payment
+        // Gateway Decision). Ledger-authoritative: post-commit, never throws.
+        for (const effect of releaseEffects.claimedEntryEffects) {
+          await recordEscrowReleaseEffect({
+            escrowLedgerId: effect.escrowLedgerId,
+            taskId: task.id,
+            bookingId: escrow.bookingId,
+            vendorId: escrow.booking?.vendorId ?? null,
+            heldAmountCents: effect.heldAmountCents,
+            payoutCents: effect.payoutCents,
+            providerHoldRef: effect.providerHoldRef,
+          });
+        }
 
         // Create DISPUTE_RESOLVED notification for all household members
         const members = await db.familyMember.findMany({

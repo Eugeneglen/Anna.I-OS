@@ -134,7 +134,7 @@ function NotificationItem({
   notification: VendorNotification;
   onMarkRead: (id: string) => void;
 }) {
-  const isUnread = notification.status === "PENDING";
+  const isUnread = !notification.readAt; // FIX-1d: delivery status is not read state
   const style = getEventStyle(notification.eventType);
   const Icon = style.icon;
 

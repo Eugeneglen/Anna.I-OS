@@ -6,6 +6,8 @@ import {
   ACTIVE_CATEGORIES,
 } from "@/lib/constants"
 import { ServiceCategory } from "@prisma/client"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -161,6 +163,23 @@ export async function GET(
 ) {
   try {
     const { householdId } = await params
+
+    // FIX-1a: previously fully unauthenticated — the graph exposes the
+    // household's full service history, spend and vendor affinity. Own
+    // household session OR ops session required.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — you can only view your own household's graph" },
+        { status: 403 }
+      )
+    }
 
     // Run all independent queries in parallel
     const [autonomyRecords, thresholds, vendorAffinities, tasks] =

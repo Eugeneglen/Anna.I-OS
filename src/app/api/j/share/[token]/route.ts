@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { signServeUrl } from "@/lib/serve-auth";
+
+// FIX-1a: /api/serve now requires a session or a signed access token.
+// This is the PUBLIC job-share data API (no session), so every
+// /api/serve URL it returns is signed with a short TTL. The vendor
+// logo (avatar) gets a longer TTL so the page stays presentable if
+// data is refetched later; task attachments are short-lived.
+const ATTACHMENT_TTL_SECONDS = 10 * 60; // 10 minutes
+const AVATAR_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
 export async function GET(
   _request: Request,
@@ -64,13 +73,18 @@ export async function GET(
         serviceName: booking.task.jobType?.name || null,
         serviceDescription: booking.task.jobType?.description || null,
         vendorName: booking.vendor.companyName || booking.vendor.name,
-        vendorLogo: booking.vendor.avatarUrl || null,
+        vendorLogo: signServeUrl(booking.vendor.avatarUrl, AVATAR_TTL_SECONDS) || null,
         vendorPhone: booking.vendor.phone || null,
         staffName: booking.assignedStaff?.name || null,
         staffRole: booking.assignedStaff?.role || null,
         staffContact: booking.assignedStaff?.contact || null,
-        // Customer-uploaded attachments (photos/videos from household)
-        customerAttachments: booking.task.attachments || [],
+        // Customer-uploaded attachments (photos/videos from household) —
+        // signed for sessionless access by the share-page viewer
+        customerAttachments: booking.task.attachments.map((att) => ({
+          ...att,
+          fileUrl: signServeUrl(att.fileUrl, ATTACHMENT_TTL_SECONDS) ?? att.fileUrl,
+          thumbnailUrl: signServeUrl(att.thumbnailUrl, ATTACHMENT_TTL_SECONDS) ?? null,
+        })),
       },
     });
   } catch (error) {

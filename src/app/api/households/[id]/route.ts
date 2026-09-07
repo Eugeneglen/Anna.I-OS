@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { z } from "zod"
 import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
+import { stripMemberSecrets } from "@/lib/sanitize"
 import { validateSgPhone } from "@/lib/phone-validation"
 import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code"
 
@@ -118,6 +120,24 @@ export async function GET(
   try {
     const { id } = await params
 
+    // FIX-1a: previously fully unauthenticated. The household portal
+    // (dashboard / settings / layout shell) fetches its OWN record here,
+    // and ops may inspect any household — so: own household session OR
+    // ops session. Everyone else gets 401/403.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== id) {
+      return NextResponse.json(
+        { error: "Forbidden — this household belongs to another account" },
+        { status: 403 }
+      )
+    }
+
     const household = await db.household.findUnique({
       where: { id },
       select: {
@@ -145,11 +165,15 @@ export async function GET(
       return NextResponse.json({ error: "Household not found" }, { status: 404 })
     }
 
+    // FIX-1a: strip bcrypt passwordHash from member rows before
+    // serialising (was previously returned in every response).
     const [members, tasks, subscriptions, categoryAutonomy] = await Promise.all([
-      db.familyMember.findMany({
-        where: { householdId: id },
-        orderBy: { createdAt: "asc" },
-      }),
+      db.familyMember
+        .findMany({
+          where: { householdId: id },
+          orderBy: { createdAt: "asc" },
+        })
+        .then((rows) => rows.map(stripMemberSecrets)),
       db.task.findMany({
         where: {
           householdId: id,

@@ -230,7 +230,13 @@ export default function VendorSchedulePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Action failed");
+      if (!res.ok) {
+        // FIX-1c: surface the API's error message (e.g. the 400
+        // verification-photo requirement) instead of a generic toast, so
+        // vendors see exactly why completion was rejected.
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || "Action failed");
+      }
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -249,8 +255,12 @@ export default function VendorSchedulePage() {
       queryClient.invalidateQueries({ queryKey: ["vendor-earnings", vendorId] });
       toast({ title: "Booking updated successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to update booking", variant: "destructive" });
+    onError: (e: Error) => {
+      toast({
+        title: "Failed to update booking",
+        description: e.message,
+        variant: "destructive",
+      });
     },
   });
 

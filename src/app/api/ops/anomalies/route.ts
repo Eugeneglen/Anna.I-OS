@@ -1,9 +1,25 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 
 export async function GET(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated. Ops session +
+    // anomalies:view required (same convention as the other /api/ops/*
+    // routes).
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "anomalies", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "";
     const severity = searchParams.get("severity") || "";
@@ -129,6 +145,19 @@ const patchSchema = z.object({
 
 export async function PATCH(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated — anyone could resolve or
+    // dismiss any anomaly. Ops session + anomalies:edit required, and the
+    // mutation is now audit-logged.
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "anomalies", "edit");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const parsed = patchSchema.parse(body);
 
@@ -139,6 +168,17 @@ export async function PATCH(request: Request) {
     const result = await db.anomaly.updateMany({
       where: { id: { in: parsed.ids } },
       data: updateData,
+    });
+
+    // FIX-1a audit coverage: anomaly resolve/dismiss/acknowledge was
+    // previously invisible in the audit trail.
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "anomaly.update",
+      entityType: "Anomaly",
+      entityId: parsed.ids[0],
+      metadata: { ids: parsed.ids, status: parsed.status, updated: result.count },
     });
 
     return NextResponse.json({ updated: result.count });

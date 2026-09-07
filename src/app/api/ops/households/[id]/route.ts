@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import { stripMemberSecrets } from "@/lib/sanitize";
 import { validateSgPhone } from "@/lib/phone-validation";
 import { isValidPostalCode, normalizePostalCode } from "@/lib/postal-code";
 
@@ -63,10 +64,12 @@ export async function GET(
     }
 
     const [members, tasks, subscriptions, categoryAutonomy] = await Promise.all([
-      db.familyMember.findMany({
-        where: { householdId: id },
-        orderBy: { createdAt: "asc" },
-      }),
+      db.familyMember
+        .findMany({
+          where: { householdId: id },
+          orderBy: { createdAt: "asc" },
+        })
+        .then((rows) => rows.map(stripMemberSecrets)),
       db.task.findMany({
         where: {
           householdId: id,

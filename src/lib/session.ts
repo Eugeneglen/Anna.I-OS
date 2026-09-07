@@ -1,4 +1,5 @@
 import { getIronSession } from "iron-session";
+import { resolveSecret } from "@/lib/secrets";
 
 export interface SessionData {
   userId: string;
@@ -19,7 +20,11 @@ declare module "iron-session" {
 }
 
 const SESSION_OPTIONS = {
-  password: process.env.IRON_SESSION_PASSWORD || "anna-dev-session-secret-change-in-production",
+  password: resolveSecret(
+    "IRON_SESSION_PASSWORD",
+    "anna-dev-session-secret-change-in-production",
+    { owner: "iron-session (ops nextauth session)" }
+  ),
   cookieName: "anna-ops-session",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",

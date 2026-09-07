@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
-import { CATEGORIES, ACTIVE_CATEGORIES, PLATFORM_COMMISSION_RATE, MAX_AUTONOMY_LEVEL, CATEGORY_CYCLES_PER_LEVEL } from "@/lib/constants";
+import { getCommissionRate, invalidateCommissionRateCache } from "@/lib/commission";
+import { CATEGORIES, ACTIVE_CATEGORIES, MAX_AUTONOMY_LEVEL } from "@/lib/constants";
 import { CATEGORY_DEFAULTS, ServiceJobType as ServiceJobTypeT } from "@/lib/types";
 
 // ── README keys & labels for the Autonomy tab ──
@@ -93,26 +94,48 @@ export async function GET() {
       isActive: activeCats.includes(cat),
     }));
 
-    const effectiveCommission = configMap["commission_rate"]
-      ? parseInt(configMap["commission_rate"])
-      : PLATFORM_COMMISSION_RATE;
+    // ── Commission rate: single source of truth (FIX-1c) ──
+    // Reported through the same cached reader the charge path uses
+    // (getCommissionRate — PlatformConfig "commission_rate", 60s cache,
+    // PLATFORM_COMMISSION_RATE fallback), so the Ops UI can never show a
+    // value the escrow math doesn't apply.
+    const effectiveCommission = await getCommissionRate();
 
+    // ── Pricing authority consolidation (FIX-1c) ──
+    // ServiceJobType is the ONLY selling-price source (Ops edits prices in
+    // the Job Types tab). The former category_price_* PlatformConfig surface
+    // was display-only and diverged from the real charge path (audit:
+    // category_price_CARE 2000 vs job-type 6800) — retired from this GET and
+    // its write action removed below. This view is READ-ONLY, derived from
+    // the active job types per category.
     const categoryPricing = allCats.map((cat) => {
-      const dbPrice = configMap[`category_price_${cat}`];
-      const priceCents = dbPrice ? parseInt(dbPrice) : (CATEGORY_DEFAULTS[cat as keyof typeof CATEGORY_DEFAULTS]?.amount || 0);
+      const categoryJobTypes = jobTypes.filter((j) => j.category === cat);
+      const activeJobTypes = categoryJobTypes.filter((j) => j.isActive);
+      const priced = (activeJobTypes.length > 0 ? activeJobTypes : categoryJobTypes)
+        .map((j) => j.basePriceCents)
+        .filter((p) => p > 0);
       return {
         category: cat,
         label: toLabel(cat),
-        defaultPriceCents: CATEGORY_DEFAULTS[cat as keyof typeof CATEGORY_DEFAULTS]?.amount || 0,
-        activePriceCents: priceCents,
-        isCustom: !!dbPrice,
         isActive: activeCats.includes(cat),
+        activeJobTypes: activeJobTypes.length,
+        totalJobTypes: categoryJobTypes.length,
+        minPriceCents: priced.length > 0 ? Math.min(...priced) : 0,
+        maxPriceCents: priced.length > 0 ? Math.max(...priced) : 0,
+        avgPriceCents:
+          priced.length > 0
+            ? Math.round(priced.reduce((sum, p) => sum + p, 0) / priced.length)
+            : CATEGORY_DEFAULTS[cat as keyof typeof CATEGORY_DEFAULTS]?.amount || 0,
       };
     });
 
-    const activePricing = categoryPricing.filter((c) => c.isActive);
+    // Blended job value: average of the per-category average prices across
+    // ACTIVE categories that have priced job types (derived view).
+    const activePricing = categoryPricing.filter(
+      (c) => c.isActive && (c.activeJobTypes > 0 || c.avgPriceCents > 0)
+    );
     const blendedJobValueCents = activePricing.length > 0
-      ? Math.round(activePricing.reduce((sum, c) => sum + c.activePriceCents, 0) / activePricing.length)
+      ? Math.round(activePricing.reduce((sum, c) => sum + c.avgPriceCents, 0) / activePricing.length)
       : 0;
 
     // ── Fetch READMEs ──
@@ -184,22 +207,18 @@ export async function POST(req: NextRequest) {
         metadata: { count: thresholds.length },
       });
     } else if (action === "save_pricing") {
-      const { pricing } = body as { pricing: { category: string; priceCents: number }[] };
-      for (const p of pricing) {
-        const key = `category_price_${p.category}`;
-        await db.platformConfig.upsert({
-          where: { key },
-          create: { key, value: String(p.priceCents), label: `Base price for ${p.category.replace(/_/g, " ")}` },
-          update: { value: String(p.priceCents) },
-        });
-      }
-      await logAction({
-        userId: session.userId,
-        userName: session.name,
-        action: "config.save_pricing",
-        entityType: "PlatformConfig",
-        metadata: { count: pricing.length, items: pricing.map((p) => ({ category: p.category, priceCents: p.priceCents })) },
-      });
+      // ── RETIRED (FIX-1c pricing authority consolidation) ──
+      // The category_price_* PlatformConfig surface was display-only and
+      // diverged from the real charge path (ServiceJobType prices via
+      // calculateQuote). Selling prices are edited per job type in the Job
+      // Types tab; commission_rate (save_commission) is the Ops margin lever.
+      return NextResponse.json(
+        {
+          error:
+            "Category base prices are derived from Service Job Types — edit prices in the Job Types tab. This action has been retired.",
+        },
+        { status: 400 }
+      );
     } else if (action === "save_commission") {
       const { commissionRate } = body as { commissionRate: number };
       if (commissionRate < 0 || commissionRate > 100) {
@@ -210,6 +229,10 @@ export async function POST(req: NextRequest) {
         create: { key: "commission_rate", value: String(commissionRate), label: "Platform commission rate (%)" },
         update: { value: String(commissionRate) },
       });
+      // FIX-1c: invalidate the in-process commission cache so the next
+      // escrow creation (booking accept / add-on approval) reads the fresh
+      // value immediately — the write is no longer display-only.
+      invalidateCommissionRateCache();
       await logAction({
         userId: session.userId,
         userName: session.name,

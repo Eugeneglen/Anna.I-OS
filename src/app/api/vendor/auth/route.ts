@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 import { createVendorToken, createVendorUserToken } from "@/lib/vendor-auth";
+import {
+  checkRateLimit,
+  clientIpFromHeaders,
+  isRateLimited,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -15,6 +22,19 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // FIX-1a: brute-force throttle — 10 FAILED attempts / 15 min per
+    // identifier + IP. Only failures are counted.
+    const failKey = `login-fail:vendor:${clientIpFromHeaders(req.headers)}:${String(email).toLowerCase()}`;
+    if (isRateLimited(failKey, RATE_LIMITS.loginFailures.limit)) {
+      return NextResponse.json(rateLimitResponsePayload(failKey), { status: 429 });
+    }
+    const recordFailure = () =>
+      checkRateLimit(
+        failKey,
+        RATE_LIMITS.loginFailures.limit,
+        RATE_LIMITS.loginFailures.windowMs
+      );
 
     // ── 1. Try the Vendor (owner) table first — backward compatible for
     //       demo vendors created by Ops (e.g. ops@sparkclean.sg). ──
@@ -42,6 +62,7 @@ export async function POST(req: NextRequest) {
 
       const valid = await bcrypt.compare(password, passwordHash);
       if (!valid) {
+        recordFailure();
         return NextResponse.json(
           { error: "Invalid credentials" },
           { status: 401 }
@@ -106,6 +127,7 @@ export async function POST(req: NextRequest) {
 
       const valid = await bcrypt.compare(password, staffUser.passwordHash);
       if (!valid) {
+        recordFailure();
         return NextResponse.json(
           { error: "Invalid credentials" },
           { status: 401 }
@@ -145,6 +167,7 @@ export async function POST(req: NextRequest) {
     }
 
     // No match in either table.
+    recordFailure();
     return NextResponse.json(
       { error: "Invalid credentials" },
       { status: 401 }

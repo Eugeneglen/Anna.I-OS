@@ -1,6 +1,7 @@
 import { readFile, stat } from "fs/promises";
 import { join, extname } from "path";
 import { NextResponse } from "next/server";
+import { hasServeSession, verifyServeToken } from "@/lib/serve-auth";
 
 // ── Config ──────────────────────────────────────────────────────
 // UPLOAD_DIR points to the root directory where uploads are stored.
@@ -25,8 +26,17 @@ const MIME_MAP: Record<string, string> = {
 // Cache duration for uploaded files (1 hour — allows images to update after re-upload)
 const CACHE_SECONDS = 3600;
 
+// ── Auth (FIX-1a) ───────────────────────────────────────────────
+// /api/serve previously served any file to anyone who knew its URL.
+// Access now requires either:
+//   (a) a household / vendor / ops session cookie (all authenticated portal
+//       pages — browsers send cookies on <img> / <video> requests), or
+//   (b) a short-TTL HMAC-signed `t` query token covering this exact path
+//       (issued by public surfaces such as /api/j/share/[token] and by
+//       server-side consumers like the photo-analysis VLM call).
+// The 400 path-traversal guard below is unchanged.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
@@ -40,6 +50,20 @@ export async function GET(
       relativePath.includes("\\")
     ) {
       return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    }
+
+    // ── Auth check ──
+    const authenticated = await hasServeSession();
+    if (!authenticated) {
+      const token = new URL(request.url).searchParams.get("t");
+      // Token is signed over the full URL path exactly as stored in the DB.
+      const fullPath = `/api/serve/${relativePath}`;
+      if (!token || !verifyServeToken(fullPath, token)) {
+        return NextResponse.json(
+          { error: "Unauthorized — a valid session or signed access token is required" },
+          { status: 401 }
+        );
+      }
     }
 
     const filePath = join(UPLOAD_DIR, relativePath);

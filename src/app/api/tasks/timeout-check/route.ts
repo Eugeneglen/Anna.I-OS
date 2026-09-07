@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { timingSafeEqual } from "crypto"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
 import { emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 import { resolveApiActor } from "@/lib/api-guards"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 /**
  * POST /api/tasks/timeout-check
@@ -15,14 +17,66 @@ import { resolveApiActor } from "@/lib/api-guards"
  *   3. If no more vendors or max attempts reached, escalates to ops
  *
  * Can be called by a cron job or on-demand by ops.
+ *
+ * Authentication (FIX-1b — this route previously had NO caller because it
+ * could only be triggered with a browser ops session):
+ *   • cron: header `x-cron-secret`, timing-safe compared to CRON_SECRET
+ *     (the ops-events mini-service sweeper calls this every 60 s), or
+ *   • ops session cookie (manual console trigger — unchanged).
+ * The cron path mirrors /api/ops/marketing/dispatch-expiry exactly
+ * (police-1c hardened posture): no query-param fallback, timing-safe
+ * compare, PROD with unset CRON_SECRET is closed, rate-limited 6/min.
  */
-export async function POST() {
+
+const DEV_FALLBACK_SECRET = "anna-cron-dev-secret"
+
+function secretsMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) {
+    // Still do a comparison to keep timing roughly constant.
+    timingSafeEqual(b, b)
+    return false
+  }
+  return timingSafeEqual(a, b)
+}
+
+function resolveSecret(): string | null {
+  const s = process.env.CRON_SECRET
+  if (s) return s
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[timeout-check] CRON_SECRET is not set — cron path CLOSED (401) until it is configured."
+    )
+    return null
+  }
+  console.warn(
+    "[timeout-check] CRON_SECRET not set — using dev fallback secret. Do NOT ship this to production."
+  )
+  return DEV_FALLBACK_SECRET
+}
+
+export async function POST(req: NextRequest) {
   try {
-    // ── F21 auth gate (audit C7 family) ── system sweep: ops only.
+    // ── F21 auth gate (audit C7 family) ── dual auth:
+    // (a) system sweep via shared cron secret (ops-events sweeper), or
+    // (b) ops session (manual console trigger).
     // (No household should trigger global re-routing.)
-    const actor = await resolveApiActor()
-    if (!actor || actor.kind !== "ops") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const expected = resolveSecret()
+    const provided = req.headers.get("x-cron-secret") ?? ""
+    const viaCron = !!expected && !!provided && secretsMatch(provided, expected)
+
+    if (viaCron) {
+      // 6 calls/min is far above the 60s sweep tick — anything faster is abuse.
+      const rlKey = "cron:timeout-check"
+      if (!checkRateLimit(rlKey, 6, 60_000)) {
+        return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+      }
+    } else {
+      const actor = await resolveApiActor()
+      if (!actor || actor.kind !== "ops") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
     }
 
     const now = new Date()

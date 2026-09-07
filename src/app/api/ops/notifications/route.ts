@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 
 export async function GET(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated (full notification feed
+    // with household/member PII). Ops session + notifications:view
+    // required, same convention as the other /api/ops/* routes.
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "notifications", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "";
     const channel = searchParams.get("channel") || "";

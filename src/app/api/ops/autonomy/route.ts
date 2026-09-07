@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AUTONOMY_LEVEL_NAMES, MAX_AUTONOMY_LEVEL } from "@/lib/constants";
+import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 
 export async function GET(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated (all household emails +
+    // autonomy levels). Ops session + autonomy:view required.
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "autonomy", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const category = searchParams.get("category") || "";
@@ -153,6 +168,19 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    // FIX-1a: previously fully unauthenticated (promotionPaused toggle on
+    // any household). Ops session + autonomy:edit required, and the
+    // mutation is now audit-logged.
+    const session = await getOpsSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const allowed = await hasPermission(session, "autonomy", "edit");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { householdId, category, promotionPaused } = body;
 
@@ -176,6 +204,17 @@ export async function PATCH(request: Request) {
         promotionPaused,
       },
       update: { promotionPaused },
+    });
+
+    // FIX-1a audit coverage: autonomy mutations were previously invisible
+    // in the audit trail.
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "autonomy.update",
+      entityType: "HouseholdCategoryAutonomy",
+      entityId: updated.id,
+      metadata: { householdId, category, promotionPaused },
     });
 
     return NextResponse.json({ autonomy: updated });

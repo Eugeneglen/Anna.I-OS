@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 import { generateSingleCode, generateBulkCodes } from "@/lib/marketing/campaign-service";
 import { checkRateLimit, opsRateKey, rateLimitResponsePayload } from "@/lib/rate-limit";
 
@@ -74,6 +75,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         maxUses: parsed.data.maxUses,
         expiresAt: parsed.data.expiresAt,
       });
+      // FIX-1a audit coverage: discount-code generation was previously
+      // invisible in the audit trail (confirmed live in AUDIT-2).
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "campaign.codes.generate",
+        entityType: "Campaign",
+        entityId: id,
+        metadata: { mode: "single", code: code.code, maxUses: parsed.data.maxUses ?? null },
+      });
       return NextResponse.json({ code }, { status: 201 });
     } else {
       const result = await generateBulkCodes(id, {
@@ -82,6 +93,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         codeLength: parsed.data.codeLength,
         maxUses: parsed.data.maxUses,
         expiresAt: parsed.data.expiresAt,
+      });
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "campaign.codes.generate",
+        entityType: "Campaign",
+        entityId: id,
+        metadata: {
+          mode: "bulk",
+          quantity: parsed.data.quantity ?? null,
+          generated: result.codes?.length ?? null,
+          prefix: parsed.data.prefix ?? null,
+        },
       });
       return NextResponse.json(result, { status: 201 });
     }

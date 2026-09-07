@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { logAction } from "@/lib/audit-log";
+import { stripVendorSecrets } from "@/lib/sanitize";
 import * as bcrypt from "bcryptjs";
 
 async function requireAuth(req: NextRequest) {
@@ -32,7 +33,9 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ vendors });
+    // FIX-1a: strip bcrypt passwordHash + verificationData (NRIC /
+    // background checks) from every row before serialising.
+    return NextResponse.json({ vendors: vendors.map(stripVendorSecrets) });
   } catch (error) {
     console.error("[/api/ops/vendors GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -119,7 +122,9 @@ export async function POST(req: NextRequest) {
       metadata: { companyName, contactPerson, vendorType },
     });
 
-    return NextResponse.json({ vendor }, { status: 201 });
+    // FIX-1a: the create response previously echoed the new vendor row
+    // INCLUDING the freshly-written passwordHash.
+    return NextResponse.json({ vendor: stripVendorSecrets(vendor) }, { status: 201 });
   } catch (error: unknown) {
     console.error("[/api/ops/vendors POST]", error);
     if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002") {

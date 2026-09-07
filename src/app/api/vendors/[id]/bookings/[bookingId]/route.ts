@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
-import { BOOKING_STATUS_TRANSITIONS, PLATFORM_COMMISSION_RATE, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
+import { BOOKING_STATUS_TRANSITIONS, VENDOR_ACCEPTANCE_TIMEOUT_MINUTES, MAX_MATCH_ATTEMPTS } from "@/lib/constants"
+import { getCommissionRate } from "@/lib/commission"
+import { getRequireVerificationPhotos } from "@/lib/platform-config"
+import { recordEscrowHoldEffect } from "@/lib/payments/escrow-effects"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
 import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
@@ -70,6 +73,35 @@ export async function PATCH(
       )
     }
 
+    // ── Server-side verification-photo requirement (FIX-1c) ──
+    // Vendors cannot complete a job with ZERO verification photos. Gated on
+    // the Ops-controlled PlatformConfig key "require_verification_photos"
+    // (default TRUE when absent), read through the 60s-cached helper.
+    // Checked BEFORE any state mutation so a 400 leaves the booking,
+    // task, and escrow untouched.
+    if (action === "complete") {
+      const requirePhotos = await getRequireVerificationPhotos()
+      if (requirePhotos) {
+        const photoCount = await db.verificationPhoto.count({
+          where: { taskId: booking.taskId },
+        })
+        if (photoCount === 0) {
+          return NextResponse.json(
+            {
+              error:
+                "Cannot complete this job: at least 1 verification photo is required. Upload a before/after photo in the job's Photos section, then mark the work complete.",
+              code: "VERIFICATION_PHOTOS_REQUIRED",
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // Populated by the accept transaction when a NEW escrow entry is created
+    // (the adapter hold effect runs after commit — see the accept branch).
+    let createdEscrowEntryId: string | null = null
+
     const now = new Date()
     const updateData: Record<string, unknown> = { status: newStatus }
 
@@ -116,6 +148,12 @@ export async function PATCH(
     // ────────────────────────────────────────────────
     if (action === "accept") {
       const task = booking.task
+      // ── Commission single source of truth (FIX-1c) ──
+      // Ops-controlled margin: PlatformConfig "commission_rate" via the
+      // 60s-cached getCommissionRate() (falls back to the compiled
+      // PLATFORM_COMMISSION_RATE constant). Previously this was the
+      // hard-coded constant, making the Ops config display-only.
+      const commissionRate = await getCommissionRate()
       // Phase 0 FIX: Use finalAmountCents (post-discount) for escrow, NOT amountCents (pre-discount).
       // Use ?? (nullish coalescing) instead of || to handle the case where finalAmountCents is 0
       // (a 100% discount would make it 0, which is a valid amount — || would incorrectly fall back).
@@ -134,7 +172,7 @@ export async function PATCH(
       // always stamps discountFundedBy: "PLATFORM", so the base is the
       // pre-discount amount whenever a discount exists. ──
       const commissionBaseCents = hasDiscount ? originalAmountCents : escrowAmountCents
-      const commissionCents = Math.round((commissionBaseCents * PLATFORM_COMMISSION_RATE) / 100)
+      const commissionCents = Math.round((commissionBaseCents * commissionRate) / 100)
       const vendorPayoutCents = commissionBaseCents - commissionCents
 
       // Hold escrow (this is the ONLY place escrow is created)
@@ -190,7 +228,7 @@ export async function PATCH(
           select: { id: true },
         });
         if (!existingForBooking) {
-          await tx.escrowLedger.create({
+          const escrowEntry = await tx.escrowLedger.create({
             data: {
               taskId: task.id,
               bookingId,
@@ -199,14 +237,31 @@ export async function PATCH(
               discountCents,                         // discount captured in this escrow
               discountFundedBy: "PLATFORM",          // platform absorbs the discount cost
               state: "HELD",
-              commissionRate: PLATFORM_COMMISSION_RATE,
+              commissionRate,                        // Ops-controlled rate (getCommissionRate)
               commissionCents,
               vendorPayoutCents,
               heldAt: now,
             },
           });
+          // Capture the created entry id so the adapter hold effect can run
+          // AFTER this transaction commits (ledger-first, effect-layer).
+          createdEscrowEntryId = escrowEntry.id;
         }
       })
+
+      // ── Payment adapter effect (FIX-1c wiring) ──
+      // Hold/authorize the customer payment through the provider-agnostic
+      // PaymentService (NoOp today — Pending Payment Gateway Decision).
+      // Ledger-authoritative: called after commit, never throws, adapter
+      // failures are logged as reconciliation cases.
+      if (createdEscrowEntryId) {
+        await recordEscrowHoldEffect({
+          escrowLedgerId: createdEscrowEntryId,
+          taskId: task.id,
+          bookingId,
+          amountCents: escrowAmountCents,
+        });
+      }
 
       // Determine if task should go to SCHEDULED directly (if it has a scheduledStart)
       const hasSchedule = task.scheduledStart != null

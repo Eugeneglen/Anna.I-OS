@@ -1,6 +1,12 @@
 // ============================================================
 // Anna.I — Shared Notification Utility (Phase 5)
 // Centralized notification creation + anomaly notification bridge
+//
+// FIX-1d: creation now cascades into the delivery layer
+// (src/lib/notify/delivery.ts) — rows no longer sit PENDING forever:
+// each row gets an immediate delivery attempt here, and anything left
+// PENDING (failure/no attempt) is retried by the cron sweep at
+// POST /api/ops/notifications/dispatch (max 3 attempts).
 // ============================================================
 
 import { db } from "@/lib/db";
@@ -10,11 +16,32 @@ import {
   NotificationStatus,
   RecipientType,
 } from "@prisma/client";
+import type { Notification } from "@prisma/client";
 import type { AnomalyType, AnomalySeverity } from "./types";
+import { attemptNotificationDelivery } from "./notify/delivery";
 
 // ─────────────────────────────────────────────────────────────
 // Core notification creator
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * FIX-1d: best-effort IMMEDIATE delivery right after persisting the row.
+ *
+ * Delivery must never break the caller's request path (the notification
+ * row itself is already persisted) — any failure here just leaves the
+ * row PENDING for the /api/ops/notifications/dispatch sweep to retry
+ * (max MAX_DELIVERY_ATTEMPTS). See src/lib/notify/delivery.ts.
+ */
+async function deliverImmediately(notification: Notification): Promise<void> {
+  try {
+    await attemptNotificationDelivery(notification);
+  } catch (err) {
+    console.error(
+      "[notify] Immediate delivery failed (row stays PENDING for the sweep):",
+      err
+    );
+  }
+}
 
 interface CreateNotificationParams {
   householdId: string;
@@ -46,7 +73,7 @@ export async function createNotification(params: CreateNotificationParams) {
   } = params;
 
   if (memberId) {
-    await db.notification.create({
+    const notification = await db.notification.create({
       data: {
         householdId,
         recipientType: RecipientType.HOUSEHOLD_MEMBER,
@@ -60,6 +87,10 @@ export async function createNotification(params: CreateNotificationParams) {
         referenceId,
       },
     });
+    // FIX-1d: attempt delivery through the active channel adapter right
+    // away (status → SENT + deliveredAt + deliveredVia on success; on
+    // failure the row stays PENDING and the cron sweep retries).
+    await deliverImmediately(notification);
   } else {
     // Notify all members in the household
     const members = await db.familyMember.findMany({
@@ -69,7 +100,9 @@ export async function createNotification(params: CreateNotificationParams) {
 
     if (members.length === 0) return;
 
-    await db.notification.createMany({
+    // FIX-1d: createManyAndReturn (instead of createMany) so the created
+    // rows come back and can each get an immediate delivery attempt.
+    const created = await db.notification.createManyAndReturn({
       data: members.map((m) => ({
         householdId,
         recipientType: RecipientType.HOUSEHOLD_MEMBER,
@@ -83,6 +116,10 @@ export async function createNotification(params: CreateNotificationParams) {
         referenceId,
       })),
     });
+
+    for (const notification of created) {
+      await deliverImmediately(notification);
+    }
   }
 }
 

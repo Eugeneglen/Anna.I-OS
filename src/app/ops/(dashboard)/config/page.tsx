@@ -63,6 +63,7 @@ export default function ConfigPage() {
   const categoryPricing = data?.categoryPricing || [];
   const readmes: Record<string, string> = data?.readmes || {};
   const effectiveCommission = data?.commissionRate ?? PLATFORM_COMMISSION_RATE;
+  const blendedJobValueCents = data?.blendedJobValueCents ?? 0;
   const isAdmin = user?.role === "ADMIN";
 
   // ── Threshold editing state ──
@@ -77,18 +78,11 @@ export default function ConfigPage() {
   const [localEdits, setLocalEdits] = useState<Record<string, number> | null>(null);
   const edits = localEdits ?? thresholdEdits;
 
-  // ── Pricing editing state ──
-  const priceEdits = (() => {
-    const edits: Record<string, number> = {};
-    for (const p of categoryPricing) {
-      edits[p.category] = p.activePriceCents;
-    }
-    return edits;
-  })();
-
-  const [localPriceEdits, setLocalPriceEdits] = useState<Record<string, number> | null>(null);
+  // ── Commission editing state ──
+  // (FIX-1c pricing consolidation: the per-category price editor was retired
+  // — selling prices are edited per job type in the Job Types tab. The
+  // commission rate is the remaining Ops margin lever on this tab.)
   const [localCommission, setLocalCommission] = useState<number | null>(null);
-  const priceState = localPriceEdits ?? priceEdits;
   const commissionState = localCommission ?? effectiveCommission;
 
   // ── Job Type edit dialog state ──
@@ -114,31 +108,10 @@ export default function ConfigPage() {
   const toggleJobType = (id: string, isActive: boolean) =>
     configMutation.mutate({ action: "toggle_job_type", id, isActive });
 
-  function savePricing() {
-    const pricing = Object.entries(priceState).map(([category, priceCents]) => ({
-      category,
-      priceCents,
-    }));
-    configMutation.mutate({ action: "save_pricing", pricing });
-    setLocalPriceEdits(null);
-  }
-
   const saveCommission = () => {
     configMutation.mutate({ action: "save_commission", commissionRate: commissionState });
     setLocalCommission(null);
   };
-
-  function resetPricing() {
-    const defaults: Record<string, number> = {};
-    for (const p of categoryPricing) {
-      defaults[p.category] = p.defaultPriceCents;
-    }
-    setLocalPriceEdits(defaults);
-    setLocalCommission(PLATFORM_COMMISSION_RATE);
-  }
-
-  const handlePriceChange = (category: string, cents: number) =>
-    setLocalPriceEdits((prev) => ({ ...(prev ?? priceEdits), [category]: cents }));
 
   // ── Category handlers ──
   const toggleCategory = (category: string, isActive: boolean) =>
@@ -174,17 +147,6 @@ export default function ConfigPage() {
   const handleUpdateJobTypePrice = (id: string, priceCents: number) =>
     configMutation.mutate({ action: "update_job_type_price", id, priceCents });
 
-  // Compute live blended value from edits
-  const liveBlended = (() => {
-    const activePrices = categoryPricing
-      .filter((c: Record<string, unknown>) => c.isActive)
-      .map((c: Record<string, unknown>) => priceState[c.category as string] || c.activePriceCents);
-    return activePrices.length > 0
-      ? Math.round(activePrices.reduce((sum: number, v: number) => sum + v, 0) / activePrices.length)
-      : 0;
-  })();
-
-  const hasPriceChanges = localPriceEdits !== null || localCommission !== null;
   const hasThresholdChanges = localEdits !== null;
 
   // ── README save mutation ──
@@ -262,22 +224,16 @@ export default function ConfigPage() {
           ))}
         </TabsList>
 
-        {/* ===== PRICING TAB ===== */}
+        {/* ===== PRICING TAB (read-only prices from ServiceJobType + commission lever) ===== */}
         <TabsContent value="pricing">
           <PricingTab
             categoryPricing={categoryPricing}
-            priceState={priceState}
             commissionState={commissionState}
-            liveBlended={liveBlended}
-            hasPriceChanges={hasPriceChanges}
-            isEditing={localPriceEdits !== null}
-            isAdmin={isAdmin}
             effectiveCommission={effectiveCommission}
+            blendedJobValueCents={blendedJobValueCents}
+            isAdmin={isAdmin}
             isPending={configMutation.isPending}
-            onSave={savePricing}
             onSaveCommission={saveCommission}
-            onReset={resetPricing}
-            onPriceChange={handlePriceChange}
             onCommissionChange={setLocalCommission}
           />
         </TabsContent>

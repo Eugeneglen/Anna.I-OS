@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 import { getCampaign, updateCampaign, transitionCampaignStatus, getCampaignStats } from "@/lib/marketing/campaign-service";
 import { CampaignStatus } from "@prisma/client";
 import { invalidateBehaviourCache, invalidateCampaignPerfCache } from "@/lib/cache";
@@ -116,6 +117,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       // PAUSED → ENDED transition may freeze voucher issuance flows.
       invalidateCampaignPerfCache(id);
       invalidateBehaviourCache();
+      // FIX-1a audit coverage: campaign status transitions were
+      // previously invisible in the audit trail.
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "campaign.update",
+        entityType: "Campaign",
+        entityId: id,
+        metadata: { statusTransition: newStatus },
+      });
       return NextResponse.json({ campaign: updated });
     }
 
@@ -125,6 +136,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // monetaryScore if a redemption is later applied with new rules).
     invalidateCampaignPerfCache(id);
     invalidateBehaviourCache();
+    // FIX-1a audit coverage: campaign edits were previously invisible in
+    // the audit trail.
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "campaign.update",
+      entityType: "Campaign",
+      entityId: id,
+      metadata: { changes: parsed.data },
+    });
     return NextResponse.json({ campaign: updated });
   } catch (error) {
     console.error("[/api/ops/campaigns/[id] PATCH]", error);

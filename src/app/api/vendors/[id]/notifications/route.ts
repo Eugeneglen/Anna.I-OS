@@ -22,8 +22,10 @@ export async function GET(
       vendorId: auth.vendorId,
     }
 
+    // FIX-1d: unread is readAt-based — the delivery layer flips status
+    // PENDING → SENT, so status no longer doubles as the unread marker.
     if (unreadOnly) {
-      where.status = "PENDING"
+      where.readAt = null
     }
 
     // Fetch notifications, newest first
@@ -45,11 +47,12 @@ export async function GET(
     })
 
     // Count unread
+    // FIX-1d: readAt-based — see note above.
     const unreadCount = await db.notification.count({
       where: {
         recipientType: "VENDOR",
         vendorId: auth.vendorId,
-        status: "PENDING",
+        readAt: null,
       },
     })
 

@@ -1,8 +1,9 @@
 // ============================================================
 // Anna.I — Event Emitter (Phase 2)
-// Connects to the ops-events WebSocket service as a client
-// and emits events that get broadcast to all ops dashboards
-// and optionally to specific household rooms.
+// Connects to the ops-events WebSocket service as a TRUSTED SERVER
+// client (authenticated with OPS_EVENT_SERVER_SECRET, so the service
+// accepts our event:emit calls and room joins) and emits events that
+// get routed to ops dashboards and to specific household/vendor rooms.
 // Fire-and-forget pattern — errors are logged, never thrown.
 // ============================================================
 
@@ -43,24 +44,30 @@ function getSocket(): Socket | null {
   if (!socket && !connecting) {
     connecting = true;
     try {
-      socket = io(OPS_EVENTS_URL, {
+      const currentSocket = io(OPS_EVENTS_URL, {
         path: "/",
         transports: ["websocket"],
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 2000,
         timeout: 5000,
-        auth: { type: "event_source" },
+        // Trusted-server handshake: only sockets presenting the shared
+        // secret may emit events / join any room on the service. Read
+        // server-side only — this module never runs in the browser bundle.
+        auth: {
+          type: "event_source",
+          serverToken: process.env.OPS_EVENT_SERVER_SECRET || "",
+        },
       });
 
-      socket.on("connect", () => {
+      currentSocket.on("connect", () => {
         connecting = false;
         console.log("[events] Connected to ops-events service");
         // Flush any events that were buffered while we were connecting
         if (pendingEmits.length > 0) {
           console.log(`[events] Flushing ${pendingEmits.length} buffered event(s)`);
           for (const evt of pendingEmits) {
-            socket!.emit("event:emit", {
+            currentSocket.emit("event:emit", {
               type: evt.type,
               data: evt.data,
               timestamp: evt.timestamp || new Date().toISOString(),
@@ -70,14 +77,31 @@ function getSocket(): Socket | null {
         }
       });
 
-      socket.on("disconnect", () => {
+      currentSocket.on("disconnect", () => {
         connecting = false;
       });
 
-      socket.on("connect_error", (err) => {
+      currentSocket.on("connect_error", (err) => {
         connecting = false;
         console.warn("[events] Failed to connect to ops-events:", err.message);
       });
+
+      // When all reconnection attempts are exhausted (e.g. the service was
+      // down at server start), socket.io gives up permanently and the dead
+      // socket would block getSocket() from ever dialing again. Drop it so
+      // the next emit starts a fresh connection — buffered events then
+      // flush on connect as usual.
+      currentSocket.io.on("reconnect_failed", () => {
+        connecting = false;
+        console.warn(
+          "[events] Reconnection attempts exhausted — resetting client, next emit will redial"
+        );
+        if (socket === currentSocket) {
+          socket = null;
+        }
+      });
+
+      socket = currentSocket;
     } catch (err) {
       connecting = false;
       console.warn("[events] Failed to create socket:", err);

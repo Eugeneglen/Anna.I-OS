@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getHouseholdSession } from "@/lib/household-auth";
+import { getCommissionRate } from "@/lib/commission";
+import { recordEscrowHoldEffect } from "@/lib/payments/escrow-effects";
 import {
   NotificationChannel,
   NotificationEventType,
@@ -123,11 +125,16 @@ export async function PATCH(
       newTotalCents = baseAmountCents + addonTotalCents;
 
       // Create a new EscrowLedger entry for the addon amount
-      const commissionRate = 10.0;
+      // ── Commission single source of truth (FIX-1c) ──
+      // Previously hard-coded 10.0 here, duplicating PLATFORM_COMMISSION_RATE
+      // and ignoring the Ops-controlled PlatformConfig "commission_rate".
+      // Now sourced from getCommissionRate() (60s-cached, falls back to the
+      // compiled constant).
+      const commissionRate = await getCommissionRate();
       const addonCommissionCents = Math.round(addon.amountCents * commissionRate / 100);
       const addonVendorPayoutCents = addon.amountCents - addonCommissionCents;
 
-      await db.escrowLedger.create({
+      const addonEscrowEntry = await db.escrowLedger.create({
         data: {
           taskId: addon.booking.taskId,
           bookingId,
@@ -140,6 +147,18 @@ export async function PATCH(
           commissionCents: addonCommissionCents,
           vendorPayoutCents: addonVendorPayoutCents,
         },
+      });
+
+      // ── Payment adapter effect (FIX-1c wiring) ──
+      // Hold/authorize the add-on charge through the provider-agnostic
+      // PaymentService (NoOp today — Pending Payment Gateway Decision).
+      // Ledger-authoritative: called after the row is committed, never
+      // throws, adapter failures are logged as reconciliation cases.
+      await recordEscrowHoldEffect({
+        escrowLedgerId: addonEscrowEntry.id,
+        taskId: addon.booking.taskId,
+        bookingId,
+        amountCents: addon.amountCents,
       });
     }
 

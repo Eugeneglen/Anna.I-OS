@@ -58,7 +58,10 @@ export async function PATCH(
         if (!member) memberId = null
       }
 
-      const markWhere: Record<string, unknown> = { householdId, status: NotificationStatus.PENDING }
+      // FIX-1d: readAt-based — delivery flips status PENDING → SENT, so
+      // status is a delivery state now, not the unread marker. Matching
+      // readAt: null covers SENT rows that have not been read yet.
+      const markWhere: Record<string, unknown> = { householdId, readAt: null }
       if (memberId) {
         markWhere.memberId = memberId
       }

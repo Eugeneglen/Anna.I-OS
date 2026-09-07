@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { MAX_AUTONOMY_LEVEL } from "@/lib/constants"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 const patchSchema = z.object({
   promotionPaused: z.boolean().optional(),
@@ -14,6 +16,24 @@ export async function PATCH(
 ) {
   try {
     const { householdId, category } = await params
+
+    // FIX-1a: previously fully unauthenticated — anyone could set any
+    // autonomy level on any household. The household autonomy panel edits
+    // its OWN record; ops may act on any household.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — you can only manage autonomy for your own household" },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const parsed = patchSchema.safeParse(body)
 

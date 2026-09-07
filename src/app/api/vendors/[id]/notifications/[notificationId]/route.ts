@@ -19,11 +19,13 @@ export async function PATCH(
 
     if (markAll) {
       // Bulk mark all vendor notifications as read
+      // FIX-1d: readAt-based — the delivery layer flips status PENDING →
+      // SENT, so bulk read must match unread rows via readAt: null.
       const result = await db.notification.updateMany({
         where: {
           recipientType: "VENDOR",
           vendorId: auth.vendorId,
-          status: "PENDING",
+          readAt: null,
         },
         data: {
           status: "READ",

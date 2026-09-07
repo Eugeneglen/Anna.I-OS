@@ -2,21 +2,51 @@
 
 ## Overview
 
-All payment-related operations (escrow holds, releases, refunds) go through a
-single `PaymentService` interface. The actual provider (Stripe, etc.) is
-abstracted so business logic never imports Stripe directly.
+All payment-related operations (escrow holds, releases, payouts, refunds) go
+through a single provider-agnostic `PaymentService` interface. The actual
+provider is abstracted so business logic never imports a provider SDK
+directly.
+
+**PENDING PAYMENT GATEWAY DECISION** — no provider has been chosen yet
+(Stripe Connect and alternatives are under evaluation). NoOpPaymentService
+is the only implementation; the dormant Stripe branch in factory.ts is a
+documented placeholder. Adding a provider later = one adapter file + one
+factory branch.
 
 ## Architecture
 
 ```
 src/lib/payments/
-├── types.ts          ← PaymentService interface + DTOs
-├── no-op.ts          ← NoOpPaymentService (sandbox / dev / test)
-├── stripe.ts         ← StripePaymentService (STUB — future implementation)
+├── types.ts          ← PaymentService interface + DTOs (provider-agnostic)
+├── no-op.ts          ← NoOpPaymentService (sandbox / dev / test — active)
+├── stripe.ts         ← StripePaymentService (STUB — Pending Payment Gateway Decision)
 ├── factory.ts        ← getPaymentService() — picks impl by env
+├── escrow-effects.ts ← money-transition wiring: hold (accept/add-on) + release/payout (release paths)
+├── refund-service.ts ← refund orchestration (adapter inside its DB transaction)
+├── billing-gateway.ts← subscription charging seam (createCheckoutIntent / checkEntitlement — NoOp)
 ├── calculations.ts   ← pure functions for commission/payout/refund math
 └── README.md         ← this file
 ```
+
+## Money Lifecycle & Ledger Authority
+
+The DB ledger (EscrowLedger states + calculations.ts math) is the SINGLE
+SOURCE OF TRUTH; the adapter is an effect layer, never authoritative:
+
+| Ledger transition | Adapter effect (wired in) | Method |
+|---|---|---|
+| escrow created (HELD) | vendor booking accept + add-on approval | `hold()` |
+| escrow released (RELEASED) | ops release, ops resolve_voucher, household release | `release()` + `payout()` |
+| refund (DISPUTED→REFUNDED) | processRefund (inside its DB transaction) | `refund()` |
+| zero-cash resolution | no adapter effect (nothing held) — logged | — |
+
+Adapter refs: the hold ref persists to `EscrowLedger.stripePaymentIntentId`
+and the payout ref to `stripeTransferId` (historical column names — schema
+frozen; providerRef persistence lands with the real adapter). Adapter calls
+are wrapped in try/catch at the wiring layer (escrow-effects.ts) — failures
+log reconciliation cases and never corrupt ledger state. The one exception
+is refund-service.ts, where an adapter failure intentionally rolls back the
+ledger transition (a refund must actually move before REFUNDED is written).
 
 ## Payout Base & Platform-Funded Discounts
 
@@ -65,16 +95,20 @@ voucher is restored instead.)
 
 ## Current State (MVP)
 
-- **NoOpPaymentService** is the active implementation.
-- Refunds succeed in the database (Refund row created, EscrowLedger updated)
-  but **no real money is moved**.
-- This is intentional for the MVP scope — Stripe integration is deferred.
+- **NoOpPaymentService** is the active implementation (Pending Payment
+  Gateway Decision — Stripe Connect and alternatives under evaluation).
+- Escrow holds, releases, payouts and refunds all flow through the adapter
+  seam (escrow-effects.ts + refund-service.ts), but **no real money is
+  moved** — the NoOp adapter synthesises deterministic `noop_*` references
+  (persisted to `stripePaymentIntentId` / `stripeTransferId` for audit).
+- This is intentional until the provider decision lands.
 
-## Adding Stripe Later
+## Adding a Provider Later
 
-When Stripe integration is needed, follow these steps. **No business logic,
-API route, or frontend change is required** — everything already calls
-`getPaymentService().refund()` / `.release()`.
+When a provider integration is needed, follow these steps. **No business
+logic, API route, or frontend change is required** — everything already
+calls `getPaymentService().hold()` / `.release()` / `.payout()` /
+`.refund()` via escrow-effects.ts / refund-service.ts.
 
 ### Step 1: Set environment variables
 
@@ -85,11 +119,14 @@ STRIPE_HOME_PRICE_ID=price_xxx
 STRIPE_CARE_PRICE_ID=price_xxx
 ```
 
-### Step 2: Implement StripePaymentService
+### Step 2: Implement the provider adapter
 
-Open `src/lib/payments/stripe.ts` and uncomment + complete the `refund()` and
-`release()` method bodies. The file contains commented-out reference
-implementations using the Stripe SDK.
+Open `src/lib/payments/stripe.ts` (or create a new adapter file for the
+chosen provider) and implement the `hold()`, `release()`, `payout()` and
+`refund()` method bodies. The interface is provider-agnostic
+(`{ amountCents, currency, idempotencyKey, metadata, providerRef }`) — map
+it to the provider's own concepts INSIDE the adapter file only. The file
+contains commented-out reference implementations using the Stripe SDK.
 
 ### Step 3: Enable in factory.ts
 

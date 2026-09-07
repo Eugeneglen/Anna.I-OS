@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { getHouseholdSession } from "@/lib/household-auth"
+import { getOpsSession } from "@/lib/ops-auth"
 
 export async function DELETE(
   _request: Request,
@@ -7,6 +9,22 @@ export async function DELETE(
 ) {
   try {
     const { id: householdId, memberId } = await params
+
+    // FIX-1a: previously unauthenticated — anyone could remove members
+    // from any household. Own household session OR ops session required.
+    const [hhSession, opsSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+    ])
+    if (!hhSession && !opsSession) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (hhSession && !opsSession && hhSession.householdId !== householdId) {
+      return NextResponse.json(
+        { error: "Forbidden — this household belongs to another account" },
+        { status: 403 }
+      )
+    }
 
     const member = await db.familyMember.findUnique({
       where: { id: memberId },

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { randomBytes } from "crypto";
+import {
+  checkRateLimit,
+  clientIpFromHeaders,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +17,15 @@ export async function POST(req: NextRequest) {
         { error: "Email is required" },
         { status: 400 }
       );
+    }
+
+    // FIX-1a: 5 token generations / 15 min per email + IP (prevents
+    // unlimited reset-token spam against the token table).
+    const rlKey = `forgot-password:ops:${clientIpFromHeaders(req.headers)}:${String(email).toLowerCase()}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.forgotPassword.limit, RATE_LIMITS.forgotPassword.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
     }
 
     // Find the ops user by email

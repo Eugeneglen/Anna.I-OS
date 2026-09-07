@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
+import { logAction } from "@/lib/audit-log";
 import { createCampaign, getCampaigns } from "@/lib/marketing/campaign-service";
 import { db } from "@/lib/db";
 import {
@@ -122,6 +123,23 @@ export async function POST(req: NextRequest) {
     // next read fetches fresh data.
     invalidateBehaviourCache();
     invalidateCampaignPerfCache(campaign.id);
+
+    // FIX-1a audit coverage: campaign creation was previously invisible
+    // in the audit trail (confirmed live in AUDIT-2).
+    await logAction({
+      userId: session.userId,
+      userName: session.name,
+      action: "campaign.create",
+      entityType: "Campaign",
+      entityId: campaign.id,
+      metadata: {
+        name: campaign.name,
+        type: parsed.data.type,
+        discountType: parsed.data.discountType,
+        discountValue: parsed.data.discountValue,
+        segmentId: parsed.data.segmentId ?? null,
+      },
+    });
 
     // Phase 2 Fix 11: if a segmentId is provided, do NOT issue vouchers
     // synchronously. Instead, create a VoucherIssuanceJob row (status=PENDING)

@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
+import { resolveSecret } from "@/lib/secrets";
 
-const JWT_SECRET = process.env.OPS_JWT_SECRET || "anna-ops-dev-secret";
+const JWT_SECRET = resolveSecret("OPS_JWT_SECRET", "anna-ops-dev-secret", {
+  owner: "ops-auth",
+});
 const secret = new TextEncoder().encode(JWT_SECRET);
 
 export interface OpsSession {

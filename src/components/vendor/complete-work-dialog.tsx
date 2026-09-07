@@ -112,6 +112,18 @@ export function CompleteWorkDialog({
             </div>
           </div>
 
+          {/* FIX-1c: server-side photo requirement warning — mirrors the
+              400 VERIFICATION_PHOTOS_REQUIRED gate on the completion API. */}
+          {photoCount === 0 && (
+            <div className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+              <AlertCircle size={13} className="mt-0.5 shrink-0" />
+              <span>
+                At least 1 verification photo is required before you can complete this job. Upload a before/after photo
+                in the job&apos;s Photos section first.
+              </span>
+            </div>
+          )}
+
           {/* Completion notes textarea */}
           <div className="space-y-2">
             <label className="flex items-center gap-1.5 text-xs font-semibold text-[var(--anna-slate)]">

@@ -382,6 +382,11 @@ model Task {
   attachments        TaskAttachment[]
   campaignAttributions CampaignAttribution[] @relation("CampaignAttributionTask")
 
+  // FIX-1d (audit: missing indexes — status sweeps like timeout-check and
+  // predictive-lock scans full-scanned the table)
+  @@index([status])
+  @@index([acceptTimeoutAt])
+  @@index([lockAt])
   @@index([householdId, idempotencyKey])
 }
 
@@ -429,6 +434,12 @@ model Booking {
   verificationPhotos VerificationPhoto[]
   escrowEntries      EscrowLedger[]
   addons             BookingAddon[]
+
+  // FIX-1d (audit: missing indexes — task-detail, vendor-schedule and
+  // status-filtered booking sweeps full-scanned the table)
+  @@index([taskId])
+  @@index([vendorId, status])
+  @@index([status])
 }
 
 // ======================== VERIFICATION ========================
@@ -448,6 +459,9 @@ model VerificationPhoto {
 
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking @relation(fields: [bookingId], references: [id])
+
+  // FIX-1d (audit: missing index — task verification-photo lists full-scanned)
+  @@index([taskId])
 }
 
 // ======================== AD-HOC CHARGES ========================
@@ -609,11 +623,21 @@ model Notification {
   deliveredAt       DateTime?
   readAt            DateTime?
   failedAt          DateTime?
+  // ── FIX-1d delivery layer (additive) ──
+  deliveredVia      String? // adapter key that delivered the row ("log" today; "email"/"whatsapp" once a provider is wired)
+  attemptCount      Int      @default(0) // delivery attempts (immediate + sweep retries), max MAX_DELIVERY_ATTEMPTS
+  lastError         String? // most recent delivery failure reason (errorMessage kept in sync for the ops UI)
   createdAt         DateTime              @default(now())
 
   household Household     @relation(fields: [householdId], references: [id])
   member    FamilyMember? @relation(fields: [memberId], references: [id], onDelete: SetNull) // C-3 FIX: allow member deletion
   vendor    Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  // FIX-1d (audit: missing indexes — household/vendor feeds and the PENDING
+  // delivery sweep full-scanned the table)
+  @@index([householdId, createdAt])
+  @@index([status, createdAt])
+  @@index([vendorId, createdAt])
 }
 
 // ======================== SERVICE JOB TYPES & QUOTATION (Phase 4A) ========================

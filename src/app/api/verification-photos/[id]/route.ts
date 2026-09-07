@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { getHouseholdSession } from '@/lib/household-auth'
+import { getOpsSession } from '@/lib/ops-auth'
+import { getVendorSession } from '@/lib/vendor-auth'
 import { NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from '@prisma/client'
 
 const patchVerificationSchema = z.object({
@@ -27,6 +30,23 @@ export async function PATCH(
 
     const { action, memberId, rejectionReason } = parsed.data
 
+    // ── FIX-1a ownership guard ──
+    // Previously fully unauthenticated: anyone could approve/reject any
+    // photo (mutating affinity + verifiedBy). Allowed actors:
+    //   - the household that owns the related task
+    //   - the vendor of the related booking
+    //   - ops (any session)
+    // Session check runs BEFORE the photo lookup so anonymous callers
+    // cannot probe photo-id existence (404 vs 401 oracle).
+    const [hhSession, opsSession, vendorSession] = await Promise.all([
+      getHouseholdSession(),
+      getOpsSession(),
+      getVendorSession(),
+    ])
+    if (!hhSession && !opsSession && !vendorSession) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Get the verification photo with task info
     const photo = await db.verificationPhoto.findUnique({
       where: { id: photoId },
@@ -40,6 +60,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Verification photo not found' }, { status: 404 })
     }
 
+    if (!opsSession) {
+      if (hhSession && photo.task.householdId === hhSession.householdId) {
+        // household owner — verifiedBy is pinned to the session member
+        // (body memberId is ignored to prevent spoofing)
+      } else if (vendorSession && photo.booking && photo.booking.vendorId === vendorSession.vendorId) {
+        // vendor of this booking — vendors reject photos, verifiedBy stays null
+      } else {
+        return NextResponse.json(
+          { error: 'Forbidden — this photo belongs to another household or vendor' },
+          { status: 403 }
+        )
+      }
+    }
+
     const now = new Date()
 
     if (action === 'approve') {
@@ -49,7 +83,7 @@ export async function PATCH(
         data: {
           isVerified: true,
           verifiedAt: now,
-          verifiedBy: memberId ?? null,
+          verifiedBy: hhSession ? hhSession.memberId : memberId ?? null,
         },
       })
 

@@ -187,7 +187,9 @@ export function NotificationPanel() {
   });
 
   function handleNotificationClick(n: AppNotification) {
-    if (n.status === "PENDING") {
+    // FIX-1d: read-state is readAt-based — delivery flips status to SENT,
+    // so "unread" must not key off status PENDING.
+    if (!n.readAt) {
       markReadMutation.mutate(n.id);
     }
 
@@ -228,7 +230,8 @@ export function NotificationPanel() {
   }
 
   function handleNotificationAction(n: AppNotification) {
-    if (n.status === "PENDING") {
+    // FIX-1d: read-state is readAt-based — see handleNotificationClick.
+    if (!n.readAt) {
       markReadMutation.mutate(n.id);
     }
 
@@ -384,7 +387,7 @@ function NotificationListContent({
             {notifications.map((n) => {
               const Icon = EVENT_ICONS[n.eventType] || Bell;
               const colorClass = EVENT_COLORS[n.eventType] || "text-[var(--anna-muted)]";
-              const isUnread = n.status === "PENDING";
+              const isUnread = !n.readAt; // FIX-1d: delivery status is not read state
               const isAddonRequested = n.eventType === "ADDON_REQUESTED";
               const isAddonResolved = n.eventType === "ADDON_APPROVED" || n.eventType === "ADDON_REJECTED";
 

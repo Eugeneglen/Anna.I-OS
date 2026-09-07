@@ -24,6 +24,10 @@
  * fails, the transaction rolls back (Refund row is deleted, no escrow update).
  * If the DB update fails after the payment service succeeds, the Refund row stays
  * "pending" — a reconciliation job (future) can detect + retry.
+ *
+ * Adapter: provider-agnostic (see ./types.ts). The NoOp adapter is active today
+ * (Pending Payment Gateway Decision); escrow hold/release/payout effects are
+ * wired via ./escrow-effects.ts.
  */
 
 import { db } from "@/lib/db";
@@ -196,14 +200,23 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       }
 
       // Call the payment service INSIDE the transaction (after validation, before DB writes).
-      // NoOp: always succeeds immediately. Stripe (future): makes the API call.
-      // If this throws, the transaction rolls back — no Refund row, no escrow update.
+      // NoOp: always succeeds immediately. A real provider (Pending Payment Gateway
+      // Decision): makes the API call. If this throws, the transaction rolls back —
+      // no Refund row, no escrow update. (This is the one adapter call site whose
+      // failure intentionally blocks the ledger transition: a refund must actually
+      // move before the ledger says REFUNDED.)
       const paymentService = getPaymentService();
       const refundResult = await paymentService.refund({
-        paymentIntentId: escrow.stripePaymentIntentId,
+        providerRef: escrow.stripePaymentIntentId, // historical column name (schema frozen)
         amountCents: input.refundAmountCents,
+        currency: "SGD",
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,
+        metadata: {
+          taskId: escrow.task.id,
+          bookingId: escrow.bookingId,
+          escrowLedgerId: escrow.id,
+        },
       });
 
       // Create the Refund row (idempotency key unique → atomic gate).

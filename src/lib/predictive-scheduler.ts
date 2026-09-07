@@ -321,8 +321,13 @@ export async function createPredictiveBooking(
       referenceId: task.id,
     })
 
+    // audit fix (FIX-1c): this log previously referenced an undefined
+    // variable `predictedStr` → ReferenceError thrown AFTER the task and
+    // notification were committed, so createPredictiveBooking returned
+    // success:false for every real prediction. The intended value is the
+    // human-readable predicted-date string (`scheduledStr`) used above.
     console.log(
-      `[predictive] Created predicted task ${task.id} for ${category} at ${predictedStr} ` +
+      `[predictive] Created predicted task ${task.id} for ${category} at ${scheduledStr} ` +
       `(lock: ${lockStr}, cycle: ${Math.round(insight.medianDays)}d, level: ${AUTONOMY_LEVEL_NAMES[level - 1]})`
     )
 

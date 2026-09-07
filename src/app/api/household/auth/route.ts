@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 import { createHouseholdToken } from "@/lib/household-auth";
+import {
+  checkRateLimit,
+  clientIpFromHeaders,
+  isRateLimited,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -16,6 +23,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // FIX-1a: brute-force throttle — 10 FAILED attempts / 15 min per
+    // identifier + IP. Only failures are counted; successful logins do
+    // not consume the budget.
+    const failKey = `login-fail:household:${clientIpFromHeaders(req.headers)}:${String(email).toLowerCase()}`;
+    if (isRateLimited(failKey, RATE_LIMITS.loginFailures.limit)) {
+      return NextResponse.json(rateLimitResponsePayload(failKey), { status: 429 });
+    }
+    const recordFailure = () =>
+      checkRateLimit(
+        failKey,
+        RATE_LIMITS.loginFailures.limit,
+        RATE_LIMITS.loginFailures.windowMs
+      );
+
     // Find the family member by email
     const member = await db.familyMember.findUnique({
       where: { email },
@@ -23,6 +44,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!member) {
+      recordFailure();
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -44,6 +66,7 @@ export async function POST(req: NextRequest) {
 
     const valid = await bcrypt.compare(password, passwordHash);
     if (!valid) {
+      recordFailure();
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }

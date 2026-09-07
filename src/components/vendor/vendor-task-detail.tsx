@@ -527,6 +527,13 @@ function VendorTaskDetailContent({
         const hasRefund = totalRefundCents > 0;
         const hasMultipleEntries = allEntries.length > 1;
         const hasDiscount = platformSubsidyCents > 0;
+        // FIX-1c (money display): derive the effective commission rate from
+        // the stored figures instead of the hard-coded "10%" label — the
+        // rate is Ops-configurable (commission_rate) and refunds heal the
+        // stored commission, so the label must follow the ledger.
+        const effectiveCommissionRate = orderTotalCents > 0
+          ? Math.round((totalCommissionCents / orderTotalCents) * 1000) / 10
+          : 0;
         // When the escrow has been released (household verified & released the
         // final agreed amount), the vendor has been paid — switch the bottom
         // row from "Remaining Payable" to "PAID" showing the actual payout.
@@ -605,7 +612,7 @@ function VendorTaskDetailContent({
               {/* Commission + Payout breakdown (on the full job value) */}
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-[var(--anna-muted)]">Platform Commission (10%)</span>
+                  <span className="text-[10px] text-[var(--anna-muted)]">Platform Commission ({effectiveCommissionRate}%)</span>
                   <span className="text-[10px] font-data text-[var(--anna-muted)]">
                     −{formatSgd(totalCommissionCents)}
                   </span>

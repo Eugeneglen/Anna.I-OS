@@ -2,10 +2,11 @@
   "name": "ops-events",
   "version": "1.0.0",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
+    "start": "bun --env-file=../../.env index.ts",
+    "dev": "bun --hot --env-file=../../.env index.ts"
   },
   "dependencies": {
+    "jose": "^6.2.12",
     "socket.io": "^4.8.3"
   }
 }

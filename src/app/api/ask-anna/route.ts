@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ANNA_TOOLS, executeToolCall } from "@/lib/nlu-tools";
 import { getZAI } from "@/lib/zai";
+import { getHouseholdSession } from "@/lib/household-auth";
+import {
+  checkRateLimit,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ask Anna (Household NLU)
@@ -94,8 +100,27 @@ interface ToolCall {
 
 export async function POST(request: NextRequest) {
   try {
+    // ── FIX-1a auth guard + IDOR fix ──
+    // householdId is now DERIVED from the session cookie and any body
+    // householdId is IGNORED — previously the route trusted the request
+    // body, giving unauthenticated callers full read access to ANY
+    // household's data through the NLU tools.
+    const session = await getHouseholdSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const householdId = session.householdId;
+
+    // ── Rate limit: 20 requests / minute per household (LLM cost cap) ──
+    const rlKey = `ask-anna:hh:${householdId}`;
+    if (
+      !checkRateLimit(rlKey, RATE_LIMITS.askAnna.limit, RATE_LIMITS.askAnna.windowMs)
+    ) {
+      return NextResponse.json(rateLimitResponsePayload(rlKey), { status: 429 });
+    }
+
     const body: AskAnnaRequest = await request.json();
-    const { message, householdId, confirmAction } = body;
+    const { message, confirmAction } = body;
 
     if (!message || !householdId) {
       return NextResponse.json(

@@ -401,7 +401,12 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Status update failed");
+      if (!res.ok) {
+        // FIX-1c: surface the API's error message (e.g. the 400
+        // verification-photo requirement) instead of a generic toast.
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || "Status update failed");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -409,8 +414,12 @@ export function VendorSchedule({ vendorId, onSelectBooking, onRequestComplete }:
       queryClient.invalidateQueries({ queryKey: ["vendor-schedule", vendorId] });
       queryClient.invalidateQueries({ queryKey: ["vendor-earnings", vendorId] });
     },
-    onError: () => {
-      toast({ title: "Failed to update booking", variant: "destructive" });
+    onError: (e: Error) => {
+      toast({
+        title: "Failed to update booking",
+        description: e.message,
+        variant: "destructive",
+      });
     },
   });
 

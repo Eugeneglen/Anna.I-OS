@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { resolveSecret } from "@/lib/secrets";
 
-const OPS_JWT_SECRET = process.env.OPS_JWT_SECRET || "anna-ops-dev-secret";
-const VENDOR_JWT_SECRET = process.env.VENDOR_JWT_SECRET || "anna-vendor-dev-secret";
-const HOUSEHOLD_JWT_SECRET = process.env.HOUSEHOLD_JWT_SECRET || "anna-household-dev-secret";
+const OPS_JWT_SECRET = resolveSecret("OPS_JWT_SECRET", "anna-ops-dev-secret", {
+  owner: "middleware (ops JWT)",
+});
+const VENDOR_JWT_SECRET = resolveSecret("VENDOR_JWT_SECRET", "anna-vendor-dev-secret", {
+  owner: "middleware (vendor JWT)",
+});
+const HOUSEHOLD_JWT_SECRET = resolveSecret("HOUSEHOLD_JWT_SECRET", "anna-household-dev-secret", {
+  owner: "middleware (household JWT)",
+});
 const opsSecret = new TextEncoder().encode(OPS_JWT_SECRET);
 const vendorSecret = new TextEncoder().encode(VENDOR_JWT_SECRET);
 const householdSecret = new TextEncoder().encode(HOUSEHOLD_JWT_SECRET);

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getZAI } from "@/lib/zai";
+import { getHouseholdSession } from "@/lib/household-auth";
+import { signServeUrl } from "@/lib/serve-auth";
 
 const analyzePhotosSchema = z.object({
   photos: z.array(
@@ -15,6 +17,13 @@ const analyzePhotosSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    // FIX-1a: this route sends task photos to the vision model — it was
+    // previously callable unauthenticated. Household session required.
+    const session = await getHouseholdSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const parsed = analyzePhotosSchema.safeParse(body);
 
@@ -84,9 +93,12 @@ Respond in JSON format only:
     }
 
     // Build image content array
+    // FIX-1a: /api/serve now requires auth. The VLM fetches these URLs
+    // server-side WITHOUT cookies, so sign short-TTL access tokens onto
+    // any /api/serve URL before handing it to the vision model.
     const imageContent = photos.map((photo) => ({
       type: "image_url" as const,
-      image_url: { url: photo.url },
+      image_url: { url: signServeUrl(photo.url, 10 * 60) ?? photo.url },
     }));
 
     // Call VLM

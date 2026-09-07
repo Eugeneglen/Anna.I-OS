@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { isAuthRejection, fetchEventToken } from "@/hooks/socket-auth";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -111,6 +112,13 @@ export function useHouseholdEvents(
   const handlersRef = useRef(handlers);
   const onEventRef = useRef(onEvent);
   const householdIdRef = useRef(householdId);
+  // FIX-1b: auth fallback / log-once state (see socket-auth.ts)
+  const authFallbackArmedRef = useRef(true);
+  const connectErrorLoggedRef = useRef(false);
+  const fallbackLoggedRef = useRef(false);
+  // Latest connect callback, so the auth-fallback path can re-enter connect
+  // without a self-referencing closure.
+  const connectRef = useRef<((eventToken?: string) => void) | null>(null);
 
   // Keep refs up to date without triggering reconnects
   useEffect(() => {
@@ -122,7 +130,7 @@ export function useHouseholdEvents(
     householdIdRef.current = householdId;
   }, [householdId]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback((eventToken?: string) => {
     if (socketRef.current?.connected) return;
 
     try {
@@ -141,6 +149,11 @@ export function useHouseholdEvents(
         auth: {
           type: "household",
           householdId: householdIdRef.current || undefined,
+          // FIX-1b: the service verifies the household session cookie on the
+          // handshake (same-origin, forwarded by the gateway). eventToken is
+          // the short-lived fallback from /api/events/token, used only when
+          // the cookie was unavailable.
+          ...(eventToken ? { token: eventToken } : {}),
         },
       });
       console.log("[useHouseholdEvents] Socket created, connecting...");
@@ -148,6 +161,10 @@ export function useHouseholdEvents(
       socket.on("connect", () => {
         console.log("[useHouseholdEvents] Connected!");
         setIsConnected(true);
+        // Re-arm the one-shot auth fallback + log-once flags for the NEXT
+        // connection lifecycle (e.g. a token expiring after 5 minutes).
+        authFallbackArmedRef.current = true;
+        connectErrorLoggedRef.current = false;
 
         // Join household room on connect
         if (householdIdRef.current) {
@@ -161,7 +178,34 @@ export function useHouseholdEvents(
       });
 
       socket.on("connect_error", (err) => {
-        console.warn("[useHouseholdEvents] Connect error:", err.message);
+        // FIX-1b: the service rejects unauthenticated handshakes with an
+        // "unauthorized..." error. Socket.io does NOT auto-reconnect after
+        // a middleware rejection, so there is no reconnect spam — we get
+        // exactly one shot at a token fallback per connection lifecycle.
+        if (authFallbackArmedRef.current && isAuthRejection(err)) {
+          authFallbackArmedRef.current = false;
+          socket.disconnect();
+          if (socketRef.current === socket) {
+            socketRef.current = null;
+          }
+          fetchEventToken().then((token) => {
+            if (token) {
+              connectRef.current?.(token);
+            } else if (!fallbackLoggedRef.current) {
+              fallbackLoggedRef.current = true;
+              console.warn(
+                "[useHouseholdEvents] Auth fallback failed — realtime updates disabled for this session"
+              );
+            }
+          });
+          return;
+        }
+        // Other errors (network, service down): socket.io retries with
+        // backoff on its own — log once per lifecycle to avoid spam.
+        if (!connectErrorLoggedRef.current) {
+          connectErrorLoggedRef.current = true;
+          console.warn("[useHouseholdEvents] Connect error:", err.message);
+        }
       });
 
       // Confirm room join
@@ -204,6 +248,11 @@ export function useHouseholdEvents(
     }
   }, [householdIdRef]);
 
+  // Keep the latest connect callback reachable from the fallback path
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
   // ── Handle household ID changes (join/leave rooms) ──
   useEffect(() => {
     const socket = socketRef.current;
@@ -227,7 +276,7 @@ export function useHouseholdEvents(
 
   const reconnect = useCallback(() => {
     disconnect();
-    setTimeout(connect, 500);
+    setTimeout(() => connect(), 500);
   }, [connect, disconnect]);
 
   // Connect on mount if enabled

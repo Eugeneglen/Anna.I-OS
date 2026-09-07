@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import crypto from "crypto";
 import { db } from "@/lib/db";
+import { signServeUrl } from "@/lib/serve-auth";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "public");
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -116,7 +117,12 @@ export async function POST(
     return NextResponse.json({
       count: savedPhotos.length,
       type,
-      photos: savedPhotos.map((p) => ({ fileUrl: p.fileUrl })),
+      // FIX-1a: /api/serve requires auth — the share page has no session,
+      // so return short-TTL signed URLs for immediate preview. The DB row
+      // keeps the unsigned path.
+      photos: savedPhotos.map((p) => ({
+        fileUrl: signServeUrl(p.fileUrl, 10 * 60),
+      })),
     });
   } catch (error) {
     console.error("POST /api/j/share/[token]/photos error:", error);

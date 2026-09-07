@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 import { createOpsToken } from "@/lib/ops-auth";
+import {
+  checkRateLimit,
+  clientIpFromHeaders,
+  isRateLimited,
+  rateLimitResponsePayload,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 
 /** In production (Railway HTTPS), cookies MUST have secure:true or browsers reject them */
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -17,10 +24,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // FIX-1a: brute-force throttle — 10 FAILED attempts / 15 min per
+    // identifier + IP. Only failures are counted.
+    const failKey = `login-fail:ops:${clientIpFromHeaders(req.headers)}:${String(email).toLowerCase()}`;
+    if (isRateLimited(failKey, RATE_LIMITS.loginFailures.limit)) {
+      return NextResponse.json(rateLimitResponsePayload(failKey), { status: 429 });
+    }
+    const recordFailure = () =>
+      checkRateLimit(
+        failKey,
+        RATE_LIMITS.loginFailures.limit,
+        RATE_LIMITS.loginFailures.windowMs
+      );
+
     const user = await db.opsUser.findUnique({ where: { email } });
 
     if (!user) {
       console.warn(`[/api/ops/auth] User not found: ${email} (OpsUser count: ${await db.opsUser.count().catch(() => -1)})`);
+      recordFailure();
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -50,6 +71,7 @@ export async function POST(req: NextRequest) {
     const valid = await bcrypt.compare(password, passwordHash);
     if (!valid) {
       console.warn(`[/api/ops/auth] Wrong password for: ${email}`);
+      recordFailure();
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }

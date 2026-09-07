@@ -57,10 +57,12 @@ export async function GET(request: Request) {
       where.memberId = memberId
     }
 
+    // FIX-1d: unread is now readAt-based (delivery flips status PENDING →
+    // SENT through the delivery layer — status no longer tracks read state).
     if (status && status !== "ALL") {
       where.status = status
     } else if (unreadOnly) {
-      where.status = NotificationStatus.PENDING
+      where.readAt = null
     }
 
     const notifications = await db.notification.findMany({
@@ -70,7 +72,8 @@ export async function GET(request: Request) {
     })
 
     // Get unread count (filtered by memberId too)
-    const unreadWhere: Record<string, any> = { householdId, status: NotificationStatus.PENDING }
+    // FIX-1d: readAt-based — see note above.
+    const unreadWhere: Record<string, any> = { householdId, readAt: null }
     if (memberId) {
       unreadWhere.memberId = memberId
     }
@@ -118,7 +121,9 @@ export async function POST(request: Request) {
         if (!member) memberId = null
       }
 
-      const markWhere: Record<string, any> = { householdId, status: NotificationStatus.PENDING }
+      // FIX-1d: readAt-based (covers SENT rows too — status PENDING is a
+      // delivery state now, not the unread marker).
+      const markWhere: Record<string, any> = { householdId, readAt: null }
       if (memberId) {
         markWhere.memberId = memberId
       }

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { TaskStatus, EscrowState, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { isPlatformFundedDiscount, payoutBaseCents } from "@/lib/payments/calculations"
+import { recordEscrowReleaseEffect } from "@/lib/payments/escrow-effects"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { triggerPredictiveScheduling } from "@/lib/predictive-scheduler"
 import { emitEscrowStateChanged, emitDisputeRaised, emitVendorNotification } from "@/lib/events"
@@ -59,6 +60,13 @@ export async function PATCH(
       return NextResponse.json({ error: "No escrow entry found for this task" }, { status: 404 })
     }
 
+    // Vendor to pay on release (from the booking that served the task, when
+    // present). FIX-1c: used by the post-commit payment adapter effects.
+    const releaseVendorBooking = await db.booking.findFirst({
+      where: { taskId: id, status: { in: ["accepted", "in_progress", "completed"] } },
+      select: { id: true, vendorId: true },
+    })
+
     const now = new Date()
 
     if (action === "release") {
@@ -113,12 +121,21 @@ export async function PATCH(
             id: true, amountCents: true, vendorPayoutCents: true,
             commissionCents: true, commissionRate: true, refundCents: true,
             originalAmountCents: true, discountCents: true, discountFundedBy: true,
+            stripePaymentIntentId: true,
           },
         })
         if (txHeldEntries.length === 0) {
           throw new Error("ESCROW_ALREADY_RESOLVED")
         }
         const updatedEscrows: { id: string; vendorPayoutCents: number; state: EscrowState }[] = []
+        // FIX-1c: per-entry figures for the post-commit adapter effects
+        // (release/capture + vendor payout — see escrow-effects.ts).
+        const claimedEntryEffects: {
+          escrowLedgerId: string
+          heldAmountCents: number
+          payoutCents: number
+          providerHoldRef: string | null
+        }[] = []
         let releasedCount = 0
         let subsidyDrawnCents = 0
         let payoutBaseTotalCents = 0
@@ -156,6 +173,12 @@ export async function PATCH(
             payoutTotalCents += vendorPayoutCents
             commissionTotalCents += commissionCents
             escrowCashTotalCents += entry.amountCents
+            claimedEntryEffects.push({
+              escrowLedgerId: entry.id,
+              heldAmountCents: entry.amountCents,
+              payoutCents: vendorPayoutCents,
+              providerHoldRef: entry.stripePaymentIntentId,
+            })
             const fresh = await tx.escrowLedger.findUnique({
               where: { id: entry.id },
               select: { id: true, vendorPayoutCents: true, state: true },
@@ -243,8 +266,25 @@ export async function PATCH(
           })
         }
 
-        return { updatedTask, updatedEscrow }
+        return { updatedTask, updatedEscrow, claimedEntryEffects }
       })
+
+      // ── Payment adapter effects (FIX-1c wiring) ──
+      // Release/capture the held cash + transfer the vendor payout through
+      // the provider-agnostic PaymentService (NoOp today — Pending Payment
+      // Gateway Decision). Ledger-authoritative: post-commit, never throws,
+      // adapter failures are logged as reconciliation cases.
+      for (const effect of result.claimedEntryEffects) {
+        await recordEscrowReleaseEffect({
+          escrowLedgerId: effect.escrowLedgerId,
+          taskId: task.id,
+          bookingId: releaseVendorBooking?.id ?? escrow.bookingId,
+          vendorId: releaseVendorBooking?.vendorId ?? null,
+          heldAmountCents: effect.heldAmountCents,
+          payoutCents: effect.payoutCents,
+          providerHoldRef: effect.providerHoldRef,
+        })
+      }
 
       // Phase 4: Fire-and-forget predictive scheduling for L4+ households
       triggerPredictiveScheduling(task.householdId, task.category as any, task.id)

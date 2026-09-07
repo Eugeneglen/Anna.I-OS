@@ -4,18 +4,23 @@
  *
  * Returns the active PaymentService implementation for the current environment.
  *
- * - When `STRIPE_SECRET_KEY` is set and not "test", returns StripePaymentService.
- * - Otherwise returns NoOpPaymentService (sandbox / dev / test).
+ * PENDING PAYMENT GATEWAY DECISION: the client has NOT chosen a payment
+ * provider (Stripe Connect and alternatives are under evaluation). Until
+ * one is chosen, the factory ALWAYS returns NoOpPaymentService — refunds,
+ * holds, releases and payouts are ledger-only bookkeeping; no actual money
+ * moves. This is documented and intentional.
  *
- * StripePaymentService is not yet implemented (see ./stripe.ts). Until it is,
- * the factory always returns NoOpPaymentService — refunds succeed in the DB
- * but no actual money is moved. This is documented and intentional for the
- * MVP scope (Stripe integration deferred).
+ * Selection is env-driven and provider-agnostic:
+ *   - When a provider adapter is implemented AND its env credentials are
+ *     present, the factory instantiates that adapter (one import + one
+ *     branch — see the dormant Stripe placeholder below).
+ *   - Otherwise: NoOpPaymentService.
  *
- * ── Adding Stripe later ──
+ * ── Adding a provider later ──
  *
- *   1. Implement StripePaymentService in ./stripe.ts (uncomment the method bodies).
- *   2. Uncomment the StripePaymentService import + branch below.
+ *   1. Implement the adapter in its own file (e.g. ./stripe.ts) against the
+ *      provider-agnostic interface in ./types.ts.
+ *   2. Uncomment the import + branch below.
  *   3. No changes to any API route, business logic, or frontend.
  */
 
@@ -27,19 +32,26 @@ let _instance: PaymentService | null = null;
 export function getPaymentService(): PaymentService {
   if (_instance) return _instance;
 
+  // ── Dormant Stripe branch (placeholder — Pending Payment Gateway Decision) ──
+  //
+  // Uncomment when StripePaymentService is implemented:
+  //
+  //   import { StripePaymentService } from "./stripe";
+  //   const stripeKey = process.env.STRIPE_SECRET_KEY;
+  //   if (stripeKey && stripeKey !== "test") {
+  //     _instance = new StripePaymentService();
+  //     return _instance;
+  //   }
+  //
+  // NOTE: until then, a set STRIPE_SECRET_KEY does NOT activate Stripe —
+  // the NoOp adapter stays active so the app never crashes and the ledger
+  // remains the single source of truth.
   const stripeKey = process.env.STRIPE_SECRET_KEY;
-  const stripeEnabled = !!stripeKey && stripeKey !== "test";
-
-  if (stripeEnabled) {
-    // Future: uncomment when StripePaymentService is implemented.
-    //
-    //   import { StripePaymentService } from "./stripe";
-    //   _instance = new StripePaymentService();
-    //   return _instance;
-    //
-    // For now, log a warning and fall back to NoOpPaymentService so the app
-    // doesn't crash when STRIPE_SECRET_KEY is set but Stripe isn't wired up.
-    console.warn("[payments] StripePaymentService not yet implemented — falling back to NoOpPaymentService");
+  if (stripeKey && stripeKey !== "test") {
+    console.warn(
+      "[payments] STRIPE_SECRET_KEY is set but no provider adapter is implemented — " +
+      "staying on NoOpPaymentService (Pending Payment Gateway Decision)."
+    );
   }
 
   _instance = new NoOpPaymentService();
