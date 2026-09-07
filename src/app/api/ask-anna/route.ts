@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ANNA_TOOLS, executeToolCall } from "@/lib/nlu-tools";
+import { ANNA_TOOLS, executeToolCall, type ToolCallResult } from "@/lib/nlu-tools";
 import { getZAI } from "@/lib/zai";
 import { getHouseholdSession } from "@/lib/household-auth";
 import {
@@ -197,12 +197,34 @@ export async function POST(request: NextRequest) {
 
     // ── Handle confirmation flow ──
     if (confirmAction) {
-      const result = await executeToolCall(
-        confirmAction.toolName,
-        confirmAction.action,
-        householdId,
-        true // executeWrites = true
-      );
+      // FIX-2B (POLICE-2 follow-up): the confirmed-write pass — the most
+      // important path, real task creation/cancellation — was still
+      // unwrapped, so a DB throw here 500'd the household chat with raw
+      // Prisma internals. Catch it: log server-side, keep the A-8 audit
+      // row (success:false, attempts matter), and let the LLM report the
+      // failure cleanly. Note: create_task/cancel_task executors
+      // themselves return {success:false} for business-rule refusals —
+      // those never throw and are unaffected.
+      let result: ToolCallResult;
+      try {
+        result = await executeToolCall(
+          confirmAction.toolName,
+          confirmAction.action,
+          householdId,
+          true // executeWrites = true
+        );
+      } catch (error) {
+        console.error(
+          `[AskAnna] Confirm-pass tool ${confirmAction.toolName} threw:`,
+          error
+        );
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        result = {
+          success: false,
+          toolName: confirmAction.toolName,
+          error: `Tool ${confirmAction.toolName} failed: ${msg.slice(0, 200)}`,
+        };
+      }
 
       // A-8: audit the confirmed write (success or failure — attempts matter).
       // cancel_task is audited inside the canonical cancel service already
@@ -304,7 +326,23 @@ export async function POST(request: NextRequest) {
         args = {};
       }
 
-      const result = await executeToolCall(toolName, args, householdId, false);
+      // FIX-2B: a single broken tool must NOT 500 the whole chat turn
+      // with raw Prisma internals dumped into the household's chat. Catch,
+      // log server-side, and hand the LLM a clean tool-level error. A
+      // thrown error can never be a requiresConfirmation result, so the
+      // confirmation-card flow is unaffected.
+      let result: ToolCallResult;
+      try {
+        result = await executeToolCall(toolName, args, householdId, false);
+      } catch (error) {
+        console.error(`[AskAnna] Tool ${toolName} threw:`, error);
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        result = {
+          success: false,
+          toolName,
+          error: `Tool ${toolName} failed: ${msg.slice(0, 200)}`,
+        };
+      }
 
       if (result.requiresConfirmation && result.confirmationMessage) {
         pendingConfirmation = {

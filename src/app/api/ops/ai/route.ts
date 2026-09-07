@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OPS_AI_TOOLS, executeOpsToolCall } from "@/lib/ops-ai-tools";
+import {
+  OPS_AI_TOOLS,
+  executeOpsToolCall,
+  type OpsToolCallResult,
+} from "@/lib/ops-ai-tools";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasMinRole } from "@/lib/ops-auth";
 import { getUserPermissions } from "@/lib/permissions";
@@ -224,7 +228,22 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const result = await executeOpsToolCall(toolName, args);
+      // FIX-2B: a single broken tool must NOT 500 the whole chat turn
+      // with raw Prisma internals dumped into the operator's chat. Catch,
+      // log server-side, and hand the LLM a clean tool-level error so it
+      // can report what failed and still answer the rest of the question.
+      let result: OpsToolCallResult;
+      try {
+        result = await executeOpsToolCall(toolName, args);
+      } catch (error) {
+        console.error(`[OpsAI] Tool ${toolName} threw:`, error);
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        result = {
+          success: false,
+          toolName,
+          error: `Tool ${toolName} failed: ${msg.slice(0, 200)}`,
+        };
+      }
 
       if (result.success && result.data) {
         results.push(JSON.stringify(result.data));

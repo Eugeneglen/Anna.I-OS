@@ -720,7 +720,7 @@ async function executeBookingHealth(): Promise<OpsToolCallResult> {
     totalAccepted,
     totalCompleted,
     totalCancelled,
-    avgTimeToComplete,
+    recentCompleted,
   ] = await Promise.all([
     db.booking.count(),
     db.booking.groupBy({ by: ["status"], _count: true }),
@@ -728,16 +728,20 @@ async function executeBookingHealth(): Promise<OpsToolCallResult> {
     db.booking.count({ where: { status: "accepted" } }),
     db.booking.count({ where: { status: "completed" } }),
     db.booking.count({ where: { status: "cancelled" } }),
-    // Average time from scheduled start to completion
-    db.booking.aggregate({
-      where: {
-        status: "completed",
-        scheduledStart: { not: null },
-        completedAt: { not: null },
-      },
-      _avg: {
-        completedAt: true,
-      },
+    // FIX-2B: mean scheduledStart → completedAt duration (the tool's
+    // description has always promised "average time-to-complete" but the
+    // old query never produced it — and was invalid twice over: Prisma
+    // rejects `not: null` on the NON-nullable scheduledStart column, and
+    // _avg only supports numeric fields, not DateTime. Averaging raw
+    // timestamps is meaningless anyway — the metric is the SPAN, so
+    // compute it in JS. scheduledStart is non-nullable by schema, so only
+    // completedAt needs the null guard. Bounded to the most recent 2000
+    // completions to keep memory flat at platform scale.
+    db.booking.findMany({
+      where: { status: "completed", completedAt: { not: null } },
+      orderBy: { completedAt: "desc" },
+      take: 2000,
+      select: { scheduledStart: true, completedAt: true },
     }),
   ]);
 
@@ -750,6 +754,30 @@ async function executeBookingHealth(): Promise<OpsToolCallResult> {
   const completionRate = pct(totalCompleted, totalBookings);
   const cancellationRate = pct(totalCancelled, totalBookings);
 
+  // FIX-2B: average hours from scheduled start to completion (1dp),
+  // sampled from the most recent completed bookings. null = nothing
+  // completed yet. Rows where completedAt < scheduledStart are EXCLUDED
+  // from the average (they corrupt it — the live DB has seed rows with
+  // completion stamps before schedule) but counted separately so the
+  // integrity anomaly stays visible to ops. Honest data, never
+  // fabricated (per system-prompt hard boundary).
+  let avgCompletionHours: number | null = null;
+  let negativeDurationRows = 0;
+  const validSpansMs: number[] = [];
+  for (const b of recentCompleted) {
+    const span = b.completedAt!.getTime() - b.scheduledStart.getTime();
+    if (span < 0) {
+      negativeDurationRows++;
+    } else {
+      validSpansMs.push(span);
+    }
+  }
+  if (validSpansMs.length > 0) {
+    const totalMs = validSpansMs.reduce((sum, ms) => sum + ms, 0);
+    avgCompletionHours =
+      Math.round((totalMs / validSpansMs.length / 3_600_000) * 10) / 10;
+  }
+
   return {
     success: true,
     toolName: "get_booking_health",
@@ -761,6 +789,14 @@ async function executeBookingHealth(): Promise<OpsToolCallResult> {
         acceptanceRate,
         completionRate,
         cancellationRate,
+        // Hours from scheduled start to completion, averaged over valid
+        // spans only; null when no completed bookings exist yet.
+        avgCompletionHours,
+        // Sample size behind avgCompletionHours (most recent N, valid spans).
+        avgCompletionSampleSize: validSpansMs.length,
+        // completedAt earlier than scheduledStart — data-integrity
+        // anomaly for ops to investigate; excluded from the average.
+        negativeDurationRows,
       },
     },
   };

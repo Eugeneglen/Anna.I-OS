@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { VENDOR_AI_TOOLS, executeVendorToolCall } from "@/lib/vendor-ai-tools";
+import {
+  VENDOR_AI_TOOLS,
+  executeVendorToolCall,
+  type VendorToolCallResult,
+} from "@/lib/vendor-ai-tools";
 import { getVendorSession } from "@/lib/vendor-auth";
 import { getZAI } from "@/lib/zai";
 import { vendorHasAiAccess } from "@/lib/vendor-rbac";
@@ -190,7 +194,21 @@ export async function POST(request: NextRequest) {
         args = {};
       }
 
-      const result = await executeVendorToolCall(toolName, args, vendorId);
+      // FIX-2B: a single broken tool must NOT 500 the whole chat turn
+      // with raw Prisma internals dumped into the vendor's chat. Catch,
+      // log server-side, and hand the LLM a clean tool-level error.
+      let result: VendorToolCallResult;
+      try {
+        result = await executeVendorToolCall(toolName, args, vendorId);
+      } catch (error) {
+        console.error(`[VendorAI] Tool ${toolName} threw:`, error);
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        result = {
+          success: false,
+          toolName,
+          error: `Tool ${toolName} failed: ${msg.slice(0, 200)}`,
+        };
+      }
 
       if (result.success && result.data) {
         results.push(JSON.stringify(result.data));
