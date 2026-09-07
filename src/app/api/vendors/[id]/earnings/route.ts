@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { EscrowState } from "@prisma/client"
-import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
+import { requireVendorOwnership, requireVendorPermission, vendorJson } from "@/lib/vendor-guard"
 import { payoutBaseCents } from "@/lib/payments/calculations"
 
 export async function GET(
@@ -14,6 +14,12 @@ export async function GET(
     // ── IDOR protection: verify authenticated vendor owns this resource ──
     const auth = await requireVendorOwnership(id)
     if (!auth.success) return auth.response
+
+    // ── P5 (AUDIT-4): RBAC gate — the earnings/money view is permission-
+    // gated, not just ownership-gated (previously staff ≡ manager ≡ owner).
+    // Requires v_earnings:view (Vendor Staff does not hold it).
+    const permAuth = await requireVendorPermission("v_earnings", "view")
+    if (!permAuth.success) return permAuth.response
 
     // Get all booking IDs for this vendor
     const vendorBookings = await db.booking.findMany({

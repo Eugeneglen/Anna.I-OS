@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { signServeUrl } from "@/lib/serve-auth";
+import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
 
 // FIX-1a: /api/serve now requires a session or a signed access token.
 // This is the PUBLIC job-share data API (no session), so every
@@ -49,6 +50,15 @@ export async function GET(
       return NextResponse.json(
         { error: "Link not found or expired" },
         { status: 404 }
+      );
+    }
+
+    // P8 (AUDIT-4): share links were immortal — enforce a TTL from the
+    // generation timestamp so leaked links stop exposing job data forever.
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json(
+        { error: shareLinkExpiredError() },
+        { status: 410 }
       );
     }
 

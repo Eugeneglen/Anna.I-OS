@@ -23,6 +23,14 @@ const escrowActionSchema = z.object({
   voucherRefundAmountCents: z.number().int().nonnegative().optional(),
   // For resolve_voucher: voucher expiry in days (default 90, min 1, max 365).
   voucherExpiryDays: z.number().int().min(1).max(365).optional(),
+  // ── P8 (AUDIT-4): maker-checker-lite for money-moving actions. ──
+  // Refund-class actions (resolve_refund / partial_refund /
+  // resolve_voucher) must be explicitly confirmed by the acting operator
+  // AND carry a non-empty reason for the audit trail. A true two-person
+  // maker-checker needs a pending-state workflow + schema change; this
+  // confirmation gate + the existing per-action audit rows are the
+  // non-breaking control the audit asked to add now.
+  refundConfirmed: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -52,7 +60,32 @@ export async function PATCH(
     }
 
     const { action, resolution, refundAmountCents, idempotencyKey,
-            voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays } = parsed.data;
+            voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays, refundConfirmed } = parsed.data;
+
+    // ── P8 (AUDIT-4): maker-checker-lite gate for money-moving actions.
+    // Refund-class actions require an explicit confirmation flag AND a
+    // non-empty resolution note before any money moves. Unconfirmed calls
+    // get a 409 with instructions so the console can re-submit safely. ──
+    const REFUND_ACTIONS = ["resolve_refund", "partial_refund", "resolve_voucher"] as const;
+    if ((REFUND_ACTIONS as readonly string[]).includes(action)) {
+      if (!refundConfirmed) {
+        return NextResponse.json(
+          {
+            error:
+              "Refund actions require explicit confirmation — re-submit with refundConfirmed: true after reviewing the amount and reason.",
+            action,
+            requiresConfirmation: true,
+          },
+          { status: 409 }
+        );
+      }
+      if (!resolution || resolution.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Refund actions require a resolution note (audit trail)." },
+          { status: 400 }
+        );
+      }
+    }
 
     // Fetch escrow with task and household
     const escrow = await db.escrowLedger.findUnique({

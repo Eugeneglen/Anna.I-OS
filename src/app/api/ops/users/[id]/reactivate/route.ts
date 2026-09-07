@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getOpsSession } from "@/lib/ops-auth";
+import { getOpsSession, invalidateOpsSessionCache } from "@/lib/ops-auth";
 import { hasPermission, auditLog } from "@/lib/permissions";
 
 // ──────────────────────────────────────────────────────────
@@ -39,6 +39,9 @@ export async function POST(
       where: { id },
       data: { isActive: true, updatedBy: session.userId },
     });
+
+    // P7: refresh the reactivated user's session state immediately.
+    invalidateOpsSessionCache(id);
 
     await auditLog({
       userId: session.userId,

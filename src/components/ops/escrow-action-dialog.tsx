@@ -221,11 +221,14 @@ export function EscrowActionDialog({
       (voucherAmountCents + (voucherRefundAmountCents || 0) <= maxCompensationCents)
     : true;
 
-  const isVoucherResolutionValid = type === "resolve_voucher"
-    ? resolution.trim().length > 0
-    : true;
+  // P8 (AUDIT-4): the API now requires a non-empty resolution note on ALL
+  // refund-class actions (audit trail), not just vouchers.
+  const isRefundResolutionValid =
+    type === "resolve_refund" || type === "partial_refund" || type === "resolve_voucher"
+      ? resolution.trim().length > 0
+      : true;
 
-  const isValid = isPartialRefundValid && isVoucherValid && isVoucherResolutionValid;
+  const isValid = isPartialRefundValid && isVoucherValid && isRefundResolutionValid;
 
   const handleClose = () => {
     setResolution("");

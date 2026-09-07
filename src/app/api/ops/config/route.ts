@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import { logAction } from "@/lib/audit-log";
 import { getCommissionRate, invalidateCommissionRateCache } from "@/lib/commission";
 import { CATEGORIES, ACTIVE_CATEGORIES, MAX_AUTONOMY_LEVEL } from "@/lib/constants";
@@ -90,6 +91,14 @@ export async function GET() {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): was session-only — now requires config:view
+    // (all four seeded roles hold it; POST/PUT config writes remain
+    // hasMinRole ADMIN as before).
+    const allowed = await hasPermission(session, "config", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — requires config:view" }, { status: 403 });
     }
 
     const [jobTypes, thresholds, platformConfigs] = await Promise.all([

@@ -116,6 +116,12 @@ export default function EscrowPage() {
           action, resolution,
           refundAmountCents, idempotencyKey,
           voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays,
+          // P8 (AUDIT-4): the dialog IS the operator's explicit confirmation
+          // step for money-moving actions (typed amount + reason + submit).
+          // The API requires this flag on refund-class actions.
+          ...(action === "resolve_refund" || action === "partial_refund" || action === "resolve_voucher"
+            ? { refundConfirmed: true }
+            : {}),
         }),
       });
       if (!res.ok) {

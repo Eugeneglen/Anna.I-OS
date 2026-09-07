@@ -27,6 +27,18 @@ export async function POST(
     const guard = await guardTaskAccess(id, { opsMinRole: "COORDINATOR" })
     if (!guard.ok) return guardErrorResponse(guard)
 
+    // ── P8 (AUDIT-4): household role differentiation — verification is the
+    // precondition for escrow release, so within the household it is
+    // restricted to the OWNER. MEMBERs previously had identical authority
+    // to the OWNER on every action (roles cosmetic). Ops actors are
+    // unaffected (COORDINATOR+ tier above). ──
+    if (guard.actor.kind === "household" && guard.actor.memberRole !== "OWNER") {
+      return NextResponse.json(
+        { error: "Only the household owner can verify completed work. Please ask the owner to do this." },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const parsed = verifySchema.safeParse(body)
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
 import { z } from "zod";
 import {
   NotificationChannel,
@@ -30,7 +31,7 @@ export async function GET(
 
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
-      select: { id: true },
+      select: { id: true, sharedAt: true },
     });
 
     if (!booking) {
@@ -38,6 +39,11 @@ export async function GET(
         { error: "Invalid or expired share link" },
         { status: 404 }
       );
+    }
+
+    // P8 (AUDIT-4): share links expire — see src/lib/share-link.ts
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
     const addons = await db.bookingAddon.findMany({
@@ -84,6 +90,11 @@ export async function POST(
         { error: "Invalid or expired share link" },
         { status: 404 }
       );
+    }
+
+    // P8 (AUDIT-4): share links expire — see src/lib/share-link.ts
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
     // Only allow addons on active bookings

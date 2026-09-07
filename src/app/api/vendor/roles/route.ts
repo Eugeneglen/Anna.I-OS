@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 
 let vendorSelfHealed = false;
 
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 const VENDOR_PERMISSIONS = [
   { module: "v_schedule", action: "view" }, { module: "v_schedule", action: "edit" },
   { module: "v_schedule", action: "create" }, { module: "v_schedule", action: "delete" },
@@ -72,6 +74,26 @@ const VENDOR_ROLE_DEFS = [
 
 async function ensureVendorRbac() {
   if (vendorSelfHealed) return;
+
+  // ── P3 (AUDIT-4): this self-heal MUTATES the shared Role table from a
+  //    request path. In production it must never run:
+  //      • it auto-assigns "Super Admin" (level 5, every permission) to
+  //        EVERY vendor with roleId=null — a silent privilege grant to
+  //        unprovisioned accounts;
+  //      • request-path schema seeding belongs to migrations/seeds.
+  //    Production is deny-by-default: unprovisioned vendors resolve to an
+  //    EMPTY permission set (see resolvePermissions in vendor-guard.ts).
+  //    Dev/CI keeps the self-heal so legacy demo credentials and
+  //    post-schema-push recovery continue to work. ──
+  if (IS_PRODUCTION) {
+    if (!vendorSelfHealed) {
+      console.warn(
+        "[ensureVendorRbac] Production environment — request-path RBAC self-heal disabled (deny-by-default)"
+      );
+      vendorSelfHealed = true;
+    }
+    return;
+  }
 
   const vendorRoleCount = await db.role.count({
     where: { slug: { startsWith: "vendor_" } },

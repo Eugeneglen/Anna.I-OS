@@ -35,6 +35,18 @@ export async function POST(
     if (!guard.ok) return guardErrorResponse(guard);
     const actor = guard.actor;
 
+    // ── P8 (AUDIT-4): household role differentiation — cancel triggers the
+    // refund pipeline (HELD → REFUNDED + REFUND_CREDIT), so within the
+    // household it is restricted to the OWNER. MEMBERs previously had
+    // identical authority to the OWNER on every action (roles cosmetic).
+    // Ops actors are unaffected (COORDINATOR+ tier above). ──
+    if (actor.kind === "household" && actor.memberRole !== "OWNER") {
+      return NextResponse.json(
+        { error: "Only the household owner can cancel a task. Please ask the owner to do this." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const parsed = cancelSchema.safeParse(body);
     if (!parsed.success) {

@@ -178,6 +178,12 @@ export function BookingDetailSheet({
           action, resolution,
           refundAmountCents, idempotencyKey,
           voucherAmountCents, voucherRefundAmountCents, voucherExpiryDays,
+          // P8 (AUDIT-4): refund-class actions require explicit confirmation
+          // (same as the escrow page — the API rejects unconfirmed refunds
+          // with 409 requiresConfirmation).
+          ...(action === "resolve_refund" || action === "partial_refund" || action === "resolve_voucher"
+            ? { refundConfirmed: true }
+            : {}),
         }),
       });
       if (!res.ok) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
+import { requireVendorOwnership, requireVendorPermission, vendorJson } from "@/lib/vendor-guard"
 
 export async function GET(
   request: Request,
@@ -13,6 +13,12 @@ export async function GET(
     // ── IDOR protection: verify authenticated vendor owns this resource ──
     const auth = await requireVendorOwnership(id)
     if (!auth.success) return auth.response
+
+    // ── P5 (AUDIT-4): RBAC gate — the schedule view requires
+    // v_schedule:view (all vendor roles hold it; this establishes the
+    // permission pattern for this route family).
+    const permAuth = await requireVendorPermission("v_schedule", "view")
+    if (!permAuth.success) return permAuth.response
 
     const { searchParams } = new URL(request.url)
 

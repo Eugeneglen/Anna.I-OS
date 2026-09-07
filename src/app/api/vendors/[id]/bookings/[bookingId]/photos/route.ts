@@ -3,7 +3,7 @@ import { writeFile, mkdir } from "fs/promises"
 import { join } from "path"
 import crypto from "crypto"
 import { db } from "@/lib/db"
-import { getVendorSession } from "@/lib/vendor-auth"
+import { requireVendorOwnership } from "@/lib/vendor-guard"
 
 // UPLOAD_DIR: writable root for file storage.
 // - Local dev: defaults to public/ (backward compatible)
@@ -19,13 +19,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string; bookingId: string }> }
 ) {
   try {
-    // ── Auth check ──
-    const session = await getVendorSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const { id: vendorId, bookingId } = await params
+
+    // ── P4 (AUDIT-4): auth + IDOR — previously this route only checked that
+    // the booking matched the URL vendorId, but NOT that the session vendor
+    // matched the URL vendorId. Any authenticated vendor could upload
+    // photos into any other vendor's booking by path substitution.
+    // requireVendorOwnership pins session.vendorId === urlVendorId. ──
+    const auth = await requireVendorOwnership(vendorId)
+    if (!auth.success) return auth.response
 
     // Verify booking exists and belongs to this vendor
     const booking = await db.booking.findUnique({
@@ -37,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
     }
 
-    if (booking.vendorId !== vendorId) {
+    if (booking.vendorId !== auth.vendorId) {
       return NextResponse.json(
         { error: "Booking does not belong to this vendor" },
         { status: 403 }

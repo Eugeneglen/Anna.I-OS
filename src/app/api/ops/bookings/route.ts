@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
@@ -8,6 +9,12 @@ export async function GET(req: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): was session-only — now requires bookings:view.
+    const allowed = await hasPermission(session, "bookings", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — requires bookings:view" }, { status: 403 });
     }
 
     const sp = req.nextUrl.searchParams;

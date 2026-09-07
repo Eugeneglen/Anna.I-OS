@@ -53,10 +53,23 @@ export async function POST(req: NextRequest) {
 
     // ── Self-heal: if passwordHash is null (new column from schema push),
     //    hash the incoming password and persist it. This handles the case
-    //    where ensure-seed.ts backfill didn't reach the database.       ──
+    //    where ensure-seed.ts backfill didn't reach the database.
+    //    ── P2 (AUDIT-4): DEV/CI ONLY. In production a NULL passwordHash
+    //    means "ops-managed account, no self-serve login" (per schema
+    //    comment) — honouring the self-heal there would let ANY password
+    //    log into ops-managed accounts. Production denies the login. ──
     let passwordHash = member.passwordHash;
     if (!passwordHash) {
-      console.warn(`[household/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+      if (IS_PRODUCTION) {
+        console.error(
+          `[household/auth] Blocked login for NULL-passwordHash account ${email} in production (ops-managed account)`
+        );
+        return NextResponse.json(
+          { error: "Invalid credentials" },
+          { status: 401 }
+        );
+      }
+      console.warn(`[household/auth] passwordHash is NULL for ${email} — auto-setting from login attempt (dev/CI self-heal)`);
       passwordHash = bcrypt.hashSync(password, 10);
       await db.familyMember.update({
         where: { id: member.id },

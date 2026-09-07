@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): was session-only — any ops login (any role) could read
+    // the full analytics surface. Now requires the analytics:view module
+    // permission (all four seeded roles hold it).
+    const allowed = await hasPermission(session, "analytics", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — requires analytics:view" }, { status: 403 });
     }
 
     const now = new Date();

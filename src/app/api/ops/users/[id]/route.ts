@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getOpsSession } from "@/lib/ops-auth";
+import { getOpsSession, invalidateOpsSessionCache, legacyRoleForSlug } from "@/lib/ops-auth";
 import { hasPermission, auditLog } from "@/lib/permissions";
 
 // ──────────────────────────────────────────────────────────
@@ -105,13 +105,9 @@ export async function PATCH(
       updateData.roleId = parsed.data.roleId;
       const targetRole = await db.role.findUnique({ where: { id: parsed.data.roleId } });
       if (targetRole) {
-        updateData.role = targetRole.slug === "super_admin"
-          ? "ADMIN"
-          : targetRole.slug === "operations"
-            ? "ADMIN"
-            : targetRole.slug === "coordinator"
-              ? "COORDINATOR"
-              : "ANALYST";
+        // P6 (AUDIT-4): `operations` now maps to COORDINATOR (was ADMIN).
+        // See legacyRoleForSlug for the rationale.
+        updateData.role = legacyRoleForSlug(targetRole.slug);
       }
     }
 
@@ -124,6 +120,10 @@ export async function PATCH(
         roleRel: { select: { id: true, name: true, slug: true, level: true, isSystem: true } },
       },
     });
+
+    // P7: role/name changes must reach the session layer immediately,
+    // not on the next 30s cache refresh.
+    invalidateOpsSessionCache(id);
 
     await auditLog({
       userId: session.userId,
@@ -176,6 +176,9 @@ export async function DELETE(
     }
 
     await db.opsUser.delete({ where: { id } });
+
+    // P7: kill the deleted user's sessions immediately.
+    invalidateOpsSessionCache(id);
 
     await auditLog({
       userId: session.userId,

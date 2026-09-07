@@ -57,10 +57,22 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Self-heal: if passwordHash is null (new column from schema push),
-    //    hash the incoming password and persist it.                       ──
+    //    hash the incoming password and persist it.
+    //    ── P2 (AUDIT-4): DEV/CI ONLY. In production a NULL passwordHash
+    //    must never be auto-set from a login attempt — that would let ANY
+    //    password take over the (ops-managed) account. Production denies. ──
     let passwordHash = user.passwordHash;
     if (!passwordHash) {
-      console.warn(`[ops/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+      if (IS_PRODUCTION) {
+        console.error(
+          `[/api/ops/auth] Blocked login for NULL-passwordHash account ${email} in production`
+        );
+        return NextResponse.json(
+          { error: "Invalid credentials" },
+          { status: 401 }
+        );
+      }
+      console.warn(`[ops/auth] passwordHash is NULL for ${email} — auto-setting from login attempt (dev/CI self-heal)`);
       passwordHash = bcrypt.hashSync(password, 10);
       await db.opsUser.update({
         where: { id: user.id },

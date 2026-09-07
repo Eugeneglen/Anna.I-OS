@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client";
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine";
 
@@ -27,6 +28,11 @@ export async function POST(
 
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+
+    // P8 (AUDIT-4): share links expire — see src/lib/share-link.ts
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
     // Only LAUNDRY tasks use the deliver step

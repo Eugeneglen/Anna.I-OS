@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import * as bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { getOpsSession } from "@/lib/ops-auth";
+import { getOpsSession, legacyRoleForSlug } from "@/lib/ops-auth";
 import { hasPermission, auditLog } from "@/lib/permissions";
 
 // ──────────────────────────────────────────────────────────
@@ -142,14 +142,11 @@ export async function POST(req: NextRequest) {
         email,
         passwordHash,
         roleId: targetRole.id,
-        // Keep legacy role field in sync
-        role: targetRole.slug === "super_admin"
-          ? "ADMIN" as const
-          : targetRole.slug === "operations"
-            ? "ADMIN" as const
-            : targetRole.slug === "coordinator"
-              ? "COORDINATOR" as const
-              : "ANALYST" as const,
+        // Keep legacy role field in sync.
+        // P6 (AUDIT-4): `operations` now maps to COORDINATOR (was ADMIN —
+        // which silently granted Operations the legacy super-admin tier on
+        // hasMinRole-gated money/config routes). See legacyRoleForSlug.
+        role: legacyRoleForSlug(targetRole.slug),
       },
       select: {
         id: true, name: true, email: true, role: true, roleId: true,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import {
   scanForPromotions,
   executePromotions,
@@ -34,6 +35,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // ── P5 (AUDIT-4): was session-only. The promotion engine walks every
+  // household and EXECUTE mutates marketing state platform-wide — both
+  // branches are now permission-gated instead of "any ops login":
+  //   scan    → marketing:view
+  //   execute → marketing:create
+  // (coordinator / operations / super_admin hold both; data_analyst,
+  // which is read-only, holds neither and is denied.)
+  const scanAllowed = await hasPermission(session, "marketing", "view");
+  const execAllowed = await hasPermission(session, "marketing", "create");
+
   // ── F8: promotion scans walk every household — 10/min max ──
   const rlKey = opsRateKey(session.userId, "promotions");
   if (!checkRateLimit(rlKey, 10, 60_000)) {
@@ -46,6 +57,9 @@ export async function POST(request: Request) {
     // --- SCAN ---
     const scanParse = scanSchema.safeParse(body);
     if (scanParse.success) {
+      if (!scanAllowed) {
+        return NextResponse.json({ error: "Forbidden — requires marketing:view" }, { status: 403 });
+      }
       const candidates = await scanForPromotions();
       return NextResponse.json({ candidates });
     }
@@ -53,6 +67,9 @@ export async function POST(request: Request) {
     // --- EXECUTE ---
     const execParse = executeSchema.safeParse(body);
     if (execParse.success) {
+      if (!execAllowed) {
+        return NextResponse.json({ error: "Forbidden — requires marketing:create" }, { status: 403 });
+      }
       const results = await executePromotions(execParse.data.candidates);
       const promoted = results.filter((r) => r.success).length;
       const failed = results.filter((r) => !r.success).length;

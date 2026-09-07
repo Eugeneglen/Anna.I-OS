@@ -171,9 +171,15 @@ function SidebarNav({ vendorId }: { vendorId: string }) {
   });
 
   async function handleLogout() {
-    // Clear tab-scoped session state only.
-    // We do NOT call DELETE /api/vendor/auth because that would clear
-    // the shared cookie and break other tabs' middleware access.
+    // P7 (AUDIT-4): clear the shared vendor_token cookie server-side so the
+    // device doesn't keep a valid 24h session after logout. Other tabs that
+    // rely on their per-tab Authorization header for API calls are unaffected;
+    // their page loads correctly redirect to login after this point.
+    try {
+      await fetch("/api/vendor/auth", { method: "DELETE" });
+    } catch {
+      // non-fatal — local tab state is cleared below regardless
+    }
     clearExpectedVendorId();
     clearVendorToken();
     router.push("/vendor/login");

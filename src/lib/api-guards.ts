@@ -28,7 +28,7 @@ import { hasPermission } from "@/lib/permissions";
  */
 
 export type ApiActor =
-  | { kind: "household"; householdId: string; memberId: string }
+  | { kind: "household"; householdId: string; memberId: string; memberRole: string }
   | { kind: "ops"; userId: string; session: OpsSession };
 
 export type GuardOk = { ok: true; actor: ApiActor };
@@ -43,7 +43,15 @@ export function guardErrorResponse(fail: GuardFail): NextResponse {
 export async function resolveApiActor(): Promise<ApiActor | null> {
   const hh = await getHouseholdSession();
   if (hh) {
-    return { kind: "household", householdId: hh.householdId, memberId: hh.memberId };
+    return {
+      kind: "household",
+      householdId: hh.householdId,
+      memberId: hh.memberId,
+      // P8 (AUDIT-4): surface the member's role (OWNER vs MEMBER) so
+      // routes can enforce household-level role differentiation instead
+      // of treating every member identically.
+      memberRole: hh.memberRole,
+    };
   }
   const ops = await getOpsSession();
   if (ops) {

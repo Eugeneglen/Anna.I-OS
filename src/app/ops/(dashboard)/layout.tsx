@@ -411,9 +411,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const can = useCallback(
     (module: string, action: string) => {
       const perms = user?.permissions;
-      // Legacy fallback: if no permissions loaded yet or role not migrated, grant all access
-      // This ensures sidebar nav is always visible even before RBAC migration completes
-      if (!perms || perms.length === 0) return true;
+      // ── P8 (AUDIT-4): deny-by-default. Previously an EMPTY permission
+      // array granted ALL access ("grants-all fallback"), so a
+      // permissionless role rendered every nav item and action. Now:
+      //   • perms undefined  → still loading → optimistic grant (nav
+      //     renders on first paint without flashing empty)
+      //   • perms.length===0 → roleless / permissionless user → deny
+      //     (/api/ops/auth/me auto-migrates legacy users to a real role,
+      //     so genuinely empty means genuinely no access)
+      //   • otherwise       → real permission check
+      // (Mirrors the vendor portal's deny-by-default can().) ──
+      if (!perms) return true; // still loading
+      if (perms.length === 0) return false; // permissionless → deny
       return perms.includes(`${module}:${action}`);
     },
     [user]

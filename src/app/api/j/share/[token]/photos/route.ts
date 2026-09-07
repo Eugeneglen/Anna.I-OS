@@ -4,6 +4,7 @@ import { join } from "path";
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { signServeUrl } from "@/lib/serve-auth";
+import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "public");
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -20,7 +21,7 @@ export async function POST(
     // ── Authenticate via shareToken ──
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
-      select: { id: true, taskId: true, status: true },
+      select: { id: true, taskId: true, status: true, sharedAt: true },
     });
 
     if (!booking) {
@@ -28,6 +29,11 @@ export async function POST(
         { error: "Invalid or expired share link" },
         { status: 404 }
       );
+    }
+
+    // P8 (AUDIT-4): share links expire — see src/lib/share-link.ts
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
     // ── Parse multipart form data ──

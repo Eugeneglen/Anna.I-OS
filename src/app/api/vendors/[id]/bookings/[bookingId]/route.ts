@@ -8,7 +8,7 @@ import { getRequireVerificationPhotos } from "@/lib/platform-config"
 import { recordEscrowHoldEffect } from "@/lib/payments/escrow-effects"
 import { triggerAnomalyDetection } from "@/lib/notify"
 import { emitTaskStatusChanged, emitBookingStatusChanged, emitVendorNotification, emitTaskDispatched } from "@/lib/events"
-import { requireVendorOwnership, vendorJson } from "@/lib/vendor-guard"
+import { requireVendorOwnership, requireVendorPermission, vendorJson } from "@/lib/vendor-guard"
 import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
@@ -29,10 +29,6 @@ export async function PATCH(
   try {
     const { id: vendorId, bookingId } = await params
 
-    // ── IDOR protection: verify authenticated vendor owns this resource ──
-    const auth = await requireVendorOwnership(vendorId)
-    if (!auth.success) return auth.response
-
     const body = await request.json()
     const parsed = patchVendorBookingSchema.safeParse(body)
 
@@ -45,6 +41,26 @@ export async function PATCH(
 
     const { action, completionNotes } = parsed.data
     const newStatus = ACTION_STATUS_MAP[action]
+
+    // ── IDOR protection: verify authenticated vendor owns this resource ──
+    const auth = await requireVendorOwnership(vendorId)
+    if (!auth.success) return auth.response
+
+    // ── P5 (AUDIT-4): RBAC gate — booking actions are permission-gated,
+    // not just ownership-gated. Previously staff ≡ manager ≡ owner: any
+    // actor of the vendor org could accept (which CREATES the escrow hold),
+    // complete (triggers payout pipeline) or reject (auto-reroute). Now:
+    //   accept   → v_bookings:accept
+    //   complete → v_bookings:complete
+    //   reject   → v_bookings:reject
+    // (Vendor Staff only holds v_bookings:view and is correctly denied.) ──
+    const permByAction: Record<string, string> = {
+      accept: "accept",
+      complete: "complete",
+      reject: "reject",
+    }
+    const permAuth = await requireVendorPermission("v_bookings", permByAction[action])
+    if (!permAuth.success) return permAuth.response
 
     // Fetch booking with task
     const booking = await db.booking.findUnique({

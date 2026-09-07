@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getOpsSession } from "@/lib/ops-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 
 // ============================================================
 // POST /api/ops/events/push
@@ -64,6 +64,16 @@ export async function POST(request: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── P8 (AUDIT-4): was any-ops-session. Pushing dashboard events is an
+    // ops-internal relay — gate it at the COORDINATOR tier so read-only
+    // roles (data_analyst) cannot inject events into live consoles.
+    if (!hasMinRole(session.role, "COORDINATOR")) {
+      return NextResponse.json(
+        { error: "Forbidden — event pushes require an ops COORDINATOR role or above" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json().catch(() => ({}));

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import * as bcrypt from "bcryptjs";
 
 // POST /api/ops/households — Create a new household (ops-initiated)
@@ -9,6 +10,14 @@ export async function POST(req: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): was session-only — now requires households:create
+    // (coordinator / operations / super_admin hold it; data_analyst is
+    // read-only by design and is correctly denied).
+    const allowed = await hasPermission(session, "households", "create");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — requires households:create" }, { status: 403 });
     }
 
     const body = await req.json();

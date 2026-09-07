@@ -11,8 +11,27 @@ const ROLE_SLUG_MAP: Record<string, string> = {
 };
 
 export async function main() {
-  await db.auditLog.deleteMany();
-  await db.opsUser.deleteMany();
+  // ── P8 (AUDIT-4): non-destructive by default.
+  //
+  // Previously this seed unconditionally ran:
+  //   await db.auditLog.deleteMany();
+  //   await db.opsUser.deleteMany();
+  // …wiping the ENTIRE ops user table (including users created via User
+  // Management) and the full audit log on every re-run. On a fresh
+  // database the upserts below produce the exact same end state as the
+  // destructive version, so CI/dev bootstrap is unchanged — but a re-run
+  // against a live database now only (re)ensures the three demo users,
+  // preserving every other account, its password, and the audit trail.
+  //
+  // The old reset behaviour is available explicitly via SEED_RESET=1
+  // (used only when you genuinely want to wipe ops users + audit logs).
+  if (process.env.SEED_RESET === "1") {
+    console.log("  SEED_RESET=1 — wiping ops users + audit logs (destructive)");
+    await db.auditLog.deleteMany();
+    await db.opsUser.deleteMany();
+  } else {
+    console.log("  Non-destructive mode (SEED_RESET=1 enables full reset)");
+  }
 
   const users = [
     { name: "Eugene", email: "eugene@annai.sg", role: "ADMIN" as const, passwordHash: DEFAULT_HASH },
@@ -25,8 +44,17 @@ export async function main() {
     const slug = ROLE_SLUG_MAP[u.role];
     const role = slug ? await db.role.findUnique({ where: { slug } }) : null;
 
-    await db.opsUser.create({
-      data: {
+    // Upsert by email: create with the demo password on a fresh database;
+    // on re-run, keep the EXISTING passwordHash (a dev may have changed it)
+    // and only re-sync name/role/roleId.
+    await db.opsUser.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        role: u.role,
+        roleId: role?.id ?? null,
+      },
+      create: {
         name: u.name,
         email: u.email,
         role: u.role,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import { Prisma, EscrowState } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
@@ -8,6 +9,14 @@ export async function GET(req: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): was session-only — the escrow ledger view now requires
+    // escrow:view (all four seeded roles hold it; mutations on
+    // /api/ops/escrow/[id] remain COORDINATOR-tier as before).
+    const allowed = await hasPermission(session, "escrow", "view");
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden — requires escrow:view" }, { status: 403 });
     }
 
     const sp = req.nextUrl.searchParams;

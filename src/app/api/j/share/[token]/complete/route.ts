@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
 import { TaskStatus } from "@prisma/client";
 import { getRequireVerificationPhotos } from "@/lib/platform-config";
 import { triggerAnomalyDetection } from "@/lib/notify";
@@ -32,6 +33,11 @@ export async function POST(
         { error: "Invalid or expired share link" },
         { status: 404 }
       );
+    }
+
+    // P8 (AUDIT-4): share links expire — see src/lib/share-link.ts
+    if (isShareLinkExpired(booking)) {
+      return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
     // Only accepted bookings can be completed by staff

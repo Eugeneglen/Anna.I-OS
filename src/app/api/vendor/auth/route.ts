@@ -50,9 +50,21 @@ export async function POST(req: NextRequest) {
 
       // Self-heal: if passwordHash is null (schema push wiped it), hash the
       // incoming password and persist it. Needed for Railway recovery.
+      // ── P2 (AUDIT-4): DEV/CI ONLY. In production a NULL passwordHash
+      // means the account has no self-serve login — the self-heal would
+      // let ANY password take over the account. Production denies. ──
       let passwordHash = vendor.passwordHash;
       if (!passwordHash) {
-        console.warn(`[vendor/auth] passwordHash is NULL for ${email} — auto-setting from login attempt`);
+        if (IS_PRODUCTION) {
+          console.error(
+            `[vendor/auth] Blocked login for NULL-passwordHash account ${email} in production`
+          );
+          return NextResponse.json(
+            { error: "Invalid credentials" },
+            { status: 401 }
+          );
+        }
+        console.warn(`[vendor/auth] passwordHash is NULL for ${email} — auto-setting from login attempt (dev/CI self-heal)`);
         passwordHash = bcrypt.hashSync(password, 10);
         await db.vendor.update({
           where: { id: vendor.id },
@@ -180,12 +192,28 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE() {
   try {
-    // NOTE: We do NOT clear the vendor_token cookie here.
-    // With multi-tab support, each tab stores its own JWT in sessionStorage.
-    // Clearing the shared cookie would break other tabs' middleware access.
-    // The cookie expires naturally in 24h. The logging-out tab clears its
-    // own sessionStorage client-side, which is sufficient.
-    return NextResponse.json({ success: true });
+    // ── P7 (AUDIT-4): clear the vendor_token cookie on logout.
+    //
+    // Previously this endpoint deliberately left the 24h cookie in place,
+    // relying on the logging-out tab clearing only its own sessionStorage.
+    // That left a fully valid session cookie on the device after logout —
+    // anyone with device access (or an XSS read of document.cookie
+    // exfiltration path) could keep acting as the vendor for up to 24h.
+    //
+    // Multi-tab impact: other open tabs keep working for API calls that use
+    // their per-tab Authorization header (getVendorSession checks the
+    // header first), but page loads through the middleware now correctly
+    // redirect to /vendor/login — which is the expected post-logout
+    // behavior. Security beats multi-tab convenience.
+    const res = NextResponse.json({ success: true });
+    res.cookies.set("vendor_token", "", {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    return res;
   } catch (error) {
     console.error("[/api/vendor/auth DELETE]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

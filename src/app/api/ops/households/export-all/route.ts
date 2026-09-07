@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import {
   HOME_TYPE_LABELS,
   OCCUPANT_LABELS,
@@ -25,6 +26,19 @@ export async function GET(req: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // P5 (AUDIT-4): this endpoint exports a PII CSV of EVERY household.
+    // It was session-only — any ops login (any role) could bulk-export all
+    // customer PII. Now requires households:export (data_analyst,
+    // operations, super_admin hold it; coordinator does NOT — the seeded
+    // coordinator role is deliberately not an export role).
+    const allowed = await hasPermission(session, "households", "export");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Forbidden — bulk PII export requires households:export" },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(req.url);

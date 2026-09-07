@@ -1,5 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
+import { db } from "@/lib/db";
 import { resolveSecret } from "@/lib/secrets";
 
 // Lazy, memoized secret resolution. Resolved on first USE (not at module
@@ -28,6 +29,71 @@ export interface VendorSession {
   status: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// P7 (AUDIT-4): per-request re-verification of vendor sessions.
+//
+// Previously a 24h vendor token was UNREVOCABLE: suspending the vendor
+// (Vendor.status != ACTIVE) or deactivating an HQ staff user
+// (VendorUser.isActive=false) had no effect until token expiry.
+// getVendorSession now re-checks the underlying row (cached ~30s in
+// process) and returns null when the actor has been cut off. DB errors
+// fail open (JWT still cryptographically valid).
+// ─────────────────────────────────────────────────────────────
+
+interface VendorVerifyEntry {
+  ok: boolean;
+  status?: string;
+  expiresAt: number;
+}
+
+const VENDOR_SESSION_VERIFY_TTL_MS = 30_000; // 30s
+const vendorVerifyCache = new Map<string, VendorVerifyEntry>();
+
+async function verifyVendorActor(session: VendorSession): Promise<VendorVerifyEntry | null> {
+  const cacheKey = session.isStaff ? `staff:${session.userId}` : `vendor:${session.vendorId}`;
+  const cached = vendorVerifyCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached;
+  }
+  try {
+    let entry: VendorVerifyEntry;
+    if (session.isStaff && session.userId) {
+      const user = await db.vendorUser.findUnique({
+        where: { id: session.userId },
+        select: { id: true, isActive: true, vendor: { select: { status: true } } },
+      });
+      entry =
+        user && user.isActive && user.vendor.status === "ACTIVE"
+          ? { ok: true, status: user.vendor.status, expiresAt: Date.now() + VENDOR_SESSION_VERIFY_TTL_MS }
+          : { ok: false, expiresAt: Date.now() + VENDOR_SESSION_VERIFY_TTL_MS };
+    } else {
+      const vendor = await db.vendor.findUnique({
+        where: { id: session.vendorId },
+        select: { id: true, status: true },
+      });
+      entry =
+        vendor && vendor.status === "ACTIVE"
+          ? { ok: true, status: vendor.status, expiresAt: Date.now() + VENDOR_SESSION_VERIFY_TTL_MS }
+          : { ok: false, expiresAt: Date.now() + VENDOR_SESSION_VERIFY_TTL_MS };
+    }
+    vendorVerifyCache.set(cacheKey, entry);
+    return entry;
+  } catch (e) {
+    console.warn("[vendor-auth] session re-verification skipped (DB error, fail-open):", e);
+    return null;
+  }
+}
+
+async function verifyVendorSessionPayload(payload: unknown): Promise<VendorSession | null> {
+  const session = payload as unknown as VendorSession;
+  const entry = await verifyVendorActor(session);
+  if (entry === null) return session; // DB error — fail open on valid JWT
+  if (!entry.ok) return null; // suspended / deactivated — kill session now
+  // Refresh the status claim so freshly-suspended vendors can't keep
+  // presenting a stale "ACTIVE" status from the token.
+  return { ...session, status: entry.status ?? session.status };
+}
+
 export async function getVendorSession(): Promise<VendorSession | null> {
   // Resolve BEFORE the try blocks — a missing production secret must fail
   // loud (500 with clear error) instead of silently returning null, which
@@ -43,7 +109,7 @@ export async function getVendorSession(): Promise<VendorSession | null> {
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.slice(7);
       const { payload } = await jwtVerify(token, key);
-      return payload as unknown as VendorSession;
+      return await verifyVendorSessionPayload(payload);
     }
   } catch {
     // Fall through to cookie check
@@ -55,7 +121,7 @@ export async function getVendorSession(): Promise<VendorSession | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, key);
-    return payload as unknown as VendorSession;
+    return await verifyVendorSessionPayload(payload);
   } catch {
     return null;
   }
