@@ -2,10 +2,21 @@ import { cookies, headers } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
 import { resolveSecret } from "@/lib/secrets";
 
-const JWT_SECRET = resolveSecret("VENDOR_JWT_SECRET", "anna-vendor-dev-secret", {
-  owner: "vendor-auth",
-});
-const secret = new TextEncoder().encode(JWT_SECRET);
+// Lazy, memoized secret resolution. Resolved on first USE (not at module
+// import) so `next build` can collect page data without deployment secrets
+// configured. Production still fails fast on the first request that needs
+// the secret.
+let _secretKey: Uint8Array | null = null;
+function secretKey(): Uint8Array {
+  if (!_secretKey) {
+    _secretKey = new TextEncoder().encode(
+      resolveSecret("VENDOR_JWT_SECRET", "anna-vendor-dev-secret", {
+        owner: "vendor-auth",
+      })
+    );
+  }
+  return _secretKey;
+}
 
 export interface VendorSession {
   vendorId: string;   // parent Vendor.id (the business the user acts for)
@@ -18,6 +29,11 @@ export interface VendorSession {
 }
 
 export async function getVendorSession(): Promise<VendorSession | null> {
+  // Resolve BEFORE the try blocks — a missing production secret must fail
+  // loud (500 with clear error) instead of silently returning null, which
+  // would make every login fail with a misleading "invalid credentials".
+  const key = secretKey();
+
   // 1. Check Authorization header (set by vendorFetch for multi-tab support).
   //    Each browser tab stores its own JWT in sessionStorage and sends
   //    it via the Authorization header, preventing cookie collision.
@@ -26,7 +42,7 @@ export async function getVendorSession(): Promise<VendorSession | null> {
     const authHeader = headersList.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.slice(7);
-      const { payload } = await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, key);
       return payload as unknown as VendorSession;
     }
   } catch {
@@ -38,7 +54,7 @@ export async function getVendorSession(): Promise<VendorSession | null> {
   const token = cookieStore.get("vendor_token")?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, key);
     return payload as unknown as VendorSession;
   } catch {
     return null;
@@ -64,7 +80,7 @@ export async function createVendorToken(vendor: {
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("24h")
     .setIssuedAt()
-    .sign(secret);
+    .sign(secretKey());
 }
 
 // Token for an HQ staff USER (logs in via VendorUser table). Carries the
@@ -89,12 +105,13 @@ export async function createVendorUserToken(params: {
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("24h")
     .setIssuedAt()
-    .sign(secret);
+    .sign(secretKey());
 }
 
 export async function verifyVendorToken(token: string): Promise<VendorSession | null> {
+  const key = secretKey(); // resolve BEFORE try — missing prod secret must fail loud
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, key);
     return payload as unknown as VendorSession;
   } catch {
     return null;

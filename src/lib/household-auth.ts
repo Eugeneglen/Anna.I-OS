@@ -2,10 +2,22 @@ import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
 import { resolveSecret } from "@/lib/secrets";
 
-const JWT_SECRET = resolveSecret("HOUSEHOLD_JWT_SECRET", "anna-household-dev-secret", {
-  owner: "household-auth",
-});
-const secret = new TextEncoder().encode(JWT_SECRET);
+// Lazy, memoized secret resolution. The secret is resolved on first USE
+// (not at module import) so that `next build` — which evaluates route
+// modules during page-data collection without deployment secrets — can
+// import this module safely. Production still fails fast on the first
+// request that actually needs the secret.
+let _secretKey: Uint8Array | null = null;
+function secretKey(): Uint8Array {
+  if (!_secretKey) {
+    _secretKey = new TextEncoder().encode(
+      resolveSecret("HOUSEHOLD_JWT_SECRET", "anna-household-dev-secret", {
+        owner: "household-auth",
+      })
+    );
+  }
+  return _secretKey;
+}
 
 export interface HouseholdSession {
   memberId: string;
@@ -17,11 +29,12 @@ export interface HouseholdSession {
 }
 
 export async function getHouseholdSession(): Promise<HouseholdSession | null> {
+  const key = secretKey(); // resolve BEFORE try — missing prod secret must fail loud, not silently return null
   const cookieStore = await cookies();
   const token = cookieStore.get("household_token")?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, key);
     return payload as unknown as HouseholdSession;
   } catch {
     return null;
@@ -47,12 +60,13 @@ export async function createHouseholdToken(member: {
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("7d")
     .setIssuedAt()
-    .sign(secret);
+    .sign(secretKey());
 }
 
 export async function verifyHouseholdToken(token: string): Promise<HouseholdSession | null> {
+  const key = secretKey(); // resolve BEFORE try — missing prod secret must fail loud
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, key);
     return payload as unknown as HouseholdSession;
   } catch {
     return null;

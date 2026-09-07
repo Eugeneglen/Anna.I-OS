@@ -2,18 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { resolveSecret } from "@/lib/secrets";
 
-const OPS_JWT_SECRET = resolveSecret("OPS_JWT_SECRET", "anna-ops-dev-secret", {
-  owner: "middleware (ops JWT)",
-});
-const VENDOR_JWT_SECRET = resolveSecret("VENDOR_JWT_SECRET", "anna-vendor-dev-secret", {
-  owner: "middleware (vendor JWT)",
-});
-const HOUSEHOLD_JWT_SECRET = resolveSecret("HOUSEHOLD_JWT_SECRET", "anna-household-dev-secret", {
-  owner: "middleware (household JWT)",
-});
-const opsSecret = new TextEncoder().encode(OPS_JWT_SECRET);
-const vendorSecret = new TextEncoder().encode(VENDOR_JWT_SECRET);
-const householdSecret = new TextEncoder().encode(HOUSEHOLD_JWT_SECRET);
+// Lazy, memoized secret resolution: the secrets below are resolved on
+// first USE (request time), not at module import, so `next build` and
+// cold module evaluation never require deployment secrets.
+function opsSecretKey(): Uint8Array {
+  return new TextEncoder().encode(
+    resolveSecret("OPS_JWT_SECRET", "anna-ops-dev-secret", {
+      owner: "middleware (ops JWT)",
+    })
+  );
+}
+function vendorSecretKey(): Uint8Array {
+  return new TextEncoder().encode(
+    resolveSecret("VENDOR_JWT_SECRET", "anna-vendor-dev-secret", {
+      owner: "middleware (vendor JWT)",
+    })
+  );
+}
+// NOTE: the household_token cookie is intentionally NOT verified here —
+// the client LayoutShell handles session redirect (see the "/" branch
+// below). If that changes, resolve the secret lazily like the helpers
+// above so module evaluation stays build-safe.
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -30,7 +39,7 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      await jwtVerify(token, opsSecret);
+      await jwtVerify(token, opsSecretKey());
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL("/ops/login", req.url));
@@ -49,7 +58,7 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      await jwtVerify(token, vendorSecret);
+      await jwtVerify(token, vendorSecretKey());
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL("/vendor/login", req.url));

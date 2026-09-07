@@ -227,3 +227,31 @@ BWAA	Broad-based weighted average anti-dilution (Class B protection)
 MAS	Monetary Authority of Singapore
 AIC	Agency for Integrated Care (Singapore eldercare)
 CASE	Consumers Association of Singapore
+
+---
+Deployment — Required Environment Variables
+============================================
+
+The app runs without these in local development (secure dev fallbacks are used with a
+console warning), but in production (NODE_ENV=production) each missing secret below
+fails FAST and LOUD on the first request that needs it — the server refuses to run on
+insecure hardcoded secrets.
+
+Secrets are resolved lazily (on first use), so `next build` does NOT require them —
+only the running server does. Set them in your platform's service variables
+(e.g. Railway) and restart.
+
+| Variable | Used by | Generate with |
+|---|---|---|
+| OPS_JWT_SECRET | Ops portal JWT + serve-token HMAC | `openssl rand -base64 32` |
+| VENDOR_JWT_SECRET | Vendor portal JWT | `openssl rand -base64 32` |
+| HOUSEHOLD_JWT_SECRET | Household portal JWT | `openssl rand -base64 32` |
+| IRON_SESSION_PASSWORD | Ops NextAuth iron-session | `openssl rand -base64 32` |
+| CRON_SECRET | Auth for internal cron routes (timeout-check, marketing dispatch) | `openssl rand -hex 16` |
+| OPS_EVENT_SERVER_SECRET | ops-events mini-service socket auth (if deployed) | `openssl rand -hex 16` |
+| DATABASE_URL | Postgres connection (provider is switched to postgresql in Docker) | platform-provided |
+| NEXTAUTH_SECRET / NEXTAUTH_URL / GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET | Google OAuth household login | Google Cloud console |
+
+Note: DATABASE_URL should point at Postgres in deployment (the Dockerfile switches the
+Prisma provider from sqlite to postgresql at build time). In local dev the SQLite file
+(db/custom.db) is used.
