@@ -5,12 +5,15 @@ import { OpsSectionHeader } from "@/components/ops/ops-kpi-card";
 import { OpsEmptyState } from "@/components/ops/ops-empty-state";
 import { DisputeTaskCard } from "./dispute-task-card";
 import { PendingReleaseCard } from "./pending-release-card";
+import { AiCaseBriefPanel } from "@/components/ops/ai/ai-case-brief-panel";
 
 // ============================================================
 // Anna.I — Ops Escrow Active Issues Tab
 // ============================================================
 // Wraps the entire "Active Issues" tab content: Pending Release
 // section + Active Disputes section.
+// Phase 2: each disputed task also shows its AI Case Brief panel
+// (Anna.I investigates + recommends; a human decides).
 // ============================================================
 
 interface EscrowActiveIssuesProps {
@@ -24,6 +27,10 @@ interface EscrowActiveIssuesProps {
   onRefund: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
   onPartialRefund?: (escrowId: string, amount: number, alreadyRefundedCents: number, reason?: string | null) => void;
   onIssueVoucher?: (taskId: string, escrowId: string, amount: number, reason?: string | null) => void;
+  /** Phase 2: bump to refresh the AI brief panels (after actions). */
+  briefRefreshKey?: number;
+  /** Phase 2: an AI decision was made → refresh escrow data. */
+  onBriefDecided?: () => void;
 }
 
 export function EscrowActiveIssues({
@@ -37,6 +44,8 @@ export function EscrowActiveIssues({
   onRefund,
   onPartialRefund,
   onIssueVoucher,
+  briefRefreshKey,
+  onBriefDecided,
 }: EscrowActiveIssuesProps) {
   return (
     <div className="space-y-6">
@@ -88,15 +97,23 @@ export function EscrowActiveIssues({
         ) : (
           <div className="space-y-2">
             {disputedTasks.map((t: Record<string, unknown>) => (
-              <DisputeTaskCard
-                key={t.id as string}
-                task={t}
-                onDismiss={onDismiss}
-                onRefund={onRefund}
-                onPartialRefund={onPartialRefund}
-                onIssueVoucher={onIssueVoucher}
-                isActing={isActing}
-              />
+              <div key={t.id as string} className="space-y-2">
+                <DisputeTaskCard
+                  task={t}
+                  onDismiss={onDismiss}
+                  onRefund={onRefund}
+                  onPartialRefund={onPartialRefund}
+                  onIssueVoucher={onIssueVoucher}
+                  isActing={isActing}
+                />
+                {/* Phase 2: the AI case brief — investigates, explains,
+                    recommends. The human decides via Accept/Reject/Override. */}
+                <AiCaseBriefPanel
+                  taskId={t.id as string}
+                  refreshKey={briefRefreshKey}
+                  onDecided={onBriefDecided}
+                />
+              </div>
             ))}
           </div>
         )}

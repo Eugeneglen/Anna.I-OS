@@ -269,6 +269,7 @@ model Vendor {
   staff            VendorStaff[]
   vendorUsers      VendorUser[]
   vendorAffinity   VendorHouseholdAffinity[]
+  aiCaseBriefs     AiCaseBrief[]            @relation("AiCaseBriefVendor") // Phase 2: dispute briefs involving this vendor
   vendorPlan       VendorPlan?
   featureOverrides VendorFeatureOverride[]
   notifications    Notification[]
@@ -996,24 +997,50 @@ model AiCaseBrief {
   entityType      String // "task" | "escrow" | ... — polymorphic, same pattern as AuditLog
   entityId        String
   householdId     String // affected household — the security scope of the brief's data
+  // ── Phase 2 (AI-assisted dispute/refund workflow) ──
+  escrowId        String? // primary DISPUTED escrow entry the recommendation executes against (§10: case tied to correct household/task/escrow/vendor)
+  vendorId        String? // vendor involved in the disputed task (scope + vendor history in the case)
+  aiChainId       String? @unique // AuditLog chain correlation — one query reconstructs request→recommendation→decision→execution→result (§7)
   status          AiBriefStatus @default(PENDING_REVIEW)
+  generationStatus AiBriefGeneration @default(QUEUED) // §8 coverage tracking: every qualifying dispute produces a row, success or failure
+  generationAttempts Int @default(0) // §8 retries
+  generationError String? // last generation failure reason — failures are never hidden
   summary         String // one-line factual problem statement
   recommendation  String // proposed action (e.g. "resolve_refund") — advisory, never auto-executed
+  recommendedAmountCents Int? // AI's DISPLAY-ONLY amount suggestion — never authoritative; execution amounts are server-recomputed (§3)
+  fallbackFromInvalid Boolean @default(false) // true = LLM output failed validation → safe MANUAL_REVIEW fallback (§2/§9)
   rationale       String // why, with rule/threshold references (no "the AI decided" without the rule)
   confidence      Float? // 0–1 producer-reported confidence, when available
   contextSnapshot Json? // the deterministic scoped context the recommendation was grounded in
+  eligibleActions Json? // §2 code-first policy snapshot — the ONLY action set the LLM may choose from; LLM may not invent/expand it
+  financialImpact Json? // §3 server-computed financial figures per eligible action (escrow/refund calculation = source of truth)
   reviewedById    String? // ops user who made the human decision (APPROVED/REJECTED)
   reviewedAt      DateTime?
   decisionNote    String? // human's reason for the decision
+  decisionKind    String? // "ACCEPT" | "REJECT" | "OVERRIDE" (§5 — what the human selected vs what AI recommended)
+  decisionAction  String? // the action the human selected (null on pure REJECT)
+  decisionLatencyMs Int? // ms from brief ready (updatedAt at GENERATED) to the human decision (§5)
+  executionResult Json? // §7 result stage on the brief itself: status + key figures of the execution through the existing money path
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   household  Household @relation(fields: [householdId], references: [id])
+  vendor     Vendor?   @relation("AiCaseBriefVendor", fields: [vendorId], references: [id])
   reviewedBy OpsUser?  @relation("AiCaseBriefReviewer", fields: [reviewedById], references: [id])
 
   @@index([status, createdAt])
   @@index([entityType, entityId])
   @@index([householdId])
+  @@index([generationStatus, updatedAt])
+}
+
+// §8 coverage: generation lifecycle of a brief — a FAILED row is deliberately
+// kept (recommendation = manual_review) so generation failures stay visible.
+enum AiBriefGeneration {
+  QUEUED     // row created; generation not started yet
+  GENERATING // LLM call in flight (sweep skips recent GENERATING rows)
+  GENERATED  // recommendation produced (or safe fallback applied)
+  FAILED     // provider error/timeout after retries — manual review with visible error
 }
 
 enum AiInsightType {

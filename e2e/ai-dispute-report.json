@@ -1,0 +1,697 @@
+{
+  "runId": 1788856519834,
+  "totalPass": 115,
+  "totalFail": 0,
+  "records": [
+    {
+      "suite": "SETUP",
+      "name": "Ops logins (admin/coordinator/analyst)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "SETUP",
+      "name": "Households A + B registered",
+      "pass": true,
+      "detail": "A=mq7mia B=2239eq"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Vendor active + portal login",
+      "pass": true,
+      "detail": "vendor=ney2oc bearer=true"
+    },
+    {
+      "suite": "S1",
+      "name": "Unauthenticated → 401 on all 6 routes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "data_analyst (no ai:*) → 403 on all 5 routes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "coordinator (ai:prepare) → 200 list + stats",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "coordinator (no ai:approve) → 403 on decision route",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "super_admin → 200 list",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "super_admin decision route: auth passes (404 not-found)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "LLM simulation seam: coordinator (no ai:configure) → 403",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "sweep without secret/session → 401",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "sweep with cron secret → 200/204",
+      "pass": true,
+      "detail": "status=204"
+    },
+    {
+      "suite": "S2",
+      "name": "Household A dispute raised (task+escrow DISPUTED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "AI case brief generated within 60s of dispute (real provider)",
+      "pass": true,
+      "detail": "latency=6.1s status=GENERATED"
+    },
+    {
+      "suite": "S2",
+      "name": "Brief PENDING_REVIEW + caseType DISPUTE + scope=A",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Recommendation is from the eligible action set",
+      "pass": true,
+      "detail": "rec=resolve_refund"
+    },
+    {
+      "suite": "S2",
+      "name": "Confidence is 0..1 or null",
+      "pass": true,
+      "detail": "conf=0.9"
+    },
+    {
+      "suite": "S2",
+      "name": "No fallback flag on a valid real-LLM output",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Audit chain has ai_request + ai_recommendation stages",
+      "pass": true,
+      "detail": "stages=ai_request→ai_recommendation"
+    },
+    {
+      "suite": "S2",
+      "name": "ai_recommendation attributed to ANNA-AI (system actor)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Coverage stats: 100% for the live qualifying dispute",
+      "pass": true,
+      "detail": "qualifying=1 coverage=100%"
+    },
+    {
+      "suite": "S3",
+      "name": "Manual generation (super_admin, ai:prepare+configure) → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Brief generated for B1",
+      "pass": true,
+      "detail": "status=GENERATED"
+    },
+    {
+      "suite": "S3",
+      "name": "contextSnapshot carries the deterministic case JSON",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Case escrow figures match the DB (amount/original/commissionRate)",
+      "pass": true,
+      "detail": "amount=8000 vs 8000"
+    },
+    {
+      "suite": "S3",
+      "name": "Task timeline has full stage timestamps",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Vendor history with computed dispute rate",
+      "pass": true,
+      "detail": "rate=1"
+    },
+    {
+      "suite": "S3",
+      "name": "Household history with dispute history",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Policy snapshot exists with eligible actions",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "resolve_voucher INELIGIBLE (consent OFF — deterministic rule)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "resolve_refund eligible with server-computed bounds",
+      "pass": true,
+      "detail": "max=8000"
+    },
+    {
+      "suite": "S3",
+      "name": "Financial impact uses the escrow calculation (full refund zeroes payout)",
+      "pass": true,
+      "detail": "payout=0"
+    },
+    {
+      "suite": "S3",
+      "name": "Disputes B2/B3/B4 raised for decision suites",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: invalid JSON (truncated)",
+      "pass": true,
+      "detail": "response is not valid JSON"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: unknown action",
+      "pass": true,
+      "detail": "action 'resolve_everything' is not in the code-eligible set [resolve_dismiss, resolve_refu"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: oversized refund amount",
+      "pass": true,
+      "detail": "'refundAmountCents' 999999 is outside the eligible bounds [1, 8000]"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: negative amount",
+      "pass": true,
+      "detail": "'refundAmountCents' must be positive (got -3000)"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: missing required amount",
+      "pass": true,
+      "detail": "missing or non-numeric 'refundAmountCents' for action 'partial_refund'"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: decimal amount (rounding attack)",
+      "pass": true,
+      "detail": "'refundAmountCents' must be an integer number of cents (got decimal)"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: contradictory (dismiss + refund amount)",
+      "pass": true,
+      "detail": "action 'resolve_dismiss' carries 'refundAmountCents' — contradictory recommendation (this "
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: contradictory (full refund + amount)",
+      "pass": true,
+      "detail": "action 'resolve_refund' carries 'refundAmountCents' — contradictory recommendation (this a"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: unsupported action for this case (voucher, consent OFF)",
+      "pass": true,
+      "detail": "action 'resolve_voucher' is not in the code-eligible set [resolve_dismiss, resolve_refund,"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: null response",
+      "pass": true,
+      "detail": "response is not a JSON object"
+    },
+    {
+      "suite": "S4",
+      "name": "REJECTED: prompt injection as whole response",
+      "pass": true,
+      "detail": "response is not valid JSON"
+    },
+    {
+      "suite": "S4",
+      "name": "ALL adversarial outputs rejected — no fallback selects a refund",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Valid in-bounds partial refund ACCEPTED by validator",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Valid manual_review ACCEPTED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Fenced JSON ACCEPTED (parse tolerance, strict semantics)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Invalid JSON → brief falls back to manual_review (fallbackFromInvalid)",
+      "pass": true,
+      "detail": "rec=manual_review"
+    },
+    {
+      "suite": "S5",
+      "name": "Unknown action → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Oversized amount → manual_review fallback (never clamped to cap)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Negative amount → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Missing amount field → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Decimal amount → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Contradictory (dismiss+amount) → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Injected instructions with oversized amount → rejected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Unsupported/ineligible action → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "null response → manual_review fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Timeout → generation FAILED (visible, manual review queue)",
+      "pass": true,
+      "detail": "gen=FAILED err=simulated timeout error"
+    },
+    {
+      "suite": "S5",
+      "name": "Timeout retry recorded (attempts ≥ 2)",
+      "pass": true,
+      "detail": "attempts=2"
+    },
+    {
+      "suite": "S5",
+      "name": "Provider error → FAILED with generationError visible",
+      "pass": true,
+      "detail": "err=simulated provider error"
+    },
+    {
+      "suite": "S5",
+      "name": "NO money moved: B2 + B3 escrows untouched (DISPUTED, 0 refunds)",
+      "pass": true,
+      "detail": "B2=DISPUTED/0 B3=DISPUTED/0"
+    },
+    {
+      "suite": "S6",
+      "name": "Brief identity: household B + task B1 + its escrow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "B's brief contains NO household-A data (ids, names, tasks)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "A's brief contains NO household-B data",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor scope = the task's actual vendor",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Decision with injected foreign ids: accepted (extras ignored)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Brief recorded REJECTED against its OWN task",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Decision applied to the brief's own entity (not task A)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Household A's task untouched by the manipulated decision",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Deterministic brief: partial_refund $30 recommendation",
+      "pass": true,
+      "detail": "rec=partial_refund/3000"
+    },
+    {
+      "suite": "S7",
+      "name": "Maker-checker: accept refund-class WITHOUT refundConfirmed → 409",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "409 is the confirmation gate (requiresConfirmation)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Brief still PENDING_REVIEW after the 409",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "ACCEPT executes (200)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Response marks executed=true with AI vs human selection",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow refundCents = 3000 (server-executed, LLM amount advisory)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Commission recomputed on remainder (existing money-path math)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Vendor payout recomputed on remainder",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Vendor payout recomputed on remainder",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Refund row created through processRefund (NoOp provider, succeeded)",
+      "pass": true,
+      "detail": "id=cmtsf01sm007kswu7j4zzhw8z"
+    },
+    {
+      "suite": "S7",
+      "name": "Task stays DISPUTED after PARTIAL refund (existing semantics)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Refund credit voucher issued to household B (R3, existing path)",
+      "pass": true,
+      "detail": "code=undefined"
+    },
+    {
+      "suite": "S7",
+      "name": "Brief APPROVED with decisionKind ACCEPT",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Decision record: reviewer + latency + confidence + note",
+      "pass": true,
+      "detail": "latency=99ms"
+    },
+    {
+      "suite": "S7",
+      "name": "B2 brief generated (resolve_dismiss recommendation)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "REJECT without a reason → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "REJECT with reason → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "REJECT does not execute anything",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Brief REJECTED, decisionKind REJECT",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow B2 untouched by reject (still DISPUTED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "B3 brief generated (resolve_refund recommendation to override)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "OVERRIDE without a reason → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "OVERRIDE to ineligible action → 422 (code-first policy)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "OVERRIDE with out-of-bounds amount → 422 (never clamped)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "OVERRIDE executes the human-selected action (200)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Brief APPROVED with decisionKind OVERRIDE + decisionAction partial_refund",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow B3 refunded 2000c (the HUMAN's chosen amount, within bounds)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "AI recommendation (resolve_refund) preserved for the record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Accepted brief found for chain reconstruction",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Full 5-stage chain by aiChainId (one DB query)",
+      "pass": true,
+      "detail": "stages=ai_request → ai_recommendation → human_decision → execution → result"
+    },
+    {
+      "suite": "S8",
+      "name": "human_decision records: AI rec vs human selection + reason + latency + policy snapshot",
+      "pass": true,
+      "detail": "actor=Eugene"
+    },
+    {
+      "suite": "S8",
+      "name": "result stage records the executed refund figures",
+      "pass": true,
+      "detail": "cum=3000"
+    },
+    {
+      "suite": "S8",
+      "name": "Money-path audit rows exist for the same escrow (existing service wrote them)",
+      "pass": true,
+      "detail": "rows=PARTIAL_REFUND"
+    },
+    {
+      "suite": "S8",
+      "name": "Brief.executionResult persisted (ok + refund + escrow state)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Stats: briefs generated ≥ disputes",
+      "pass": true,
+      "detail": "generated=19"
+    },
+    {
+      "suite": "S9",
+      "name": "Stats: fallbacks + failures + retries + expired all tracked",
+      "pass": true,
+      "detail": "fb=10 ret=2 exp=0 fail=12"
+    },
+    {
+      "suite": "S9",
+      "name": "B4 pending brief generated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "MANUAL escrow PATCH still works (extraction regression)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Manual dismiss: task COMPLETED + escrow HELD",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Pending brief EXPIRED after events moved on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Expiry reason recorded on the brief",
+      "pass": true,
+      "detail": "Escrow action 'resolve_dismiss' executed by Eugene"
+    },
+    {
+      "suite": "S9",
+      "name": "Manual PATCH refund WITHOUT refundConfirmed → 409 (gate intact)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Household self-resolve works",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Brief expired when household self-resolved",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

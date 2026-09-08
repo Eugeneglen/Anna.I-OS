@@ -696,6 +696,7 @@ async function runTimeoutSweep() {
     console.warn("[cron] Timeout sweep failed (non-critical):", err instanceof Error ? err.message : err);
   } finally {
     timeoutSweepInFlight = false;
+
   }
 }
 
@@ -800,6 +801,57 @@ setTimeout(() => {
   runNotificationDispatch();
   setInterval(runNotificationDispatch, NOTIFICATION_DISPATCH_INTERVAL_MS);
 }, NOTIFICATION_DISPATCH_CRON_DELAY);
+
+// ─────────────────────────────────────────────────────────────
+// Phase 2 (§8): AI Case-Brief Coverage Sweep Cron
+// Every 60 s, ask the Next.js app to run the AI dispute brief
+// coverage pass: every qualifying dispute must hold an active
+// brief (generate missing, retry failures, expire stale).
+// Authenticated with the shared CRON_SECRET header — mirrors
+// the issuance/expiry dispatchers above. This is the hard SLA
+// backstop (≤60 s) behind the inline dispute-raised trigger.
+// (Audit-AI-FIX8 port: hardened to this branch's cron
+// conventions — in-flight guard + fetch timeout + outcome log.)
+// ─────────────────────────────────────────────────────────────
+
+const AI_BRIEF_SWEEP_INTERVAL_MS = 60 * 1000; // 60 seconds
+const AI_BRIEF_SWEEP_CRON_DELAY = 50 * 1000; // stagger vs the other ticks
+let aiBriefSweepInFlight = false;
+
+async function runAiBriefSweep() {
+  if (aiBriefSweepInFlight) return;
+  aiBriefSweepInFlight = true;
+  try {
+    const res = await fetch("http://127.0.0.1:3000/api/ops/ai/cases/sweep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
+      signal: AbortSignal.timeout(CRON_FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 204) return; // nothing to do — normal case
+    if (res.status === 401) {
+      logCronOutcome("ai-brief-sweep", "HTTP 401 — cron secret rejected");
+      return;
+    }
+    logCronOutcome("ai-brief-sweep", "ok");
+    const data: any = await res.json().catch(() => null);
+    if (res.ok && data && data.swept) {
+      console.log(
+        `[cron] AI brief sweep: qualifying=${data.qualifyingDisputes}, ensured=${data.ensured}, expired=${data.expired}, skipped=${data.skipped}`
+      );
+    }
+  } catch (err) {
+    // Non-critical — Next.js may not be up yet during startup
+    console.warn("[cron] AI brief sweep failed (non-critical):", err instanceof Error ? err.message : err);
+  } finally {
+    aiBriefSweepInFlight = false;
+  }
+}
+
+setTimeout(() => {
+  console.log(`[cron] AI brief coverage sweep active (every ${AI_BRIEF_SWEEP_INTERVAL_MS / 1000}s)`);
+  runAiBriefSweep();
+  setInterval(runAiBriefSweep, AI_BRIEF_SWEEP_INTERVAL_MS);
+}, AI_BRIEF_SWEEP_CRON_DELAY);
 
 // ─────────────────────────────────────────────────────────────
 // Start server

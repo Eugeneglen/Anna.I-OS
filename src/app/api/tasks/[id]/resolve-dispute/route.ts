@@ -147,6 +147,16 @@ export async function POST(
       console.error("[tasks/resolve-dispute] updateHouseholdCachedStats failed:", statsErr)
     }
 
+    // ── Phase 2 (§8): the household self-resolved the dispute — any pending
+    // AI case brief for this task is expired (events moved on before a human
+    // decided). Non-fatal by construction.
+    try {
+      const { expirePendingBriefsForTask } = await import("@/lib/ai-dispute/brief-service");
+      await expirePendingBriefsForTask(task.id, "Household resolved the dispute directly with the vendor")
+    } catch (e) {
+      console.warn("[tasks/resolve-dispute] AI brief expiry failed (non-fatal):", e)
+    }
+
     return NextResponse.json({ task: result })
   } catch (error) {
     // F19/E3: a concurrent resolution (ops won the race) is a clean 409,

@@ -11,6 +11,7 @@ import { EscrowKpiCard } from "@/components/ops/escrow/escrow-kpi-card";
 import { EscrowActiveIssues } from "@/components/ops/escrow/escrow-active-issues";
 import { EscrowLedgerTable } from "@/components/ops/escrow/escrow-ledger-table";
 import { EscrowLedgerMobileList } from "@/components/ops/escrow/escrow-ledger-mobile-card";
+import { AiCoverageStrip } from "@/components/ops/ai/ai-coverage-strip";
 import { OpsPageHeader } from "@/components/ops/ops-page-header";
 import { OpsEmptyState } from "@/components/ops/ops-empty-state";
 import { OpsLoadingRows } from "@/components/ops/ops-loading-skeleton";
@@ -43,6 +44,9 @@ export default function EscrowPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [tabValue, setTabValue] = useState("overview");
+  // Phase 2: bump when escrow actions or AI decisions land → brief panels
+  // and the coverage strip refetch.
+  const [briefRefreshKey, setBriefRefreshKey] = useState(0);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -134,6 +138,7 @@ export default function EscrowPage() {
       queryClient.invalidateQueries({ queryKey: ["ops-escrow"] });
       queryClient.invalidateQueries({ queryKey: ["ops-bookings"] });
       queryClient.invalidateQueries({ queryKey: ["ops-anomalies"] });
+      setBriefRefreshKey((k) => k + 1);
     },
   });
 
@@ -304,18 +309,28 @@ export default function EscrowPage() {
 
       {/* ── Tab: Active Issues ── */}
       {tabValue === "overview" && (
-        <EscrowActiveIssues
-          pendingReleaseTasks={pendingReleaseTasks}
-          disputedTasks={disputedTasks}
-          pendingReleaseCount={pendingReleaseCount}
-          disputedTaskCount={disputedTaskCount}
-          isActing={escrowMutation.isPending}
-          onRelease={openReleaseDialog}
-          onDismiss={openDismissDialog}
-          onRefund={openRefundDialog}
-          onPartialRefund={openPartialRefundDialog}
-          onIssueVoucher={openIssueVoucherDialog}
-        />
+        <div className="space-y-5">
+          {/* Phase 2: AI dispute coverage metrics (§8) */}
+          <AiCoverageStrip refreshKey={briefRefreshKey} />
+          <EscrowActiveIssues
+            pendingReleaseTasks={pendingReleaseTasks}
+            disputedTasks={disputedTasks}
+            pendingReleaseCount={pendingReleaseCount}
+            disputedTaskCount={disputedTaskCount}
+            isActing={escrowMutation.isPending}
+            onRelease={openReleaseDialog}
+            onDismiss={openDismissDialog}
+            onRefund={openRefundDialog}
+            onPartialRefund={openPartialRefundDialog}
+            onIssueVoucher={openIssueVoucherDialog}
+            briefRefreshKey={briefRefreshKey}
+            onBriefDecided={() => {
+              queryClient.invalidateQueries({ queryKey: ["ops-escrow"] });
+              queryClient.invalidateQueries({ queryKey: ["ops-anomalies"] });
+              setBriefRefreshKey((k) => k + 1);
+            }}
+          />
+        </div>
       )}
 
       {/* ── Tab: Full Ledger ── */}

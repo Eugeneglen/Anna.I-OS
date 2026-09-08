@@ -526,6 +526,20 @@ export async function PATCH(
         disputeReason: reason ?? "No reason provided",
       }).catch(() => {});
 
+      // ── Phase 2 (§8): a NEW qualifying dispute must generate an AI case
+      // brief within 60 seconds. Fire-and-forget (same pattern as the event
+      // emits above): the deterministic pipeline (scoped case → code-first
+      // policy → LLM → strict validation) runs in the background. The
+      // ops-events 60s sweep is the backstop if this trigger is lost.
+      try {
+        const { ensureDisputeCaseBrief } = await import("@/lib/ai-dispute/brief-service");
+        void ensureDisputeCaseBrief(task.id, { trigger: "dispute_raised" }).catch((e) => {
+          console.error("[escrow dispute] AI case brief generation failed:", e);
+        });
+      } catch {
+        // never block the dispute itself on the AI layer
+      }
+
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow })
     }
 
