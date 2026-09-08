@@ -76,8 +76,14 @@ export async function GET(
         household: {
           ...((where.task as Record<string, unknown>)?.household as Record<string, unknown> ?? {}),
           OR: [
-            { name: { contains: searchParam, mode: "insensitive" } },
-            { address: { contains: searchParam, mode: "insensitive" } },
+            // NOTE: `mode: "insensitive"` is a PostgreSQL-only Prisma argument —
+            // on SQLite (dev/sandbox datasource) it throws
+            // PrismaClientValidationError "Unknown argument `mode`" and 500s
+            // the whole schedule view. SQLite LIKE is ASCII-case-insensitive
+            // by default, so a plain `contains` keeps search working on both
+            // providers (matching the ops bookings/escrow search style).
+            { name: { contains: searchParam } },
+            { address: { contains: searchParam } },
           ],
         },
       }

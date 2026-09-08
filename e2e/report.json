@@ -1,0 +1,1814 @@
+{
+  "runId": 1788829521610,
+  "base": "http://localhost:3000",
+  "totalPass": 301,
+  "totalFail": 0,
+  "records": [
+    {
+      "flow": "SETUP",
+      "name": "Ops admin login (eugene@annai.sg)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Ops session resolves RBAC identity",
+      "pass": true,
+      "detail": "role=ADMIN"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household register (201/200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household session → householdId + memberId",
+      "pass": true,
+      "detail": "hh=57okk4 member=prlgdt"
+    },
+    {
+      "flow": "SETUP",
+      "name": "New household onboardingStep = 0",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Ops vendor intake creates vendor",
+      "pass": true,
+      "detail": "vendor=ucbptz status=PENDING"
+    },
+    {
+      "flow": "SETUP",
+      "name": "PENDING vendor NOT visible in public browse",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Ops activates vendor",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "SETUP",
+      "name": "ACTIVE vendor visible in public browse (user discovery)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Vendor portal login",
+      "pass": true,
+      "detail": "status=200 bearer=true"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Onboarding steps 1–9 accepted",
+      "pass": true,
+      "detail": "9/9"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Onboarding completed (step 9, completedAt set)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Browse service catalog (CLEANING job types)",
+      "pass": true,
+      "detail": "4 types"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Pricing config visible to user",
+      "pass": true,
+      "detail": "commission=10"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Quotation created ($80 base + $8 pet-hair add-on)",
+      "pass": true,
+      "detail": "total=8800c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Quotation total = 8800c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Booking created from quotation (task CREATED)",
+      "pass": true,
+      "detail": "jobNo=AI-00000014"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Idempotent re-submit returns SAME task (no duplicate booking)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "DB: task CREATED + quotation ACCEPTED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Dispatch → task MATCHING",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Dispatch → booking assigned to vendor",
+      "pass": true,
+      "detail": "booking=32ck6b"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Vendor notified of new booking (TASK_DISPATCHED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Vendor accepts job (payment held in escrow)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "DB: task accepted/scheduled after vendor acceptance",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Escrow HELD created on acceptance (the payment seam)",
+      "pass": true,
+      "detail": "8800c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Escrow holds full job value 8800c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Commission 10% = 880c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Vendor payout = 7920c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] USER escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] USER escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000014 bookings=1"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR booking 32ck6b task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "7920c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS escrow 4sorow payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[escrow held] OPS booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "State machine: illegal transition accepted→in_progress rejected (409)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Task unchanged after rejected transition",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] USER escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] USER escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000014 bookings=1"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR booking 32ck6b task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "7920c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS escrow 4sorow payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[execution start] OPS booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Vendor completes job → task COMPLETED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Completion notes recorded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Household verifies work → task VERIFIED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Escrow released → task ESCROW_RELEASED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Escrow state RELEASED with payout",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "Vendor payout credited (earnings = 7920c)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "VENDOR environment earnings.totalEarned = 7920c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=ESCROW_RELEASED"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] USER escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] USER escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000014 bookings=1"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR booking 32ck6b task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "7920c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS escrow 4sorow state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS escrow 4sorow amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS escrow 4sorow payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "[payout released] OPS booking 32ck6b status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 1 · User→Vendor→Ops lifecycle",
+      "name": "OPS record: ESCROW_RELEASE audit log entry exists (household release now audited)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Original order escrow HELD 6000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Vendor proposes add-on ($15)",
+      "pass": true,
+      "detail": "status=201"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "User notified of add-on request (ADDON_REQUESTED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "USER sees pending add-on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Household approves add-on",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "New HELD escrow entry created for add-on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Add-on escrow commission 150c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Add-on escrow payout 1350c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Revised total held in escrow = 7500c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "USER task view shows approved add-on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER escrow da6rrz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER escrow da6rrz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER escrow 3d4jhm state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] USER escrow 3d4jhm amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000015 bookings=1"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR booking ogni62 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR booking ogni62 task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "6750c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "7920c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow da6rrz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow da6rrz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow da6rrz payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow 3d4jhm state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow 3d4jhm amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS escrow 3d4jhm payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[addon approved (revised total)] OPS booking ogni62 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "All escrows released (base + add-on)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "Vendor payout includes add-on (cumulative earned = 14670c)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=ESCROW_RELEASED"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER escrow da6rrz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER escrow da6rrz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER escrow 3d4jhm state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] USER escrow 3d4jhm amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000015 bookings=1"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR booking ogni62 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR booking ogni62 task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "14670c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow da6rrz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow da6rrz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow da6rrz payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow 3d4jhm state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow 3d4jhm amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS escrow 3d4jhm payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 2 · Add-on",
+      "name": "[payout incl. add-on] OPS booking ogni62 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Order paid into escrow (HELD 8000c)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Dispute raised → task DISPUTED, escrow DISPUTED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "User-side effect: autonomy promotion paused during dispute",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Maker-checker: unconfirmed refund blocked (409)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Ops issues partial refund $30",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Provider refund recorded (Stripe seam: NoOp dev provider)",
+      "pass": true,
+      "detail": "stripeId=noop_refund_e2e-pr-1788829521610 status=succeeded"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Refund has succeeded provider status",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Escrow refundCents cumulative = 3000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Escrow recomputed payout on remainder = 4500c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Escrow recomputed commission = 500c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "User balance: escrow refundCreditCents = 3000c (refund-as-credit)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Refund-credit voucher issued to user wallet (origin REFUND_CREDIT)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "USER wallet shows the refund-credit voucher",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Refund idempotency: replay does not double-refund",
+      "pass": true,
+      "detail": "replayStatus=200"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Ops resolves dispute (dismiss, keep remainder)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Escrow back to HELD after ops resolution",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Autonomy unpaused after resolution",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Terminal: task ESCROW_RELEASED with adjusted payout",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Vendor payout net of refund (cumulative earned = 19170c)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "Vendor earnings totalRefunded shows 3000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "OPS record: PARTIAL_REFUND audit log entry exists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=ESCROW_RELEASED"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] USER escrow c3flxd state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] USER escrow c3flxd amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000016 bookings=1"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR booking 98l0gq status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR booking 98l0gq task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "19170c"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "3000c"
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS escrow c3flxd state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS escrow c3flxd amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS escrow c3flxd payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 3 · Refund",
+      "name": "[post-refund payout] OPS booking 98l0gq status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Order executed → task COMPLETED before dispute",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "User disputes → task DISPUTED, escrow DISPUTED (completed booking stays completed)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Vendor notified (DISPUTE_RAISED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "OPS review: disputed escrow surfaced in ledger (state=DISPUTED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "OPS summary counts DISPUTED escrow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Vendor earnings hold disputed payout as pending",
+      "pass": true,
+      "detail": "pending=8100c"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Ops settles dispute with full refund",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Escrow resolution → REFUNDED (full)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Terminal order status → DISPUTE_CLOSED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Payout & commission zeroed after full refund",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Full refund event recorded ($90)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Terminal status enforced: verify rejected on DISPUTE_CLOSED (409)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Terminal status enforced: release rejected (409)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "Autonomy unpaused after terminal resolution",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "OPS record: DISPUTE_REFUNDED audit log entry exists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=DISPUTE_CLOSED"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] USER escrow j7gnaz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] USER escrow j7gnaz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000017 bookings=1"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR booking bqsu64 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR booking bqsu64 task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "19170c"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "12000c"
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS escrow j7gnaz state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS escrow j7gnaz amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS escrow j7gnaz payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 4 · Dispute",
+      "name": "[dispute settled (terminal)] OPS booking bqsu64 status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Campaign → targeted user: segment created",
+      "pass": true,
+      "detail": "members=undefined"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Segment computes exactly our household",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Campaign created with segment targeting → issuance job queued",
+      "pass": true,
+      "detail": "status=202"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Campaign auto-ACTIVATED by segment linkage (DB)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Voucher issuance job completes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Targeted user: voucher lands in wallet (CLAIMED)",
+      "pass": true,
+      "detail": "code=MPVS5ATQ"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Voucher code surfaced to user at checkout",
+      "pass": true,
+      "detail": "code=MPVS5ATQ"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "User notified (VOUCHER_ISSUED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Checkout shows voucher as eligible for order",
+      "pass": true,
+      "detail": "eligible=3"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Discount validation preview before checkout",
+      "pass": true,
+      "detail": "preview={\"valid\":true,\"discountCents\":2000,\"finalAmountCents\":8000}"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Discount applied: task discountCents = 2000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Revised order total finalAmountCents = 8000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Voucher marked USED at checkout",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "CodeRedemption audit row bound to task",
+      "pass": true,
+      "detail": "applied=2000c"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Campaign redemption counter incremented",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Escrow holds post-discount cash 8000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Escrow records original (pre-discount) 10000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Escrow records discount 2000c funded by PLATFORM",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Commission on full job value (payout base) = 1000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Vendor payout on full value = 9000c (platform absorbs subsidy)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=SCHEDULED"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] USER escrow dwuwro state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] USER escrow dwuwro amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000018 bookings=1"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR booking gqmv2x status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR booking gqmv2x task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "9000c"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "19170c"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "12000c"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS escrow dwuwro state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS escrow dwuwro amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS escrow dwuwro payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "[discounted escrow held] OPS booking gqmv2x status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "User cancels discounted order pre-completion",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Escrow → REFUNDED (user's money back)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Payout/commission zeroed on cancellation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "User balance: refund-credit = post-discount cash 8000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Escrow linked to refund-credit voucher",
+      "pass": true,
+      "detail": "credit=8000c"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Promo voucher reissued/restored to wallet (CLAIMED again)",
+      "pass": true,
+      "detail": "voucherStatus=CLAIMED"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Refund-credit voucher issued (user's cash as platform credit)",
+      "pass": true,
+      "detail": "origin=REFUND_CREDIT amount=??"
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "Redemption reconciled (no stale redemption for cancelled order)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "USER wallet shows refund-credit voucher",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 5 · Voucher/Promotion",
+      "name": "OPS campaign view consistent: voucher status matches wallet",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Insight engine: behaviour aggregates available",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Insight engine sees the E2E household (behaviour row)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Segment from insight (minOrders ≥ 1 + name)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Segment membership = our household",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Campaign (fixed $10) queued for segment",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Voucher issued to targeted user",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Campaign event: VOUCHER_ISSUED logged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "USER wallet shows conversion voucher",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Conversion: discount applied (1000c)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Conversion: final total 4000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Attribution: order linked to campaign (multi-touch row)",
+      "pass": true,
+      "detail": "touchpoint=VOUCHER_USED"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Conversion order completed & paid out",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Campaign events: VOUCHER_REDEEMED logged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "ROI tracking: campaign performance endpoint",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Funnel: vouchers issued = 1 (targeted 1)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Funnel: vouchers redeemed = 1 (conversion)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Funnel: orders generated = 1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Funnel: orders completed = 1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "ROI revenue = actual released escrow cash (4000c)",
+      "pass": true,
+      "detail": "reported=4000c"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "ROI discount cost = 1000c given",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "ROI net revenue = 3000c",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "Voucher terminal state USED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] USER task status = DB task status",
+      "pass": true,
+      "detail": "status=ESCROW_RELEASED"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] USER escrow entry count = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] USER escrow q4ww9w state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] USER escrow q4ww9w amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR schedule search endpoint healthy (200)",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR schedule booking count = DB",
+      "pass": true,
+      "detail": "jobNo=AI-00000019 bookings=1"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR booking 51y7gk status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR booking 51y7gk task status = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED)",
+      "pass": true,
+      "detail": "0c"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR earnings.totalEarned = DB Σ payout(RELEASED)",
+      "pass": true,
+      "detail": "23670c"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] VENDOR earnings.totalRefunded = DB Σ refundCents",
+      "pass": true,
+      "detail": "20000c"
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS ledger entries for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS escrow q4ww9w state = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS escrow q4ww9w amount = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS escrow q4ww9w payout = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS bookings rows for task = DB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "FLOW 6 · Marketing",
+      "name": "[marketing conversion order] OPS booking 51y7gk status = DB",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

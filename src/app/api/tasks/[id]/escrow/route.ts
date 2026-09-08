@@ -197,6 +197,33 @@ export async function PATCH(
           data: { status: TaskStatus.ESCROW_RELEASED, escrowReleasedAt: now },
         })
 
+        // ── Audit-parity fix (found by E2E flow-1): household-initiated
+        // release previously wrote NO ESCROW_RELEASE audit row (only the
+        // conditional PLATFORM_SUBSIDY_DRAWN row when a subsidy existed),
+        // while the ops release path always audits. Money moved from the
+        // household side with no ledger trail — mirror the ops route's
+        // ESCROW_RELEASE row here (userId null; human label in userName,
+        // same convention as the subsidy row below).
+        await tx.auditLog.create({
+          data: {
+            userId: null,
+            userName: `${task.household?.name ?? "household"} (household)`,
+            action: "ESCROW_RELEASE",
+            entityType: "EscrowLedger",
+            entityId: claimedEntryIds[0] ?? escrow.id,
+            metadata: {
+              taskId: task.id,
+              amountCents: escrowCashTotalCents,
+              entriesReleased: releasedCount,
+              entryIds: claimedEntryIds,
+              resolution: "Released by household (post-verification)",
+              payoutBaseCents: payoutBaseTotalCents,
+              vendorPayoutTotalCents: payoutTotalCents,
+              commissionTotalCents,
+            },
+          },
+        })
+
         // PLATFORM_SUBSIDY_DRAWN ledger event — written only when the
         // release paid out more than the escrow held (platform-funded
         // discount). Keeps Σ released payouts reconcilable against Σ held

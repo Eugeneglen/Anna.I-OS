@@ -70,3 +70,6 @@ tool-results/
 upload/
 *.png
 !public/brain-icon.png
+
+# E2E test artifacts
+db/*.bak-e2e
