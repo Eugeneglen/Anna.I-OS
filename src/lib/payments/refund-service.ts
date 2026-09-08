@@ -62,6 +62,10 @@ export interface ProcessRefundResult {
   paymentStatus: string;
   isFullyRefunded: boolean;
   isDuplicate: boolean; // true if this was a retried idempotent call
+  // ── Two-way refund split (this event) ──
+  householdCashLegCents: number;    // their own paid cash → refund credit
+  platformDiscountLegCents: number; // platform-funded discount reversed → restored promo
+  cumulativeSubsidyReversedCents: number; // platform leg cumulative on the entry
 }
 
 export class RefundError extends Error {
@@ -112,6 +116,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
         originalAmountCents: true,
         discountCents: true,
         discountFundedBy: true,
+        subsidyReversedCents: true,
         task: { select: { status: true } },
       },
     });
@@ -132,6 +137,10 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       paymentStatus: existing.stripeStatus || "succeeded",
       isFullyRefunded: escrow.refundCents >= escrow.amountCents,
       isDuplicate: true,
+      // Two-way split (stored state — this was the original event's split)
+      householdCashLegCents: existing.amountCents,
+      platformDiscountLegCents: existing.platformDiscountCents,
+      cumulativeSubsidyReversedCents: escrow.subsidyReversedCents,
     };
   }
 
@@ -184,6 +193,11 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       // on the pre-discount value — a vendor-fault refund reduces the vendor's
       // earnings on the FULL job value, and exhausting the customer cash zeroes
       // them (the consumed discount reverses to the household via voucher restore).
+      //
+      // Two-way split: the calc also returns the PLATFORM PROMO leg — the
+      // platform-funded discount reversed by THIS event (fires exactly once,
+      // at full-refund) — which is persisted on the Refund row and on the
+      // entry as subsidyReversedCents.
       let calc: RefundCalcResult;
       try {
         calc = calculateRefundImpact({
@@ -194,6 +208,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           originalAmountCents: escrow.originalAmountCents || undefined,
           discountCents: escrow.discountCents || 0,
           discountFundedBy: escrow.discountFundedBy,
+          existingSubsidyReversedCents: escrow.subsidyReversedCents,
         });
       } catch (e) {
         throw new RefundError((e as Error).message, 400, "REFUND_CALC_FAILED");
@@ -221,10 +236,13 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
 
       // Create the Refund row (idempotency key unique → atomic gate).
       // If a concurrent transaction already inserted this key, P2002 throws here.
+      // The row records the TWO-WAY SPLIT for this event: amountCents = the
+      // household cash leg; platformDiscountCents = the platform promo leg.
       const refund = await tx.refund.create({
         data: {
           escrowLedgerId: escrow.id,
           amountCents: input.refundAmountCents,
+          platformDiscountCents: calc.platformDiscountLegCents,
           reason: input.reason,
           issuedById: input.issuedById,
           issuedByName: input.issuedByName,
@@ -245,6 +263,12 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           vendorPayoutCents: calc.newVendorPayoutCents,
           state: newState,
           refundedAt: calc.isFullyRefunded ? new Date() : escrow.refundedAt,
+          // Two-way split: book the platform promo leg on the entry (0 for
+          // every event except the full-refund reversal — increment keeps
+          // it crash-safe/idempotent per event).
+          ...(calc.platformDiscountLegCents > 0
+            ? { subsidyReversedCents: { increment: calc.platformDiscountLegCents } }
+            : {}),
           // Only set resolution fields when the dispute is actually resolved (full refund)
           disputeResolution: calc.isFullyRefunded ? input.reason : escrow.disputeResolution,
           disputeResolvedBy: calc.isFullyRefunded ? input.issuedByName : escrow.disputeResolvedBy,
@@ -323,6 +347,10 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
             paymentProviderRefundId: refundResult.providerRefundId,
             paymentStatus: refundResult.status,
             reason: input.reason,
+            // Two-way refund split (this event)
+            householdCashLegCents: calc.householdCashLegCents,
+            platformDiscountLegCents: calc.platformDiscountLegCents,
+            subsidyReversedTotalCents: calc.newSubsidyReversedCents,
           },
         },
       });
@@ -350,6 +378,9 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
       paymentStatus: result.refundResult.status,
       isFullyRefunded: result.calc.isFullyRefunded,
       isDuplicate: false,
+      householdCashLegCents: result.calc.householdCashLegCents,
+      platformDiscountLegCents: result.calc.platformDiscountLegCents,
+      cumulativeSubsidyReversedCents: result.calc.newSubsidyReversedCents,
     };
   } catch (error: unknown) {
     // Prisma P2002 = unique constraint violation (duplicate idempotency key).
@@ -376,6 +407,7 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
               originalAmountCents: true,
               discountCents: true,
               discountFundedBy: true,
+              subsidyReversedCents: true,
               task: { select: { status: true } },
             },
           },
@@ -397,6 +429,9 @@ export async function processRefund(input: ProcessRefundInput): Promise<ProcessR
           paymentStatus: existing.stripeStatus || "succeeded",
           isFullyRefunded: e.refundCents >= e.amountCents,
           isDuplicate: true,
+          householdCashLegCents: existing.amountCents,
+          platformDiscountLegCents: existing.platformDiscountCents,
+          cumulativeSubsidyReversedCents: e.subsidyReversedCents,
         };
       }
     }

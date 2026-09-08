@@ -48,6 +48,21 @@ export function EscrowLedgerMobileList({ entries }: EscrowLedgerMobileListProps)
                 → {formatSgd(e.vendorPayoutCents as number)} payout
               </span>
             </div>
+            {/* Two-way refund split: household cash leg ‖ platform promo leg */}
+            {(((e.refundCents as number) || 0) > 0 || ((e.subsidyReversedCents as number) || 0) > 0) && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                {((e.refundCents as number) || 0) > 0 && (
+                  <span className="text-[10px] font-data px-1.5 py-0.5 rounded-md bg-[var(--anna-bg)] text-[var(--anna-slate)]">
+                    refunded cash {formatSgd(e.refundCents as number)}
+                  </span>
+                )}
+                {((e.subsidyReversedCents as number) || 0) > 0 && (
+                  <span className="text-[10px] font-data px-1.5 py-0.5 rounded-md bg-[var(--anna-sage-light)] text-[var(--anna-sage-dark)]">
+                    + promo restored {formatSgd(e.subsidyReversedCents as number)}
+                  </span>
+                )}
+              </div>
+            )}
             <p className="text-[10px] text-[var(--anna-muted)] mt-2 font-data">
               {formatDateTime(e.createdAt as string)}
             </p>

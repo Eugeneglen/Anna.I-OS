@@ -491,10 +491,15 @@ export async function PATCH(
       // remaining refund" is 0 — processRefund rejects amounts ≤ 0, which
       // dead-ended resolve_refund on these disputes (400 INVALID_AMOUNT).
       // Terminalize directly instead: full-refund semantics with no cash
-      // movement (commission/payout → 0, vendor paid nothing, no Refund row
-      // and no refund credit — the household paid no cash). The consumed
-      // promo voucher is restored below, exactly like the normal full-refund
-      // path, so the household is made whole.
+      // movement (commission/payout → 0, vendor paid nothing, no refund
+      // credit — the household paid no cash). The consumed promo voucher is
+      // restored below, exactly like the normal full-refund path, so the
+      // household is made whole.
+      //
+      // Two-way split: the platform promo leg is still real value — the
+      // consumed discount reverses (restored voucher below). Book it on the
+      // entry (subsidyReversedCents) and write the refund trail row with a
+      // zero household cash leg, so the platform leg stays auditable.
       if (fullRemainingCents <= 0) {
         const zeroCash = await db.$transaction(async (tx) => {
           // FIX-1c (payments wiring): the zero-cash resolution moves NO
@@ -505,6 +510,16 @@ export async function PATCH(
           // refund/release effect to perform here; logged for the audit trail
           // (Pending Payment Gateway Decision).
           logNoProviderEffect(id, "zero-cash dispute resolution — no customer cash held, no refund effect");
+          // Two-way refund split: the platform promo leg is still real
+          // value — the consumed discount reverses (restored voucher
+          // below). Book it on the entry (subsidyReversedCents) and write
+          // the refund trail row with a zero household cash leg, so the
+          // platform leg stays auditable.
+          const zeroCashPlatformLeg =
+            isPlatformFundedDiscount(escrow)
+              ? Math.max(0, (escrow.discountCents || 0) - (escrow.subsidyReversedCents || 0))
+              : 0;
+          let refundRowId: string | null = null;
           const claimed = await tx.escrowLedger.updateMany({
             where: { id, state: EscrowState.DISPUTED },
             data: {
@@ -512,6 +527,9 @@ export async function PATCH(
               refundedAt: now,
               commissionCents: 0,
               vendorPayoutCents: 0,
+              ...(zeroCashPlatformLeg > 0
+                ? { subsidyReversedCents: { increment: zeroCashPlatformLeg } }
+                : {}),
               disputeResolution: resolution || "Dispute upheld — full refund (no cash held)",
               disputeResolvedBy: session.name,
               disputeResolvedAt: now,
@@ -519,6 +537,21 @@ export async function PATCH(
           });
           if (claimed.count === 0) {
             throw new Error("ESCROW_ALREADY_RESOLVED");
+          }
+          if (zeroCashPlatformLeg > 0) {
+            const refundRow = await tx.refund.create({
+              data: {
+                escrowLedgerId: id,
+                amountCents: 0, // no household cash leg — none was held
+                platformDiscountCents: zeroCashPlatformLeg,
+                reason: resolution || "Dispute upheld — 100% platform-funded discount reversed",
+                issuedById: session.userId,
+                issuedByName: session.name,
+                idempotencyKey: `resolve-refund-zero-${id}`,
+                stripeStatus: "succeeded", // NoOp payment pilot
+              },
+            });
+            refundRowId = refundRow.id;
           }
 
           // Close the task only when every OTHER entry is also resolved
@@ -554,19 +587,22 @@ export async function PATCH(
               entityId: id,
               metadata: {
                 taskId: task.id,
-                refundId: null,
+                refundId: refundRowId,
                 zeroCashEntry: true,
                 amountCents: escrow.amountCents,
                 payoutBaseCents: escrow.originalAmountCents || escrow.amountCents,
                 commissionZeroedCents: escrow.commissionCents,
                 payoutZeroedCents: escrow.vendorPayoutCents,
                 taskClosed,
+                // Two-way refund split (this event)
+                householdCashLegCents: 0,
+                platformDiscountLegCents: zeroCashPlatformLeg,
                 resolution: resolution || "Dispute upheld — full refund (no cash held)",
               },
             },
           });
 
-          return { taskClosed };
+          return { taskClosed, refundRowId, zeroCashPlatformLeg };
         });
 
         // Notify household members (no credit — no cash was ever held)
@@ -627,7 +663,7 @@ export async function PATCH(
 
         return NextResponse.json({
           refund: {
-            refundId: null, // no Refund row — no cash was moved
+            refundId: zeroCash.refundRowId, // trail row only when a platform leg was booked
             refundedCents: 0,
             cumulativeRefundCents: escrow.refundCents,
             effectiveAmountCents: 0,
@@ -641,6 +677,11 @@ export async function PATCH(
             isFullyRefunded: true,
             isDuplicate: false,
             zeroCashEntry: true,
+            // Two-way refund split (this event)
+            householdCashLegCents: 0,
+            platformDiscountLegCents: zeroCash.zeroCashPlatformLeg,
+            cumulativeSubsidyReversedCents:
+              (escrow.subsidyReversedCents || 0) + zeroCash.zeroCashPlatformLeg,
           },
           creditCode: null,
           escrow: await db.escrowLedger.findUnique({ where: { id } }),

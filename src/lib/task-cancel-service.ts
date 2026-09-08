@@ -50,6 +50,11 @@ export type CancelActor =
 export interface CancelTaskSuccess {
   task: unknown; // full Task row (response parity with the old route)
   refundedCents: number;
+  // ── Two-way refund split (this cancellation) ──
+  // Household cash leg (→ REFUND_CREDIT) and platform promo leg (→ restored
+  // voucher, subsidyReversedCents) — booked on every refund event.
+  platformDiscountReversedCents: number;
+  refundRowsWritten: number;
   credit: { code: string; amountCents: number; expiresAt: Date } | null;
   creditPending: boolean;
   voucherRestored: boolean;
@@ -120,7 +125,7 @@ export async function cancelTask(opts: {
       : `${task.household?.name ?? "household"} (household)`;
 
   // ── Step 1: terminal state transition (all-or-nothing) ──
-  let step1: { refundedEntries: { id: string; amountCents: number }[]; refundedTotalCents: number; cancelledBookings: number; zeroCashTerminalized: string[] };
+  let step1: { refundedEntries: { id: string; amountCents: number }[]; refundedTotalCents: number; platformDiscountReversedCents: number; refundRowsWritten: number; cancelledBookings: number; zeroCashTerminalized: string[] };
   try {
     step1 = await db.$transaction(async (tx) => {
       // Cancel live bookings for this task (assigned/accepted — booking
@@ -148,9 +153,13 @@ export async function cancelTask(opts: {
         select: {
           id: true, amountCents: true, refundCents: true, commissionRate: true,
           originalAmountCents: true, discountCents: true, discountFundedBy: true,
+          subsidyReversedCents: true,
         },
       });
       const refunded: { id: string; amountCents: number }[] = [];
+      // Two-way split totals (this cancellation):
+      let platformLegTotal = 0;
+      let refundRowsWritten = 0;
       // f6b (police-payout-base-1): 0-cash entries (a 100% platform-funded
       // discount holds amountCents = 0) have no cash to return, but policy
       // R3 still requires the terminal HELD → REFUNDED transition.
@@ -158,6 +167,16 @@ export async function cancelTask(opts: {
       for (const entry of heldEntries) {
         const remaining = entry.amountCents - entry.refundCents;
         if (remaining <= 0) {
+          // Two-way split: even with no cash held, a platform-funded
+          // discount was consumed — book its reversal (the promo is
+          // restored post-TX via restoreVoucherOnCancellation) and write
+          // the trail row so the platform leg is auditable.
+          const zeroCashPlatformLeg =
+            (entry.discountCents || 0) > 0 &&
+            (entry.originalAmountCents || 0) > 0 &&
+            entry.discountFundedBy !== "VENDOR"
+              ? Math.max(0, (entry.discountCents || 0) - (entry.subsidyReversedCents || 0))
+              : 0;
           const claimed = await tx.escrowLedger.updateMany({
             where: { id: entry.id, state: EscrowState.HELD },
             data: {
@@ -165,12 +184,33 @@ export async function cancelTask(opts: {
               refundedAt: now,
               commissionCents: 0,
               vendorPayoutCents: 0,
+              ...(zeroCashPlatformLeg > 0
+                ? { subsidyReversedCents: { increment: zeroCashPlatformLeg } }
+                : {}),
               disputeResolution: `${reason} — cancelled, no cash held (policy R3)`,
               disputeResolvedBy: actor.kind === "ops" ? actorLabel : "household",
               disputeResolvedAt: now,
             },
           });
-          if (claimed.count > 0) zeroCashTerminalized.push(entry.id);
+          if (claimed.count > 0) {
+            zeroCashTerminalized.push(entry.id);
+            if (zeroCashPlatformLeg > 0) {
+              await tx.refund.create({
+                data: {
+                  escrowLedgerId: entry.id,
+                  amountCents: 0, // no household cash leg — none was held
+                  platformDiscountCents: zeroCashPlatformLeg,
+                  reason: `${reason} — cancelled, 100% platform-funded discount reversed (policy R3)`,
+                  issuedById: actor.kind === "ops" ? actor.userId : null,
+                  issuedByName: actorLabel,
+                  idempotencyKey: `cancel-refund-${task.id}-${entry.id}`,
+                  stripeStatus: "succeeded", // NoOp payment pilot — no provider movement
+                },
+              });
+              refundRowsWritten += 1;
+              platformLegTotal += zeroCashPlatformLeg;
+            }
+          }
           continue;
         }
         const calc = calculateRefundImpact({
@@ -181,6 +221,7 @@ export async function cancelTask(opts: {
           originalAmountCents: entry.originalAmountCents || undefined,
           discountCents: entry.discountCents || 0,
           discountFundedBy: entry.discountFundedBy,
+          existingSubsidyReversedCents: entry.subsidyReversedCents,
         });
         const claimed = await tx.escrowLedger.updateMany({
           where: { id: entry.id, state: EscrowState.HELD },
@@ -190,6 +231,9 @@ export async function cancelTask(opts: {
             vendorPayoutCents: calc.newVendorPayoutCents,
             state: EscrowState.REFUNDED,
             refundedAt: now,
+            ...(calc.platformDiscountLegCents > 0
+              ? { subsidyReversedCents: { increment: calc.platformDiscountLegCents } }
+              : {}),
             disputeResolution: `${reason} — refunded as Anna.I credit (policy R3)`,
             disputeResolvedBy: actor.kind === "ops" ? actorLabel : "household",
             disputeResolvedAt: now,
@@ -197,6 +241,28 @@ export async function cancelTask(opts: {
         });
         if (claimed.count > 0) {
           refunded.push({ id: entry.id, amountCents: remaining });
+          // ── Two-way refund split: refund trail row ──
+          // The cancel path previously wrote NO Refund rows, leaving 41%
+          // of refunded value invisible to the refund trail (FIN-AUDIT-3).
+          // Now every cancel refund event records its two legs —
+          // amountCents = household cash leg (→ REFUND_CREDIT post-TX),
+          // platformDiscountCents = platform promo leg (→ restored voucher
+          // post-TX). Both are in this TX with the escrow claim, so the
+          // trail and the entry figures commit atomically.
+          await tx.refund.create({
+            data: {
+              escrowLedgerId: entry.id,
+              amountCents: remaining,
+              platformDiscountCents: calc.platformDiscountLegCents,
+              reason: `${reason} — cancelled, refunded as Anna.I credit (policy R3)`,
+              issuedById: actor.kind === "ops" ? actor.userId : null,
+              issuedByName: actorLabel,
+              idempotencyKey: `cancel-refund-${task.id}-${entry.id}`,
+              stripeStatus: "succeeded", // NoOp payment pilot — no provider movement
+            },
+          });
+          refundRowsWritten += 1;
+          platformLegTotal += calc.platformDiscountLegCents;
         }
       }
       const refundedTotal = refunded.reduce((s, e) => s + e.amountCents, 0);
@@ -258,6 +324,10 @@ export async function cancelTask(opts: {
             actorType: actor.kind,
             actorHouseholdId: actor.kind === "household" ? actor.householdId : undefined,
             via: actor.kind === "household" ? actor.via : undefined,
+            // Two-way refund split (this cancellation)
+            householdCashLegCents: refundedTotal,
+            platformDiscountLegCents: platformLegTotal,
+            refundRowsWritten,
           },
         },
       });
@@ -265,6 +335,8 @@ export async function cancelTask(opts: {
       return {
         refundedEntries: refunded,
         refundedTotalCents: refundedTotal,
+        platformDiscountReversedCents: platformLegTotal,
+        refundRowsWritten,
         cancelledBookings: liveBookings.length,
         zeroCashTerminalized,
       };
@@ -282,7 +354,7 @@ export async function cancelTask(opts: {
     }
     throw txError;
   }
-  const { refundedEntries, refundedTotalCents, cancelledBookings, zeroCashTerminalized } = step1;
+  const { refundedEntries, refundedTotalCents, platformDiscountReversedCents, refundRowsWritten, cancelledBookings, zeroCashTerminalized } = step1;
 
   // ── Step 2: credit conversion + original-voucher reissue (idempotent,
   //    non-fatal — step 1 already reached terminal state) ──
@@ -356,6 +428,8 @@ export async function cancelTask(opts: {
     data: {
       task: await db.task.findUnique({ where: { id: task.id } }),
       refundedCents: refundedTotalCents,
+      platformDiscountReversedCents,
+      refundRowsWritten,
       credit,
       creditPending,
       voucherRestored,

@@ -20,6 +20,35 @@
  * Funding equation (invariant, per entry):
  *   commission + payout + refundCents + reversedDiscount (when applied) = payoutBase
  *
+ * ── Two-way refund split (policy) ──
+ *
+ * Every refund event decomposes into TWO explicitly recorded legs that are
+ * NEVER blended into one gross credit:
+ *
+ *   1. HOUSEHOLD CASH leg (Refund.amountCents / escrow.refundCents) —
+ *      the household's OWN paid cash, returned as REFUND_CREDIT (R3:
+ *      no cash refunds, ever). Capped at the entry's amountCents.
+ *
+ *   2. PLATFORM PROMO leg (Refund.platformDiscountCents /
+ *      escrow.subsidyReversedCents) — the platform-funded discount
+ *      REVERSED by the refund, returned to the household as a RESTORED
+ *      PROMO VOUCHER (restoreVoucherOnCancellation) and booked on the
+ *      platform ledger as a reversal against the subsidy drawn at
+ *      release. Fires exactly once per entry: at the refund event that
+ *      exhausts the household cash (full refund). Partial refunds never
+ *      touch it — a partially-done job keeps the discount consumed.
+ *
+ * Invariants (per entry):
+ *   Σ Refund.amountCents          = refundCents
+ *   Σ Refund.platformDiscountCents = subsidyReversedCents
+ *
+ * Subsidy ledger conservation (platform marketing view):
+ *   Σ discountCents = drawn (realized at release)
+ *                   + reversed (restored promo liability, this leg)
+ *                   + in-flight (discounted entries not yet released)
+ *
+ * Rationale (grounded in the DB): 100% of live discounts are
+ * discountFundedBy=PLATFORM, so two legs suffice — no vendor-funder leg.
  * Refunds return CUSTOMER CASH only (capped at amountCents). When a full
  * refund exhausts the customer cash on a platform-discounted entry, the
  * consumed discount is treated as REVERSED back to the household (the
@@ -41,13 +70,19 @@ export interface EscrowFigures {
 }
 
 export interface RefundCalcResult {
-  newRefundCents: number;       // cumulative after this refund
-  refundedThisEvent: number;    // amount refunded in THIS event
+  newRefundCents: number;       // cumulative after this refund (household cash leg)
+  refundedThisEvent: number;    // amount refunded in THIS event (household cash leg)
   effectiveAmountCents: number; // effective PAYOUT BASE (base − refund − reversal)
   remainingCashCents: number;   // customer cash still held (amount − cumulative refund, floored)
   newCommissionCents: number;   // recalculated commission
   newVendorPayoutCents: number; // recalculated payout
   isFullyRefunded: boolean;     // true if effective payout base === 0
+  // ── Two-way split legs for THIS event ──
+  householdCashLegCents: number;     // = refundedThisEvent (their own money → credit)
+  platformDiscountLegCents: number;  // platform-funded discount reversed by THIS
+                                     // event (0 unless this event exhausts the
+                                     // household cash on a discounted entry)
+  newSubsidyReversedCents: number;   // cumulative platform leg after this event
 }
 
 /**
@@ -169,6 +204,8 @@ export function calculateRefundImpact(params: {
   originalAmountCents?: number;
   discountCents?: number;
   discountFundedBy?: string;
+  /** Cumulative platform leg already reversed on this entry (default 0). */
+  existingSubsidyReversedCents?: number;
 }): RefundCalcResult {
   const {
     amountCents,
@@ -208,6 +245,20 @@ export function calculateRefundImpact(params: {
     commissionRate
   );
 
+  // ── Two-way split: the platform promo leg ──
+  // Fires on the single event whose cumulative refund exhausts the
+  // household cash (full refund) on a platform-funded discounted entry:
+  // the discount un-consumes and returns as a restored promo voucher.
+  // Idempotent by construction — once cashExhausted, no further refund
+  // events are possible (cumulative refund is capped at amountCents) —
+  // and existingSubsidyReversedCents guards any legacy double-stamp.
+  const existingSubsidyReversed = params.existingSubsidyReversedCents || 0;
+  const reversibleDiscount = platformFunded
+    ? Math.max(0, (params.discountCents || 0) - existingSubsidyReversed)
+    : 0;
+  const platformDiscountLegCents =
+    platformFunded && cashExhausted ? reversibleDiscount : 0;
+
   return {
     newRefundCents,
     refundedThisEvent: refundAmountCents,
@@ -216,6 +267,9 @@ export function calculateRefundImpact(params: {
     newCommissionCents: commissionCents,
     newVendorPayoutCents: vendorPayoutCents,
     isFullyRefunded: effectiveAmountCents === 0,
+    householdCashLegCents: refundAmountCents,
+    platformDiscountLegCents,
+    newSubsidyReversedCents: existingSubsidyReversed + platformDiscountLegCents,
   };
 }
 

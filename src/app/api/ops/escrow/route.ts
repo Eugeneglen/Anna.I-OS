@@ -38,14 +38,25 @@ export async function GET(req: NextRequest) {
     const sumAmount = (entries: { amountCents: number }[]) =>
       entries.reduce((s, e) => s + e.amountCents, 0);
 
+    // ── Two-way refund split context in the summary ──
+    // Per state: the household cash leg returned (Σ refundCents) and the
+    // platform promo leg reversed (Σ subsidyReversedCents). The legacy
+    // amountCents keys are unchanged (gross cash ever held in that state)
+    // — the split fields carry the net-of-refund truth the KPIs need.
+    const refundSplit = (entries: { refundCents: number; subsidyReversedCents: number }[]) => ({
+      refundedCents: entries.reduce((s, e) => s + (e.refundCents || 0), 0),
+      subsidyReversedCents: entries.reduce((s, e) => s + (e.subsidyReversedCents || 0), 0),
+    });
+
     const summary = {
-      HELD: { count: heldEntries.length, amountCents: sumAmount(heldEntries) },
-      RELEASED: { count: releasedEntries.length, amountCents: sumAmount(releasedEntries) },
-      DISPUTED: { count: disputedEntries.length, amountCents: sumAmount(disputedEntries) },
-      REFUNDED: { count: refundedEntries.length, amountCents: sumAmount(refundedEntries) },
+      HELD: { count: heldEntries.length, amountCents: sumAmount(heldEntries), ...refundSplit(heldEntries) },
+      RELEASED: { count: releasedEntries.length, amountCents: sumAmount(releasedEntries), ...refundSplit(releasedEntries) },
+      DISPUTED: { count: disputedEntries.length, amountCents: sumAmount(disputedEntries), ...refundSplit(disputedEntries) },
+      REFUNDED: { count: refundedEntries.length, amountCents: sumAmount(refundedEntries), ...refundSplit(refundedEntries) },
       total: {
         count: heldEntries.length + releasedEntries.length + disputedEntries.length + refundedEntries.length,
         amountCents: sumAmount(heldEntries) + sumAmount(releasedEntries) + sumAmount(disputedEntries) + sumAmount(refundedEntries),
+        ...refundSplit([...heldEntries, ...releasedEntries, ...disputedEntries, ...refundedEntries]),
       },
     };
 
@@ -165,6 +176,16 @@ export async function GET(req: NextRequest) {
         disputeResolvedBy: true,
         disputeResolvedAt: true,
         createdAt: true,
+        // ── Two-way refund split context (ops ledger rows must explain
+        // themselves — FIN-AUDIT-3 warning: "ops ledger UI can't explain
+        // rows"). original/discount/funder explain the amount vs payout gap;
+        // refundCents + subsidyReversedCents are the two refund legs. ──
+        originalAmountCents: true,
+        discountCents: true,
+        discountFundedBy: true,
+        refundCents: true,
+        refundCreditCents: true,
+        subsidyReversedCents: true,
         task: {
           select: {
             id: true,

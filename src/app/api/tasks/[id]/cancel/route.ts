@@ -15,6 +15,12 @@ import { cancelTask } from "@/lib/task-cancel-service";
 // Refund window: ANY pre-completion status. COMPLETED/VERIFIED/
 // ESCROW_RELEASED must go through the dispute flow instead (money has
 // either been earned or released); DISPUTED must be resolved first.
+//
+// Two-way refund split (REFUND-SPLIT-1): the cancel money path in
+// task-cancel-service.ts books BOTH legs of every refund event — the
+// household cash leg (→ REFUND_CREDIT) and the platform promo leg
+// (→ restored voucher, subsidyReversedCents) — and writes the Refund
+// trail rows inside the terminal transaction.
 
 const cancelSchema = z.object({
   reason: z.string().max(500).optional(),
@@ -76,6 +82,11 @@ export async function POST(
     return NextResponse.json({
       task: d.task,
       refundedCents: d.refundedCents,
+      // Two-way refund split (this cancellation): the household cash leg is
+      // delivered as REFUND_CREDIT (`credit` above); the platform promo leg
+      // is delivered as the restored original voucher (`voucherRestored`).
+      platformDiscountReversedCents: d.platformDiscountReversedCents,
+      refundRowsWritten: d.refundRowsWritten,
       credit: d.credit,
       creditPending: d.creditPending, // true = refund landed but credit issuance failed; recover via backfill mode-2
       voucherRestored: d.voucherRestored,

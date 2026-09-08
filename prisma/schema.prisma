@@ -523,6 +523,24 @@ model EscrowLedger {
   refundCreditCents      Int     @default(0)
   refundCreditVoucherId  String? // FK → Voucher.id (denormalised, no relation)
 
+  // ── Two-way refund split — PLATFORM leg (cumulative) ──
+  // Mirrors refundCents (the household cash leg). Records the
+  // platform-funded discount REVERSED by refunds on this entry: the value
+  // returns to the household as a RESTORED PROMO voucher
+  // (restoreVoucherOnCancellation), never as refund credit, and is booked
+  // here as a reversal against the subsidy drawn at release
+  // (PLATFORM_SUBSIDY_DRAWN audit event). Fires exactly once per entry —
+  // at the refund event that exhausts the household cash (full refund):
+  //   household cash leg  = refundCents          (their own money, as credit)
+  //   platform promo leg  = subsidyReversedCents (Anna.I's money, as promo)
+  // Reconciliation:
+  //   Σ Refund.platformDiscountCents (per entry) = subsidyReversedCents
+  //   Subsidy ledger conservation:
+  //     Σ discountCents = drawn (realized at release)
+  //                     + reversed (restored promo liability)
+  //                     + in-flight (discounted entries not yet released)
+  subsidyReversedCents   Int     @default(0)
+
   task    Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [bookingId], references: [id])
   refunds Refund[]
@@ -540,7 +558,17 @@ model EscrowLedger {
 model Refund {
   id             String   @id @default(cuid())
   escrowLedgerId String
-  amountCents    Int // amount refunded in THIS event (not cumulative)
+  // ── Two-way refund split (per refund EVENT) ──
+  // Household cash leg: the household's OWN paid cash returned by THIS
+  // event (never the discount portion). Capped at the entry's amountCents;
+  // delivered as REFUND_CREDIT per policy R3 (no cash refunds, ever).
+  amountCents    Int // household cash leg refunded in THIS event (not cumulative)
+  // Platform promo leg: platform-funded discount reversed by THIS event.
+  // 0 on every event except the single one that exhausts the household
+  // cash on a platform-discounted entry (full refund), where it equals the
+  // entry's remaining un-reversed discountCents. Delivered as a restored
+  // promo voucher — the two legs are NEVER blended into one gross credit.
+  platformDiscountCents Int @default(0)
   reason         String
   issuedById     String? // ops user ID who authorised the refund
   issuedByName   String
