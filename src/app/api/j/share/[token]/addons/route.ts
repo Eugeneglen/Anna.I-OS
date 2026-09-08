@@ -31,7 +31,7 @@ export async function GET(
 
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
-      select: { id: true, sharedAt: true },
+      select: { id: true, sharedAt: true, scheduledEnd: true },
     });
 
     if (!booking) {

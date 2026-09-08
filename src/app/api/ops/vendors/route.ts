@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
       dailyCapacity,
       zones,
       password,
+      roleId,
     } = body;
 
     if (!companyName) {
@@ -90,6 +91,42 @@ export async function POST(req: NextRequest) {
       passwordHash = bcrypt.hashSync(password, 10);
     }
 
+    // ── P3 companion (AUDIT-FIX-9): provision the vendor PORTAL role.
+    // Production is deny-by-default (no request-path self-heal), so a
+    // vendor created without a role would authenticate fine but hit 403
+    // on every portal action. This explicit, ops-triggered assignment is
+    // the replacement: default to Vendor Admin (full portal, no
+    // user/role management escalation beyond it), or use the roleId the
+    // operator chose. Only vendor_* roles are assignable. ──
+    let assignedRoleId: string | null | undefined;
+    if (roleId !== undefined && roleId !== null) {
+      const chosen = await db.role.findUnique({
+        where: { id: roleId as string },
+        select: { id: true, slug: true },
+      });
+      if (!chosen || !chosen.slug.startsWith("vendor_")) {
+        return NextResponse.json(
+          { error: "Invalid role — only vendor portal roles (vendor_*) can be assigned" },
+          { status: 400 }
+        );
+      }
+      assignedRoleId = chosen.id;
+    } else {
+      const defaultRole = await db.role.findUnique({
+        where: { slug: "vendor_admin" },
+        select: { id: true },
+      });
+      if (defaultRole) {
+        assignedRoleId = defaultRole.id;
+      } else {
+        // Role catalog missing (seed not run). Create the vendor anyway
+        // but flag it — ops can assign a role from the detail page later.
+        console.warn(
+          "[ops/vendors POST] vendor_admin role not found — vendor created WITHOUT a portal role (run the RBAC seed or assign one from the vendor detail page)"
+        );
+      }
+    }
+
     const vendor = await db.vendor.create({
       data: {
         name: vendorName,
@@ -110,6 +147,7 @@ export async function POST(req: NextRequest) {
         dailyCapacity: dailyCapacity || 6,
         zones: JSON.stringify(zones || []),
         ...(passwordHash ? { passwordHash } : {}),
+        ...(assignedRoleId !== undefined ? { roleId: assignedRoleId } : {}),
       },
     });
 
@@ -119,12 +157,25 @@ export async function POST(req: NextRequest) {
       action: "vendor.create",
       entityType: "Vendor",
       entityId: vendor.id,
-      metadata: { companyName, contactPerson, vendorType },
+      metadata: { companyName, contactPerson, vendorType, roleId: assignedRoleId ?? null },
     });
 
-    // FIX-1a: the create response previously echoed the new vendor row
-    // INCLUDING the freshly-written passwordHash.
-    return NextResponse.json({ vendor: stripVendorSecrets(vendor) }, { status: 201 });
+    // Re-fetch with the assigned role so the response shows what the new
+    // vendor can actually do in the portal (mirrors the PATCH response).
+    // FIX-1a: strip the freshly-written passwordHash before echoing.
+    const vendorWithRole = await db.vendor.findUnique({
+      where: { id: vendor.id },
+      include: { roleRel: { select: { id: true, name: true, slug: true, level: true } } },
+    });
+
+    return NextResponse.json(
+      {
+        vendor: vendorWithRole
+          ? stripVendorSecrets(vendorWithRole)
+          : stripVendorSecrets(vendor),
+      },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     console.error("[/api/ops/vendors POST]", error);
     if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002") {

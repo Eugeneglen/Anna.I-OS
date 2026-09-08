@@ -27,7 +27,26 @@ type VendorUpdateData = {
   availability?: unknown;
   staff?: { action: "add" | "remove" | "toggle"; data: Record<string, unknown> };
   password?: string; // set/reset vendor portal login password
+  roleId?: string | null; // assign/clear the vendor PORTAL role (vendor_* roles only)
 };
+
+/**
+ * Resolves a candidate portal role for a vendor. Only roles with slugs
+ * under the vendor_ namespace are assignable here — an ops user must never
+ * be able to pin an OPS role (super_admin etc.) onto a vendor.
+ */
+async function resolveVendorPortalRole(roleId: string | null | undefined) {
+  if (roleId === undefined) return { ok: true as const, role: undefined };
+  if (roleId === null || roleId === "") return { ok: true as const, role: null };
+  const role = await db.role.findUnique({
+    where: { id: roleId },
+    select: { id: true, name: true, slug: true, level: true },
+  });
+  if (!role || !role.slug.startsWith("vendor_")) {
+    return { ok: false as const };
+  }
+  return { ok: true as const, role };
+}
 
 export async function GET(
   req: NextRequest,
@@ -43,6 +62,7 @@ export async function GET(
     const vendor = await db.vendor.findUnique({
       where: { id },
       include: {
+        roleRel: { select: { id: true, name: true, slug: true, level: true } },
         staff: { orderBy: { createdAt: "asc" } },
         addresses: {
           where: { ownerType: "VENDOR", vendorId: id },
@@ -55,8 +75,19 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    // ── P3 companion (AUDIT-FIX-9): Ops needs a way to provision vendor
+    // portal roles now that request-path self-heal is disabled in
+    // production. Expose the assignable vendor_* role catalog alongside
+    // the vendor record so the detail page can render a role picker
+    // without requiring roles:view (which coordinators lack). ──
+    const vendorRoles = await db.role.findMany({
+      where: { slug: { startsWith: "vendor_" } },
+      orderBy: { level: "desc" },
+      select: { id: true, name: true, slug: true, level: true, description: true },
+    });
+
     // FIX-1a: strip passwordHash + verificationData before serialising.
-    return NextResponse.json({ vendor: stripVendorSecrets(vendor) });
+    return NextResponse.json({ vendor: stripVendorSecrets(vendor), vendorRoles });
   } catch (error) {
     console.error("[/api/ops/vendors/[id] GET]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -84,6 +115,18 @@ export async function PATCH(
     // Status changes require ADMIN
     if (body.status && !hasMinRole(session.role, "ADMIN")) {
       return NextResponse.json({ error: "Admin required for status changes" }, { status: 403 });
+    }
+
+    // Portal role assignment is a privilege grant — ADMIN only.
+    const roleChange = body.roleId !== undefined ? await resolveVendorPortalRole(body.roleId) : null;
+    if (roleChange && !roleChange.ok) {
+      return NextResponse.json(
+        { error: "Invalid role — only vendor portal roles (vendor_*) can be assigned" },
+        { status: 400 }
+      );
+    }
+    if (body.roleId !== undefined && !hasMinRole(session.role, "ADMIN")) {
+      return NextResponse.json({ error: "Admin required for portal role changes" }, { status: 403 });
     }
 
     // Non-admin can only edit certain fields
@@ -121,6 +164,14 @@ export async function PATCH(
         return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
       }
       updateData.passwordHash = bcrypt.hashSync(body.password, 10);
+    }
+
+    // Assign/clear the vendor portal role (validated + admin-gated above).
+    // Vendor permissions are resolved from the DB on every request
+    // (vendor-guard resolvePermissions), so the change takes effect on
+    // the vendor's very next API call — no cache to invalidate.
+    if (roleChange && roleChange.ok && roleChange.role !== undefined) {
+      updateData.roleId = roleChange.role ? roleChange.role.id : null;
     }
 
     const vendor = await db.vendor.update({
@@ -179,6 +230,7 @@ export async function PATCH(
     const updated = await db.vendor.findUnique({
       where: { id },
       include: {
+        roleRel: { select: { id: true, name: true, slug: true, level: true } },
         staff: { orderBy: { createdAt: "asc" } },
         addresses: {
           where: { ownerType: "VENDOR", vendorId: id },
@@ -187,7 +239,34 @@ export async function PATCH(
       },
     });
 
+    // Dedicated audit entry for portal-role changes (old → new), so
+    // privilege grants are greppable in isolation from profile edits.
+    if (roleChange && roleChange.ok && roleChange.role !== undefined) {
+      const oldRole = existing.roleId
+        ? await db.role.findUnique({
+            where: { id: existing.roleId },
+            select: { name: true, slug: true },
+          })
+        : null;
+      await logAction({
+        userId: session.userId,
+        userName: session.name,
+        action: "vendor.role.assign",
+        entityType: "Vendor",
+        entityId: id,
+        metadata: {
+          from: oldRole ? { id: existing.roleId, name: oldRole.name, slug: oldRole.slug } : null,
+          to: roleChange.role
+            ? { id: roleChange.role.id, name: roleChange.role.name, slug: roleChange.role.slug }
+            : null,
+        },
+      });
+    }
+
     // FIX-1a: strip passwordHash + verificationData before serialising.
+    if (!updated) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     return NextResponse.json({ vendor: stripVendorSecrets(updated) });
   } catch (error: unknown) {
     console.error("[/api/ops/vendors/[id] PATCH]", error);

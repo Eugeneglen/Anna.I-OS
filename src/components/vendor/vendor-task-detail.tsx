@@ -54,6 +54,7 @@ import {
   Wallet,
   Loader2,
   Copy,
+  RefreshCw,
   UserPlus,
   Send,
   Link2,
@@ -199,6 +200,7 @@ function VendorTaskDetailContent({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [shareGenerated, setShareGenerated] = useState(false);
+  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
 
   // Sync localBooking + assignedStaffInfo when the parent prop changes.
   // When a DIFFERENT booking is opened, reset everything.  When the SAME
@@ -320,22 +322,49 @@ function VendorTaskDetailContent({
   // reverse-proxy, and production environments alike).
   const buildShareUrl = (token: string) => `${window.location.origin}/j/${token}`;
 
-  // Generate share link (called once, then cached in state)
+  // Shared helper for talking to the share endpoint. The endpoint returns
+  // the SAME token while it is live, ROTATES it when it has expired, and
+  // rotates on demand when `rotate=1` is passed (revoking the old link).
+  const requestShareLink = async (rotate: boolean): Promise<string | null> => {
+    const res = await fetch(
+      `/api/vendors/${vendorId}/bookings/${b.id}/share${rotate ? "?rotate=1" : ""}`,
+      { method: "POST" }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const url: string = buildShareUrl(json.token);
+    setShareUrl(url);
+    setShareGenerated(true);
+    setShareExpiresAt(json.expiresAt ?? null);
+    return url;
+  };
+
+  // Generate share link (called once, then cached in state). If the stored
+  // token has expired, the endpoint transparently issues a fresh one.
   const handleGenerateLink = async () => {
     if (isSharing) return;
     setIsSharing(true);
     try {
-      const res = await fetch(
-        `/api/vendors/${vendorId}/bookings/${b.id}/share`,
-        { method: "POST" }
-      );
-      if (!res.ok) return;
-      const json = await res.json();
-      const url: string = buildShareUrl(json.token);
-      setShareUrl(url);
-      setShareGenerated(true);
+      const url = await requestShareLink(false);
+      if (!url) toast.error("Failed to generate share link");
     } catch {
       toast.error("Failed to generate share link");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  // Force-regenerate: revokes the current link (leaked or stale) and
+  // issues a brand-new one.
+  const handleRegenerateLink = async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const url = await requestShareLink(true);
+      if (url) toast.success("New link generated — the previous link no longer works");
+      else toast.error("Failed to regenerate share link");
+    } catch {
+      toast.error("Failed to regenerate share link");
     } finally {
       setIsSharing(false);
     }
@@ -345,21 +374,14 @@ function VendorTaskDetailContent({
   const handleSendWhatsApp = async () => {
     let url = shareUrl;
     if (!url) {
-      // Generate link first
+      // Generate link first (the endpoint rotates it if the stored one expired)
       try {
-        const res = await fetch(
-          `/api/vendors/${vendorId}/bookings/${b.id}/share`,
-          { method: "POST" }
-        );
-        if (!res.ok) return;
-        const json = await res.json();
-        url = buildShareUrl(json.token);
-        setShareUrl(url);
-        setShareGenerated(true);
+        url = await requestShareLink(false);
       } catch {
         toast.error("Failed to generate share link");
         return;
       }
+      if (!url) return;
     }
 
     const staffContact = assignedStaffInfo?.contact ?? b.assignedStaff?.contact;
@@ -396,19 +418,12 @@ function VendorTaskDetailContent({
     let url = shareUrl;
     if (!url) {
       try {
-        const res = await fetch(
-          `/api/vendors/${vendorId}/bookings/${b.id}/share`,
-          { method: "POST" }
-        );
-        if (!res.ok) return;
-        const json = await res.json();
-        url = buildShareUrl(json.token);
-        setShareUrl(url);
-        setShareGenerated(true);
+        url = await requestShareLink(false);
       } catch {
         toast.error("Failed to generate share link");
         return;
       }
+      if (!url) return;
     }
     await navigator.clipboard.writeText(url);
     toast.success("Job link copied to clipboard");
@@ -1013,22 +1028,43 @@ function VendorTaskDetailContent({
 
                 {/* Generated link preview */}
                 {shareGenerated && shareUrl && (
-                  <div className="bg-[var(--anna-bg)] rounded-lg px-3 py-2 flex items-center gap-2">
-                    <Link2 size={11} className="text-[var(--anna-muted)] flex-shrink-0" />
-                    <p className="text-[10px] text-[var(--anna-muted)] truncate flex-1 font-mono">
-                      {shareUrl}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-[10px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
-                      onClick={() => {
-                        navigator.clipboard.writeText(shareUrl);
-                        toast.success("Link copied");
-                      }}
-                    >
-                      <Copy size={10} />
-                    </Button>
+                  <div className="bg-[var(--anna-bg)] rounded-lg px-3 py-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Link2 size={11} className="text-[var(--anna-muted)] flex-shrink-0" />
+                      <p className="text-[10px] text-[var(--anna-muted)] truncate flex-1 font-mono">
+                        {shareUrl}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-[10px] text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+                        onClick={() => {
+                          navigator.clipboard.writeText(shareUrl);
+                          toast.success("Link copied");
+                        }}
+                      >
+                        <Copy size={10} />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-[var(--anna-muted)] flex items-center gap-1">
+                        <Clock size={10} />
+                        {shareExpiresAt
+                          ? `Valid until ${new Date(shareExpiresAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+                          : "No expiry"}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isSharing}
+                        className="h-6 px-2 text-[10px] text-[var(--anna-slate-light)] hover:text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+                        onClick={handleRegenerateLink}
+                        title="Revoke this link and issue a new one"
+                      >
+                        <RefreshCw size={10} className="mr-0.5" />
+                        Regenerate
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

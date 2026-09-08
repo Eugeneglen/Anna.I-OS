@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Save, KeyRound, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, KeyRound, CheckCircle2, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOpsUser } from "@/app/ops/(dashboard)/layout";
 import { CATEGORIES } from "@/lib/constants";
@@ -53,6 +53,16 @@ interface Address {
   unitNumber: string | null;
 }
 
+// Assignable vendor portal roles (vendor_* namespace only) — served by
+// GET /api/ops/vendors/[id] alongside the vendor record.
+interface VendorRoleOption {
+  id: string;
+  name: string;
+  slug: string;
+  level: number;
+  description: string | null;
+}
+
 function parseJsonField(val: unknown): string[] {
   if (Array.isArray(val)) return val as string[];
   if (typeof val === "string") {
@@ -68,7 +78,13 @@ function parseJsonField(val: unknown): string[] {
 const inputCls = "rounded-xl border-[var(--anna-border)] text-sm";
 const labelCls = "text-xs font-medium text-[var(--anna-slate)]";
 
-function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
+function VendorDetailInner({
+  data,
+  vendorRoles,
+}: {
+  data: Record<string, unknown>;
+  vendorRoles: VendorRoleOption[];
+}) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const opsCtx = useOpsUser();
@@ -95,6 +111,9 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
   const [dirty, setDirty] = useState(false);
   const [loginPassword, setLoginPassword] = useState("");
   const [hasLogin, setHasLogin] = useState<boolean>(!!data.passwordHash);
+  const [portalRole, setPortalRole] = useState<string | null>(
+    (data.roleId as string | null) ?? null
+  );
 
   const addresses: Address[] = Array.isArray(data.addresses)
     ? (data.addresses as Address[])
@@ -178,6 +197,41 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
       return;
     }
     passwordMutation.mutate(loginPassword);
+  }
+
+  // ── Portal role assignment (P3 companion, AUDIT-FIX-9) ──
+  // Assigning a role is what lets a vendor actually USE the portal:
+  // without one they authenticate fine but every action is denied
+  // (deny-by-default). Saved immediately on change; "No access"
+  // clears the role entirely.
+  const roleMutation = useMutation({
+    mutationFn: async (roleId: string | null) => {
+      const res = await fetch(`/api/ops/vendors/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to assign role");
+      return result;
+    },
+    onSuccess: (_result, roleId) => {
+      qc.invalidateQueries({ queryKey: ["ops-vendor", id] });
+      toast.success(
+        roleId ? "Portal role assigned" : "Portal role removed — vendor now has zero portal permissions"
+      );
+    },
+    onError: (e: Error) => {
+      // revert the optimistic select value to the server state
+      setPortalRole((data.roleId as string | null) ?? null);
+      toast.error(e.message);
+    },
+  });
+
+  function handleRoleChange(value: string) {
+    const roleId = value === "__none__" ? null : value;
+    setPortalRole(roleId);
+    roleMutation.mutate(roleId);
   }
 
   return (
@@ -343,7 +397,7 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
         <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] overflow-hidden">
           <div className="px-5 py-3 border-b border-[var(--anna-border)] flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--anna-muted)]">
-              Portal Login Access
+              Vendor Portal Access
             </h3>
             {hasLogin ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
@@ -357,33 +411,82 @@ function VendorDetailInner({ data }: { data: Record<string, unknown> }) {
               </span>
             )}
           </div>
-          <div className="p-5 space-y-3">
-            <p className="text-xs text-[var(--anna-muted)] leading-relaxed">
-              {hasLogin
-                ? "This vendor can log in to the vendor portal. Set a new password below to reset their access (the old password will stop working immediately)."
-                : "This vendor cannot log in yet (no password set). Set a password below to provision portal access. The vendor email is the login email."}
-            </p>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1.5">
-                <Label className="text-xs font-medium text-[var(--anna-slate)]">
-                  {hasLogin ? "New password (reset)" : "Set login password"}
-                </Label>
-                <Input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Min. 8 characters"
-                  className="rounded-xl border-[var(--anna-border)] text-sm"
-                />
+          <div className="p-5 space-y-5">
+            {/* Portal role — controls what the vendor can DO in the portal.
+                Without a role the vendor authenticates fine but every
+                action is denied (deny-by-default, AUDIT-FIX-9). */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className={labelCls}>Portal Role</Label>
+                {portalRole ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--anna-sage-dark)] bg-[var(--anna-sage-light)] border border-[var(--anna-sage)]/20 px-2 py-0.5 rounded-full">
+                    <ShieldCheck className="h-3 w-3" />
+                    {vendorRoles.find((r) => r.id === portalRole)?.name ?? "Assigned"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    No role — deny all
+                  </span>
+                )}
               </div>
-              <Button
-                onClick={handleSetPassword}
-                disabled={!loginPassword || loginPassword.length < 8 || passwordMutation.isPending}
-                className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl h-10 text-sm font-semibold"
+              <Select
+                value={portalRole ?? "__none__"}
+                onValueChange={handleRoleChange}
+                disabled={roleMutation.isPending || vendorRoles.length === 0}
               >
+                <SelectTrigger className={cn(inputCls, "w-full")}>
+                  <SelectValue
+                    placeholder={
+                      vendorRoles.length === 0
+                        ? "No vendor roles found (run RBAC seed)"
+                        : "Select a role"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No access (deny everything)</SelectItem>
+                  {vendorRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-[var(--anna-muted)] leading-relaxed">
+                The role controls what this vendor can do in the vendor portal. Without a role
+                the vendor can still log in, but every action is denied (deny-by-default).
+                Changes take effect on their next request and are recorded in the audit log.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--anna-muted)] leading-relaxed">
+                {hasLogin
+                  ? "This vendor can log in to the vendor portal. Set a new password below to reset their access (the old password will stop working immediately)."
+                  : "This vendor cannot log in yet (no password set). Set a password below to provision portal access. The vendor email is the login email."}
+              </p>
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-1.5">
+                  <Label className="text-xs font-medium text-[var(--anna-slate)]">
+                    {hasLogin ? "New password (reset)" : "Set login password"}
+                  </Label>
+                  <Input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    className="rounded-xl border-[var(--anna-border)] text-sm"
+                  />
+                </div>
+                <Button
+                  onClick={handleSetPassword}
+                  disabled={!loginPassword || loginPassword.length < 8 || passwordMutation.isPending}
+                  className="bg-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage)] text-white rounded-xl h-10 text-sm font-semibold"
+                >
                   <KeyRound className="h-4 w-4 mr-1.5" />
                   {passwordMutation.isPending ? "Setting..." : hasLogin ? "Reset Password" : "Set Password"}
-              </Button>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -531,8 +634,11 @@ export default function VendorDetailPage() {
     queryFn: async () => {
       const res = await fetch(`/api/ops/vendors/${id}`);
       if (!res.ok) throw new Error("Not found");
-      const result = await res.json();
-      return result.vendor;
+      const result = (await res.json()) as {
+        vendor: Record<string, unknown>;
+        vendorRoles: VendorRoleOption[];
+      };
+      return { vendor: result.vendor, vendorRoles: result.vendorRoles ?? [] };
     },
     enabled: !!id,
   });
@@ -552,5 +658,5 @@ export default function VendorDetailPage() {
     );
   }
 
-  return <VendorDetailInner key={id} data={data} />;
+  return <VendorDetailInner key={id} data={data.vendor} vendorRoles={data.vendorRoles} />;
 }

@@ -21,7 +21,7 @@ export async function POST(
     // ── Authenticate via shareToken ──
     const booking = await db.booking.findUnique({
       where: { shareToken: token },
-      select: { id: true, taskId: true, status: true, sharedAt: true },
+      select: { id: true, taskId: true, status: true, sharedAt: true, scheduledEnd: true },
     });
 
     if (!booking) {
