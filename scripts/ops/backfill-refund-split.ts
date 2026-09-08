@@ -49,7 +49,7 @@ async function main() {
 
   const entries = await db.escrowLedger.findMany({
     where: { refundCents: { gt: 0 } },
-    include: { refunds: { orderBy: { createdAt: "asc" } } },
+    include: { refunds: { orderBy: { createdAt: "asc" } }, task: { select: { id: true, jobNo: true } } },
     orderBy: { createdAt: "asc" },
   });
   // C-qualifiers: zero-cash fully-refunded discounted entries (refundCents=0
