@@ -1,7 +1,7 @@
 /**
  * seed-rbac.ts — Idempotent RBAC seed script
  *
- * Creates 72 permissions, 4 system roles, and migrates existing OpsUser records.
+ * Creates 76 permissions, 4 system roles, and migrates existing OpsUser records.
  *
  * Usage:  bun run prisma/seed-rbac.ts
  */
@@ -104,6 +104,17 @@ const PERMISSIONS: PermDef[] = [
   { module: "roles", action: "edit", description: "Edit roles" },
   { module: "roles", action: "delete", description: "Delete roles" },
   { module: "roles", action: "assign", description: "Assign roles to users" },
+
+  // ai: 4 — L4 AI governance foundation (Phase 1 · Step 1.1).
+  // Authority over the AI OUTPUT lifecycle, NEVER over execution:
+  // approving a brief routes the decision through the EXISTING gated
+  // services (e.g. the refundConfirmed maker-checker 409 on
+  // /api/ops/escrow/[id]) — ai:approve records the human decision on
+  // the brief, it does not move money.
+  { module: "ai", action: "recommend", description: "Generate advisory AI output (ops AI chat, insights, recommendations)" },
+  { module: "ai", action: "prepare", description: "Trigger AI case-brief preparation for human review" },
+  { module: "ai", action: "approve", description: "Record human decisions on AI case briefs (execution stays with existing gated services)" },
+  { module: "ai", action: "configure", description: "Change AI governance configuration" },
 ];
 
 // ─── Role definitions ─────────────────────────────────────────────
@@ -166,6 +177,7 @@ const ROLES: RoleDef[] = [
       ...perm("users", ["view", "create", "edit", "export", "assign"]), // NO delete
       ...perm("roles", ["view"]),                        // NO create/edit/delete/assign
       ...perm("marketing", ["view", "create", "edit", "delete"]), // Marketing management
+      ...perm("ai", ["recommend", "prepare", "approve"]),  // AI governance: full advisory + human-decision recording, NO configure (matches "no system config" stance)
     ],
   },
   {
@@ -185,6 +197,7 @@ const ROLES: RoleDef[] = [
       ...perm("anomalies", ["view"]),
       ...perm("subscriptions", ["view", "create"]),
       ...perm("marketing", ["view", "create"]),         // Coordinator can view + create campaigns
+      ...perm("ai", ["recommend", "prepare"]),           // AI governance: advisory only — brief APPROVAL authority sits with operations+; execution stays with the escrow gate's maker-checker
       // NO users, NO roles
     ],
   },

@@ -212,6 +212,9 @@ model Household {
   attributions     CampaignAttribution[]
   quotations       Quotation[]
   addresses        Address[]
+  conversations    Conversation[]        // AI governance (L4): Ask Anna traceability
+  aiCaseBriefs     AiCaseBrief[]         // AI governance (L4): briefs scoped to this household
+  aiInsights       AiInsight[]          // AI governance (L4): insights scoped to this household
 }
 
 model FamilyMember {
@@ -229,6 +232,7 @@ model FamilyMember {
   household      Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
   notifications  Notification[]
   approvedAddons BookingAddon[] @relation("AddonApprover")
+  conversations  Conversation[] // AI governance (L4): which member spoke to Ask Anna
 }
 
 model Vendor {
@@ -272,6 +276,7 @@ model Vendor {
   createdAddons    BookingAddon[]            @relation("AddonCreator")
   roleRel          Role?                     @relation("VendorRole", fields: [roleId], references: [id])
   auditLogs        AuditLog[]
+  aiInsights       AiInsight[]              // AI governance (L4): vendor-scoped insights
 }
 
 // ======================== ADDRESSES ========================
@@ -459,6 +464,7 @@ model VerificationPhoto {
 
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   booking Booking @relation(fields: [bookingId], references: [id])
+  aiVerdict PhotoVerification? // AI governance (L4, Phase 3 wiring): persisted VLM verdict, one per photo
 
   // FIX-1d (audit: missing index — task verification-photo lists full-scanned)
   @@index([taskId])
@@ -936,6 +942,8 @@ model OpsUser {
 
   roleRel   Role?      @relation(fields: [roleId], references: [id])
   auditLogs AuditLog[]
+  aiCaseBriefsReviewed AiCaseBrief[] @relation("AiCaseBriefReviewer") // AI governance (L4): human decisions on AI briefs
+  aiInsightsReviewed   AiInsight[]   @relation("AiInsightReviewer")   // AI governance (L4): insight review records
 }
 
 model AuditLog {
@@ -956,6 +964,157 @@ model AuditLog {
   @@index([userId])
   @@index([vendorId])
   @@index([createdAt])
+}
+
+// ======================== AI GOVERNANCE (L4 FOUNDATION) ========================
+// Phase 1 · Step 1.1 — governance & safety foundation ONLY.
+//
+// What is live in Phase 1: Conversation/ConversationTurn (Ask Anna request
+// traceability), the ai:* RBAC permissions, the AuditLog AI chain, and the
+// scoped deterministic context layer. AiCaseBrief / AiInsight /
+// PhotoVerification rows are NOT written by any code yet — they land with
+// Phase 2 (dispute/refund briefs, event-driven insights) and Phase 3 (VLM
+// persistence). Every field below exists for a named L4 gate item; nothing
+// is speculative for L5 (no learning-loop/outcome-scoring fields).
+
+enum AiCaseType {
+  DISPUTE // B1–B3: dispute resolution briefs (Phase 2)
+  REFUND  // B4–B6: refund resolution briefs (Phase 2)
+}
+
+enum AiBriefStatus {
+  PENDING_REVIEW // AI prepared; awaiting the human decision — the only non-terminal AI end-state
+  APPROVED       // human accepted; execution still only via existing gated services (never by the AI)
+  REJECTED       // human rejected the recommendation
+  EXPIRED        // events moved on (task state changed) before a human decided
+  SUPERSEDED     // replaced by a newer brief for the same entity
+}
+
+model AiCaseBrief {
+  id              String        @id @default(cuid())
+  caseType        AiCaseType
+  entityType      String // "task" | "escrow" | ... — polymorphic, same pattern as AuditLog
+  entityId        String
+  householdId     String // affected household — the security scope of the brief's data
+  status          AiBriefStatus @default(PENDING_REVIEW)
+  summary         String // one-line factual problem statement
+  recommendation  String // proposed action (e.g. "resolve_refund") — advisory, never auto-executed
+  rationale       String // why, with rule/threshold references (no "the AI decided" without the rule)
+  confidence      Float? // 0–1 producer-reported confidence, when available
+  contextSnapshot Json? // the deterministic scoped context the recommendation was grounded in
+  reviewedById    String? // ops user who made the human decision (APPROVED/REJECTED)
+  reviewedAt      DateTime?
+  decisionNote    String? // human's reason for the decision
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  household  Household @relation(fields: [householdId], references: [id])
+  reviewedBy OpsUser?  @relation("AiCaseBriefReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([entityType, entityId])
+  @@index([householdId])
+}
+
+enum AiInsightType {
+  ANOMALY            // C1–C2: event-driven context on a detected Anomaly (Phase 2)
+  VENDOR_PERFORMANCE // C3: vendor utilisation / dispatch-success deterioration (Phase 2)
+  AUTONOMY           // C4: autonomy promotion stalled by disputes (Phase 2)
+}
+
+enum AiInsightStatus {
+  NEW          // generated, not yet seen by ops
+  ACKNOWLEDGED // ops saw and acted / noted it
+  DISMISSED    // ops judged it not actionable
+}
+
+model AiInsight {
+  id           String          @id @default(cuid())
+  insightType  AiInsightType
+  severity     AnomalySeverity @default(MEDIUM) // reuse the ops triage scale (LOW..CRITICAL)
+  entityType   String
+  entityId     String
+  householdId  String? // null → vendor- or platform-scoped insight
+  vendorId     String?
+  status       AiInsightStatus @default(NEW)
+  title        String
+  body         String
+  evidence     Json? // deterministic data snapshot behind the insight
+  dedupKey     String? @unique // idempotent generation across repeated event sweeps
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  household  Household? @relation(fields: [householdId], references: [id])
+  vendor     Vendor?    @relation(fields: [vendorId], references: [id])
+  reviewedBy OpsUser?   @relation("AiInsightReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([insightType, entityType])
+}
+
+// VLM photo-QA verdict persistence — schema lands now so the Phase-1 audit
+// chain has a stable entity type; the wiring that writes these rows is
+// Phase 3 (explicitly out of Phase-1 scope). One verdict per photo.
+enum PhotoVerificationVerdict {
+  PASS
+  FAIL
+  UNCLEAR
+}
+
+model PhotoVerification {
+  id                  String                  @id @default(cuid())
+  verificationPhotoId String                  @unique
+  verdict             PhotoVerificationVerdict
+  qualityScore        Int? // 0–10 — same scale as the current in-request VLM QA
+  issues              Json? // structured issues the model reported
+  createdAt           DateTime                @default(now())
+
+  verificationPhoto VerificationPhoto @relation(fields: [verificationPhotoId], references: [id])
+}
+
+// Ask Anna conversation traceability. Phase 1 records turns for audit
+// (AI request → recommendation → human decision → execution → result) but
+// does NOT feed them back to the LLM — no multi-turn memory (L5 scope).
+enum ConversationChannel {
+  ASK_ANNA
+  OPS_AI
+  VENDOR_AI
+}
+
+enum ConversationRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+model Conversation {
+  id          String              @id @default(cuid())
+  householdId String
+  memberId    String? // which member is speaking (null = system/portal-initiated)
+  channel     ConversationChannel @default(ASK_ANNA)
+  startedAt   DateTime            @default(now())
+  lastTurnAt  DateTime? // recency ordering without a COUNT query
+
+  household Household         @relation(fields: [householdId], references: [id])
+  member    FamilyMember?     @relation(fields: [memberId], references: [id])
+  turns     ConversationTurn[]
+
+  @@index([householdId, startedAt])
+}
+
+model ConversationTurn {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           ConversationRole
+  content        String
+  toolName       String? // TOOL turns: which tool fired (the dataUsed trace)
+  createdAt      DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 // ======================== MARKETING MODULE ========================

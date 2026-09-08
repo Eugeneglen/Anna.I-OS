@@ -7,12 +7,26 @@ import {
   rateLimitResponsePayload,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
-import { db } from "@/lib/db";
+import { getOpsSession } from "@/lib/ops-auth";
+import { buildHouseholdContext, renderContextForPrompt } from "@/lib/ai-context";
+import { getOrCreateConversation, recordTurn } from "@/lib/ai-conversation";
+import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ask Anna (Household NLU)
 // Per USER_AI_README.md: warm, calm, competent.
 // Reduce coordination burden. Move household from Manager → Approver.
+//
+// P0 SECURITY (L4 · Phase 1): this route is now AUTHENTICATED.
+//   - household identity comes ONLY from the household_token session —
+//     any client-supplied householdId is IGNORED (spoofing impossible);
+//   - unauthenticated callers get 401, ops sessions get 403 (Ask Anna
+//     serves households only);
+//   - every tool call executes with the SESSION householdId.
+//
+// P1 CONTEXT INTEGRITY: a deterministic, server-side scoped context
+// (buildHouseholdContext) is injected into every prompt, so narration is
+// grounded in the household's real records — never guessed.
 // ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are "Ask Anna" — the household's assistant for home services coordination. You are the conversational layer over that household's Household Graph. You are NOT a generic chatbot, NOT the Ops AI, NOT the Vendor AI.
@@ -29,6 +43,8 @@ DATA SCOPE:
 - Their service history: past/upcoming bookings, vendor assignments, completion status
 - Escrow/verification status for their own bookings
 - Subscription tier and billing status at summary level
+
+AUTHORITATIVE SCOPED DATA: Every request includes a server-generated data block for THIS household. It is complete and authoritative. If a task, job number, vendor, or amount is not in that block, it is not this household's — say so plainly. Never narrate one entity's facts under another entity's identifier.
 
 BOOKING LIFECYCLE — what happens after a task is created:
 - CREATED → MATCHING (vendor being found) → ACCEPTED (vendor confirmed, escrow held) → IN_PROGRESS (vendor working) → COMPLETED → VERIFIED (household approves photos) → ESCROW RELEASED (payment to vendor)
@@ -93,38 +109,12 @@ function buildSystemPrompt(): string {
   return `${SYSTEM_PROMPT}\n\nCURRENT DATE & TIME: ${dateLine} (Asia/Singapore, UTC+8). Resolve every relative date ("today", "tomorrow", "next Friday", "this weekend") against THIS date. When calling create_task, pass scheduledDate as YYYY-MM-DD derived from this date — never from memory or guesses. Prices come from the Anna.I catalog; never state or invent a price yourself.`;
 }
 
-// ── AI Wave 2-A (A-8): AI actions are attributable. Every confirmed AI
-// write gets an AuditLog row (actor = household member via Ask Anna) —
-// previously AI writes left no audit trace at all.
-async function auditAiAction(
-  session: { memberName: string; memberEmail: string; householdId: string; householdName: string },
-  action: string,
-  entityType: string,
-  entityId: string | null | undefined,
-  metadata: Record<string, unknown>
-): Promise<void> {
-  try {
-    await db.auditLog.create({
-      data: {
-        userId: null, // OpsUser FK — null for household actors
-        userName: `${session.memberName} (household, via Ask Anna)`,
-        action,
-        entityType,
-        entityId: entityId ?? null,
-        metadata: {
-          ...metadata,
-          via: "ask-anna",
-          actorHouseholdId: session.householdId,
-          actorEmail: session.memberEmail,
-        },
-      },
-    });
-  } catch (err) {
-    // Non-fatal — the action itself already succeeded; a failed audit row
-    // must not turn a success into a user-facing error.
-    console.error("[AskAnna NLU] audit log failed:", err);
-  }
-}
+// ─────────────────────────────────────────────────────────────
+// (Audit-AI-FIX8 port note) AI Wave 2-A A-8 auditAiAction is superseded
+// here by the Phase 1 five-stage AI audit chain (logAiEvent writes the
+// same AuditLog attribution — actor member, household scope — plus the
+// aiChainId envelope covering request → decision → execution → result).
+// ─────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────
 // Request/Response Types
@@ -132,12 +122,18 @@ async function auditAiAction(
 
 interface AskAnnaRequest {
   message: string;
-  householdId: string;
+  /** IGNORED since the P0 fix — household identity is derived from the
+   *  authenticated session. Kept in the interface so existing clients
+   *  keep working; it has no effect. */
+  householdId?: string;
   conversationId?: string;
   // For confirming a write action
   confirmAction?: {
     toolName: string;
     action: Record<string, unknown>;
+    /** Correlates the confirm with the original AI chain (audit only —
+     *  authorization never depends on it). */
+    chainId?: string;
   };
 }
 
@@ -155,19 +151,28 @@ interface ToolCall {
 // ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  let session: Awaited<ReturnType<typeof getHouseholdSession>> = null;
+  let chainId = newAiChainId();
+  let conversationId: string | null = null;
+
   try {
-    // ── FIX-1a auth guard + IDOR fix ──
-    // householdId is now DERIVED from the session cookie and any body
-    // householdId is IGNORED — previously the route trusted the request
-    // body, giving unauthenticated callers full read access to ANY
-    // household's data through the NLU tools.
-    const session = await getHouseholdSession();
+    // ── P0 auth: household identity ONLY from the session ──
+    session = await getHouseholdSession();
     if (!session) {
+      // Distinguish "wrong constituent" (403) from "no session" (401).
+      const ops = await getOpsSession();
+      if (ops) {
+        return NextResponse.json(
+          { error: "Ask Anna is the household assistant — ops staff should use the Ops AI console." },
+          { status: 403 }
+        );
+      }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const householdId = session.householdId;
+    const householdId = session.householdId; // NEVER from the request body
 
-    // ── Rate limit: 20 requests / minute per household (LLM cost cap) ──
+    // ── Rate limit: 20 requests / minute per household (LLM cost cap,
+    // AI Wave 2-A A-5 — preserved from this branch) ──
     const rlKey = `ask-anna:hh:${householdId}`;
     if (
       !checkRateLimit(rlKey, RATE_LIMITS.askAnna.limit, RATE_LIMITS.askAnna.windowMs)
@@ -177,34 +182,112 @@ export async function POST(request: NextRequest) {
 
     const body: AskAnnaRequest = await request.json();
     const { message, confirmAction } = body;
+    const suppliedConversationId = body.conversationId;
 
-    if (!message || !householdId) {
+    if (!message) {
       return NextResponse.json(
-        { error: "Missing message or householdId" },
+        { error: "Missing message" },
         { status: 400 }
       );
     }
 
+    // ── Conversation (household-scoped; foreign ids start fresh) ──
+    const conversation = await getOrCreateConversation({
+      conversationId: suppliedConversationId,
+      householdId,
+      memberId: session.memberId,
+      channel: "ASK_ANNA",
+    });
+    conversationId = conversation.id;
+    await recordTurn({ conversationId, role: "USER", content: message });
+
     // ── Check if AI is available ──
     const zai = await getZAI();
     if (!zai) {
+      const offline =
+        "I'm currently offline — my AI engine isn't configured on this server. Please ask your administrator to set up the AI environment variables (Z_AI_BASE_URL, Z_AI_API_KEY).";
+      await recordTurn({ conversationId, role: "ASSISTANT", content: offline });
+      await logAiEvent({
+        stage: "ai_request",
+        chainId,
+        action: "ai.ask_anna.request",
+        actor: { memberId: session.memberId, userName: session.memberName },
+        scope: { householdId, surface: "ask-anna" },
+        detail: { message, conversationId },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.ask_anna.unavailable",
+        scope: { householdId, surface: "ask-anna" },
+        detail: { reason: "zai_not_configured" },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
       return NextResponse.json({
-        response: "I'm currently offline — my AI engine isn't configured on this server. Please ask your administrator to set up the AI environment variables (Z_AI_BASE_URL, Z_AI_API_KEY).",
+        response: offline,
         dataUsed: [],
         aiUnavailable: true,
+        conversationId,
       });
     }
 
-    // ── Handle confirmation flow ──
+    // ── Deterministic scoped context (P1 integrity fix) ──
+    const scopedContext = await buildHouseholdContext(householdId);
+    const contextBlock = renderContextForPrompt(scopedContext);
+    const systemMessage = `${buildSystemPrompt()}\n\n${contextBlock}`;
+
+    // ── Audit: AI request ──
+    await logAiEvent({
+      stage: "ai_request",
+      chainId,
+      action: "ai.ask_anna.request",
+      actor: { memberId: session.memberId, userName: session.memberName },
+      scope: { householdId, surface: "ask-anna" },
+      detail: { message, conversationId },
+      entityType: "ai_conversation",
+      entityId: conversationId,
+    });
+
+    // ── Handle confirmation flow (human decision → execution → result) ──
     if (confirmAction) {
-      // FIX-2B (POLICE-2 follow-up): the confirmed-write pass — the most
-      // important path, real task creation/cancellation — was still
-      // unwrapped, so a DB throw here 500'd the household chat with raw
-      // Prisma internals. Catch it: log server-side, keep the A-8 audit
-      // row (success:false, attempts matter), and let the LLM report the
-      // failure cleanly. Note: create_task/cancel_task executors
-      // themselves return {success:false} for business-rule refusals —
-      // those never throw and are unaffected.
+      if (typeof confirmAction.chainId === "string" && confirmAction.chainId.length <= 64) {
+        chainId = confirmAction.chainId; // correlation only — auth is session-based
+      }
+
+      await logAiEvent({
+        stage: "human_decision",
+        chainId,
+        action: "ai.ask_anna.confirmed",
+        actor: { memberId: session.memberId, userName: session.memberName },
+        scope: { householdId, surface: "ask-anna" },
+        detail: { toolName: confirmAction.toolName, args: confirmAction.action },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
+
+      await logAiEvent({
+        stage: "execution",
+        chainId,
+        action: "ai.ask_anna.execute",
+        scope: { householdId, surface: "ask-anna" },
+        detail: { toolName: confirmAction.toolName },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
+
+      // householdId comes from the SESSION — the tool layer additionally
+      // validates per-task ownership (cancel_task checks task.householdId).
+      // FIX-2B (POLICE-2 follow-up, preserved from this branch): the
+      // confirmed-write pass — real task creation/cancellation — must not
+      // 500 the household chat with raw Prisma internals on a DB throw.
+      // Catch it: log server-side and let the LLM report the failure
+      // cleanly. Note: create_task/cancel_task executors themselves return
+      // {success:false} for business-rule refusals — those never throw and
+      // are unaffected. (Attribution is covered by the execution/result
+      // audit stages above — success AND failure are recorded.)
       let result: ToolCallResult;
       try {
         result = await executeToolCall(
@@ -226,28 +309,21 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // A-8: audit the confirmed write (success or failure — attempts matter).
-      // cancel_task is audited inside the canonical cancel service already
-      // (TASK_CANCELLED with via: "ask-anna"), so only create_task is
-      // audited here to avoid double rows.
-      if (confirmAction.toolName === "create_task") {
-        await auditAiAction(
-          session,
-          "AI_TASK_CREATED",
-          "task",
-          (result.data?.taskId as string) ?? null,
-          {
-            tool: "create_task",
-            success: result.success,
-            category: confirmAction.action.category ?? null,
-            jobTypeId: confirmAction.action.jobTypeId ?? null,
-            amountCents: confirmAction.action.amountCents ?? null,
-            scheduledStart: confirmAction.action.scheduledStart ?? null,
-            recurrence: confirmAction.action.recurrence ?? null,
-            instructions: confirmAction.action.instructions ?? null,
-          }
-        );
-      }
+      await recordTurn({
+        conversationId,
+        role: "TOOL",
+        content: JSON.stringify(result.data ?? result.error ?? {}),
+        toolName: confirmAction.toolName,
+      });
+      await logAiEvent({
+        stage: "result",
+        chainId,
+        action: "ai.ask_anna.result",
+        scope: { householdId, surface: "ask-anna" },
+        detail: { toolName: confirmAction.toolName, success: result.success, data: result.data ?? result.error },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
 
       const completion = await zai.chat.completions.create({
         messages: [
@@ -263,21 +339,34 @@ export async function POST(request: NextRequest) {
         thinking: { type: "disabled" },
       });
 
+      const responseText =
+        completion.choices[0]?.message?.content || "Action completed.";
+      await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.ask_anna.response",
+        scope: { householdId, surface: "ask-anna" },
+        detail: { response: responseText, dataUsed: [confirmAction.toolName] },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
+
       return NextResponse.json({
-        response:
-          completion.choices[0]?.message?.content ||
-          "Action completed.",
+        response: responseText,
         dataUsed: [confirmAction.toolName],
         actionResult: result,
+        conversationId,
+        chainId,
       });
     }
 
-    // ── Normal flow: LLM with tools ──
+    // ── Normal flow: LLM with tools + injected scoped context ──
     const completion = await zai.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt(),
+          content: systemMessage,
         },
         {
           role: "user",
@@ -301,15 +390,31 @@ export async function POST(request: NextRequest) {
 
     // ── No tool calls: respond directly ──
     if (!toolCalls || toolCalls.length === 0) {
+      const responseText =
+        responseMessage?.content ||
+        "I'm not sure I understood that. Could you rephrase?";
+      await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.ask_anna.response",
+        // No actor → ANNA-AI: the recommendation is system-generated text,
+        // exactly like the tool-flow branches (the member is the actor of
+        // the REQUEST and any DECISION, never of the recommendation).
+        scope: { householdId, surface: "ask-anna" },
+        detail: { response: responseText, dataUsed: [] },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
       return NextResponse.json({
-        response:
-          responseMessage?.content ||
-          "I'm not sure I understood that. Could you rephrase?",
+        response: responseText,
         dataUsed: [],
+        conversationId,
+        chainId,
       });
     }
 
-    // ── Execute tool calls ──
+    // ── Execute tool calls (always with the SESSION householdId) ──
     const results: string[] = [];
     let pendingConfirmation: {
       toolName: string;
@@ -344,6 +449,13 @@ export async function POST(request: NextRequest) {
         };
       }
 
+      await recordTurn({
+        conversationId,
+        role: "TOOL",
+        content: JSON.stringify(result.data ?? result.error ?? {}),
+        toolName,
+      });
+
       if (result.requiresConfirmation && result.confirmationMessage) {
         pendingConfirmation = {
           toolName,
@@ -372,12 +484,33 @@ export async function POST(request: NextRequest) {
       // include the confirmation so the UI can render it
       const naturalResponse = choice?.content || "";
 
+      const responseText =
+        naturalResponse ||
+        `I'd like to ${pendingConfirmation.toolName.replace("_", " ")} for you. Please confirm below.`;
+      await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.ask_anna.recommendation_pending",
+        scope: { householdId, surface: "ask-anna" },
+        detail: {
+          response: responseText,
+          dataUsed: [pendingConfirmation.toolName],
+          pendingConfirmation: pendingConfirmation.confirmationAction,
+        },
+        entityType: "ai_conversation",
+        entityId: conversationId,
+      });
+
       return NextResponse.json({
-        response:
-          naturalResponse ||
-          `I'd like to ${pendingConfirmation.toolName.replace("_", " ")} for you. Please confirm below.`,
+        response: responseText,
         dataUsed: [pendingConfirmation.toolName],
-        pendingConfirmation,
+        pendingConfirmation: {
+          ...pendingConfirmation,
+          chainId, // returned so the confirm call can correlate the audit chain
+        },
+        conversationId,
+        chainId,
       });
     }
 
@@ -392,7 +525,7 @@ export async function POST(request: NextRequest) {
 
     const finalCompletion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: buildSystemPrompt() },
+        { role: "system", content: systemMessage },
         { role: "user", content: message },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,
@@ -400,14 +533,48 @@ export async function POST(request: NextRequest) {
       thinking: { type: "disabled" },
     });
 
+    const finalResponse =
+      finalCompletion.choices[0]?.message?.content ||
+      "I processed your request but couldn't generate a summary.";
+    await recordTurn({ conversationId, role: "ASSISTANT", content: finalResponse });
+    await logAiEvent({
+      stage: "ai_recommendation",
+      chainId,
+      action: "ai.ask_anna.response",
+      scope: { householdId, surface: "ask-anna" },
+      detail: {
+        response: finalResponse,
+        dataUsed: toolCalls.map((tc) => tc.function.name),
+      },
+      entityType: "ai_conversation",
+      entityId: conversationId,
+    });
+
     return NextResponse.json({
-      response:
-        finalCompletion.choices[0]?.message?.content ||
-        "I processed your request but couldn't generate a summary.",
+      response: finalResponse,
       dataUsed: toolCalls.map((tc) => tc.function.name),
+      conversationId,
+      chainId,
     });
   } catch (error) {
     console.error("[AskAnna NLU] Error:", error);
+    // Fail-loud audit: record the failure so the chain has no silent gaps.
+    try {
+      await logAiEvent({
+        stage: "result",
+        chainId,
+        action: "ai.ask_anna.error",
+        scope: {
+          householdId: session?.householdId,
+          surface: "ask-anna",
+          entityId: conversationId ?? undefined,
+          entityType: conversationId ? "ai_conversation" : "ai",
+        },
+        detail: { error: error instanceof Error ? error.message : "Unknown error" },
+      });
+    } catch {
+      // The original error matters more than the audit write.
+    }
     const msg = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       { error: `Failed to process your request: ${msg}` },

@@ -4,8 +4,7 @@ import {
   executeOpsToolCall,
   type OpsToolCallResult,
 } from "@/lib/ops-ai-tools";
-import { getOpsSession } from "@/lib/ops-auth";
-import { hasMinRole } from "@/lib/ops-auth";
+import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { getUserPermissions } from "@/lib/permissions";
 import { getZAI } from "@/lib/zai";
 import {
@@ -13,6 +12,7 @@ import {
   rateLimitResponsePayload,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
+import { requireAiPermission, aiGuardErrorResponse } from "@/lib/ai-guards";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ops AI
@@ -122,14 +122,19 @@ interface ToolCall {
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate ops user
-    const session = await getOpsSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    // ── L4 AI governance (Phase 1): requires ai:recommend ──
+    // The Ops AI generates advisory output — exactly the ai:recommend
+    // permission's meaning. Previously any ops session could call it;
+    // now the seeded RBAC matrix decides (super_admin / operations /
+    // coordinator: allowed · data_analyst & unauthenticated: denied).
+    // DELIBERATE BEHAVIOUR CHANGE, documented in the Phase-1 report.
+    const guard = await requireAiPermission("recommend");
+    if (!guard.ok) {
+      return aiGuardErrorResponse(guard);
     }
+    // The guard resolved and verified the ops session (401/403 above) —
+    // reuse it for the cost cap + RBAC tool resolution below.
+    const session = guard.session;
 
     // ── AI Wave 2-A (A-5): LLM cost cap — this endpoint was unmetered. ──
     const rlKey = `ops-ai:ops:${session.userId}`;

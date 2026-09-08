@@ -38,6 +38,9 @@ interface PendingConfirmation {
   toolName: string;
   confirmationMessage: string;
   confirmationAction: Record<string, unknown>;
+  /** Server-generated — sent back on confirm so the audit chain
+   *  correlates the human decision with the original AI request. */
+  chainId?: string;
 }
 
 interface AskAnnaResponse {
@@ -49,6 +52,9 @@ interface AskAnnaResponse {
     toolName: string;
     data?: Record<string, unknown>;
   };
+  conversationId?: string;
+  chainId?: string;
+  aiUnavailable?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -220,6 +226,9 @@ export function AskAnna() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [aiUnavailable, setAiUnavailable] = useState(false);
+  // Conversation threading: the server owns the conversation; we just echo
+  // its id back on subsequent turns (L4 traceability — not chat memory).
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -243,6 +252,7 @@ export function AskAnna() {
       confirmAction?: {
         toolName: string;
         action: Record<string, unknown>;
+        chainId?: string;
       };
     }): Promise<AskAnnaResponse> => {
       const res = await fetch("/api/ask-anna", {
@@ -251,6 +261,7 @@ export function AskAnna() {
         body: JSON.stringify({
           message: msg,
           householdId: selectedHouseholdId,
+          conversationId: conversationId ?? undefined,
           confirmAction,
         }),
       });
@@ -264,6 +275,9 @@ export function AskAnna() {
       // If AI is unavailable, mark it for future display
       if (data.aiUnavailable) {
         setAiUnavailable(true);
+      }
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
       }
       setMessages((prev) => [
         ...prev,
@@ -298,6 +312,7 @@ export function AskAnna() {
       confirmAction: {
         toolName: string;
         action: Record<string, unknown>;
+        chainId?: string;
       };
     }) => {
       const res = await fetch("/api/ask-anna", {
@@ -306,6 +321,7 @@ export function AskAnna() {
         body: JSON.stringify({
           message: `Confirm: ${confirmAction.toolName}`,
           householdId: selectedHouseholdId,
+          conversationId: conversationId ?? undefined,
           confirmAction,
         }),
       });
@@ -316,6 +332,10 @@ export function AskAnna() {
       return res.json();
     },
     onSuccess: (data, variables) => {
+      // Thread the conversation across the confirm boundary too.
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+      }
       // Remove the confirmation from the last assistant message
       setMessages((prev) => {
         const updated = [...prev];
@@ -397,7 +417,7 @@ export function AskAnna() {
 
     // Send to API
     mutation.mutate({ msg: trimmed });
-  }, [input, mutation.isPending, selectedHouseholdId, mutation]);
+  }, [input, mutation.isPending, selectedHouseholdId, conversationId, mutation]);
 
   const handleConfirm = useCallback(
     (originalMessage: string, confirmAction: PendingConfirmation) => {
@@ -406,6 +426,7 @@ export function AskAnna() {
         confirmAction: {
           toolName: confirmAction.toolName,
           action: confirmAction.confirmationAction,
+          chainId: confirmAction.chainId, // audit-chain correlation
         },
       });
     },
