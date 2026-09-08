@@ -55,11 +55,17 @@ function groupEscrowItems(tasks: Task[]): Record<EscrowGroup, EscrowItem[]> {
 
   for (const task of tasks) {
     if (!task.escrowEntries || task.escrowEntries.length === 0) continue;
-    // Use the latest escrow entry
-    const latest = task.escrowEntries[task.escrowEntries.length - 1];
-    const state = latest.state as EscrowGroup;
-    if (groups[state]) {
-      groups[state].push({ task, escrow: latest });
+    // E2E truth fix: ONE item PER escROW entry (base + add-ons each carry
+    // their own ledger state). The previous "latest entry only" rule (a)
+    // hid the released BASE entry of any task that later got an add-on
+    // entry, and (b) mixed gross-vs-net amounts into the summary totals.
+    // Per-entry grouping keeps every money movement visible and lets the
+    // summary below net out refunds exactly like the ops ledger.
+    for (const entry of task.escrowEntries) {
+      const state = entry.state as EscrowGroup;
+      if (groups[state]) {
+        groups[state].push({ task, escrow: entry });
+      }
     }
   }
 
@@ -228,20 +234,25 @@ export function EscrowPanel() {
   const allTasks: Task[] = tasks ?? [];
   const groups = groupEscrowItems(allTasks);
 
-  // Summary stats
-  const totalHeld = groups.HELD.reduce((s, i) => s + i.escrow.amountCents, 0);
-  const totalReleased = groups.RELEASED.reduce((s, i) => s + i.escrow.amountCents, 0);
-  // Fix #5: Total amount spent = released + held (excludes refunded amounts).
-  // Refunded amounts are returned to the customer, so they should NOT inflate
-  // the "total spent" figure. The totalRefunded is shown separately.
-  const totalRefunded = groups.REFUNDED.reduce(
-    (s, i) => s + (i.escrow.refundCents || i.escrow.amountCents),
-    0
-  );
-  const totalSpent = [...groups.RELEASED, ...groups.HELD].reduce(
-    (s, i) => s + i.escrow.amountCents,
-    0
-  );
+  // Summary stats — reconciled with the EscrowLedger (net-of-refund basis):
+  //   Released = Σ (amountCents − refundCents) over RELEASED entries
+  //   Held     = Σ (amountCents − refundCents) over HELD entries
+  //   Refunded = Σ refundCents over ALL entries (full refunds AND partial
+  //              refunds recorded on entries that were later released)
+  //   Spent    = Released + Held (net — refunded money is the customer's
+  //              money back and must not inflate "total spent")
+  // This matches the ops escrow view and vendor earnings (payout basis)
+  // to the cent, so all three environments show the same underlying truth.
+  const netCents = (i: EscrowItem) => Math.max(0, i.escrow.amountCents - (i.escrow.refundCents || 0));
+  const totalHeld = groups.HELD.reduce((s, i) => s + netCents(i), 0);
+  const totalReleased = groups.RELEASED.reduce((s, i) => s + netCents(i), 0);
+  const totalRefunded =
+    groups.REFUNDED.reduce((s, i) => s + (i.escrow.refundCents || i.escrow.amountCents), 0) +
+    [groups.RELEASED, groups.HELD, groups.DISPUTED].flat().reduce((s, i) => s + (i.escrow.refundCents || 0), 0);
+  const refundEventCount =
+    groups.REFUNDED.length +
+    [groups.RELEASED, groups.HELD, groups.DISPUTED].flat().filter((i) => (i.escrow.refundCents || 0) > 0).length;
+  const totalSpent = totalReleased + totalHeld;
   const disputedCount = groups.DISPUTED.length;
 
   // Check if there are any escrow items at all
@@ -290,7 +301,7 @@ export function EscrowPanel() {
           iconColor="text-[var(--anna-error)]"
           label="Total Refunded"
           value={formatSgd(totalRefunded)}
-          sub={`${groups.REFUNDED.length} refund${groups.REFUNDED.length !== 1 ? "s" : ""}`}
+          sub={`${refundEventCount} refund${refundEventCount !== 1 ? "s" : ""}`}
         />
         <SummaryStat
           icon={AlertTriangle}

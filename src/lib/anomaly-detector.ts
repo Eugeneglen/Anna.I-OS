@@ -452,3 +452,33 @@ export async function runAnomalyDetection(
     anomalies: filtered,
   };
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// E2E truth fix (cross-environment drift): ESCROW_DISPUTED anomalies are
+// created when a household raises a dispute, but nothing ever closed them
+// when the dispute was settled — the ops console showed the dispute as
+// resolved while the household dashboard kept displaying "N Active Alerts"
+// for the same, already-settled task. Call this from every path that moves
+// escrow OUT of the DISPUTED state (ops resolve_dismiss / resolve_refund /
+// resolve_voucher, household resolve-dispute) so the anomaly lifecycle ends
+// with the dispute instead of lingering forever.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function resolveEscrowDisputeAnomalies(taskId: string, resolution: string) {
+  const now = new Date();
+  const result = await db.anomaly.updateMany({
+    where: {
+      taskId,
+      type: "ESCROW_DISPUTED",
+      status: "ACTIVE",
+    },
+    data: {
+      status: "RESOLVED",
+      resolvedAt: now,
+      metadata: {
+        resolution,
+        resolvedAt: now.toISOString(),
+        autoResolved: true,
+      },
+    },
+  });
+  return result.count;
+}

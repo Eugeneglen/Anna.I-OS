@@ -639,6 +639,8 @@ async function flow3() {
     resolution: "Core work delivered; refund retained; release remainder to vendor",
   });
   check(flow, "Ops resolves dispute (dismiss, keep remainder)", resolve.status === 200, `status=${resolve.status}`);
+  const anomalyF3 = await db.anomaly.findFirst({ where: { taskId, type: "ESCROW_DISPUTED" }, orderBy: { createdAt: "desc" } });
+  check(flow, "Cross-env truth: dispute anomaly auto-closed on settlement (no stale alerts)", anomalyF3?.status === "RESOLVED", `status=${anomalyF3?.status}`);
   const t3 = await dbTask(taskId);
   eq(flow, "Escrow back to HELD after ops resolution", t3?.escrowEntries[0]?.state, "HELD");
   const autonomy2 = await db.householdCategoryAutonomy.findFirst({ where: { householdId: C.householdId, category: "CLEANING" } });
@@ -725,6 +727,8 @@ async function flow4() {
   // autonomy unpaused
   const autonomy = await db.householdCategoryAutonomy.findFirst({ where: { householdId: C.householdId, category: "CLEANING" } });
   check(flow, "Autonomy unpaused after terminal resolution", autonomy?.promotionPaused === false);
+  const anomalyF4 = await db.anomaly.findFirst({ where: { taskId, type: "ESCROW_DISPUTED" }, orderBy: { createdAt: "desc" } });
+  check(flow, "Cross-env truth: dispute anomaly auto-closed on terminal settlement", anomalyF4?.status === "RESOLVED", `status=${anomalyF4?.status}`);
 
   // ops records
   const auditDis = await db.auditLog.findMany({ where: { action: "DISPUTE_REFUNDED" }, select: { entityId: true } });

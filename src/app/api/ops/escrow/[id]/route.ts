@@ -7,6 +7,7 @@ import { emitEscrowStateChanged, emitDisputeResolved } from "@/lib/events";
 import { processRefund, RefundError } from "@/lib/payments/refund-service";
 import { recordEscrowReleaseEffect, logNoProviderEffect } from "@/lib/payments/escrow-effects";
 import { issueCompensationVoucher } from "@/lib/marketing/service-recovery";
+import { resolveEscrowDisputeAnomalies } from "@/lib/anomaly-detector";
 import { isPlatformFundedDiscount, payoutBaseCents } from "@/lib/payments/calculations";
 
 const escrowActionSchema = z.object({
@@ -452,6 +453,11 @@ export async function PATCH(
         disputeResolution: resolution || "Dispute dismissed by ops",
       }).catch(() => {});
 
+      // E2E truth fix: close the ESCROW_DISPUTED anomaly rows that were opened
+      // when the household raised this dispute — otherwise the household
+      // dashboard keeps showing "active alerts" for a settled dispute.
+      resolveEscrowDisputeAnomalies(task.id, resolution || "Dispute dismissed by ops").catch(() => {});
+
       return NextResponse.json({ task: result.updatedTask, escrow: result.updatedEscrow });
     }
 
@@ -615,6 +621,10 @@ export async function PATCH(
           }
         }
 
+        // E2E truth fix: zero-cash refund still settles the dispute — close
+        // its ACTIVE ESCROW_DISPUTED anomalies (see helper doc).
+        resolveEscrowDisputeAnomalies(task.id, resolution || "Dispute upheld — zero-cash entry refunded").catch(() => {});
+
         return NextResponse.json({
           refund: {
             refundId: null, // no Refund row — no cash was moved
@@ -723,6 +733,10 @@ export async function PATCH(
             console.error("[escrow resolve_refund] Failed to restore voucher:", restoreError);
           }
         }
+
+        // E2E truth fix: full refund settles the dispute — close its ACTIVE
+        // ESCROW_DISPUTED anomalies so no stale alerts linger.
+        resolveEscrowDisputeAnomalies(task.id, resolution || "Dispute upheld — full refund issued").catch(() => {});
 
         return NextResponse.json({
           refund: refundResult,
@@ -1139,6 +1153,10 @@ export async function PATCH(
           householdName: task.household?.name,
           disputeResolution: `Compensated by voucher ${result.code} ($${(voucherAmountCents / 100).toFixed(2)})`,
         }).catch(() => {});
+
+        // E2E truth fix: voucher compensation settles the dispute — close
+        // its ACTIVE ESCROW_DISPUTED anomalies.
+        resolveEscrowDisputeAnomalies(task.id, resolution || "Dispute settled with compensation voucher").catch(() => {});
 
         return NextResponse.json({
           voucherId: result.voucherId,

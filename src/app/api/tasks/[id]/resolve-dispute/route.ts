@@ -127,6 +127,17 @@ export async function POST(
       return updatedTask
     })
 
+    // E2E truth fix: the dispute is settled from the household side too —
+    // close the ACTIVE ESCROW_DISPUTED anomaly rows for this task so the
+    // household dashboard stops showing "active alerts" for a resolved
+    // dispute (cross-environment truth parity with the ops console).
+    try {
+      const { resolveEscrowDisputeAnomalies } = await import("@/lib/anomaly-detector");
+      await resolveEscrowDisputeAnomalies(task.id, "Dispute resolved by household member");
+    } catch (anomalyError) {
+      console.error("[resolve-dispute] failed to close dispute anomalies:", anomalyError);
+    }
+
     // Phase 1 P1-4 fix: refresh cached household marketing stats (post-commit,
     // non-fatal). The dispute reset transitions DISPUTED → COMPLETED, so the
     // task now re-enters the cached-stats filter set.
