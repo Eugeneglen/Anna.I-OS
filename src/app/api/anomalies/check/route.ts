@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAnomalyDetection } from "@/lib/anomaly-detector";
+import { sweepInsights } from "@/lib/ai-insight/insight-service";
 import { getHouseholdSession } from "@/lib/household-auth";
 import { getOpsSession } from "@/lib/ops-auth";
 import { isCronRequest } from "@/lib/cron-auth";
@@ -58,6 +59,13 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await runAnomalyDetection(householdId);
+
+    // ── Phase 3 · §3.1 event-driven wiring: every detection run feeds the
+    // AI insight pipeline (fire-and-forget; the dedupKey makes it
+    // idempotent, the 60s ops-events cron is the SLA backstop). ──
+    void sweepInsights().catch((e) => {
+      console.warn("[anomalies/check] insight sweep failed:", e);
+    });
 
     return NextResponse.json({
       message: `Detection complete: ${result.created} new anomalies detected, ${result.skipped} filtered`,

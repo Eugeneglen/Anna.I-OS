@@ -41,7 +41,7 @@ const MAX_ATTEMPTS = 5;
 
 export interface GenerateBriefOptions {
   /** Who/what asked for generation (audit + stats). */
-  trigger: "dispute_raised" | "sweep" | "manual";
+  trigger: "dispute_raised" | "sweep" | "manual" | "insight_prepare";
   /**
    * Adversarial-test seam — passed through to the LLM engine ONLY by
    * routes that have already verified ai:configure + non-production.

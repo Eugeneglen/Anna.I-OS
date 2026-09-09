@@ -38,7 +38,12 @@ export async function GET(
             },
           },
         },
-        verificationPhotos: true,
+        verificationPhotos: {
+          // Phase 3 · §3.4: include the persisted VLM verdict with each
+          // photo — decision-support evidence for household/ops viewers
+          // (one verdict per photo; absent when never analyzed).
+          include: { aiVerdict: true },
+        },
         escrowEntries: {
           include: {
             compensationVouchers: {

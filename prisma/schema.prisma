@@ -1068,6 +1068,15 @@ model AiInsight {
   body         String
   evidence     Json? // deterministic data snapshot behind the insight
   dedupKey     String? @unique // idempotent generation across repeated event sweeps
+  // ── Phase 3 (§3.1 event-driven AI insights) ──
+  aiChainId        String? @unique // AuditLog chain correlation: ai_request → ai_recommendation (→ human_decision on review)
+  generationStatus AiBriefGeneration @default(QUEUED) // reuses the brief lifecycle: a FAILED row stays visible (coverage)
+  generationAttempts Int @default(0)
+  generationError  String? // last generation failure reason — failures are never hidden
+  recommendedAction String? // CLOSED catalogue action (validated); the LLM may never invent one
+  fallbackFromInvalid Boolean @default(false) // true = LLM output failed validation → safe monitor_only fallback
+  modelVersion     String? // LLM identity as reported by the provider
+  confidence       Float? // 0–1 producer-reported confidence, when available
   reviewedById String?
   reviewedAt   DateTime?
   createdAt    DateTime        @default(now())
@@ -1079,6 +1088,7 @@ model AiInsight {
 
   @@index([status, createdAt])
   @@index([insightType, entityType])
+  @@index([generationStatus, updatedAt])
 }
 
 // VLM photo-QA verdict persistence — schema lands now so the Phase-1 audit
@@ -1096,14 +1106,24 @@ model PhotoVerification {
   verdict             PhotoVerificationVerdict
   qualityScore        Int? // 0–10 — same scale as the current in-request VLM QA
   issues              Json? // structured issues the model reported
+  // ── Phase 3 (§3.4 VLM persistence — decision support only) ──
+  recommendation      String? // "approve" | "review" | "reject" — advisory, NEVER executes anything
+  concerns            Json? // array of concern strings the model reported
+  modelVersion        String? // VLM identity as reported by the provider
+  aiChainId           String? @unique // AuditLog chain correlation (ai_request → ai_recommendation)
+  humanOutcome        String? // "approved" | "rejected" — stamped ONLY by the human verify path, never by the VLM
+  humanOutcomeAt      DateTime?
+  humanOutcomeById    String? // session-derived actor label (member id / "ops:<id>"), never client input
   createdAt           DateTime                @default(now())
 
   verificationPhoto VerificationPhoto @relation(fields: [verificationPhotoId], references: [id])
 }
 
 // Ask Anna conversation traceability. Phase 1 records turns for audit
-// (AI request → recommendation → human decision → execution → result) but
-// does NOT feed them back to the LLM — no multi-turn memory (L5 scope).
+// (AI request → recommendation → human decision → execution → result).
+// Phase 3 (§3.5) additionally replays the RECENT turns back into the LLM
+// messages array as bounded session memory — same-authorised-context only
+// (no embeddings, no semantic memory, no cross-household learning).
 enum ConversationChannel {
   ASK_ANNA
   OPS_AI

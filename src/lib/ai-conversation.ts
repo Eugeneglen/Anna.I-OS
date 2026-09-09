@@ -2,13 +2,14 @@ import { db } from "@/lib/db";
 import type { ConversationRole } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────
-// AI Conversation persistence (L4 · Phase 1 · Step 1.1)
+// AI Conversation persistence (L4 · Phase 1 · Step 1.1; §3.5 Phase 3)
 //
-// Records Ask Anna request/response turns for traceability. This is NOT
-// session memory: nothing recorded here is ever fed back into a prompt
-// (multi-turn memory is out of Phase-1 scope by design). The turns exist
-// so the audit chain (request → recommendation → decision → execution →
-// result) has a durable, household-scoped transcript.
+// Records Ask Anna request/response turns for traceability, and
+// (Phase 3) replays the RECENT turns back into the prompt as
+// bounded session memory — same-authorised-context only. The
+// turns remain the durable, household-scoped transcript for the
+// audit chain (request → recommendation → decision → execution →
+// result).
 //
 // Scope rule: a conversation can only be attached to the household of
 // the authenticated session. A conversationId belonging to a different
@@ -71,4 +72,47 @@ export async function recordTurn(params: {
     where: { id: params.conversationId },
     data: { lastTurnAt: new Date() },
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 3 · §3.5 — BOUNDED SESSION MEMORY REPLAY
+//
+// Returns the most recent USER/ASSISTANT turns (oldest→newest) so
+// "what you just told me" / "the booking we discussed earlier"
+// resolves correctly within the SAME authorised conversation.
+//
+// Boundaries (all deliberate):
+//   • last N turns only — bounded context, no long-term memory;
+//   • USER + ASSISTANT roles only (TOOL rows are internal traces);
+//   • the conversation is always the session's OWN (foreign ids
+//     can never reach here — getOrCreateConversation fail-safes);
+//   • no embeddings, no semantic memory, no cross-household
+//     learning — the replay is verbatim, scope-bound transcript.
+// ─────────────────────────────────────────────────────────────
+
+export const MEMORY_TURN_LIMIT = 10;
+const MEMORY_TURN_MAX_CHARS = 1500;
+
+export interface MemoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function getRecentTurns(
+  conversationId: string,
+  limit: number = MEMORY_TURN_LIMIT
+): Promise<MemoryTurn[]> {
+  const turns = await db.conversationTurn.findMany({
+    where: { conversationId, role: { in: ["USER", "ASSISTANT"] } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { role: true, content: true },
+  });
+  // Reverse back to chronological order and bound each replayed turn.
+  return turns
+    .reverse()
+    .map((t) => ({
+      role: t.role === "USER" ? ("user" as const) : ("assistant" as const),
+      content: t.content.slice(0, MEMORY_TURN_MAX_CHARS),
+    }));
 }

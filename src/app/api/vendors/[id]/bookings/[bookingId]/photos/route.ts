@@ -4,6 +4,7 @@ import { join } from "path"
 import crypto from "crypto"
 import { db } from "@/lib/db"
 import { requireVendorOwnership } from "@/lib/vendor-guard"
+import { analyzeVerificationPhoto } from "@/lib/vlm-analysis"
 
 // UPLOAD_DIR: writable root for file storage.
 // - Local dev: defaults to public/ (backward compatible)
@@ -112,7 +113,7 @@ export async function POST(
     }
 
     // Create verification photo records
-    await db.verificationPhoto.createMany({
+    const created = await db.verificationPhoto.createMany({
       data: savedPhotos.map((photo) => ({
         taskId: booking.taskId,
         bookingId,
@@ -120,6 +121,22 @@ export async function POST(
         uploadedBy: photo.uploadedBy,
       })),
     })
+
+    // ── Phase 3 · §3.4: completion photos ("after") feed the persisted VLM
+    // analysis — fire-and-forget. DECISION SUPPORT ONLY: the verdict is
+    // persisted for the household/ops to read; it never releases escrow
+    // and never marks the photo verified. ──
+    if (type === "after" && created.count > 0) {
+      const photos = await db.verificationPhoto.findMany({
+        where: { taskId: booking.taskId, bookingId, fileUrl: { in: savedPhotos.map((p) => p.fileUrl) } },
+        select: { id: true },
+      })
+      for (const photo of photos) {
+        void analyzeVerificationPhoto(photo.id, { trigger: "photo_uploaded" }).catch((e) => {
+          console.warn("[vendor photos] VLM analysis failed:", e)
+        })
+      }
+    }
 
     return NextResponse.json({
       count: savedPhotos.length,

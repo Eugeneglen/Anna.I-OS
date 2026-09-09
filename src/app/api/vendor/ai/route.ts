@@ -7,6 +7,8 @@ import {
 import { getVendorSession } from "@/lib/vendor-auth";
 import { getZAI } from "@/lib/zai";
 import { vendorHasAiAccess } from "@/lib/vendor-rbac";
+import { buildVendorContext, renderContextForPrompt } from "@/lib/ai-context";
+import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 import {
   checkRateLimit,
   rateLimitResponsePayload,
@@ -151,10 +153,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── LLM call with tools ──
+    // ── Phase 3 · §3.2 context injection: deterministic vendor-scoped
+    // context, built server-side from the SESSION vendorId (the request
+    // body carries no vendor identity — cross-vendor data is structurally
+    // excluded BEFORE the LLM ever sees a prompt). ──
+    const scopedContext = await buildVendorContext(vendorId);
+    const contextBlock = renderContextForPrompt(scopedContext);
+    const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
+
+    // ── Phase 3: audit chain (request stage) ──
+    const chainId = newAiChainId();
+    await logAiEvent({
+      stage: "ai_request",
+      chainId,
+      action: "ai.vendor_ai.request",
+      actor: { vendorId: session.vendorId, userName: session.name },
+      scope: { vendorId, surface: "vendor-ai" },
+      detail: { message: message.slice(0, 600) },
+      entityType: "vendor",
+      entityId: vendorId,
+    }).catch((e) => console.error("[VendorAI] audit request stage failed:", e));
+
+    // ── LLM call with tools + scoped context ──
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemMessage },
         { role: "user", content: message },
       ],
       tools: VENDOR_AI_TOOLS.map((tool) => ({
@@ -174,10 +197,20 @@ export async function POST(request: NextRequest) {
 
     // ── No tool calls: respond directly ──
     if (!toolCalls || toolCalls.length === 0) {
+      const response =
+        responseMessage?.content ||
+        "I'm not sure I understood that. Could you rephrase?";
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.vendor_ai.response",
+        scope: { vendorId, surface: "vendor-ai" },
+        detail: { response: response.slice(0, 600), dataUsed: [] },
+        entityType: "vendor",
+        entityId: vendorId,
+      }).catch((e) => console.error("[VendorAI] audit recommendation stage failed:", e));
       return NextResponse.json({
-        response:
-          responseMessage?.content ||
-          "I'm not sure I understood that. Could you rephrase?",
+        response,
         dataUsed: [],
       });
     }
@@ -230,7 +263,7 @@ export async function POST(request: NextRequest) {
 
     const finalCompletion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemMessage },
         { role: "user", content: message },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,
@@ -238,10 +271,24 @@ export async function POST(request: NextRequest) {
       thinking: { type: "disabled" },
     });
 
+    const finalResponse =
+      finalCompletion.choices[0]?.message?.content ||
+      "I processed your request but couldn't generate a summary.";
+    await logAiEvent({
+      stage: "ai_recommendation",
+      chainId,
+      action: "ai.vendor_ai.response",
+      scope: { vendorId, surface: "vendor-ai" },
+      detail: {
+        response: finalResponse.slice(0, 600),
+        dataUsed: toolCalls.map((tc) => tc.function.name),
+      },
+      entityType: "vendor",
+      entityId: vendorId,
+    }).catch((e) => console.error("[VendorAI] audit recommendation stage failed:", e));
+
     return NextResponse.json({
-      response:
-        finalCompletion.choices[0]?.message?.content ||
-        "I processed your request but couldn't generate a summary.",
+      response: finalResponse,
       dataUsed: toolCalls.map((tc) => tc.function.name),
     });
   } catch (error) {

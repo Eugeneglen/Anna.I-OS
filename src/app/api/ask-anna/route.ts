@@ -9,7 +9,7 @@ import {
 } from "@/lib/rate-limit";
 import { getOpsSession } from "@/lib/ops-auth";
 import { buildHouseholdContext, renderContextForPrompt } from "@/lib/ai-context";
-import { getOrCreateConversation, recordTurn } from "@/lib/ai-conversation";
+import { getOrCreateConversation, recordTurn, getRecentTurns, type MemoryTurn } from "@/lib/ai-conversation";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 
 // ─────────────────────────────────────────────────────────────
@@ -199,6 +199,26 @@ export async function POST(request: NextRequest) {
       channel: "ASK_ANNA",
     });
     conversationId = conversation.id;
+
+    // ── §3.5 bounded session memory: replay the recent turns of THIS
+    // conversation (server-side; foreign conversationIds can never reach
+    // here — getOrCreateConversation fail-safed the scope above). The
+    // current user turn is recorded AFTER the replay snapshot so the
+    // messages array is [system, ...history, user(now)]. ──
+    const memoryTurns: MemoryTurn[] = await getRecentTurns(conversationId);
+    const memoryMessages = memoryTurns.map((t) => ({
+      role: t.role,
+      content: t.content,
+    }));
+    if (memoryMessages.length > 0) {
+      // A leading assistant turn would break the chat format — the replay
+      // always ends with the previous assistant answer (alternation holds
+      // because turns are recorded user→assistant in pairs).
+      while (memoryMessages.length > 0 && memoryMessages[0].role === "assistant") {
+        memoryMessages.shift();
+      }
+    }
+
     await recordTurn({ conversationId, role: "USER", content: message });
 
     // ── Check if AI is available ──
@@ -361,13 +381,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Normal flow: LLM with tools + injected scoped context ──
+    // ── Normal flow: LLM with tools + injected scoped context + bounded
+    // session memory (recent turns of THIS conversation, server-replayed) ──
     const completion = await zai.chat.completions.create({
       messages: [
         {
           role: "system",
           content: systemMessage,
         },
+        ...memoryMessages,
         {
           role: "user",
           content: message,
@@ -526,6 +548,7 @@ export async function POST(request: NextRequest) {
     const finalCompletion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: systemMessage },
+        ...memoryMessages,
         { role: "user", content: message },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,

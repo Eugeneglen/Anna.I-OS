@@ -19,10 +19,10 @@ import { db } from "@/lib/db";
 //                   scope by design).
 //
 // Scope kinds mirror the platform's three constituencies. Phase 1
-// implements the household builder (Ask Anna — the surface where the
-// narrative-misattribution defect was found). Vendor and ops builders
-// land with their Phase-2+ surfaces, which already enforce their own
-// sessions (vendor-guard / ops-auth).
+// implemented the household builder (Ask Anna — the surface where the
+// narrative-misattribution defect was found). Phase 3 (§3.2) adds the
+// vendor builder (Vendor AI) and the ops builder (Ops AI — cross-
+// household AGGREGATES only, no PII), all on the same discipline.
 // ─────────────────────────────────────────────────────────────
 
 export type AiScope =
@@ -168,6 +168,210 @@ export async function buildHouseholdContext(
 
   return {
     scope: { kind: "household", householdId },
+    generatedAt: new Date().toISOString(),
+    sections,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vendor context (Vendor AI) — Phase 3 · §3.2
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Build the deterministic, vendor-scoped context. Every query below
+ * filters by vendorId — vendor B's rows structurally cannot appear in
+ * vendor A's context, so the LLM never receives data it could leak.
+ * Minimal: the vendor's own jobs, schedule, payout and performance —
+ * the facts the Vendor AI narrates.
+ */
+export async function buildVendorContext(vendorId: string): Promise<ScopedContext> {
+  const [vendor, bookings, escrowEntries, performance] = await Promise.all([
+    db.vendor.findUnique({
+      where: { id: vendorId },
+      select: {
+        id: true,
+        name: true,
+        vendorType: true,
+        status: true,
+        dailyCapacity: true,
+        maxTasksPerDay: true,
+      },
+    }),
+    db.booking.findMany({
+      where: { vendorId },
+      select: {
+        id: true,
+        status: true,
+        scheduledStart: true,
+        rating: true,
+        task: {
+          select: { id: true, jobNo: true, category: true, status: true, amountCents: true, instructions: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.escrowLedger.findMany({
+      where: { booking: { vendorId } },
+      select: {
+        state: true,
+        amountCents: true,
+        vendorPayoutCents: true,
+        refundCents: true,
+        createdAt: true,
+        task: { select: { jobNo: true, category: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    db.booking.aggregate({
+      where: { vendorId },
+      _avg: { rating: true },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const heldPayout = escrowEntries
+    .filter((e) => e.state === "HELD")
+    .reduce((s, e) => s + (e.vendorPayoutCents ?? 0), 0);
+  const releasedPayout = escrowEntries
+    .filter((e) => e.state === "RELEASED")
+    .reduce((s, e) => s + (e.vendorPayoutCents ?? 0), 0);
+
+  const sections: ContextSection[] = [
+    {
+      key: "vendor_profile",
+      data: vendor
+        ? {
+            name: vendor.name,
+            vendorType: vendor.vendorType,
+            status: vendor.status,
+            dailyCapacity: vendor.dailyCapacity,
+            maxTasksPerDay: vendor.maxTasksPerDay,
+          }
+        : null,
+    },
+    {
+      key: "jobs",
+      data: bookings.map((b) => ({
+        bookingId: b.id,
+        jobNo: b.task.jobNo,
+        category: b.task.category,
+        taskStatus: b.task.status,
+        bookingStatus: b.status,
+        scheduledDate: b.scheduledStart ? fmtDate(new Date(b.scheduledStart)) : null,
+        taskAmount: fmtSgd(b.task.amountCents),
+        rating: b.rating,
+      })),
+    },
+    {
+      key: "escrow_payouts",
+      data: {
+        heldPayout: fmtSgd(heldPayout),
+        releasedPayout: fmtSgd(releasedPayout),
+        entries: escrowEntries.slice(0, 5).map((e) => ({
+          taskJobNo: e.task.jobNo, // every payout fact pinned to its owning task
+          category: e.task.category,
+          state: e.state,
+          payout: fmtSgd(e.vendorPayoutCents ?? 0),
+          refunded: e.refundCents ? fmtSgd(e.refundCents) : null,
+          date: fmtDate(e.createdAt),
+        })),
+      },
+    },
+    {
+      key: "performance",
+      data: {
+        totalBookings: performance._count._all,
+        averageRating: performance._avg.rating ?? null,
+      },
+    },
+  ];
+
+  return {
+    scope: { kind: "vendor", vendorId },
+    generatedAt: new Date().toISOString(),
+    sections,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ops context (Ops AI) — Phase 3 · §3.2
+//
+// Cross-household AGGREGATES only: counts and sums the ops role is
+// permitted to see. No household names, no member PII, no vendor
+// contact details — the ops AI narrates platform state, not
+// individual dossiers. Role-appropriate by construction.
+// ─────────────────────────────────────────────────────────────
+
+export async function buildOpsContext(): Promise<ScopedContext> {
+  const [
+    activeAnomalyCount,
+    anomaliesBySeverity,
+    disputedTaskCount,
+    escrowAggregates,
+    tasksByStatus,
+    pendingBriefs,
+    newInsights,
+  ] = await Promise.all([
+    db.anomaly.count({ where: { status: "ACTIVE" } }),
+    db.anomaly.groupBy({
+      by: ["severity"],
+      where: { status: "ACTIVE" },
+      _count: { _all: true },
+    }),
+    db.task.count({ where: { status: "DISPUTED" } }),
+    db.escrowLedger.groupBy({
+      by: ["state"],
+      _count: { _all: true },
+      _sum: { amountCents: true },
+    }),
+    db.task.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
+    db.aiCaseBrief.count({ where: { status: "PENDING_REVIEW" } }),
+    db.aiInsight.count({ where: { status: "NEW" } }),
+  ]);
+
+  const escrowSummary: Record<string, { count: number; total: string }> = {};
+  for (const g of escrowAggregates) {
+    escrowSummary[g.state] = {
+      count: g._count._all,
+      total: fmtSgd(g._sum.amountCents ?? 0),
+    };
+  }
+
+  const sections: ContextSection[] = [
+    {
+      key: "anomalies",
+      data: {
+        activeTotal: activeAnomalyCount,
+        bySeverity: anomaliesBySeverity.map((g) => ({ severity: g.severity, count: g._count._all })),
+      },
+    },
+    {
+      key: "tasks",
+      data: {
+        disputed: disputedTaskCount,
+        byStatus: tasksByStatus.map((g) => ({ status: g.status, count: g._count._all })),
+      },
+    },
+    {
+      key: "escrow",
+      data: escrowSummary,
+    },
+    {
+      key: "ai_workqueue",
+      data: {
+        caseBriefsPendingReview: pendingBriefs,
+        insightsNew: newInsights,
+      },
+    },
+  ];
+
+  return {
+    scope: { kind: "ops" },
     generatedAt: new Date().toISOString(),
     sections,
   };

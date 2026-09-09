@@ -141,6 +141,21 @@ export async function PATCH(
         },
       })
 
+      // ── Phase 3 · §3.4: capture the HUMAN outcome on the persisted VLM
+      // record (decision-support → human outcome). The verdict itself is
+      // never mutated — this only records what the human decided. Best-
+      // effort: a missing verdict row (photo never analyzed) is normal. ──
+      await db.photoVerification
+        .updateMany({
+          where: { verificationPhotoId: photoId },
+          data: {
+            humanOutcome: 'approved',
+            humanOutcomeAt: now,
+            humanOutcomeById: verifiedBy,
+          },
+        })
+        .catch((e) => console.warn('[verification-photos] human-outcome stamp failed:', e))
+
       // Update VendorHouseholdAffinity
       if (photo.booking) {
         const affinityKey = {
@@ -207,6 +222,23 @@ export async function PATCH(
       where: { id: photoId },
       data: { rejectionReason: rejectionReason ?? null },
     })
+
+    // ── Phase 3 · §3.4: capture the HUMAN rejection outcome on the VLM
+    // record (vendor rejections land here too — the actor label carries
+    // the vendor identity from the session). ──
+    const rejectOutcomeById = vendorSession
+      ? `vendor:${vendorSession.vendorId}`
+      : verifiedBy // household actor (ops cannot reject — see branch above)
+    await db.photoVerification
+      .updateMany({
+        where: { verificationPhotoId: photoId },
+        data: {
+          humanOutcome: 'rejected',
+          humanOutcomeAt: now,
+          humanOutcomeById: rejectOutcomeById,
+        },
+      })
+      .catch((e) => console.warn('[verification-photos] human-outcome stamp failed:', e))
 
     // Notify household members
     const members = await db.familyMember.findMany({

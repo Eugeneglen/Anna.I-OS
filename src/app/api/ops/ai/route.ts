@@ -13,6 +13,8 @@ import {
   RATE_LIMITS,
 } from "@/lib/rate-limit";
 import { requireAiPermission, aiGuardErrorResponse } from "@/lib/ai-guards";
+import { buildOpsContext, renderContextForPrompt } from "@/lib/ai-context";
+import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ops AI
@@ -181,10 +183,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── LLM call with tools (only the permitted subset) ──
+    // ── Phase 3 · §3.2 context injection: deterministic ops context —
+    // cross-household AGGREGATES ONLY (counts/sums). No household names,
+    // no member PII: the ops AI narrates platform state, not individual
+    // dossiers, so every ai:recommend holder sees exactly what the role
+    // is permitted to see. ──
+    const scopedContext = await buildOpsContext();
+    const contextBlock = renderContextForPrompt(scopedContext);
+    const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
+
+    // ── Phase 3: audit chain (request stage; actor = the ops user) ──
+    const chainId = newAiChainId();
+    await logAiEvent({
+      stage: "ai_request",
+      chainId,
+      action: "ai.ops_ai.request",
+      actor: { userId: guard.session.userId, userName: guard.session.name },
+      scope: { surface: "ops-ai" },
+      detail: { message: message.slice(0, 600) },
+    }).catch((e) => console.error("[OpsAI] audit request stage failed:", e));
+
+    // ── LLM call with tools (only the permitted subset) + scoped ops context ──
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemMessage },
         { role: "user", content: message },
       ],
       tools: exposedTools.map((tool) => ({
@@ -204,10 +226,18 @@ export async function POST(request: NextRequest) {
 
     // ── No tool calls: respond directly ──
     if (!toolCalls || toolCalls.length === 0) {
+      const response =
+        responseMessage?.content ||
+        "I'm not sure I understood that. Could you rephrase?";
+      await logAiEvent({
+        stage: "ai_recommendation",
+        chainId,
+        action: "ai.ops_ai.response",
+        scope: { surface: "ops-ai" },
+        detail: { response: response.slice(0, 600), dataUsed: [] },
+      }).catch((e) => console.error("[OpsAI] audit recommendation stage failed:", e));
       return NextResponse.json({
-        response:
-          responseMessage?.content ||
-          "I'm not sure I understood that. Could you rephrase?",
+        response,
         dataUsed: [],
       });
     }
@@ -270,7 +300,7 @@ export async function POST(request: NextRequest) {
 
     const finalCompletion = await zai.chat.completions.create({
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemMessage },
         { role: "user", content: message },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,
@@ -278,10 +308,22 @@ export async function POST(request: NextRequest) {
       thinking: { type: "disabled" },
     });
 
+    const finalResponse =
+      finalCompletion.choices[0]?.message?.content ||
+      "I processed your request but couldn't generate a summary.";
+    await logAiEvent({
+      stage: "ai_recommendation",
+      chainId,
+      action: "ai.ops_ai.response",
+      scope: { surface: "ops-ai" },
+      detail: {
+        response: finalResponse.slice(0, 600),
+        dataUsed: toolCalls.map((tc) => tc.function.name),
+      },
+    }).catch((e) => console.error("[OpsAI] audit recommendation stage failed:", e));
+
     return NextResponse.json({
-      response:
-        finalCompletion.choices[0]?.message?.content ||
-        "I processed your request but couldn't generate a summary.",
+      response: finalResponse,
       dataUsed: toolCalls.map((tc) => tc.function.name),
     });
   } catch (error) {

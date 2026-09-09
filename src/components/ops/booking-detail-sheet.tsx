@@ -273,6 +273,17 @@ export function BookingDetailSheet({
     rejectionReason?: string | null;
     verifiedAt?: string | null;
     createdAt: string;
+    // Phase 3 · §3.4: persisted VLM verdict (decision support only — one per photo)
+    aiVerdict?: {
+      verdict: string;
+      qualityScore: number | null;
+      recommendation: string | null;
+      concerns: string[] | null;
+      modelVersion: string | null;
+      humanOutcome: string | null;
+      humanOutcomeAt: string | null;
+      createdAt: string;
+    } | null;
   }>) || [];
 
   // ── Booking Action Mutations ──
@@ -294,6 +305,30 @@ export function BookingDetailSheet({
       queryClient.invalidateQueries({ queryKey: ["ops-task-detail", taskId] });
       queryClient.invalidateQueries({ queryKey: ["ops-bookings"] });
     },
+  });
+
+  // ── Phase 3 · §3.4: manual VLM analysis trigger (ai:prepare enforced
+  // server-side; the verdict is persisted decision support — it NEVER
+  // releases escrow, verifies the photo, or moves money). ──
+  const vlmAnalyze = useMutation({
+    mutationFn: async (photoId: string) => {
+      const res = await fetch(`/api/ops/ai/vlm/photos/${photoId}/analyze`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Analysis failed (${res.status})`);
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      const status = data?.result?.status;
+      if (status === "exists") {
+        toast.info("A persisted VLM verdict already exists for this photo");
+      } else {
+        toast.success("VLM verdict persisted — decision support only, escrow untouched");
+      }
+      queryClient.invalidateQueries({ queryKey: ["ops-task-detail", taskId] });
+    },
+    onError: (err) => toast.error((err as Error).message || "VLM analysis failed"),
   });
 
   // ── Action handlers ──
@@ -1168,6 +1203,94 @@ export function BookingDetailSheet({
                           </p>
                         </div>
                       )}
+
+                      {/* ── Phase 3 · §3.4: persisted VLM verdicts (decision support only) ── */}
+                      {(() => {
+                        const withVerdicts = verificationPhotos.filter((p) => p.aiVerdict);
+                        const unanalyzed = verificationPhotos.filter((p) => !p.aiVerdict);
+                        if (withVerdicts.length === 0 && unanalyzed.length === 0) return null;
+                        return (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)] flex items-center gap-1.5">
+                              <ShieldCheck size={12} />
+                              AI Photo Verdicts — decision support only
+                            </p>
+                            {withVerdicts.map((photo) => {
+                              const v = photo.aiVerdict!;
+                              const isBefore = photo.uploadedBy?.includes("before");
+                              const verdictStyle =
+                                v.verdict === "PASS"
+                                  ? "bg-[var(--anna-success)] text-white"
+                                  : v.verdict === "FAIL"
+                                    ? "bg-red-500 text-white"
+                                    : "bg-[var(--anna-warning)] text-white";
+                              return (
+                                <div
+                                  key={`vlm-${photo.id}`}
+                                  className="rounded-lg border border-[var(--anna-border)] bg-[var(--anna-bg)] p-2 text-xs"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={cn("px-1.5 py-0.5 rounded font-bold text-[9px]", verdictStyle)}>
+                                      {v.verdict}
+                                    </span>
+                                    <span className="text-[var(--anna-muted)]">
+                                      {isBefore ? "Before" : "After"} photo
+                                    </span>
+                                    {v.qualityScore != null && (
+                                      <span className="font-data">quality {v.qualityScore}/10</span>
+                                    )}
+                                    {v.recommendation && (
+                                      <Badge variant="outline" className="h-4 px-1 text-[9px]">
+                                        {v.recommendation}
+                                      </Badge>
+                                    )}
+                                    {v.humanOutcome && (
+                                      <span className="text-[10px] text-[var(--anna-muted)]">
+                                        human outcome: {v.humanOutcome}
+                                      </span>
+                                    )}
+                                    <span className="ml-auto text-[10px] text-[var(--anna-muted)]">
+                                      {v.modelVersion ?? "unknown model"} · {formatDateTime(v.createdAt)}
+                                    </span>
+                                  </div>
+                                  {v.concerns && v.concerns.length > 0 && (
+                                    <ul className="mt-1 list-inside list-disc text-[10px] text-[var(--anna-muted)]">
+                                      {v.concerns.slice(0, 5).map((c, i) => (
+                                        <li key={i}>{c}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {unanalyzed.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px]"
+                                  disabled={vlmAnalyze.isPending}
+                                  onClick={() => vlmAnalyze.mutate(unanalyzed[0].id)}
+                                >
+                                  {vlmAnalyze.isPending ? (
+                                    <Loader2 size={10} className="mr-1 animate-spin" />
+                                  ) : (
+                                    <Camera size={10} className="mr-1" />
+                                  )}
+                                  Analyze photo with VLM (ai:prepare)
+                                </Button>
+                                <span className="text-[10px] text-[var(--anna-muted)]">
+                                  {unanalyzed.length} photo(s) without a persisted verdict — completion
+                                  photos are analyzed automatically on upload.
+                                </span>
+                              </div>
+                            )}
+                            <p className="text-[10px] text-[var(--anna-muted)]">
+                              The VLM never releases escrow or verifies photos — humans decide.
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </section>
                   </>
                 )}

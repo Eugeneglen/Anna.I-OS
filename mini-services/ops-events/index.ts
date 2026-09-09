@@ -854,6 +854,57 @@ setTimeout(() => {
 }, AI_BRIEF_SWEEP_CRON_DELAY);
 
 // ─────────────────────────────────────────────────────────────
+// Phase 3 (§3.1): AI Insight Coverage Sweep Cron
+// Every 60 s, ask the Next.js app to sweep ACTIVE anomalies: each
+// must hold a persisted AI insight (dedupKey makes it idempotent —
+// repeated anomaly events never create duplicate insights).
+// Authenticated with the shared CRON_SECRET header — mirrors the
+// AI brief sweep above. Backstop behind the inline
+// anomalies/check trigger. (Audit-AI-FIX8 port: hardened to this
+// branch's cron conventions — in-flight guard + fetch timeout +
+// outcome log.)
+// ─────────────────────────────────────────────────────────────
+
+const AI_INSIGHT_SWEEP_INTERVAL_MS = 60 * 1000; // 60 seconds
+const AI_INSIGHT_SWEEP_CRON_DELAY = 55 * 1000; // stagger vs the other ticks
+let aiInsightSweepInFlight = false;
+
+async function runAiInsightSweep() {
+  if (aiInsightSweepInFlight) return;
+  aiInsightSweepInFlight = true;
+  try {
+    const res = await fetch("http://127.0.0.1:3000/api/ops/ai/insights/sweep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET },
+      signal: AbortSignal.timeout(CRON_FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 204) return; // nothing to do — normal case
+    if (res.status === 401) {
+      logCronOutcome("ai-insight-sweep", "HTTP 401 — cron secret rejected");
+      return;
+    }
+    logCronOutcome("ai-insight-sweep", "ok");
+    const data: any = await res.json().catch(() => null);
+    if (res.ok && data && data.ensured) {
+      console.log(
+        `[cron] AI insight sweep: scanned=${data.scanned}, ensured=${data.ensured}, skipped=${data.skipped}`
+      );
+    }
+  } catch (err) {
+    // Non-critical — Next.js may not be up yet during startup
+    console.warn("[cron] AI insight sweep failed (non-critical):", err instanceof Error ? err.message : err);
+  } finally {
+    aiInsightSweepInFlight = false;
+  }
+}
+
+setTimeout(() => {
+  console.log(`[cron] AI insight coverage sweep active (every ${AI_INSIGHT_SWEEP_INTERVAL_MS / 1000}s)`);
+  runAiInsightSweep();
+  setInterval(runAiInsightSweep, AI_INSIGHT_SWEEP_INTERVAL_MS);
+}, AI_INSIGHT_SWEEP_CRON_DELAY);
+
+// ─────────────────────────────────────────────────────────────
 // Start server
 // ─────────────────────────────────────────────────────────────
 

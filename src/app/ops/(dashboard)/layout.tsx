@@ -29,6 +29,7 @@ import {
   Shield,
   Megaphone,
   Sparkles,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,7 @@ const NAV_ITEMS: { label: string; href: string; icon: LucideIcon; active: boolea
   { label: "Intelligence", href: "/ops/households/intelligence", icon: Sparkles, active: true, permission: "households:view" },
   { label: "Vendors", href: "/ops/vendors", icon: Users, active: true, permission: "vendors:view" },
   { label: "Escrow", href: "/ops/escrow", icon: Wallet, active: true, permission: "escrow:view" },
+  { label: "AI Insights", href: "/ops/ai-insights", icon: Lightbulb, active: true, permission: "ai:prepare" },
   { label: "Config", href: "/ops/config", icon: Settings, active: true, permission: "config:view" },
   { label: "Autonomy", href: "/ops/autonomy", icon: Zap, active: true, permission: "autonomy:view" },
   { label: "Notifications", href: "/ops/notifications", icon: Bell, active: true, permission: "notifications:view" },

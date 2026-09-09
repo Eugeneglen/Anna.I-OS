@@ -1,0 +1,889 @@
+{
+  "runId": 1788912627406,
+  "totalPass": 147,
+  "totalFail": 0,
+  "records": [
+    {
+      "suite": "SETUP",
+      "name": "Ops logins (admin/coordinator/analyst)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "SETUP",
+      "name": "Households A + B registered",
+      "pass": true,
+      "detail": "A=j9qfdd B=40o9kz"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Vendors A + B active + portal logins",
+      "pass": true,
+      "detail": "A=k5zedc B=cesrnn"
+    },
+    {
+      "suite": "SETUP",
+      "name": "3 fixture tasks dispatched + accepted (escrow HELD)",
+      "pass": true,
+      "detail": "A1=fd4nkt A2=sjpr7m B1=zuobt3"
+    },
+    {
+      "suite": "S1",
+      "name": "Unauthenticated → 401 on all 7 routes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "data_analyst (no ai:*) → 403 on all 7 routes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "coordinator: list+sweep 200, detail 404, review 403 (no ai:approve)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "admin (all ai:*) → 200 list + stats present",
+      "pass": true,
+      "detail": "total insights=11"
+    },
+    {
+      "suite": "S1",
+      "name": "cron sweep: correct secret ok (session + anon), wrong secret 401",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "simulate seam requires ai:configure → 403 for coordinator",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Household A disputes task A1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Task DISPUTED + escrow DISPUTED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Anomaly detection created the ESCROW_DISPUTED anomaly",
+      "pass": true,
+      "detail": "+1 anomalies"
+    },
+    {
+      "suite": "S2",
+      "name": "ESCROW_DISPUTED anomaly linked to task A1",
+      "pass": true,
+      "detail": "id=l90va7"
+    },
+    {
+      "suite": "S2",
+      "name": "Insight GENERATED from real anomaly ≤70s",
+      "pass": true,
+      "detail": "status=GENERATED in 5.3s"
+    },
+    {
+      "suite": "S2",
+      "name": "Evidence pins the REAL anomaly (type/severity/message)",
+      "pass": true,
+      "detail": "type=ESCROW_DISPUTED severity=CRITICAL"
+    },
+    {
+      "suite": "S2",
+      "name": "Evidence pins the REAL task (jobNo + status)",
+      "pass": true,
+      "detail": "jobNo=AI-00000044"
+    },
+    {
+      "suite": "S2",
+      "name": "Evidence carries the real escrow facts (amount formatted from DB)",
+      "pass": true,
+      "detail": "escrow=DISPUTED SGD $80.00"
+    },
+    {
+      "suite": "S2",
+      "name": "Evidence carries the real household name",
+      "pass": true,
+      "detail": "name=E2E Family A"
+    },
+    {
+      "suite": "S2",
+      "name": "recommendedAction is inside the closed catalogue",
+      "pass": true,
+      "detail": "action=prepare_case_brief"
+    },
+    {
+      "suite": "S2",
+      "name": "LLM advisory text is present and bounded",
+      "pass": true,
+      "detail": "title 45ch / body 366ch"
+    },
+    {
+      "suite": "S2",
+      "name": "Model version recorded from the provider",
+      "pass": true,
+      "detail": "model=glm-4-plus"
+    },
+    {
+      "suite": "S2",
+      "name": "Audit chain complete (request → recommendation)",
+      "pass": true,
+      "detail": "stages=[AI_INSIGHT_REQUEST, AI_INSIGHT_RECOMMENDATION]"
+    },
+    {
+      "suite": "S2",
+      "name": "No execution stage on the insight chain (LLM advisory only)",
+      "pass": true,
+      "detail": "2 stages"
+    },
+    {
+      "suite": "S2",
+      "name": "Household B disputes task B1 (fixture)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "B fixture anomaly created",
+      "pass": true,
+      "detail": "id=o9z4zo"
+    },
+    {
+      "suite": "S2",
+      "name": "B fixture insight generated (real provider)",
+      "pass": true,
+      "detail": "action=prepare_case_brief"
+    },
+    {
+      "suite": "S3",
+      "name": "Two extra sweeps → still exactly 1 insight for the anomaly",
+      "pass": true,
+      "detail": "1 row (dedupKey unique)"
+    },
+    {
+      "suite": "S3",
+      "name": "Repeated anomaly-check runs → no duplicate insight",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "POST with force:false → result 'exists' (no new row)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Row count unchanged after no-force POST",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Insight population bounded by active anomaly population",
+      "pass": true,
+      "detail": "insights=13 activeAnomalies=13"
+    },
+    {
+      "suite": "S4",
+      "name": "Policy: qualifying dispute → prepare_case_brief eligible",
+      "pass": true,
+      "detail": "review_anomaly,review_task,review_vendor,review_household,review_escrow_disputes,prepare_case_brief,monitor_only"
+    },
+    {
+      "suite": "S4",
+      "name": "Policy: non-qualifying dispute → prepare_case_brief withheld",
+      "pass": true,
+      "detail": "review_anomaly,review_task,review_household,review_escrow_disputes,monitor_only"
+    },
+    {
+      "suite": "S4",
+      "name": "Policy: minimal anomaly → review_anomaly+household+monitor_only only",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Policy: monitor_only is ALWAYS eligible (safe floor)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Valid output accepted (prepare_case_brief)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Valid output accepted (monitor_only)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Fenced JSON accepted + confidence absent tolerated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: unknown action",
+      "pass": true,
+      "detail": "action 'call_the_vendor' is not in the code-eligible set [review_anomaly, review_task, rev"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: invented execution action (execute_refund)",
+      "pass": true,
+      "detail": "action 'execute_refund' is not in the code-eligible set [review_anomaly, review_task, revi"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: invented release action (release_escrow)",
+      "pass": true,
+      "detail": "action 'release_escrow' is not in the code-eligible set [review_anomaly, review_task, revi"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: invented suspend action (suspend_vendor)",
+      "pass": true,
+      "detail": "action 'suspend_vendor' is not in the code-eligible set [review_anomaly, review_task, revi"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: missing action",
+      "pass": true,
+      "detail": "missing or non-string 'recommendedAction' field"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: not JSON",
+      "pass": true,
+      "detail": "response is not valid JSON"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: too-short title",
+      "pass": true,
+      "detail": "missing or too-short 'title' (min 8 chars)"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: too-short body",
+      "pass": true,
+      "detail": "missing or too-short 'body' (min 40 chars)"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: amount contradiction",
+      "pass": true,
+      "detail": "recommendation carries 'amountCents' — insights never carry amounts (contradiction)"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: refund amount contradiction",
+      "pass": true,
+      "detail": "recommendation carries 'refundAmountCents' — insights never carry amounts (contradiction)"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: JSON array",
+      "pass": true,
+      "detail": "response is not a JSON object"
+    },
+    {
+      "suite": "S4",
+      "name": "Rejected: action null",
+      "pass": true,
+      "detail": "missing or non-string 'recommendedAction' field"
+    },
+    {
+      "suite": "S4",
+      "name": "Fallback recommendation is monitor_only (never operational)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "No execution-shaped action exists anywhere in the catalogue",
+      "pass": true,
+      "detail": "execute_refund,release_escrow,suspend_vendor,cancel_task,auto_refund,resolve_dismiss,partial_refund,resolve_voucher all absent"
+    },
+    {
+      "suite": "S5",
+      "name": "Simulated 'execute_refund' → 200 generated",
+      "pass": true,
+      "detail": "result=generated"
+    },
+    {
+      "suite": "S5",
+      "name": "Invented execution action → monitor_only fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "fallbackFromInvalid recorded on the row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Escrow still DISPUTED (no execution)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Non-JSON output → monitor_only fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "fallbackFromInvalid still recorded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Provider error → generationStatus FAILED (visible)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "generationError recorded (failures never hidden)",
+      "pass": true,
+      "detail": "simulated provider error"
+    },
+    {
+      "suite": "S5",
+      "name": "Timeout → FAILED (retry exhausted)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Zero execution-shaped prepare results recorded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "No Refund row created for task A1 (no money moved)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A context contains A's own jobNo",
+      "pass": true,
+      "detail": "AI-00000044"
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A context EXCLUDES vendor B's jobNo (pre-LLM)",
+      "pass": true,
+      "detail": "absent: AI-00000046"
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A context EXCLUDES vendor B's name (pre-LLM)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor B context contains B's own jobNo but not A's",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A context excludes household B's amount ($95.00)",
+      "pass": true,
+      "detail": "amount-95 absent"
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor context scope kind is vendor",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Ops context scope kind is ops",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Ops context has anomaly aggregates",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Ops context has escrow aggregates",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Ops context EXCLUDES household PII (no names)",
+      "pass": true,
+      "detail": "no household names in aggregates"
+    },
+    {
+      "suite": "S6",
+      "name": "Ops AI chat responds (ai:recommend)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Ops AI answer grounded in real escrow DISPUTED count",
+      "pass": true,
+      "detail": "answered=2 actual=2"
+    },
+    {
+      "suite": "S6",
+      "name": "Ops AI chat audit chain written (request stage)",
+      "pass": true,
+      "detail": "4 rows"
+    },
+    {
+      "suite": "S6",
+      "name": "data_analyst → 403 on ops AI (role-appropriate data)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A AI chat responds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A response EXCLUDES B's jobNo",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor A response EXCLUDES B's amount (SGD $95.00)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Vendor AI audit chain written (scoped to vendor A)",
+      "pass": true,
+      "detail": "12 rows"
+    },
+    {
+      "suite": "S6",
+      "name": "Ask Anna responds to A",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Body-spoofed householdId ignored; B's amount NOT disclosed",
+      "pass": true,
+      "detail": "leak-free (householdId spoof ignored)"
+    },
+    {
+      "suite": "S7",
+      "name": "Vendor completes task A2",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Task A2 COMPLETED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Completion photo uploaded",
+      "pass": true,
+      "detail": "count=1"
+    },
+    {
+      "suite": "S7",
+      "name": "VerificationPhoto row exists",
+      "pass": true,
+      "detail": "id=z1kod8"
+    },
+    {
+      "suite": "S7",
+      "name": "Persisted VLM verdict appears ≤90s after upload",
+      "pass": true,
+      "detail": "verdict=UNCLEAR in 39.0s"
+    },
+    {
+      "suite": "S7",
+      "name": "Verdict is a valid enum value",
+      "pass": true,
+      "detail": "UNCLEAR"
+    },
+    {
+      "suite": "S7",
+      "name": "Quality score null or integer 0-10",
+      "pass": true,
+      "detail": "quality=0"
+    },
+    {
+      "suite": "S7",
+      "name": "Recommendation persisted (decision support)",
+      "pass": true,
+      "detail": "review"
+    },
+    {
+      "suite": "S7",
+      "name": "Concerns persisted (bounded)",
+      "pass": true,
+      "detail": "[\"The provided image is a solid color with no visible conten"
+    },
+    {
+      "suite": "S7",
+      "name": "Model/version persisted",
+      "pass": true,
+      "detail": "model=glm-5v-turbo"
+    },
+    {
+      "suite": "S7",
+      "name": "Timestamp persisted (createdAt)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Associated task linkage (photo→task A2)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Audit chain persisted (aiChainId + ≥2 stages)",
+      "pass": true,
+      "detail": "chain=83fe16e7"
+    },
+    {
+      "suite": "S7",
+      "name": "VLM chain stages (request + verdict)",
+      "pass": true,
+      "detail": "2 stages"
+    },
+    {
+      "suite": "S7",
+      "name": "Manual re-analyze idempotent (exists)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Still exactly one verdict row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow STILL HELD after VLM verdict (VLM never releases)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Photo NOT auto-verified by the VLM",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Household approves the photo (human decision)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Human outcome captured on the VLM record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Human outcome actor + timestamp recorded",
+      "pass": true,
+      "detail": "by=cmttce1yk007brvfo39qr87rf"
+    },
+    {
+      "suite": "S7",
+      "name": "VLM verdict visible on task detail (aiVerdict include)",
+      "pass": true,
+      "detail": "verdict=UNCLEAR"
+    },
+    {
+      "suite": "S7",
+      "name": "Human release through the ONE path works (VLM is not a gate)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow RELEASED by the human (not by the VLM)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Turn 1 responds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Conversation id returned",
+      "pass": true,
+      "detail": "conv=ya8mrg"
+    },
+    {
+      "suite": "S8",
+      "name": "Turn 2 responds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Same conversation continues (conversationId stable)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Memory works — turn 2 references the prior subject",
+      "pass": true,
+      "detail": "\nwe just discussed your current cleaning tasks. i informed you that you have two cleaning tasks sche"
+    },
+    {
+      "suite": "S8",
+      "name": "Transcript persisted (≥4 turns)",
+      "pass": true,
+      "detail": "5 turns"
+    },
+    {
+      "suite": "S8",
+      "name": "B has its own conversation",
+      "pass": true,
+      "detail": "convB=pxln52"
+    },
+    {
+      "suite": "S8",
+      "name": "Foreign conversationId: request still succeeds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Foreign conversationId NOT adopted (own/fresh conversation)",
+      "pass": true,
+      "detail": "resolved=rn1zbh ≠ B's"
+    },
+    {
+      "suite": "S8",
+      "name": "B's history NOT exposed through the foreign conversationId",
+      "pass": true,
+      "detail": "no B facts (amount + jobNo)"
+    },
+    {
+      "suite": "S8",
+      "name": "Server conversation is A-scoped (householdId = A)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Own-entity ask responds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Own jobNo answered with the CORRECT grounded amount (SGD $60.00)",
+      "pass": true,
+      "detail": "\nBased on the authoritative data for your household, job AI-00000045 costs **SGD $60.00**."
+    },
+    {
+      "suite": "S9",
+      "name": "Foreign-entity ask responds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S9",
+      "name": "Foreign jobNo: B's amount NOT disclosed (no leak)",
+      "pass": true,
+      "detail": "\nI don't see any job with the number AI-00000046 in your household's records. The jobs I can see are:\n\n- AI-00000045 (Cl"
+    },
+    {
+      "suite": "S9",
+      "name": "Foreign jobNo not attributed A's amount (misattribution closed)",
+      "pass": true,
+      "detail": "no A-amount-under-B-jobNo"
+    },
+    {
+      "suite": "S10",
+      "name": "Deterministic prepare_case_brief insight generated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "recommendedAction = prepare_case_brief (validated)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "No fallback marker on the valid recommendation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Prepare → 200 with kind=prepare",
+      "pass": true,
+      "detail": "briefStatus=exists"
+    },
+    {
+      "suite": "S10",
+      "name": "Prepare returns the escrow console redirect (catalogue-owned)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Prepare staged a Phase-2 AiCaseBrief (briefId returned)",
+      "pass": true,
+      "detail": "brief=k5gld1"
+    },
+    {
+      "suite": "S10",
+      "name": "Case brief is PENDING_REVIEW (human decides, maker-checker next)",
+      "pass": true,
+      "detail": "status=PENDING_REVIEW/GENERATED"
+    },
+    {
+      "suite": "S10",
+      "name": "Case brief bound to the disputed task A1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "coordinator (ai:prepare) can also trigger Prepare",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Acknowledge → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Insight status ACKNOWLEDGED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Reviewer recorded (reviewedById/At)",
+      "pass": true,
+      "detail": "by=u4ic51"
+    },
+    {
+      "suite": "S10",
+      "name": "Re-review of a reviewed insight → 409 (record integrity)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Force regeneration after review → already_reviewed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Still exactly one insight row (review record preserved)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Dismiss → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Insight status DISMISSED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Sweep does not regenerate over reviewed records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "monitor_only prepare → 400 (nothing to prepare)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Prepare on un-generated insight → 409",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S11",
+      "name": "Refund WITHOUT refundConfirmed → 409 (maker-checker intact)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S11",
+      "name": "Escrow A1 still DISPUTED (insights/VLM never moved money)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S11",
+      "name": "Zero refunds across all AI surfaces in this suite",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}
