@@ -1,5 +1,5 @@
 {
-  "runId": 1788912627406,
+  "runId": 1789038968454,
   "totalPass": 147,
   "totalFail": 0,
   "records": [
@@ -13,19 +13,19 @@
       "suite": "SETUP",
       "name": "Households A + B registered",
       "pass": true,
-      "detail": "A=j9qfdd B=40o9kz"
+      "detail": "A=w02fq4 B=uqsw7s"
     },
     {
       "suite": "SETUP",
       "name": "Vendors A + B active + portal logins",
       "pass": true,
-      "detail": "A=k5zedc B=cesrnn"
+      "detail": "A=go3tqe B=6yibg4"
     },
     {
       "suite": "SETUP",
       "name": "3 fixture tasks dispatched + accepted (escrow HELD)",
       "pass": true,
-      "detail": "A1=fd4nkt A2=sjpr7m B1=zuobt3"
+      "detail": "A1=orqmv8 A2=nkcc2p B1=xra80y"
     },
     {
       "suite": "S1",
@@ -85,13 +85,13 @@
       "suite": "S2",
       "name": "ESCROW_DISPUTED anomaly linked to task A1",
       "pass": true,
-      "detail": "id=l90va7"
+      "detail": "id=orq9sa"
     },
     {
       "suite": "S2",
       "name": "Insight GENERATED from real anomaly ≤70s",
       "pass": true,
-      "detail": "status=GENERATED in 5.3s"
+      "detail": "status=GENERATED in 5.5s"
     },
     {
       "suite": "S2",
@@ -103,7 +103,7 @@
       "suite": "S2",
       "name": "Evidence pins the REAL task (jobNo + status)",
       "pass": true,
-      "detail": "jobNo=AI-00000044"
+      "detail": "jobNo=AI-00000050"
     },
     {
       "suite": "S2",
@@ -121,13 +121,13 @@
       "suite": "S2",
       "name": "recommendedAction is inside the closed catalogue",
       "pass": true,
-      "detail": "action=prepare_case_brief"
+      "detail": "action=review_escrow_disputes"
     },
     {
       "suite": "S2",
       "name": "LLM advisory text is present and bounded",
       "pass": true,
-      "detail": "title 45ch / body 366ch"
+      "detail": "title 45ch / body 300ch"
     },
     {
       "suite": "S2",
@@ -157,7 +157,7 @@
       "suite": "S2",
       "name": "B fixture anomaly created",
       "pass": true,
-      "detail": "id=o9z4zo"
+      "detail": "id=k2994q"
     },
     {
       "suite": "S2",
@@ -391,13 +391,13 @@
       "suite": "S6",
       "name": "Vendor A context contains A's own jobNo",
       "pass": true,
-      "detail": "AI-00000044"
+      "detail": "AI-00000050"
     },
     {
       "suite": "S6",
       "name": "Vendor A context EXCLUDES vendor B's jobNo (pre-LLM)",
       "pass": true,
-      "detail": "absent: AI-00000046"
+      "detail": "absent: AI-00000052"
     },
     {
       "suite": "S6",
@@ -529,13 +529,13 @@
       "suite": "S7",
       "name": "VerificationPhoto row exists",
       "pass": true,
-      "detail": "id=z1kod8"
+      "detail": "id=yorr9j"
     },
     {
       "suite": "S7",
       "name": "Persisted VLM verdict appears ≤90s after upload",
       "pass": true,
-      "detail": "verdict=UNCLEAR in 39.0s"
+      "detail": "verdict=UNCLEAR in 3.0s"
     },
     {
       "suite": "S7",
@@ -553,13 +553,13 @@
       "suite": "S7",
       "name": "Recommendation persisted (decision support)",
       "pass": true,
-      "detail": "review"
+      "detail": "reject"
     },
     {
       "suite": "S7",
       "name": "Concerns persisted (bounded)",
       "pass": true,
-      "detail": "[\"The provided image is a solid color with no visible conten"
+      "detail": "[\"The provided image is a solid gray color and contains no v"
     },
     {
       "suite": "S7",
@@ -583,7 +583,7 @@
       "suite": "S7",
       "name": "Audit chain persisted (aiChainId + ≥2 stages)",
       "pass": true,
-      "detail": "chain=83fe16e7"
+      "detail": "chain=de850ea4"
     },
     {
       "suite": "S7",
@@ -631,7 +631,7 @@
       "suite": "S7",
       "name": "Human outcome actor + timestamp recorded",
       "pass": true,
-      "detail": "by=cmttce1yk007brvfo39qr87rf"
+      "detail": "by=cmtvflz6j01rwl66ud8z22pov"
     },
     {
       "suite": "S7",
@@ -661,7 +661,7 @@
       "suite": "S8",
       "name": "Conversation id returned",
       "pass": true,
-      "detail": "conv=ya8mrg"
+      "detail": "conv=cu5w3y"
     },
     {
       "suite": "S8",
@@ -679,7 +679,7 @@
       "suite": "S8",
       "name": "Memory works — turn 2 references the prior subject",
       "pass": true,
-      "detail": "\nwe just discussed your current cleaning tasks. i informed you that you have two cleaning tasks sche"
+      "detail": "\nwe just discussed your current cleaning tasks. you have two cleaning jobs scheduled for september 1"
     },
     {
       "suite": "S8",
@@ -691,7 +691,7 @@
       "suite": "S8",
       "name": "B has its own conversation",
       "pass": true,
-      "detail": "convB=pxln52"
+      "detail": "convB=pzzhr0"
     },
     {
       "suite": "S8",
@@ -703,7 +703,7 @@
       "suite": "S8",
       "name": "Foreign conversationId NOT adopted (own/fresh conversation)",
       "pass": true,
-      "detail": "resolved=rn1zbh ≠ B's"
+      "detail": "resolved=fz2hal ≠ B's"
     },
     {
       "suite": "S8",
@@ -727,7 +727,7 @@
       "suite": "S9",
       "name": "Own jobNo answered with the CORRECT grounded amount (SGD $60.00)",
       "pass": true,
-      "detail": "\nBased on the authoritative data for your household, job AI-00000045 costs **SGD $60.00**."
+      "detail": "\nBased on the authoritative data for your household, job AI-00000051 cost exactly **SGD $60.00**."
     },
     {
       "suite": "S9",
@@ -739,7 +739,7 @@
       "suite": "S9",
       "name": "Foreign jobNo: B's amount NOT disclosed (no leak)",
       "pass": true,
-      "detail": "\nI don't see any job with the number AI-00000046 in your household's records. The jobs I can see are:\n\n- AI-00000045 (Cl"
+      "detail": "\nI don't see any job with the number AI-00000052 in your household's records. The tasks I can see are:\n\n- AI-00000051 (C"
     },
     {
       "suite": "S9",
@@ -781,7 +781,7 @@
       "suite": "S10",
       "name": "Prepare staged a Phase-2 AiCaseBrief (briefId returned)",
       "pass": true,
-      "detail": "brief=k5gld1"
+      "detail": "brief=q1o2mh"
     },
     {
       "suite": "S10",

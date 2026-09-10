@@ -148,6 +148,11 @@ export const RATE_LIMITS = {
   quoteExplain: { limit: 10, windowMs: 60_000 }, // 10 / minute / household
   // FIX-1a: cron-driven anomaly detection sweep (cron ticks are 60s).
   anomalyCheck: { limit: 30, windowMs: 60_000 },
+  // Ask Anna multimodal MVP: voice transcription + photo analysis are
+  // abuse-prone provider calls (ASR/VLM). 10 / min per household keeps a
+  // legit press-to-talk conversation comfortable while capping spam.
+  voiceTranscribe: { limit: 10, windowMs: 60_000 }, // 10 / minute / household
+  photoAnalyze: { limit: 10, windowMs: 60_000 }, // 10 / minute / household
 } as const;
 
 /** Build a stable rate-limit key from the ops session. */

@@ -11,6 +11,12 @@ import { getOpsSession } from "@/lib/ops-auth";
 import { buildHouseholdContext, renderContextForPrompt } from "@/lib/ai-context";
 import { getOrCreateConversation, recordTurn, getRecentTurns, type MemoryTurn } from "@/lib/ai-conversation";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
+import {
+  MULTIMODAL_SYSTEM_PROMPT_EXTENSION,
+  composePhotoUserMessage,
+  verifyPhotoToken,
+  type PhotoAnalysis,
+} from "@/lib/ask-anna-multimodal";
 
 // ─────────────────────────────────────────────────────────────
 // System Prompt — Ask Anna (Household NLU)
@@ -27,6 +33,13 @@ import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 // P1 CONTEXT INTEGRITY: a deterministic, server-side scoped context
 // (buildHouseholdContext) is injected into every prompt, so narration is
 // grounded in the household's real records — never guessed.
+//
+// MULTIMODAL MVP (Voice + Photo): these are INPUT CHANNELS ONLY. Voice
+// arrives as an (editable) transcript; photos arrive as a server-side
+// VLM triage analysis inside an HMAC token VERIFIED HERE against the
+// SESSION household — a forged/foreign analysis can never reach the LLM.
+// The chat flow itself (context, memory, tools, confirmation gates,
+// audit chain) is UNCHANGED. No new AI execution architecture.
 // ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are "Ask Anna" — the household's assistant for home services coordination. You are the conversational layer over that household's Household Graph. You are NOT a generic chatbot, NOT the Ops AI, NOT the Vendor AI.
@@ -121,12 +134,21 @@ function buildSystemPrompt(): string {
 // ─────────────────────────────────────────────────────────────
 
 interface AskAnnaRequest {
+  /** May be empty when a photoToken is attached (photo-only message).
+   *  For voice input this is the (client-edited) transcript. */
   message: string;
   /** IGNORED since the P0 fix — household identity is derived from the
    *  authenticated session. Kept in the interface so existing clients
    *  keep working; it has no effect. */
   householdId?: string;
   conversationId?: string;
+  /** Multimodal MVP: HMAC-signed photo analysis token from
+   *  POST /api/ask-anna/photo. Verified server-side (signature,
+   *  expiry, household binding) before the analysis is used. */
+  photoToken?: string;
+  /** Multimodal MVP audit metadata: how the text was entered.
+   *  Metadata only — the transcript is treated exactly like typed text. */
+  inputModality?: "text" | "voice";
   // For confirming a write action
   confirmAction?: {
     toolName: string;
@@ -184,7 +206,29 @@ export async function POST(request: NextRequest) {
     const { message, confirmAction } = body;
     const suppliedConversationId = body.conversationId;
 
-    if (!message) {
+    // ── Multimodal: photo token verification (household-bound, signed) ──
+    let photoAnalysis: PhotoAnalysis | null = null;
+    let photoSha256: string | null = null;
+    if (typeof body.photoToken === "string" && body.photoToken.length > 0) {
+      const verification = verifyPhotoToken(body.photoToken, householdId);
+      if (!verification.ok) {
+        return NextResponse.json(
+          { error: verification.error },
+          { status: verification.status }
+        );
+      }
+      photoAnalysis = verification.analysis;
+      photoSha256 = verification.imageSha256;
+    }
+
+    const inputModality = body.inputModality === "voice" ? "voice" : "text";
+
+    // Photo-only messages: empty text is acceptable — the analysis carries
+    // the content. Synthesize a minimal transcript for the records.
+    const effectiveMessage =
+      message && message.trim().length > 0 ? message : "[Photo attached — no text]";
+
+    if (!effectiveMessage) {
       return NextResponse.json(
         { error: "Missing message" },
         { status: 400 }
@@ -219,7 +263,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await recordTurn({ conversationId, role: "USER", content: message });
+    await recordTurn({ conversationId, role: "USER", content: effectiveMessage });
+
+    // ── Multimodal: durable audit trace of the photo analysis (a TOOL-role
+    //    turn, exactly like tool-call results — persists the bounded
+    //    analysis for the audit chain; excluded from memory replay).
+    //    The original image is never persisted (see ask-anna-multimodal.ts). ──
+    if (photoAnalysis) {
+      await recordTurn({
+        conversationId,
+        role: "TOOL",
+        content: JSON.stringify({
+          tool: "photo_analysis",
+          imageSha256: photoSha256,
+          analysis: photoAnalysis,
+        }).slice(0, 4000),
+        toolName: "photo_analysis",
+      });
+    }
 
     // ── Check if AI is available ──
     const zai = await getZAI();
@@ -233,7 +294,13 @@ export async function POST(request: NextRequest) {
         action: "ai.ask_anna.request",
         actor: { memberId: session.memberId, userName: session.memberName },
         scope: { householdId, surface: "ask-anna" },
-        detail: { message, conversationId },
+        detail: {
+          message: effectiveMessage,
+          conversationId,
+          inputModality,
+          photoAttached: !!photoAnalysis,
+          photoSha256,
+        },
         entityType: "ai_conversation",
         entityId: conversationId,
       });
@@ -254,10 +321,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Deterministic scoped context (P1 integrity fix) ──
+    // ── Deterministic scoped context (P1 integrity fix) + multimodal rules ──
     const scopedContext = await buildHouseholdContext(householdId);
     const contextBlock = renderContextForPrompt(scopedContext);
-    const systemMessage = `${buildSystemPrompt()}\n\n${contextBlock}`;
+    // The multimodal extension is appended ONLY when a photo or voice input
+    // is active — the pure-text prompt stays byte-identical to before (no
+    // behavior change for the existing regression suites). Base prompt here
+    // is the remote branch's buildSystemPrompt() (Wave 2-A date grounding),
+    // so the extension composes on top of the FULL certified base.
+    const multimodalActive = !!photoAnalysis || inputModality === "voice";
+    const systemMessage = multimodalActive
+      ? `${buildSystemPrompt()}${MULTIMODAL_SYSTEM_PROMPT_EXTENSION}\n\n${contextBlock}`
+      : `${buildSystemPrompt()}\n\n${contextBlock}`;
+
+    // LLM-visible user turn: the customer's words + the server-VERIFIED
+    // analysis block when a photo is attached (composed server-side — the
+    // client cannot inject its own "analysis" text).
+    const llmUserContent = photoAnalysis
+      ? composePhotoUserMessage(effectiveMessage, photoAnalysis)
+      : effectiveMessage;
 
     // ── Audit: AI request ──
     await logAiEvent({
@@ -266,7 +348,13 @@ export async function POST(request: NextRequest) {
       action: "ai.ask_anna.request",
       actor: { memberId: session.memberId, userName: session.memberName },
       scope: { householdId, surface: "ask-anna" },
-      detail: { message, conversationId },
+      detail: {
+        message: effectiveMessage,
+        conversationId,
+        inputModality,
+        photoAttached: !!photoAnalysis,
+        photoSha256,
+      },
       entityType: "ai_conversation",
       entityId: conversationId,
     });
@@ -392,7 +480,7 @@ export async function POST(request: NextRequest) {
         ...memoryMessages,
         {
           role: "user",
-          content: message,
+          content: llmUserContent,
         },
       ],
       tools: ANNA_TOOLS.map((tool) => ({
@@ -549,7 +637,7 @@ export async function POST(request: NextRequest) {
       messages: [
         { role: "system", content: systemMessage },
         ...memoryMessages,
-        { role: "user", content: message },
+        { role: "user", content: llmUserContent },
         ...(responseMessage ? [responseMessage] : []),
         ...toolResultMessage,
       ],

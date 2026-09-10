@@ -12,6 +12,11 @@ import {
   Shield,
   Sparkles,
   CircleDot,
+  Camera,
+  ImageIcon,
+  Mic,
+  Square,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +37,10 @@ interface ChatMessage {
     toolName: string;
     data?: Record<string, unknown>;
   };
+  /** Multimodal MVP: badge shown when this user turn had a photo attached. */
+  photoAttached?: boolean;
+  /** Multimodal MVP: badge shown when this user turn came from voice. */
+  voiceInput?: boolean;
 }
 
 interface PendingConfirmation {
@@ -55,6 +64,70 @@ interface AskAnnaResponse {
   conversationId?: string;
   chainId?: string;
   aiUnavailable?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Multimodal MVP — client-side voice capture (press-to-talk)
+//
+// Captures raw PCM via AudioContext + ScriptProcessorNode (baseline
+// support incl. Safari), then encodes a 16 kHz mono 16-bit WAV — a
+// deterministic format the server-side ASR handles well. 60 s at
+// 16 kHz ≈ 1.9 MB, comfortably under the 10 MB upload cap.
+// ─────────────────────────────────────────────────────────────
+
+const MAX_RECORDING_SECONDS = 60;
+const TARGET_SAMPLE_RATE = 16_000;
+
+/** Encode captured Float32 PCM chunks as a 16 kHz mono WAV blob. */
+function encodeWav(chunks: Float32Array[], inputSampleRate: number): Blob {
+  let total = 0;
+  for (const c of chunks) total += c.length;
+  const merged = new Float32Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    merged.set(c, off);
+    off += c.length;
+  }
+  // Downsample (box-average decimation) to the ASR-friendly rate.
+  const ratio = Math.max(1, inputSampleRate / TARGET_SAMPLE_RATE);
+  const outLen = Math.max(1, Math.floor(merged.length / ratio));
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(merged.length, Math.max(start + 1, Math.floor((i + 1) * ratio)));
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += merged[j];
+    out[i] = sum / (end - start);
+  }
+  // 16-bit PCM WAV header.
+  const buffer = new ArrayBuffer(44 + out.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + out.length * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, TARGET_SAMPLE_RATE, true);
+  view.setUint32(28, TARGET_SAMPLE_RATE * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, out.length * 2, true);
+  for (let i = 0; i < out.length; i++) {
+    const s = Math.max(-1, Math.min(1, out[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([view], { type: "audio/wav" });
+}
+
+interface AttachedPhoto {
+  file: File;
+  previewUrl: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -232,6 +305,43 @@ export function AskAnna() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ── Multimodal MVP state ──
+  const [attachedPhoto, setAttachedPhoto] = useState<AttachedPhoto | null>(null);
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [micDenied, setMicDenied] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [voiceTranscriptPending, setVoiceTranscriptPending] = useState(false);
+  const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+
+  // Photo file inputs: one with capture (device camera), one without (library).
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+  // Voice capture refs.
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioChunksRef = useRef<Float32Array[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartRef = useRef<number>(0);
+  const autoStoppedRef = useRef(false);
+
+  // Cleanup on unmount: stop any live capture + revoke any preview URL.
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      processorRef.current?.disconnect();
+      sourceRef.current?.disconnect();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      void audioContextRef.current?.close();
+    };
+  }, []);
+
   // Check AI availability when panel opens
   useEffect(() => {
     if (askAnnaOpen) {
@@ -247,6 +357,8 @@ export function AskAnna() {
     mutationFn: async ({
       msg,
       confirmAction,
+      photoToken,
+      inputModality,
     }: {
       msg: string;
       confirmAction?: {
@@ -254,6 +366,8 @@ export function AskAnna() {
         action: Record<string, unknown>;
         chainId?: string;
       };
+      photoToken?: string;
+      inputModality?: "text" | "voice";
     }): Promise<AskAnnaResponse> => {
       const res = await fetch("/api/ask-anna", {
         method: "POST",
@@ -263,6 +377,8 @@ export function AskAnna() {
           householdId: selectedHouseholdId,
           conversationId: conversationId ?? undefined,
           confirmAction,
+          photoToken,
+          inputModality,
         }),
       });
       if (!res.ok) {
@@ -404,20 +520,297 @@ export function AskAnna() {
     }
   }, [askAnnaOpen]);
 
+  // ── Multimodal: photo attachment handling ──
+
+  const handlePhotoSelect = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Reset so re-selecting the SAME file re-fires onChange (replace flow).
+      event.target.value = "";
+      if (!file) return;
+      setPhotoError(null);
+
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        setPhotoError("Unsupported image format — use JPEG, PNG or WebP.");
+        return;
+      }
+      if (file.size < 1024) {
+        setPhotoError("The image appears to be empty or corrupted — try re-taking the photo.");
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        setPhotoError("Image is too large — maximum 8 MB.");
+        return;
+      }
+
+      // Replace any existing attachment (one photo per message).
+      setAttachedPhoto((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return { file, previewUrl: URL.createObjectURL(file) };
+      });
+    },
+    []
+  );
+
+  const removeAttachedPhoto = useCallback(() => {
+    setAttachedPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setPhotoError(null);
+  }, []);
+
+  // ── Multimodal: press-to-talk voice capture ──
+
+  const teardownCapture = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    const ctx = audioContextRef.current;
+    audioContextRef.current = null;
+    if (ctx && ctx.state !== "closed") void ctx.close();
+  }, []);
+
+  const transcribeBlob = useCallback(
+    async (blob: Blob, durationMs: number) => {
+      if (blob.size < 1024) {
+        setMicError("Recording too short — hold the button while speaking, then release.");
+        return;
+      }
+      setIsTranscribing(true);
+      setMicError(null);
+      try {
+        const form = new FormData();
+        form.append("audio", blob, "recording.wav");
+        form.append("durationMs", String(Math.round(durationMs)));
+        const res = await fetch("/api/voice/transcribe", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "Transcription failed");
+        }
+        const transcript = (data.transcript ?? "") as string;
+        if (transcript.length === 0) {
+          throw new Error("No speech detected");
+        }
+        // The transcript lands in the (editable) text input — the user
+        // reviews/edits before sending. Typing remains fully available.
+        setInput(transcript);
+        setVoiceTranscriptPending(true);
+        setLastInputWasVoice(true);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      } catch (err) {
+        // Transcription failure → typing fallback with a clear reason.
+        setMicError(
+          err instanceof Error
+            ? `${err.message}. You can type your message instead.`
+            : "Transcription failed. You can type your message instead."
+        );
+        setTimeout(() => inputRef.current?.focus(), 50);
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    []
+  );
+
+  const stopRecordingAndTranscribe = useCallback(() => {
+    if (!isRecording) return;
+    const chunks = audioChunksRef.current;
+    const sampleRate = audioContextRef.current?.sampleRate ?? 48000;
+    const durationMs = Date.now() - recordingStartRef.current;
+    teardownCapture();
+    setIsRecording(false);
+    setRecordingSeconds(0);
+
+    const blob = encodeWav(chunks, sampleRate);
+    void transcribeBlob(blob, durationMs);
+  }, [isRecording, teardownCapture, transcribeBlob]);
+
+  // Ref indirection so the auto-stop timer can call the latest stop handler.
+  const stopRecordingRef = useRef<(() => void) | null>(null);
+  stopRecordingRef.current = stopRecordingAndTranscribe;
+
+  const startRecording = useCallback(async () => {
+    if (isRecording || isTranscribing || mutation.isPending || confirmMutation.isPending) return;
+    setMicError(null);
+    setMicDenied(false);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicDenied(true);
+      setMicError("Voice input isn't supported in this browser. Please type your message.");
+      return;
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      // Permission denied / no microphone → typing fallback.
+      setMicDenied(true);
+      if (err instanceof DOMException && err.name === "NotFoundError") {
+        setMicError("No microphone found on this device. Please type your message.");
+      } else {
+        setMicError("Microphone permission was denied. You can type your message instead.");
+      }
+      setTimeout(() => inputRef.current?.focus(), 50);
+      return;
+    }
+
+    try {
+      const AudioCtx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      // ScriptProcessorNode: deprecated but the only baseline-everywhere
+      // synchronous capture path (AudioWorklet needs a separate module file
+      // for marginal MVP gain).
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = (e) => {
+        // Copy the buffer — the AudioProcessingEvent reuses its memory.
+        audioChunksRef.current.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      source.connect(processor);
+      // ScriptProcessor requires a destination to run; connect through a
+      // zero-gain node so nothing is audible.
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      processor.connect(mute);
+      mute.connect(ctx.destination);
+
+      audioContextRef.current = ctx;
+      streamRef.current = stream;
+      sourceRef.current = source;
+      processorRef.current = processor;
+      audioChunksRef.current = [];
+      autoStoppedRef.current = false;
+      recordingStartRef.current = Date.now();
+      setRecordingSeconds(0);
+      setIsRecording(true);
+
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = (Date.now() - recordingStartRef.current) / 1000;
+        setRecordingSeconds(Math.floor(elapsed));
+        if (elapsed >= MAX_RECORDING_SECONDS && !autoStoppedRef.current) {
+          autoStoppedRef.current = true; // auto-stop at the cap
+          stopRecordingRef.current?.();
+        }
+      }, 250);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      teardownCapture();
+      setMicError("Could not start recording. Please type your message instead.");
+    }
+  }, [isRecording, isTranscribing, mutation.isPending, confirmMutation.isPending, teardownCapture]);
+
+  // Keyboard support for press-to-talk (space/enter hold on the mic button).
+  const handleMicKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if ((e.key === " " || e.key === "Enter") && !e.repeat && !isRecording) {
+      e.preventDefault();
+      void startRecording();
+    }
+  };
+  const handleMicKeyUp = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      stopRecordingAndTranscribe();
+    }
+  };
+
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
-    if (!trimmed || mutation.isPending || !selectedHouseholdId) return;
+    const photo = attachedPhoto;
+    if (
+      (!trimmed && !photo) ||
+      mutation.isPending ||
+      confirmMutation.isPending ||
+      isAnalyzingPhoto ||
+      isRecording ||
+      isTranscribing ||
+      !selectedHouseholdId
+    ) {
+      return;
+    }
 
-    // Add user message
+    // Add user message (photo badge when attached)
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: trimmed, timestamp: Date.now() },
+      {
+        role: "user" as const,
+        content: trimmed || "[Photo attached]",
+        timestamp: Date.now(),
+        photoAttached: !!photo,
+        voiceInput: lastInputWasVoice && trimmed.length > 0,
+      },
     ]);
     setInput("");
+    setVoiceTranscriptPending(false);
+    const wasVoice = lastInputWasVoice;
+    setLastInputWasVoice(false);
 
-    // Send to API
-    mutation.mutate({ msg: trimmed });
-  }, [input, mutation.isPending, selectedHouseholdId, conversationId, mutation]);
+    if (photo) {
+      // Photo flow: authenticated analysis FIRST (server derives everything
+      // from the session — client-supplied ids are ignored), then the normal
+      // ask-anna call carries the signed analysis token.
+      setIsAnalyzingPhoto(true);
+      setPhotoError(null);
+      (async () => {
+        try {
+          const form = new FormData();
+          form.append("photo", photo.file, photo.file.name || "photo.jpg");
+          const res = await fetch("/api/ask-anna/photo", {
+            method: "POST",
+            body: form,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.error || "Photo analysis failed");
+          }
+          mutation.mutate({
+            msg: trimmed,
+            photoToken: data.photoToken as string,
+            inputModality: wasVoice && trimmed ? "voice" : "text",
+          });
+        } catch (err) {
+          setPhotoError(
+            err instanceof Error
+              ? `${err.message}. You can remove the photo and send your text, or try again.`
+              : "Photo analysis failed. You can remove the photo and send your text."
+          );
+        } finally {
+          setIsAnalyzingPhoto(false);
+          removeAttachedPhoto();
+        }
+      })();
+    } else {
+      mutation.mutate({
+        msg: trimmed,
+        inputModality: wasVoice ? "voice" : "text",
+      });
+    }
+  }, [
+    input,
+    attachedPhoto,
+    mutation,
+    mutation.isPending,
+    confirmMutation.isPending,
+    isAnalyzingPhoto,
+    isRecording,
+    isTranscribing,
+    selectedHouseholdId,
+    lastInputWasVoice,
+    removeAttachedPhoto,
+  ]);
 
   const handleConfirm = useCallback(
     (originalMessage: string, confirmAction: PendingConfirmation) => {
@@ -632,6 +1025,26 @@ export function AskAnna() {
                               : "bg-[var(--anna-bg)] text-[var(--anna-slate)] rounded-2xl rounded-tl-md border border-[var(--anna-border)]"
                           )}
                         >
+                          {(msg.photoAttached || msg.voiceInput) && (
+                            <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/20">
+                              {msg.photoAttached && (
+                                <span
+                                  className="flex items-center gap-1 text-[10px] font-medium"
+                                  title="A photo was attached to this message"
+                                >
+                                  <ImageIcon size={11} aria-hidden /> Photo
+                                </span>
+                              )}
+                              {msg.voiceInput && (
+                                <span
+                                  className="flex items-center gap-1 text-[10px] font-medium"
+                                  title="This message started as a voice transcript"
+                                >
+                                  <Mic size={11} aria-hidden /> Voice
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {msg.content}
                         </div>
                       </div>
@@ -668,7 +1081,7 @@ export function AskAnna() {
                   ))}
 
                   {/* Typing indicator */}
-                  {(mutation.isPending || confirmMutation.isPending) && (
+                  {(mutation.isPending || confirmMutation.isPending || isAnalyzingPhoto) && (
                     <TypingIndicator />
                   )}
 
@@ -691,43 +1104,296 @@ export function AskAnna() {
               )}
             </div>
 
-            {/* ── Input Bar ── */}
+            {/* ── Input Bar (Multimodal: [Photo] [Mic] [Text] [Send]) ── */}
             <div className="flex-shrink-0 border-t border-[var(--anna-border)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[var(--anna-white)]">
               {!selectedHouseholdId ? (
                 <p className="text-xs text-[var(--anna-muted)] text-center py-1.5">
                   Select a household first
                 </p>
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSend();
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <Input
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Book a service, ask about tasks..."
-                    disabled={mutation.isPending || confirmMutation.isPending}
-                    className="flex-1 h-9 text-sm border-[var(--anna-border)] bg-[var(--anna-bg)] rounded-xl px-3 focus-visible:ring-[var(--anna-sage)] focus-visible:ring-offset-0 placeholder:text-[var(--anna-muted)]"
+                <div className="space-y-2">
+                  {/* ── Recording indicator (press-to-talk active) ── */}
+                  {isRecording && (
+                    <div
+                      className="flex items-center gap-2 rounded-xl border border-[var(--anna-error)]/30 bg-[var(--anna-error)]/5 px-3 py-2"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--anna-error)] opacity-60" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--anna-error)]" />
+                      </span>
+                      <span className="text-xs font-medium text-[var(--anna-error)]">
+                        Recording · {String(Math.floor(recordingSeconds / 60))}:
+                        {String(recordingSeconds % 60).padStart(2, "0")} / 1:00
+                      </span>
+                      <span className="text-[10px] text-[var(--anna-muted)] ml-auto">
+                        Release to send · auto-stops at 1:00
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Transcribing state ── */}
+                  {isTranscribing && (
+                    <div
+                      className="flex items-center gap-2 rounded-xl border border-[var(--anna-sage)]/30 bg-[var(--anna-sage-light)]/50 px-3 py-2"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <Loader2 size={14} className="animate-spin text-[var(--anna-sage-dark)]" />
+                      <span className="text-xs font-medium text-[var(--anna-sage-dark)]">
+                        Transcribing your voice…
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Photo analysis state ── */}
+                  {isAnalyzingPhoto && (
+                    <div
+                      className="flex items-center gap-2 rounded-xl border border-[var(--anna-sage)]/30 bg-[var(--anna-sage-light)]/50 px-3 py-2"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <Loader2 size={14} className="animate-spin text-[var(--anna-sage-dark)]" />
+                      <span className="text-xs font-medium text-[var(--anna-sage-dark)]">
+                        Analyzing your photo…
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Photo attachment preview ── */}
+                  {attachedPhoto && (
+                    <div className="flex items-center gap-3 rounded-xl border border-[var(--anna-border)] bg-[var(--anna-bg)] px-3 py-2">
+                      {/* Local object-URL preview (not a Next/Image asset —
+                          the image is never persisted server-side). */}
+                      <img
+                        src={attachedPhoto.previewUrl}
+                        alt="Photo to send — preview"
+                        className="h-16 w-16 flex-shrink-0 rounded-lg object-cover border border-[var(--anna-border)]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold text-[var(--anna-slate)]">
+                          Photo attached
+                        </p>
+                        <p className="truncate text-[10px] text-[var(--anna-muted)]">
+                          {attachedPhoto.file.name || "photo"} · (
+                          {(attachedPhoto.file.size / 1024 / 1024).toFixed(1)} MB)
+                        </p>
+                        <p className="text-[10px] text-[var(--anna-muted)] mt-0.5">
+                          Send with your message, or tap the camera to replace.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeAttachedPhoto}
+                        aria-label="Remove attached photo"
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[var(--anna-muted)] hover:bg-[var(--anna-sage-light)] hover:text-[var(--anna-slate)]"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── Voice transcript hint (editable in the input below) ── */}
+                  {voiceTranscriptPending && !isTranscribing && (
+                    <div className="flex items-center gap-2 px-1">
+                      <Mic size={12} className="text-[var(--anna-sage-dark)]" />
+                      <span className="text-[10px] text-[var(--anna-muted)]">
+                        Voice transcript above — edit it if needed before sending.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ── Inline errors (photo / mic) — typing stays available ── */}
+                  {photoError && (
+                    <div className="flex items-start gap-2 rounded-xl border border-[var(--anna-error)]/20 bg-[var(--anna-error)]/5 px-3 py-2">
+                      <AlertCircle size={13} className="mt-0.5 flex-shrink-0 text-[var(--anna-error)]" />
+                      <span className="text-[11px] leading-relaxed text-[var(--anna-error)]">
+                        {photoError}
+                      </span>
+                    </div>
+                  )}
+                  {micError && (
+                    <div className="flex items-start gap-2 rounded-xl border border-[var(--anna-error)]/20 bg-[var(--anna-error)]/5 px-3 py-2">
+                      <AlertCircle size={13} className="mt-0.5 flex-shrink-0 text-[var(--anna-error)]" />
+                      <span className="text-[11px] leading-relaxed text-[var(--anna-error)]">
+                        {micError}
+                      </span>
+                    </div>
+                  )}
+                  {micDenied && !micError && (
+                    <div className="px-1 text-[10px] text-[var(--anna-muted)]">
+                      Microphone unavailable — you can still type your message.
+                    </div>
+                  )}
+
+                  {/* Hidden file inputs: camera capture + library chooser */}
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                    aria-hidden
+                    tabIndex={-1}
                   />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={
-                      !input.trim() ||
-                      mutation.isPending ||
-                      confirmMutation.isPending
-                    }
-                    className="h-9 w-9 rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white disabled:opacity-40 flex-shrink-0"
-                    aria-label="Send message"
+                  <input
+                    ref={libraryInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                    aria-hidden
+                    tabIndex={-1}
+                  />
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSend();
+                    }}
+                    className="flex items-center gap-2"
                   >
-                    <Send size={16} />
-                  </Button>
-                </form>
+                    {/* Photo button — tap for take/choose menu */}
+                    <div className="relative flex-shrink-0">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onPointerDown={(e) => {
+                          // Prevent the form from submitting on tap.
+                          e.preventDefault();
+                        }}
+                        onClick={() => setPhotoMenuOpen((v) => !v)}
+                        disabled={mutation.isPending || confirmMutation.isPending || isAnalyzingPhoto || isRecording}
+                        className="h-11 w-11 rounded-xl p-0 text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)] disabled:opacity-40"
+                        aria-label="Attach a photo — take or choose"
+                        aria-expanded={photoMenuOpen}
+                        aria-haspopup="menu"
+                      >
+                        <Camera size={18} />
+                      </Button>
+                      {photoMenuOpen && (
+                        <div
+                          role="menu"
+                          aria-label="Photo source"
+                          className="absolute bottom-12 left-0 z-10 w-40 overflow-hidden rounded-xl border border-[var(--anna-border)] bg-[var(--anna-white)] shadow-lg"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-[var(--anna-slate)] hover:bg-[var(--anna-sage-light)]"
+                            onClick={() => {
+                              setPhotoMenuOpen(false);
+                              cameraInputRef.current?.click();
+                            }}
+                          >
+                            <Camera size={14} className="text-[var(--anna-muted)]" />
+                            Take photo
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 border-t border-[var(--anna-border)] px-3 py-2.5 text-left text-xs font-medium text-[var(--anna-slate)] hover:bg-[var(--anna-sage-light)]"
+                            onClick={() => {
+                              setPhotoMenuOpen(false);
+                              libraryInputRef.current?.click();
+                            }}
+                          >
+                            <ImageIcon size={14} className="text-[var(--anna-muted)]" />
+                            Choose photo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mic button — press and hold to talk */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        if (!isRecording) void startRecording();
+                      }}
+                      onPointerUp={(e) => {
+                        e.preventDefault();
+                        if (isRecording) stopRecordingAndTranscribe();
+                      }}
+                      onPointerLeave={() => {
+                        // Finger slid off — treat as release (send what was said).
+                        if (isRecording) stopRecordingAndTranscribe();
+                      }}
+                      onKeyDown={handleMicKeyDown}
+                      onKeyUp={handleMicKeyUp}
+                      disabled={
+                        (micDenied && !isRecording) ||
+                        mutation.isPending ||
+                        confirmMutation.isPending ||
+                        isAnalyzingPhoto ||
+                        isTranscribing
+                      }
+                      className={cn(
+                        "h-11 w-11 flex-shrink-0 rounded-xl p-0 disabled:opacity-40",
+                        isRecording
+                          ? "bg-[var(--anna-error)] text-white hover:bg-[var(--anna-error)] anna-fab-pulse"
+                          : "text-[var(--anna-muted)] hover:text-[var(--anna-sage-dark)] hover:bg-[var(--anna-sage-light)]"
+                      )}
+                      aria-label={
+                        isRecording
+                          ? "Stop recording and transcribe"
+                          : "Hold to record a voice message"
+                      }
+                      aria-pressed={isRecording}
+                    >
+                      {isRecording ? (
+                        <Square size={16} fill="currentColor" />
+                      ) : isTranscribing ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Mic size={18} />
+                      )}
+                    </Button>
+
+                    <Input
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        if (voiceTranscriptPending) setVoiceTranscriptPending(false);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        isRecording
+                          ? "Listening… release the mic to transcribe"
+                          : "Type, speak, or attach a photo…"
+                      }
+                      disabled={
+                        mutation.isPending ||
+                        confirmMutation.isPending ||
+                        isRecording ||
+                        isTranscribing
+                      }
+                      className="flex-1 h-11 text-sm border-[var(--anna-border)] bg-[var(--anna-bg)] rounded-xl px-3 focus-visible:ring-[var(--anna-sage)] focus-visible:ring-offset-0 placeholder:text-[var(--anna-muted)] disabled:opacity-60"
+                      aria-label="Message to Anna — editable voice transcripts appear here"
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={
+                        (!input.trim() && !attachedPhoto) ||
+                        mutation.isPending ||
+                        confirmMutation.isPending ||
+                        isAnalyzingPhoto ||
+                        isRecording ||
+                        isTranscribing
+                      }
+                      className="h-11 w-11 rounded-xl bg-[var(--anna-sage)] hover:bg-[var(--anna-sage-dark)] text-white disabled:opacity-40 flex-shrink-0"
+                      aria-label="Send message"
+                    >
+                      <Send size={16} />
+                    </Button>
+                  </form>
+                </div>
               )}
             </div>
           </motion.div>
