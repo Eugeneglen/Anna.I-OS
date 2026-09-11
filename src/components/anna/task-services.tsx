@@ -11,7 +11,6 @@ import { BookingForm } from "./booking-form";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import {
   formatSgd,
-  CATEGORY_DEFAULTS,
   type ServiceCategory,
   type ServiceJobType,
 } from "@/lib/types";
@@ -65,12 +64,14 @@ function CategoryCard({
   category,
   onClick,
   isActive,
+  fromPriceCents,
 }: {
   category: ServiceCategory;
   onClick: () => void;
   isActive: boolean;
+  /** Live catalogue-derived price (0 = no active catalogue services). */
+  fromPriceCents: number;
 }) {
-  const defaults = CATEGORY_DEFAULTS[category];
   return (
     <button
       onClick={isActive ? onClick : undefined}
@@ -104,7 +105,13 @@ function CategoryCard({
           {CATEGORY_DESCRIPTIONS[category]}
         </p>
         <span className="font-data text-[10px] text-[var(--anna-sage-dark)] mt-1 inline-block">
-          {isActive ? `from ${formatSgd(defaults.amount)}` : "—"}
+          {/* ── Service/Pricing/Availability Authority: live catalogue
+              price only — never the hard-coded CATEGORY_DEFAULTS amount. */}
+          {isActive
+            ? fromPriceCents > 0
+              ? `from ${formatSgd(fromPriceCents)}`
+              : "quote at booking"
+            : "—"}
         </span>
       </div>
       {!isActive && (
@@ -249,7 +256,7 @@ export function TaskServices() {
 function ServicesBrowse() {
   const [view, setView] = useState<ViewState>({ mode: "browse" });
   const [searchQuery, setSearchQuery] = useState("");
-  const { isCategoryActive } = useDynamicPricing();
+  const { isCategoryActive, getPrice } = useDynamicPricing();
   // Preselect voucher (set by My Vouchers → Book Now) — passed down as
   // `initialPromoCode` so the booking form auto-applies the code on mount.
   // Cleared after consumption so it doesn't re-apply on every re-render.
@@ -375,6 +382,7 @@ function ServicesBrowse() {
               key={cat}
               category={cat}
               isActive={isCategoryActive(cat)}
+              fromPriceCents={getPrice(cat)}
               onClick={() => {
                 setSearchQuery("");
                 setView({ mode: "category", category: cat });

@@ -321,21 +321,109 @@ export async function quoteJobType(
 /**
  * Distinguish "service exists but is currently unavailable" from
  * "service does not exist" — required for honest AI answers.
+ * Accepts a jobTypeId, a slug, or a human service name
+ * ("Gas Top-up" → aircon-gas-topup).
  */
 export async function lookupServiceStatus(
-  jobTypeIdOrSlug: string
+  jobTypeIdOrSlugOrName: string
 ): Promise<{
   exists: boolean;
   active: boolean;
   service?: CatalogueServiceView;
 }> {
-  if (!jobTypeIdOrSlug) return { exists: false, active: false };
+  if (!jobTypeIdOrSlugOrName) return { exists: false, active: false };
+  // 1. Exact id or slug (may be inactive — that is the point)
   const row = (await db.serviceJobType.findFirst({
-    where: { OR: [{ id: jobTypeIdOrSlug }, { slug: jobTypeIdOrSlug }] },
+    where: {
+      OR: [{ id: jobTypeIdOrSlugOrName }, { slug: jobTypeIdOrSlugOrName }],
+    },
     select: AUTHORITY_SELECT,
   })) as unknown as AuthorityJobTypeRow | null;
-  if (!row) return { exists: false, active: false };
-  return { exists: true, active: row.isActive, service: toCatalogueView(row) };
+  if (row) return { exists: true, active: row.isActive, service: toCatalogueView(row) };
+  // 2. Active-only name/slug match ("Gas Top-up", "gas topup", …)
+  const matched = await matchActiveService(jobTypeIdOrSlugOrName);
+  if (matched && "match" in matched) {
+    return { exists: true, active: true, service: matched.match };
+  }
+  return { exists: false, active: false };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Deterministic service-intent matching
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Normalise a service key for matching: lowercase, strip every
+ * non-alphanumeric char. "Gas Top-up" → "gastopup";
+ * "aircon-gas-topup" → "aircongastopup".
+ */
+export function normalizeServiceKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Match a user/AI-supplied service string against the ACTIVE catalogue.
+ * Deterministic, no LLM pricing, no findFirst-by-category lottery:
+ *
+ *   1. exact normalized slug equality
+ *   2. exact normalized name equality
+ *   3. containment either way (slug contains query or query contains slug)
+ *   4. every query token appears in the normalized name+slug
+ *
+ * Returns the unique best match, the tied candidates (ambiguous), or
+ * null (no match). "Book me an aircon gas top-up" resolves to
+ * aircon-gas-topup, never to a generic AIRCON service.
+ */
+export async function matchActiveService(
+  query: string,
+  category?: string
+): Promise<
+  | { match: CatalogueServiceView }
+  | { candidates: CatalogueServiceView[] }
+  | null
+> {
+  const q = normalizeServiceKey(query);
+  if (!q) return null;
+  const services = await listActiveJobTypes(category);
+
+  const byExactSlug = services.filter((s) => normalizeServiceKey(s.slug) === q);
+  if (byExactSlug.length === 1) return { match: byExactSlug[0] };
+
+  const byExactName = services.filter((s) => normalizeServiceKey(s.name) === q);
+  if (byExactName.length === 1) return { match: byExactName[0] };
+
+  const byContainment = services.filter((s) => {
+    const slug = normalizeServiceKey(s.slug);
+    const name = normalizeServiceKey(s.name);
+    return slug.includes(q) || q.includes(slug) || name.includes(q) || q.includes(name);
+  });
+  if (byContainment.length === 1) return { match: byContainment[0] };
+  if (byContainment.length > 1) {
+    // Prefer the one whose slug/name STARTS with the query (most specific)
+    const starters = byContainment.filter((s) => {
+      const slug = normalizeServiceKey(s.slug);
+      const name = normalizeServiceKey(s.name);
+      return slug.startsWith(q) || name.startsWith(q) || slug.endsWith(q) || name.endsWith(q);
+    });
+    if (starters.length === 1) return { match: starters[0] };
+    return { candidates: byContainment };
+  }
+
+  // Token containment: every token of the query appears in name+slug
+  const tokens = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 2);
+  if (tokens.length > 0) {
+    const byTokens = services.filter((s) => {
+      const hay = normalizeServiceKey(s.name + s.slug);
+      return tokens.every((t) => hay.includes(normalizeServiceKey(t)));
+    });
+    if (byTokens.length === 1) return { match: byTokens[0] };
+    if (byTokens.length > 1) return { candidates: byTokens };
+  }
+
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────

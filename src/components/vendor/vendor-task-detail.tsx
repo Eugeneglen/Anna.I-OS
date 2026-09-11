@@ -442,8 +442,18 @@ function VendorTaskDetailContent({
               <JobNoBadge jobNo={b.jobNo} size="md" />
             </div>
             <h2 className="text-lg font-bold text-[var(--anna-slate)]">
-              {getCategoryLabel(b.category)}
+              {/* Service/Pricing/Availability Authority: the SPECIFIC booked
+                  catalogue service, not just the bare category. */}
+              {b.service?.name ?? getCategoryLabel(b.category)}
+              {b.service?.unitLabel ? (
+                <span className="text-xs font-normal text-[var(--anna-muted)]">
+                  {" "}({b.service.unitLabel})
+                </span>
+              ) : null}
             </h2>
+            {b.service?.scope ? (
+              <p className="text-xs text-[var(--anna-muted)] mt-0.5">{b.service.scope}</p>
+            ) : null}
           </div>
         </div>
         <Badge

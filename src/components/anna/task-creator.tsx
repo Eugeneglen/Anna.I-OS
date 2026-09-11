@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   formatSgd,
-  CATEGORY_DEFAULTS,
   type ServiceCategory,
   type RecurrencePattern,
   type ServiceJobType,
@@ -55,7 +54,10 @@ function getInitialCategoryState(): { category: ServiceCategory | null; amountCe
   const preselected = useAnnaStore.getState().preselectedCategory;
   if (preselected) {
     useAnnaStore.setState({ preselectedCategory: null });
-    return { category: preselected, amountCents: CATEGORY_DEFAULTS[preselected].amount };
+    // ── Service/Pricing/Availability Authority ── never prefill the
+    // hard-coded CATEGORY_DEFAULTS amount: start at 0 and let the live
+    // catalogue price (or an explicit custom amount) fill it in.
+    return { category: preselected, amountCents: 0 };
   }
   return { category: null, amountCents: 0 };
 }
@@ -73,7 +75,15 @@ export function TaskCreator() {
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(initialState.category);
   const [selectedJobType, setSelectedJobType] = useState<ServiceJobType | null>(null);
   const [instructions, setInstructions] = useState("");
-  const [amountCents, setAmountCents] = useState(initialState.amountCents);
+  // User's explicit custom amount (0 = not set). The effective amount is
+  // DERIVED: the live catalogue price pre-fills until the user edits it —
+  // ── Service/Pricing/Availability Authority: never the hard-coded
+  // CATEGORY_DEFAULTS figure, and the server re-prices catalogue bookings
+  // anyway (client amounts are advisory only).
+  const [customAmountCents, setCustomAmountCents] = useState(0);
+  const livePrefillCents = initialState.category ? getPrice(initialState.category) : 0;
+  const amountCents = customAmountCents > 0 ? customAmountCents : livePrefillCents;
+  const setAmountCents = setCustomAmountCents;
   const [recurrence, setRecurrence] = useState<RecurrencePattern>("ONE_OFF");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("10:00");

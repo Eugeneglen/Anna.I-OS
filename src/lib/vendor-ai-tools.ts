@@ -27,7 +27,7 @@ export const VENDOR_AI_TOOLS: VendorToolDefinition[] = [
   {
     name: "get_today_jobs",
     description:
-      "Get today's assigned jobs: what's scheduled, status, customer details, addresses. Use when the vendor asks about today's schedule, what jobs are coming, or what they need to do today.",
+      "Get today's assigned jobs: what's scheduled, status, the specific booked service, customer-approved amount, customer details, addresses. Use when the vendor asks about today's schedule, what jobs are coming, or what they need to do today.",
     parameters: {
       type: "object",
       properties: {},
@@ -36,7 +36,7 @@ export const VENDOR_AI_TOOLS: VendorToolDefinition[] = [
   {
     name: "get_job_details",
     description:
-      "Get detailed information about a specific booking/job: instructions, verification requirements, customer address, assigned staff. Use when the vendor asks about a particular job or mentions a booking ID.",
+      "Get detailed information about a specific booking/job: the specific booked service, job instructions, verification requirements, customer address, assigned staff. Use when the vendor asks about a particular job or mentions a booking ID.",
     parameters: {
       type: "object",
       properties: {
@@ -46,6 +46,20 @@ export const VENDOR_AI_TOOLS: VendorToolDefinition[] = [
         },
       },
       required: ["bookingId"],
+    },
+  },
+  {
+    name: "get_catalog_services",
+    description:
+      "Look up the PUBLIC Anna.I service catalogue, scoped to the categories this vendor serves: which services exist, which are currently bookable, their base price and unit label. Read-only — for answering 'what does Anna.I offer / what does this service cost' questions accurately. Never invent a service, price, or availability.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description: "Optional: restrict the listing to one of the vendor's service categories",
+        },
+      },
     },
   },
   {
@@ -111,6 +125,8 @@ export async function executeVendorToolCall(
       return executeGetTodayJobs(vendorId);
     case "get_job_details":
       return executeGetJobDetails(args, vendorId);
+    case "get_catalog_services":
+      return executeGetCatalogServices(args, vendorId);
     case "get_schedule":
       return executeGetSchedule(vendorId);
     case "get_earnings":
@@ -191,7 +207,9 @@ async function executeGetTodayJobs(
         select: {
           category: true,
           amountCents: true,
+          finalAmountCents: true,
           instructions: true,
+          jobType: { select: { name: true, slug: true, unitLabel: true } },
           household: {
             select: { name: true, address: true, unitNumber: true },
           },
@@ -212,8 +230,13 @@ async function executeGetTodayJobs(
         bookingId: b.id,
         status: b.status,
         category: getCategoryLabel(b.task.category),
+        // ── Service/Pricing/Availability Authority ── the vendor sees
+        // the SPECIFIC booked service and the CUSTOMER-APPROVED amount
+        // (never a generic category at a pre-discount figure).
+        service: b.task.jobType?.name ?? null,
+        unitLabel: b.task.jobType?.unitLabel ?? null,
         scheduledTime: fmtTime(b.scheduledStart),
-        amount: sgd(b.task.amountCents),
+        approvedAmount: sgd(b.task.finalAmountCents || b.task.amountCents),
         instructions: b.task.instructions || null,
         customer: b.task.household.name,
         address: `${b.task.household.address}${b.task.household.unitNumber ? ` #${b.task.household.unitNumber}` : ""}`,
@@ -251,6 +274,7 @@ async function executeGetJobDetails(
           finalAmountCents: true,
           instructions: true,
           scheduledStart: true,
+          jobType: { select: { name: true, slug: true, unitLabel: true, description: true } },
           household: {
             select: { name: true, address: true, unitNumber: true },
           },
@@ -304,8 +328,13 @@ async function executeGetJobDetails(
       bookingId: booking.id,
       status: booking.status,
       category: getCategoryLabel(booking.task.category),
+      // ── Service/Pricing/Availability Authority ── specific booked
+      // service + customer-approved amount.
+      service: booking.task.jobType?.name ?? null,
+      serviceScope: booking.task.jobType?.description ?? null,
+      unitLabel: booking.task.jobType?.unitLabel ?? null,
       scheduledTime: fmtDateTime(booking.scheduledStart),
-      amount: sgd(booking.task.finalAmountCents || booking.task.amountCents),
+      approvedAmount: sgd(booking.task.finalAmountCents || booking.task.amountCents),
       yourPayout: sgd(booking.escrowEntries[0]?.vendorPayoutCents ?? Math.round((booking.task.finalAmountCents || booking.task.amountCents) * 0.9)),
       instructions: booking.task.instructions || null,
       customer: booking.task.household.name,
@@ -351,6 +380,103 @@ function buildVerificationGuidance(
     return "Job hasn't started yet. Accept the booking, complete the job, then upload verification photos.";
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vendor-scoped catalogue access (Service/Pricing/Availability
+// Authority — explicit product decision: YES, Vendor AI gets READ-ONLY
+// access to the PUBLIC catalogue, scoped to the vendor's own service
+// categories. It lists the same public card data the household sees
+// (name, slug, description, base price, unit label, add-on labels) —
+// active/bookable services only, no internal fields. It lets the
+// vendor answer "does Anna.I offer gas top-up / what does it cost"
+// accurately instead of inventing. It grants NO booking ability, no
+// pricing write, and no visibility beyond the vendor's categories.
+// ─────────────────────────────────────────────────────────────
+
+async function executeGetCatalogServices(
+  args: Record<string, unknown>,
+  vendorId: string
+): Promise<VendorToolCallResult> {
+  const { db } = await import("@/lib/db");
+  const { listActiveJobTypes } = await import("./service-authority");
+
+  const vendor = await db.vendor.findUnique({
+    where: { id: vendorId },
+    select: { categories: true },
+  });
+  if (!vendor) {
+    return {
+      success: false,
+      toolName: "get_catalog_services",
+      error: "Vendor not found",
+    };
+  }
+
+  let vendorCategories: string[] = [];
+  try {
+    const parsed = JSON.parse(vendor.categories);
+    if (Array.isArray(parsed)) {
+      vendorCategories = parsed.filter((c): c is string => typeof c === "string");
+    }
+  } catch {
+    vendorCategories = [];
+  }
+
+  const requested = typeof args.category === "string" ? args.category : undefined;
+  if (requested && !vendorCategories.includes(requested)) {
+    return {
+      success: false,
+      toolName: "get_catalog_services",
+      error: `Category ${requested} is outside this vendor's service categories (${vendorCategories.join(", ") || "none"})`,
+    };
+  }
+
+  try {
+    // Scope: the vendor's categories only (or one of them when filtered).
+    const wanted = requested
+      ? [requested]
+      : vendorCategories.length > 0
+        ? vendorCategories
+        : [];
+    const services: Record<string, unknown>[] = [];
+    const seen = new Set<string>();
+    for (const cat of wanted) {
+      const listed = await listActiveJobTypes(cat);
+      for (const s of listed) {
+        if (seen.has(s.jobTypeId)) continue;
+        seen.add(s.jobTypeId);
+        services.push({
+          jobTypeId: s.jobTypeId,
+          category: s.category,
+          name: s.name,
+          slug: s.slug,
+          description: s.description,
+          basePrice: sgd(s.basePriceCents),
+          unitLabel: s.unitLabel,
+          pricingType: s.pricingType,
+          addOns: s.addOns.map((a) => ({ key: a.key, label: a.label, price: sgd(a.priceCents) })),
+        });
+      }
+    }
+    return {
+      success: true,
+      toolName: "get_catalog_services",
+      data: {
+        scope: "public catalogue, vendor's categories, read-only",
+        categories: vendorCategories,
+        count: services.length,
+        services,
+        note: "Authoritative live catalogue (currently bookable services only). Services not listed are not currently offered/bookable by Anna.I.",
+      },
+    };
+  } catch {
+    return {
+      success: false,
+      toolName: "get_catalog_services",
+      error: "I cannot confirm the current Anna.I information.",
+    };
+  }
 }
 
 async function executeGetSchedule(

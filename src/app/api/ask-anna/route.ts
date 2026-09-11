@@ -119,7 +119,16 @@ function buildSystemPrompt(): string {
       hour12: false,
     })
     .replace(",", " ·");
-  return `${SYSTEM_PROMPT}\n\nCURRENT DATE & TIME: ${dateLine} (Asia/Singapore, UTC+8). Resolve every relative date ("today", "tomorrow", "next Friday", "this weekend") against THIS date. When calling create_task, pass scheduledDate as YYYY-MM-DD derived from this date — never from memory or guesses. Prices come from the Anna.I catalog; never state or invent a price yourself.`;
+  return `${SYSTEM_PROMPT}
+
+CURRENT DATE & TIME: ${dateLine} (Asia/Singapore, UTC+8). Resolve every relative date ("today", "tomorrow", "next Friday", "this weekend") against THIS date. When calling create_task, pass scheduledDate as YYYY-MM-DD derived from this date — never from memory or guesses.
+
+SERVICE / PRICING / AVAILABILITY AUTHORITY (non-negotiable):
+- CURRENT catalogue questions (what services Anna.I offers, what a service costs now, what is bookable): answer ONLY from the get_available_services / get_service_pricing tools — never from memory.
+- The household's OWN jobs (status, escrow, what a booked/completed job cost): answer from your scoped context — that is their history. "How much did job AI-0000123 cost?" is a history question; answer it directly from the context amounts.
+- Never quote a historical amount as the CURRENT price of a service. If asked what a service costs NOW, use the tools.
+- If a catalogue lookup fails or errors, reply exactly: "I cannot confirm the current Anna.I information." — never guess.
+- When the user asks to book or schedule something, call create_task IMMEDIATELY — the confirmation card IS the approval step; never just narrate a plan to book and ask permission in text. Resolve the SPECIFIC service: pass serviceSlug with the exact service the user named (the server matches it against the live catalogue — "gas top-up" resolves to the gas top-up service, never a generic category service), or primary:true when the user asked generically. Never invent a service, price, availability, add-on, or booking rule.`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -471,175 +480,208 @@ export async function POST(request: NextRequest) {
 
     // ── Normal flow: LLM with tools + injected scoped context + bounded
     // session memory (recent turns of THIS conversation, server-replayed) ──
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemMessage,
-        },
-        ...memoryMessages,
-        {
-          role: "user",
-          content: llmUserContent,
-        },
-      ],
-      tools: ANNA_TOOLS.map((tool) => ({
-        type: "function" as const,
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        },
-      })),
-      thinking: { type: "disabled" },
-    });
+    //
+    // Service/Pricing/Availability Authority: bounded MULTI-ROUND tool
+    // loop (max 2 tool rounds). The LLM may need to look up the live
+    // catalogue (get_available_services / get_service_pricing) BEFORE
+    // calling create_task; feeding tool results back for one more round
+    // lets it chain read → write without guessing. Write tools ALWAYS
+    // return a confirmation card (executeWrites=false) — the loop can
+    // never execute a booking; the card remains the only approval gate.
+    const annaToolSpecs = ANNA_TOOLS.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      },
+    }));
 
-    const choice = completion.choices[0];
-    const responseMessage = choice?.message;
-    const toolCalls = responseMessage?.tool_calls as ToolCall[] | undefined;
+    const baseMessages = [
+      {
+        role: "system",
+        content: systemMessage,
+      },
+      ...memoryMessages,
+      {
+        role: "user",
+        content: llmUserContent,
+      },
+    ];
 
-    // ── No tool calls: respond directly ──
-    if (!toolCalls || toolCalls.length === 0) {
-      const responseText =
-        responseMessage?.content ||
-        "I'm not sure I understood that. Could you rephrase?";
-      await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
-      await logAiEvent({
-        stage: "ai_recommendation",
-        chainId,
-        action: "ai.ask_anna.response",
-        // No actor → ANNA-AI: the recommendation is system-generated text,
-        // exactly like the tool-flow branches (the member is the actor of
-        // the REQUEST and any DECISION, never of the recommendation).
-        scope: { householdId, surface: "ask-anna" },
-        detail: { response: responseText, dataUsed: [] },
-        entityType: "ai_conversation",
-        entityId: conversationId,
-      });
-      return NextResponse.json({
-        response: responseText,
-        dataUsed: [],
-        conversationId,
-        chainId,
-      });
-    }
-
-    // ── Execute tool calls (always with the SESSION householdId) ──
-    const results: string[] = [];
+    const MAX_TOOL_ROUNDS = 2;
     let pendingConfirmation: {
       toolName: string;
       confirmationMessage: string;
       confirmationAction: Record<string, unknown>;
     } | null = null;
+    const allToolNames: string[] = [];
+    // Messages for the next round / final narration (assistant turns with
+    // tool_calls + tool result turns — the same loose shapes the SDK's
+    // `Promise<any>` completion returns).
+    const toolTraceMessages: any[] = [];
+    let lastAssistantContent = "";
 
-    for (const tc of toolCalls) {
-      const toolName = tc.function.name;
-      let args: Record<string, unknown>;
-      try {
-        args = JSON.parse(tc.function.arguments);
-      } catch {
-        args = {};
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const completion = await zai.chat.completions.create({
+        messages:
+          round === 0
+            ? baseMessages
+            : [...baseMessages, ...toolTraceMessages],
+        tools: annaToolSpecs,
+        thinking: { type: "disabled" },
+      });
+
+      const choice = completion.choices[0];
+      const responseMessage = choice?.message;
+      const toolCalls = responseMessage?.tool_calls as ToolCall[] | undefined;
+
+      // ── No tool calls: this round's content is the final response ──
+      if (!toolCalls || toolCalls.length === 0) {
+        const responseText =
+          responseMessage?.content ||
+          "I'm not sure I understood that. Could you rephrase?";
+        await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
+        await logAiEvent({
+          stage: "ai_recommendation",
+          chainId,
+          action: "ai.ask_anna.response",
+          // No actor → ANNA-AI: the recommendation is system-generated text,
+          // exactly like the tool-flow branches (the member is the actor of
+          // the REQUEST and any DECISION, never of the recommendation).
+          scope: { householdId, surface: "ask-anna" },
+          detail: { response: responseText, dataUsed: allToolNames },
+          entityType: "ai_conversation",
+          entityId: conversationId,
+        });
+        return NextResponse.json({
+          response: responseText,
+          dataUsed: allToolNames,
+          conversationId,
+          chainId,
+        });
       }
 
-      // FIX-2B: a single broken tool must NOT 500 the whole chat turn
+      // Keep the assistant turn (with tool_calls) for the next round /
+      // final narration.
+      toolTraceMessages.push(responseMessage);
+      if (responseMessage?.content) lastAssistantContent = responseMessage.content;
+
+      // ── Execute tool calls (always with the SESSION householdId) ──
+      const results: string[] = [];
+
+      for (const tc of toolCalls) {
+        const toolName = tc.function.name;
+        allToolNames.push(toolName);
+        let args: Record<string, unknown>;
+        try {
+          args = JSON.parse(tc.function.arguments);
+        } catch {
+          args = {};
+        }
+
+        // FIX-2B: a single broken tool must NOT 500 the whole chat turn
       // with raw Prisma internals dumped into the household's chat. Catch,
       // log server-side, and hand the LLM a clean tool-level error. A
       // thrown error can never be a requiresConfirmation result, so the
       // confirmation-card flow is unaffected.
-      let result: ToolCallResult;
-      try {
-        result = await executeToolCall(toolName, args, householdId, false);
-      } catch (error) {
-        console.error(`[AskAnna] Tool ${toolName} threw:`, error);
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        result = {
-          success: false,
+        let result: ToolCallResult;
+        try {
+          result = await executeToolCall(toolName, args, householdId, false);
+        } catch (error) {
+          console.error(`[AskAnna] Tool ${toolName} threw:`, error);
+          const msg = error instanceof Error ? error.message : "Unknown error";
+          result = {
+            success: false,
+            toolName,
+            error: `Tool ${toolName} failed: ${msg.slice(0, 200)}`,
+          };
+        }
+
+        await recordTurn({
+          conversationId,
+          role: "TOOL",
+          content: JSON.stringify(result.data ?? result.error ?? {}),
           toolName,
-          error: `Tool ${toolName} failed: ${msg.slice(0, 200)}`,
-        };
+        });
+
+        if (result.requiresConfirmation && result.confirmationMessage) {
+          pendingConfirmation = {
+            toolName,
+            confirmationMessage: result.confirmationMessage,
+            confirmationAction: result.confirmationAction!,
+          };
+          results.push(
+            JSON.stringify({
+              status: "pending_confirmation",
+              message: result.confirmationMessage,
+            })
+          );
+        } else if (result.success && result.data) {
+          results.push(JSON.stringify(result.data));
+        } else {
+          results.push(
+            JSON.stringify({ error: result.error || "Tool execution failed" })
+          );
+        }
+
+        // Feed this tool's result back for the next round / final narration.
+        toolTraceMessages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: results[results.length - 1] || "{}",
+        });
       }
 
-      await recordTurn({
-        conversationId,
-        role: "TOOL",
-        content: JSON.stringify(result.data ?? result.error ?? {}),
-        toolName,
-      });
+      // ── If there's a pending confirmation, don't call LLM again ──
+      // Just return the tool results so the UI can show the confirmation card
+      if (pendingConfirmation) {
+        // Build a natural response based on the tool results, but also
+        // include the confirmation so the UI can render it
+        const naturalResponse = lastAssistantContent || "";
 
-      if (result.requiresConfirmation && result.confirmationMessage) {
-        pendingConfirmation = {
-          toolName,
-          confirmationMessage: result.confirmationMessage,
-          confirmationAction: result.confirmationAction!,
-        };
-        results.push(
-          JSON.stringify({
-            status: "pending_confirmation",
-            message: result.confirmationMessage,
-          })
-        );
-      } else if (result.success && result.data) {
-        results.push(JSON.stringify(result.data));
-      } else {
-        results.push(
-          JSON.stringify({ error: result.error || "Tool execution failed" })
-        );
-      }
-    }
+        const responseText =
+          naturalResponse ||
+          `I'd like to ${pendingConfirmation.toolName.replace("_", " ")} for you. Please confirm below.`;
+        await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
+        await logAiEvent({
+          stage: "ai_recommendation",
+          chainId,
+          action: "ai.ask_anna.recommendation_pending",
+          scope: { householdId, surface: "ask-anna" },
+          detail: {
+            response: responseText,
+            dataUsed: [pendingConfirmation.toolName],
+            pendingConfirmation: pendingConfirmation.confirmationAction,
+          },
+          entityType: "ai_conversation",
+          entityId: conversationId,
+        });
 
-    // ── If there's a pending confirmation, don't call LLM again ──
-    // Just return the tool results so the UI can show the confirmation card
-    if (pendingConfirmation) {
-      // Build a natural response based on the tool results, but also
-      // include the confirmation so the UI can render it
-      const naturalResponse = choice?.content || "";
-
-      const responseText =
-        naturalResponse ||
-        `I'd like to ${pendingConfirmation.toolName.replace("_", " ")} for you. Please confirm below.`;
-      await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
-      await logAiEvent({
-        stage: "ai_recommendation",
-        chainId,
-        action: "ai.ask_anna.recommendation_pending",
-        scope: { householdId, surface: "ask-anna" },
-        detail: {
+        return NextResponse.json({
           response: responseText,
           dataUsed: [pendingConfirmation.toolName],
-          pendingConfirmation: pendingConfirmation.confirmationAction,
-        },
-        entityType: "ai_conversation",
-        entityId: conversationId,
-      });
+          pendingConfirmation: {
+            ...pendingConfirmation,
+            chainId, // returned so the confirm call can correlate the audit chain
+          },
+          conversationId,
+          chainId,
+        });
+      }
 
-      return NextResponse.json({
-        response: responseText,
-        dataUsed: [pendingConfirmation.toolName],
-        pendingConfirmation: {
-          ...pendingConfirmation,
-          chainId, // returned so the confirm call can correlate the audit chain
-        },
-        conversationId,
-        chainId,
-      });
+      // No card in this round — loop for one more tool round (if the cap
+      // allows) so the LLM can chain read-tools into create_task.
     }
 
-    // ── Generate final response with tool results ──
-    const toolResultMessage = toolCalls
-      .map((tc, i) => ({
-        role: "tool" as const,
-        tool_call_id: tc.id,
-        content: results[i] || "{}",
-      }))
-      .flat();
-
+    // ── Round cap reached without a card: generate the final response with
+    // the accumulated tool results (tools OFF — no further tool use) ──
     const finalCompletion = await zai.chat.completions.create({
       messages: [
         { role: "system", content: systemMessage },
         ...memoryMessages,
         { role: "user", content: llmUserContent },
-        ...(responseMessage ? [responseMessage] : []),
-        ...toolResultMessage,
+        ...toolTraceMessages,
       ],
       thinking: { type: "disabled" },
     });
@@ -655,7 +697,7 @@ export async function POST(request: NextRequest) {
       scope: { householdId, surface: "ask-anna" },
       detail: {
         response: finalResponse,
-        dataUsed: toolCalls.map((tc) => tc.function.name),
+        dataUsed: allToolNames,
       },
       entityType: "ai_conversation",
       entityId: conversationId,
@@ -663,7 +705,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       response: finalResponse,
-      dataUsed: toolCalls.map((tc) => tc.function.name),
+      dataUsed: allToolNames,
       conversationId,
       chainId,
     });

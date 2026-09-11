@@ -46,6 +46,8 @@ export async function GET() {
               finalAmountCents: true,
               instructions: true,
               jobNo: true,
+              // Service/Pricing/Availability Authority: specific booked service
+              jobType: { select: { id: true, name: true, slug: true, unitLabel: true } },
               household: { select: { name: true, address: true, unitNumber: true } },
             },
           },
@@ -133,10 +135,20 @@ export async function GET() {
       id: b.id,
       status: b.status,
       category: b.task.category,
+      // Service/Pricing/Availability Authority: specific booked service
+      service: b.task.jobType
+        ? {
+            jobTypeId: b.task.jobType.id,
+            name: b.task.jobType.name,
+            slug: b.task.jobType.slug,
+            unitLabel: b.task.jobType.unitLabel,
+          }
+        : null,
       jobNo: b.task.jobNo,
       amountCents: b.task.amountCents,
       discountCents: b.task.discountCents,
       finalAmountCents: b.task.finalAmountCents,
+      approvedAmountCents: b.task.finalAmountCents || b.task.amountCents,
       instructions: b.task.instructions,
       scheduledStart: b.scheduledStart.toISOString(),
       scheduledEnd: b.scheduledEnd?.toISOString() ?? null,

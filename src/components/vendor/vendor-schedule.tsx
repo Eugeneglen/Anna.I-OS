@@ -45,6 +45,9 @@ export interface VendorScheduleItem {
   ratingComment?: string | null;
   completionNotes?: string | null;
   category: ServiceCategory;
+  /** Specific booked catalogue service (Service/Pricing/Availability
+   *  Authority) — shown instead of the bare category when present. */
+  service?: { jobTypeId: string; name: string; slug: string; unitLabel: string; scope?: string } | null;
   jobNo?: string | null;
   instructions?: string | null;
   amountCents: number;
@@ -233,13 +236,18 @@ function BookingCard({
         </div>
       )}
 
-      {/* Top row: job no + category + status */}
+      {/* Top row: job no + specific service + status */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <JobNoBadge jobNo={item.jobNo} size="sm" />
           <CategoryIcon category={item.category} size={16} />
           <span className="text-sm font-semibold text-[var(--anna-slate)]">
-            {getCategoryLabel(item.category)}
+            {item.service?.name ?? getCategoryLabel(item.category)}
+            {item.service?.unitLabel ? (
+              <span className="text-[11px] font-normal text-[var(--anna-muted)]">
+                {" "}({item.service.unitLabel})
+              </span>
+            ) : null}
           </span>
         </div>
         <Badge

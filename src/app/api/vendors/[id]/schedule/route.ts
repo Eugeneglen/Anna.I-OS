@@ -105,6 +105,11 @@ export async function GET(
             status: true,
             disputedAt: true,
             jobNo: true,
+            // ── Service/Pricing/Availability Authority ── the vendor sees
+            // the SPECIFIC booked catalogue service, not just a category.
+            jobType: {
+              select: { id: true, name: true, slug: true, unitLabel: true, description: true },
+            },
             household: {
               select: {
                 id: true,
@@ -171,11 +176,25 @@ export async function GET(
       ratingComment: b.ratingComment,
       completionNotes: b.completionNotes,
       category: b.task.category,
+      // ── Service/Pricing/Availability Authority ── specific booked
+      // service + scope + the customer-approved amount as the headline
+      // figure (finalAmountCents; amountCents kept for the pre-discount
+      // breakdown, matching the escrow stamp).
+      service: b.task.jobType
+        ? {
+            jobTypeId: b.task.jobType.id,
+            name: b.task.jobType.name,
+            slug: b.task.jobType.slug,
+            unitLabel: b.task.jobType.unitLabel,
+            scope: b.task.jobType.description,
+          }
+        : null,
       jobNo: b.task.jobNo,
       instructions: b.task.instructions,
       amountCents: b.task.amountCents,
       discountCents: b.task.discountCents,
       finalAmountCents: b.task.finalAmountCents,
+      approvedAmountCents: b.task.finalAmountCents || b.task.amountCents,
       householdName: b.task.household.name,
       address: b.task.household.address,
       verificationPhotoCount: b.verificationPhotos.length,

@@ -151,6 +151,8 @@ export async function PATCH(
             discountCents: true,
             finalAmountCents: true,
             scheduledStart: true,
+            // Service/Pricing/Availability Authority: specific booked service
+            jobType: { select: { id: true, name: true, slug: true, unitLabel: true } },
           },
         },
         assignedStaff: {

@@ -28,16 +28,69 @@ export interface ToolDefinition {
  */
 export const ANNA_TOOLS: ToolDefinition[] = [
   {
-    name: "create_task",
+    name: "get_available_services",
     description:
-      "Create a new service task for the household. Use when the user wants to book, schedule, or request a service (e.g., 'book a cleaning', 'schedule aircon servicing', 'I need a plumber'). Price is set by the Anna.I service catalog (never invented).",
+      "Look up the LIVE Anna.I service catalogue: which services exist, which are currently bookable, their base price and unit label, and their catalogue add-on options. Use when the user ASKS ABOUT services (what do you offer, is X available, what options are there) or explicitly wants to compare/choose between services. You do NOT need this before a booking: create_task resolves the service itself (serviceSlug for a named service, primary:true for a generic request). Never answer service/availability questions from memory.",
     parameters: {
       type: "object",
       properties: {
         category: {
           type: "string",
           enum: Object.keys(CATEGORY_DEFAULTS),
-          description: "Service category to book",
+          description: "Optional: restrict the listing to one service category",
+        },
+      },
+    },
+    requiresConfirmation: false,
+  },
+  {
+    name: "get_service_pricing",
+    description:
+      "Get the CURRENT authoritative price for a specific Anna.I catalogue service, computed by the live quote engine (per-unit math, surcharges, add-ons). Use for every price question ('how much is gas top-up?', 'what would 2 units cost?') and to distinguish 'exists but currently unavailable' from 'not offered'. Never quote a historical price as the current price.",
+    parameters: {
+      type: "object",
+      properties: {
+        service: {
+          type: "string",
+          description: "The service to price: its name or slug (e.g. 'gas top-up' or 'aircon-gas-topup')",
+        },
+        category: {
+          type: "string",
+          enum: Object.keys(CATEGORY_DEFAULTS),
+          description: "Optional: the service category, to disambiguate names",
+        },
+        units: {
+          type: "number",
+          description: "Optional: number of units for per-unit services (e.g. 2 aircon units)",
+        },
+      },
+      required: ["service"],
+    },
+    requiresConfirmation: false,
+  },
+  {
+    name: "create_task",
+    description:
+      "Create a new service task for the household — call this IMMEDIATELY when the user asks to book/schedule a service (the confirmation card is the approval step; do not ask permission first). ALWAYS resolves to ONE specific catalogue service — never a generic category. If the user named a service ('gas top-up', 'chemical wash'), pass serviceSlug with exactly what they said — the server matches it against the live catalogue. If the user asked generically ('book a cleaning'), pass primary:true — the card will show the category's standard service and its catalogue price for the user to approve. The price is ALWAYS the live catalogue quote — never invented.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          enum: Object.keys(CATEGORY_DEFAULTS),
+          description: "Service category",
+        },
+        serviceSlug: {
+          type: "string",
+          description: "The specific service the user asked for, in their own words or the catalogue slug (e.g. 'gas top-up', 'aircon-gas-topup'). The server matches this against the live catalogue — a specific request never falls back to a generic category service.",
+        },
+        primary: {
+          type: "boolean",
+          description: "Explicitly book the category's standard (primary) service when the user asked generically and no specific service was named.",
+        },
+        units: {
+          type: "number",
+          description: "Number of units for per-unit services (e.g. 2 for 'service my 3 aircon units' minus one already working). Omit for flat-rate services.",
         },
         instructions: {
           type: "string",
@@ -173,6 +226,10 @@ export async function executeToolCall(
       return executeCreateTask(args, householdId, executeWrites);
     case "cancel_task":
       return executeCancelTask(args, householdId, executeWrites);
+    case "get_available_services":
+      return executeGetAvailableServices(args);
+    case "get_service_pricing":
+      return executeGetServicePricing(args);
     case "get_status":
       return executeGetStatus(args, householdId);
     case "get_spending":
@@ -226,69 +283,156 @@ async function executeCreateTask(
   const { CATEGORY_DEFAULTS } = await import("./types");
   const { triggerAutomationOnTaskCreated } = await import("./automation");
   const { ServiceCategory } = await import("@prisma/client");
+  const {
+    quoteJobType,
+    matchActiveService,
+    listActiveJobTypes,
+  } = await import("./service-authority");
+  type CatalogueServiceView = import("./service-authority").CatalogueServiceView;
 
   const category = args.category as ServiceCategory;
   const instructions = (args.instructions as string) || null;
   const recurrence = (args.recurrence as string) || "ONE_OFF";
+  // ── Service/Pricing/Availability Authority (AI booking path) ──
+  const serviceSlug = typeof args.serviceSlug === "string" ? args.serviceSlug.trim() : undefined;
+  const primary = args.primary === true;
+  const units = typeof args.units === "number" && Number.isFinite(args.units) ? args.units : undefined;
 
   // Validate category
   if (!CATEGORY_DEFAULTS[category]) {
     return { success: false, toolName: "create_task", error: `Unknown service category: ${category}` };
   }
 
-  // ── AI Wave 2-A (A-2): Ops is the sole pricing authority. The old code
-  // took the amount from the hard-coded CATEGORY_DEFAULTS constant (SGD
-  // $80 for cleaning etc.), bypassing the Ops-managed ServiceJobType
-  // catalog and leaving jobTypeId NULL. Now the catalog is the ONLY price
-  // source — if no active job type exists for the category, we REFUSE to
-  // book rather than fall back to a hard-coded price (Principle B).
-  //
-  // Police (POLICE-1, must-fix #2): on the CONFIRM pass the user has
+  // ── Police (POLICE-1, must-fix #2): on the CONFIRM pass the user has
   // already approved a specific jobTypeId + amountCents on the card. We
-  // must honor EXACTLY those — re-resolving the catalog fresh could book a
-  // different price than the one approved if Ops edited the catalog in the
-  // meantime. If the approved entry no longer matches (deactivated,
-  // re-categorized, or price changed), REFUSE with a clear message instead
-  // of silently booking different terms.
+  // must honor EXACTLY those — re-resolving the catalogue fresh could
+  // book a different price than the one approved if Ops edited the
+  // catalogue in the meantime. The approved entry is re-verified
+  // against the LIVE catalogue (still active, same category, and the
+  // re-computed authoritative quote for the approved units equals the
+  // approved amount). Anything drifted → REFUSE with a clear message.
   const approvedJobTypeId = args.jobTypeId as string | undefined;
   const approvedAmountCents = args.amountCents as number | undefined;
-  let jobType: Pick<ServiceJobType, "id" | "name" | "basePriceCents" | "isActive" | "category"> | null =
-    null;
+  const approvedUnits = typeof args.units === "number" && Number.isFinite(args.units) ? args.units : undefined;
+
+  interface ResolvedJobType {
+    id: string;
+    name: string;
+    category: string;
+    isActive: boolean;
+  }
+  let jobType: ResolvedJobType | null = null;
+  let priceCents: number | undefined = undefined;
+
   if (executeWrites && approvedJobTypeId) {
-    // Confirm pass — verify the approved catalog entry is still exactly
-    // what the user signed off on.
-    const approved = await db.serviceJobType.findUnique({
-      where: { id: approvedJobTypeId },
-    });
+    // Confirm pass — verify the approved catalogue entry is still exactly
+    // what the user signed off on (price re-computed by the authority).
+    const authority = await quoteJobType(approvedJobTypeId, { units: approvedUnits });
     if (
-      !approved ||
-      !approved.isActive ||
-      approved.category !== category ||
-      (approvedAmountCents !== undefined && approved.basePriceCents !== approvedAmountCents)
+      !authority.ok ||
+      authority.jobType.category !== category ||
+      (approvedAmountCents !== undefined && authority.quote.totalCents !== approvedAmountCents)
     ) {
       return {
         success: false,
         toolName: "create_task",
         error:
-          "The service catalog changed since you approved this booking (service removed or price updated by Anna.I Ops). Nothing was booked — please ask again to see the current catalog price.",
+          "The service catalogue changed since you approved this booking (service removed or price updated by Anna.I Ops). Nothing was booked — please ask again to see the current catalogue price.",
       };
     }
-    jobType = approved;
+    jobType = authority.jobType;
+    priceCents = authority.quote.totalCents;
+  } else if (!executeWrites) {
+    // ── Draft pass — resolve the SPECIFIC catalogue service ──
+    // Never findFirst({ category }): a request naming a service must
+    // match that service ("gas top-up" → aircon-gas-topup, not the
+    // first-sorted generic AIRCON entry). A generic request must
+    // explicitly opt into the category's primary service.
+    let resolved: CatalogueServiceView | null = null;
+    let resolutionError: string | null = null;
+
+    if (serviceSlug) {
+      const matched = await matchActiveService(serviceSlug, category);
+      if (matched && "match" in matched) {
+        resolved = matched.match;
+      } else if (matched && "candidates" in matched) {
+        resolutionError =
+          `More than one catalogue service matches "${serviceSlug}" in ${category}: ` +
+          matched.candidates.map((c) => `${c.name} (${c.slug})`).join(", ") +
+          ". Ask the household which one they meant.";
+      } else {
+        const active = await listActiveJobTypes(category);
+        resolutionError =
+          `No active Anna.I catalogue service matches "${serviceSlug}" in ${category}.` +
+          (active.length > 0
+            ? ` Available: ${active.map((s) => `${s.name} (${s.slug})`).join(", ")}.`
+            : " No services in this category are currently bookable.");
+      }
+    } else if (primary) {
+      // Explicit generic request → the category's primary service
+      // (deterministic: lowest sortOrder active entry).
+      const active = await listActiveJobTypes(category);
+      if (active.length === 0) {
+        resolutionError = `No active service catalogue entry for ${category} — pricing is set by Anna.I Ops, so I can't book this category until it's added to the catalogue.`;
+      } else {
+        resolved = active[0];
+      }
+    } else {
+      const active = await listActiveJobTypes(category);
+      resolutionError =
+        "A specific catalogue service is required to book. " +
+        (active.length > 0
+          ? `Ask the household which service they want (or pass primary:true for the standard service). Available: ${active
+              .map((s) => `${s.name} (${s.slug})`)
+              .join(", ")}.`
+          : `No services in ${category} are currently bookable.`);
+    }
+
+    if (resolutionError || !resolved) {
+      return {
+        success: false,
+        toolName: "create_task",
+        error: resolutionError ?? "Could not resolve a specific catalogue service.",
+      };
+    }
+    jobType = {
+      id: resolved.jobTypeId,
+      name: resolved.name,
+      category: resolved.category,
+      isActive: resolved.isActive,
+    };
+
+    // ── Authoritative price: live catalogue quote (units-aware), never
+    // a client/AI-supplied figure, never a flat basePrice shortcut. ──
+    const authority = await quoteJobType(resolved.jobTypeId, { units });
+    if (!authority.ok) {
+      return {
+        success: false,
+        toolName: "create_task",
+        error:
+          authority.code === "UNITS_OUT_OF_RANGE"
+            ? `${authority.message} for ${resolved.name}.`
+            : `Cannot price ${resolved.name} from the catalogue right now.`,
+      };
+    }
+    priceCents = authority.quote.totalCents;
   } else {
-    // Draft pass (or a confirm without card payload) — resolve fresh.
-    jobType = await db.serviceJobType.findFirst({
-      where: { category, isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    });
-  }
-  if (!jobType) {
+    // Confirm pass WITHOUT the card payload — refuse rather than
+    // silently re-resolving different terms.
     return {
       success: false,
       toolName: "create_task",
-      error: `No active service catalog entry for ${category} — pricing is set by Anna.I Ops, so I can't book this category until it's added to the catalog. Please use the booking flow or contact support.`,
+      error: "Missing approved booking details — please ask again.",
     };
   }
-  const priceCents = jobType.basePriceCents;
+
+  if (!jobType || priceCents === undefined) {
+    return {
+      success: false,
+      toolName: "create_task",
+      error: "Could not resolve a bookable catalogue service.",
+    };
+  }
 
   // ── AI Wave 2-A (A-3): date resolution + confirmation round-trip.
   // The old bug: the confirmation card showed a date derived from the
@@ -302,16 +446,23 @@ async function executeCreateTask(
   const dateAdjusted = scheduledStart.adjusted;
 
   // If not executing writes, return confirmation request — the card now
-  // shows the EXACT values (catalog price + resolved date) that the
-  // executor will store on confirmation.
+  // shows the EXACT values (specific service, catalogue quote incl.
+  // units, resolved date) that the executor will store on confirmation.
   if (!executeWrites) {
+    const unitsNote =
+      units !== undefined && jobType.id
+        ? ` (${units} unit${units === 1 ? "" : "s"})`
+        : "";
     return {
       success: true,
       toolName: "create_task",
       requiresConfirmation: true,
-      confirmationMessage: `Book ${jobType.name} (${CATEGORY_DEFAULTS[category].label}) for ${fmtDate(scheduledStart.date)} at SGD ${(priceCents / 100).toFixed(2)} (Anna.I catalog price)?${instructions ? ` Instructions: "${instructions}"` : ""}${recurrence !== "ONE_OFF" ? ` (${recurrence})` : ""}${dateAdjusted ? " — note: the requested date already passed, so I moved it to tomorrow." : ""}`,
+      confirmationMessage: `Book ${jobType.name} (${CATEGORY_DEFAULTS[category].label})${unitsNote} for ${fmtDate(scheduledStart.date)} at SGD ${(priceCents / 100).toFixed(2)} (Anna.I catalogue price)?${instructions ? ` Instructions: "${instructions}"` : ""}${recurrence !== "ONE_OFF" ? ` (${recurrence})` : ""}${dateAdjusted ? " — note: the requested date already passed, so I moved it to tomorrow." : ""}`,
       confirmationAction: {
         category,
+        serviceSlug: serviceSlug ?? null,
+        primary: primary || null,
+        units: units ?? null,
         instructions,
         scheduledStart: scheduledStart.date.toISOString(),
         recurrence,
@@ -321,7 +472,7 @@ async function executeCreateTask(
     };
   }
 
-  // Execute: create the task with catalog pricing + catalog linkage.
+  // Execute: create the task with catalogue pricing + catalogue linkage.
   const { TaskStatus: TS } = await import("@prisma/client");
   const recurrencePattern = recurrence !== "ONE_OFF"
     ? { type: recurrence, interval: recurrence === "WEEKLY" ? 7 : recurrence === "FORTNIGHTLY" ? 14 : 30 }
@@ -355,6 +506,8 @@ async function executeCreateTask(
               source: "nlu",
               autoDispatched: false,
               jobTypeName: jobType.name,
+              pricingSource: "catalogue",
+              ...(units !== undefined ? { units } : {}),
             },
           },
           select: { id: true, jobNo: true },
@@ -408,7 +561,132 @@ async function executeCreateTask(
   };
 }
 
-/**
+// ─────────────────────────────────────────────────────────────
+// Catalogue read tools (Service/Pricing/Availability Authority)
+// ─────────────────────────────────────────────────────────────
+
+/** Sentence the AI must fall back to when a catalogue lookup fails. */
+export const CATALOG_LOOKUP_UNAVAILABLE =
+  "I cannot confirm the current Anna.I information.";
+
+async function executeGetAvailableServices(
+  args: Record<string, unknown>
+): Promise<ToolCallResult> {
+  const { listActiveJobTypes } = await import("./service-authority");
+  const category = typeof args.category === "string" ? args.category : undefined;
+  try {
+    const services = await listActiveJobTypes(category);
+    return {
+      success: true,
+      toolName: "get_available_services",
+      data: {
+        count: services.length,
+        services: services.map((s) => ({
+          jobTypeId: s.jobTypeId,
+          category: s.category,
+          name: s.name,
+          slug: s.slug,
+          description: s.description,
+          basePrice: sgd(s.basePriceCents),
+          unitLabel: s.unitLabel,
+          pricingType: s.pricingType,
+          ...(s.unitMin !== undefined || s.unitMax !== undefined
+            ? { unitsRange: `${s.unitMin ?? 1}–${s.unitMax ?? "n"}` }
+            : {}),
+          addOns: s.addOns.map((a) => ({ key: a.key, label: a.label, price: sgd(a.priceCents) })),
+        })),
+        note: "Authoritative live catalogue. Services not listed are not currently offered/bookable by Anna.I.",
+      },
+    };
+  } catch {
+    return {
+      success: false,
+      toolName: "get_available_services",
+      error: CATALOG_LOOKUP_UNAVAILABLE,
+    };
+  }
+}
+
+async function executeGetServicePricing(
+  args: Record<string, unknown>
+): Promise<ToolCallResult> {
+  const { lookupServiceStatus, quoteJobType } = await import("./service-authority");
+  const service = typeof args.service === "string" ? args.service.trim() : "";
+  const category = typeof args.category === "string" ? args.category : undefined;
+  const units = typeof args.units === "number" && Number.isFinite(args.units) ? args.units : undefined;
+  if (!service) {
+    return {
+      success: false,
+      toolName: "get_service_pricing",
+      error: "A service name or slug is required",
+    };
+  }
+  try {
+    const status = await lookupServiceStatus(service);
+    if (!status.exists) {
+      return {
+        success: true,
+        toolName: "get_service_pricing",
+        data: {
+          service,
+          exists: false,
+          available: false,
+          note: "Anna.I does not offer this service. Do not invent a price or availability.",
+        },
+      };
+    }
+    if (!status.active) {
+      return {
+        success: true,
+        toolName: "get_service_pricing",
+        data: {
+          service: status.service?.name ?? service,
+          exists: true,
+          available: false,
+          note: "This service exists in the Anna.I catalogue but is currently unavailable. It is not the same as 'not offered'.",
+        },
+      };
+    }
+    const authority = await quoteJobType(status.service!.jobTypeId, { units });
+    if (!authority.ok) {
+      return {
+        success: true,
+        toolName: "get_service_pricing",
+        data: {
+          service: status.service?.name ?? service,
+          exists: true,
+          available: true,
+          error: authority.code,
+          note: CATALOG_LOOKUP_UNAVAILABLE,
+        },
+      };
+    }
+    return {
+      success: true,
+      toolName: "get_service_pricing",
+      data: {
+        service: status.service!.name,
+        slug: status.service!.slug,
+        category: status.service!.category,
+        exists: true,
+        available: true,
+        unitLabel: status.service!.unitLabel,
+        ...(units !== undefined ? { units } : {}),
+        basePrice: sgd(authority.quote.baseCents),
+        addOns: sgd(authority.quote.addOnsCents),
+        total: sgd(authority.quote.totalCents),
+        breakdown: authority.quote.breakdown.map((b) => ({ item: b.label, amount: sgd(b.amountCents) })),
+        note: "Authoritative current catalogue price. Never substitute a historical price.",
+      },
+    };
+  } catch {
+    return {
+      success: false,
+      toolName: "get_service_pricing",
+      error: CATALOG_LOOKUP_UNAVAILABLE,
+    };
+  }
+}/**
  * A-3: single source of truth for date resolution, shared by the draft
  * (card) and confirm (execute) passes so both can never disagree.
  *

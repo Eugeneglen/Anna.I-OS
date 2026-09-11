@@ -47,9 +47,13 @@ interface TodayJob {
   id: string;
   status: string;
   category: ServiceCategory;
+  /** Specific booked catalogue service (Service/Pricing/Availability
+   *  Authority) — shown instead of the bare category when present. */
+  service?: { jobTypeId: string; name: string; slug: string; unitLabel: string } | null;
   amountCents: number;
   discountCents?: number;
   finalAmountCents?: number;
+  approvedAmountCents?: number;
   instructions?: string | null;
   scheduledStart: string;
   scheduledEnd?: string | null;
@@ -131,7 +135,14 @@ function TodayJobCard({
         <div className="flex items-center gap-2">
           <CategoryIcon category={job.category} size={16} />
           <span className="text-sm font-semibold text-[var(--anna-slate)]">
-            {getCategoryLabel(job.category)}
+            {/* Service/Pricing/Availability Authority: the SPECIFIC booked
+                service, not just the bare category. */}
+            {job.service?.name ?? getCategoryLabel(job.category)}
+            {job.service?.unitLabel ? (
+              <span className="text-[11px] font-normal text-[var(--anna-muted)]">
+                {" "}({job.service.unitLabel})
+              </span>
+            ) : null}
           </span>
         </div>
         <Badge

@@ -86,6 +86,7 @@ export async function buildHouseholdContext(
         status: true,
         amountCents: true,
         scheduledStart: true,
+        jobType: { select: { name: true, slug: true } },
         bookings: { select: { vendor: { select: { name: true } } }, take: 1 },
       },
       orderBy: { createdAt: "desc" },
@@ -135,8 +136,12 @@ export async function buildHouseholdContext(
         jobNo: t.jobNo,
         taskId: t.id,
         category: t.category,
+        service: t.jobType?.name ?? null,
         status: t.status,
-        amount: fmtSgd(t.amountCents),
+        // ── Service/Pricing/Availability Authority ── labelled as history:
+        // household context ONLY, never current pricing authority.
+        historicalAmount: fmtSgd(t.amountCents),
+        amountNote: "paid history — NOT current pricing; current prices come from the catalogue tools",
         scheduledDate: t.scheduledStart ? fmtDate(new Date(t.scheduledStart)) : null,
         vendor: t.bookings[0]?.vendor?.name ?? null,
       })),
@@ -205,7 +210,7 @@ export async function buildVendorContext(vendorId: string): Promise<ScopedContex
         scheduledStart: true,
         rating: true,
         task: {
-          select: { id: true, jobNo: true, category: true, status: true, amountCents: true, instructions: true },
+          select: { id: true, jobNo: true, category: true, status: true, amountCents: true, discountCents: true, finalAmountCents: true, instructions: true, jobType: { select: { name: true, slug: true } } },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -257,10 +262,14 @@ export async function buildVendorContext(vendorId: string): Promise<ScopedContex
         bookingId: b.id,
         jobNo: b.task.jobNo,
         category: b.task.category,
+        // ── Service/Pricing/Availability Authority ── the vendor AI
+        // narrates the SPECIFIC booked service and the CUSTOMER-APPROVED
+        // amount, not a generic category + pre-discount figure.
+        service: b.task.jobType?.name ?? null,
         taskStatus: b.task.status,
         bookingStatus: b.status,
         scheduledDate: b.scheduledStart ? fmtDate(new Date(b.scheduledStart)) : null,
-        taskAmount: fmtSgd(b.task.amountCents),
+        approvedAmount: fmtSgd(b.task.finalAmountCents || b.task.amountCents),
         rating: b.rating,
       })),
     },
