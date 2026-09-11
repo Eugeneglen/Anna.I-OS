@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { CATEGORY_DEFAULTS, type ServiceCategory } from "@/lib/types";
+import { type ServiceCategory } from "@/lib/types";
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants";
 
 interface PricingCategory {
   category: ServiceCategory;
   label: string;
-  priceCents: number;
+  /** Derived from live active job types — null when the category has no
+   *  catalogue services (never a hard-coded fallback). */
+  priceCents: number | null;
   icon: string;
   isActive: boolean;
 }
@@ -33,8 +35,8 @@ export function useDynamicPricing() {
     staleTime: 5 * 60 * 1000, // 5 min stale time — pricing doesn't change often
   });
 
-  // Build a lookup: category → priceCents
-  const priceMap: Record<string, number> = {};
+  // Build a lookup: category → priceCents (null = no catalogue price)
+  const priceMap: Record<string, number | null> = {};
   if (data?.categories) {
     for (const c of data.categories) {
       priceMap[c.category] = c.priceCents;
@@ -44,9 +46,14 @@ export function useDynamicPricing() {
   // Build a set of active categories
   const activeCategorySet = new Set<string>(data?.activeCategories ?? []);
 
-  // Helper: get price for a category (dynamic > default)
+  // Helper: get the live catalogue-derived price for a category.
+  // ── Service/Pricing/Availability Authority ──
+  // NO CATEGORY_DEFAULTS fallback: 0 means "no catalogue price — the
+  // amount must come from a catalogue quote or an explicit custom
+  // request", never a hard-coded number.
   function getPrice(category: ServiceCategory): number {
-    return priceMap[category] ?? CATEGORY_DEFAULTS[category]?.amount ?? 0;
+    const live = priceMap[category];
+    return typeof live === "number" ? live : 0;
   }
 
   // Helper: check if a category is active

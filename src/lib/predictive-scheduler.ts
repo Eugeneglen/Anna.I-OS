@@ -223,6 +223,7 @@ export async function createPredictiveBooking(
         instructions: true,
         amountCents: true,
         jobTypeId: true,
+        quotationId: true,
       },
     })
 
@@ -277,6 +278,35 @@ export async function createPredictiveBooking(
     }
 
     // 7. Create the predicted task
+    //
+    // ── Service/Pricing/Availability Authority ──
+    // finalAmountCents is stamped on EVERY task writer (invariant:
+    // final = amount − discount). The prediction shows the anchor's
+    // historical amount as its estimate; the user-confirmed price is
+    // re-computed from the LIVE catalogue at edit/confirm time (see
+    // /api/tasks/[id]/edit-predictive). The anchor quotation's field
+    // answers (units etc.) are carried in metadata so the confirm-time
+    // re-price keeps the same job scope.
+    let quotedConfig: { fieldValues?: Record<string, number>; selectedAddOns?: string[] } | undefined
+    if (lastTask.quotationId) {
+      const anchorQuotation = await db.quotation.findUnique({
+        where: { id: lastTask.quotationId },
+        select: { fieldValues: true, selectedAddOns: true },
+      })
+      if (anchorQuotation) {
+        const fv = anchorQuotation.fieldValues
+        if (fv && typeof fv === "object" && !Array.isArray(fv)) {
+          quotedConfig = { ...(quotedConfig ?? {}), fieldValues: fv as Record<string, number> }
+        }
+        const sa = anchorQuotation.selectedAddOns
+        if (Array.isArray(sa)) {
+          quotedConfig = {
+            ...(quotedConfig ?? {}),
+            selectedAddOns: sa.filter((s): s is string => typeof s === "string"),
+          }
+        }
+      }
+    }
     const task = await db.task.create({
       data: {
         householdId,
@@ -284,6 +314,7 @@ export async function createPredictiveBooking(
         status: TaskStatus.PREDICTED,
         instructions: lastTask.instructions,
         amountCents: lastTask.amountCents,
+        finalAmountCents: lastTask.amountCents,
         jobTypeId: lastTask.jobTypeId,
         scheduledStart: predictedDate,
         lockAt: lockDate,
@@ -293,6 +324,8 @@ export async function createPredictiveBooking(
           predictedLevel: level,
           cycleMedianDays: Math.round(insight.medianDays),
           cycleSampleSize: insight.sampleSize,
+          pricingSource: lastTask.jobTypeId ? "catalogue-estimate" : "custom_request",
+          ...(quotedConfig ? { quotedConfig } : {}),
         },
       },
     })
@@ -495,6 +528,7 @@ export async function editPredictiveTask(
       status: true,
       lockAt: true,
       cancelledAt: true,
+      discountCents: true,
     },
   })
 
@@ -528,6 +562,11 @@ export async function editPredictiveTask(
   }
   if (updates.amountCents !== undefined) {
     data.amountCents = updates.amountCents
+    // ── Task-amount invariant (Service/Pricing/Availability Authority):
+    // every amount writer stamps finalAmountCents in the same update —
+    // previously this writer left finalAmountCents stale/0, forcing every
+    // consumer onto the `finalAmountCents || amountCents` fallback.
+    data.finalAmountCents = updates.amountCents - (task.discountCents ?? 0)
   }
 
   const updated = await db.task.update({

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { TaskStatus, NotificationChannel, NotificationEventType, NotificationStatus, RecipientType } from "@prisma/client"
 import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
+import { quoteJobType, stampTaskAmounts } from "@/lib/service-authority"
 
 const REBOOKABLE_STATUSES = [TaskStatus.VERIFIED, TaskStatus.ESCROW_RELEASED]
 
@@ -31,7 +32,58 @@ export async function POST(
       )
     }
 
-    // Clone the original task as a new one-off
+    // ── Service/Pricing/Availability Authority ──
+    // A rebook is a NEW booking, so it re-prices from the LIVE catalogue
+    // (the snapshot rule freezes existing bookings, not future ones).
+    // The original quotation's configuration (units / field answers /
+    // add-ons) is reused so the same scope is re-priced at the CURRENT
+    // catalogue amount — never the historical amount (T6
+    // historical-price contamination). A disabled service is not
+    // rebookable, exactly like a fresh booking.
+    let rebookAmountCents = originalTask.amountCents
+    let rebookJobTypeId: string | null = originalTask.jobTypeId
+    let pricingSource: string = "custom_request"
+    if (originalTask.jobTypeId) {
+      let fieldValues: Record<string, number> | undefined
+      let selectedAddOns: string[] | undefined
+      if (originalTask.quotationId) {
+        const originalQuotation = await db.quotation.findUnique({
+          where: { id: originalTask.quotationId },
+          select: { fieldValues: true, selectedAddOns: true },
+        })
+        if (originalQuotation) {
+          const fv = originalQuotation.fieldValues
+          if (fv && typeof fv === "object" && !Array.isArray(fv)) {
+            fieldValues = fv as Record<string, number>
+          }
+          const sa = originalQuotation.selectedAddOns
+          if (Array.isArray(sa)) selectedAddOns = sa.filter((s): s is string => typeof s === "string")
+        }
+      }
+      const authority = await quoteJobType(originalTask.jobTypeId, { fieldValues, selectedAddOns })
+      if (!authority.ok) {
+        if (authority.code === "INACTIVE") {
+          return NextResponse.json(
+            { error: `This service is currently unavailable on the Anna.I catalogue: ${authority.message}`, code: "JOB_TYPE_INACTIVE" },
+            { status: 403 }
+          )
+        }
+        return NextResponse.json(
+          { error: "The catalogue service for this task no longer exists", code: "JOB_TYPE_NOT_FOUND" },
+          { status: 409 }
+        )
+      }
+      rebookAmountCents = authority.quote.totalCents
+      rebookJobTypeId = authority.jobType.id
+      pricingSource = "catalogue"
+    }
+
+    const stamped = stampTaskAmounts(rebookAmountCents, 0)
+
+    // Clone the original task as a new one-off, re-priced at the CURRENT
+    // catalogue amount. The discount code does not carry over (same as
+    // before) — finalAmountCents is stamped so the task-amount invariant
+    // holds on every writer.
     const newTask = await db.task.create({
       data: {
         householdId: originalTask.householdId,
@@ -39,7 +91,13 @@ export async function POST(
         status: TaskStatus.CREATED,
         instructions: originalTask.instructions,
         instructionsSource: "reused",
-        amountCents: originalTask.amountCents,
+        amountCents: stamped.amountCents,
+        finalAmountCents: stamped.finalAmountCents,
+        jobTypeId: rebookJobTypeId,
+        metadata: {
+          pricingSource,
+          rebookedFromTask: originalTask.id,
+        },
         // Clear recurrence — new one-off
         recurrencePattern: null,
       },

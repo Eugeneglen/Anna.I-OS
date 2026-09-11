@@ -3,6 +3,7 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { editPredictiveTask } from "@/lib/predictive-scheduler"
 import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards"
+import { quoteJobType } from "@/lib/service-authority"
 
 const schema = z.object({
   scheduledStart: z.string().datetime().optional(),
@@ -10,14 +11,16 @@ const schema = z.object({
   amountCents: z.number().int().positive().optional(),
 })
 
-// ── P5b (AUDIT-3, POLICE-4 finding #2): catalog price authority on ──
-// predicted-task edits. Predicted tasks can carry a jobTypeId (copied from
-// their anchor task by the predictive scheduler), and this route used to
-// accept ANY positive client amountCents — a household could set a $0.01
-// price on a predicted task, let it auto-lock → dispatch → escrow at the
-// forged price. Same precedence as POST /api/tasks (P5):
-//   jobTypeId present → ServiceJobType.basePriceCents is authoritative
-//   no jobTypeId      → ad-hoc amount, sanity-capped.
+// ── Service/Pricing/Availability Authority (supersedes P5b/POLICE-4) ──
+// Catalog price authority on predicted-task CONFIRMATION. Predicted
+// tasks carry a jobTypeId (copied from their anchor task by the
+// predictive scheduler, which also carries the anchor quotation's
+// field answers in metadata.quotedConfig so the job scope survives).
+// On confirmation the price is re-computed from the LIVE catalogue via
+// calculateQuote() — never the client-sent amountCents, never the
+// stale anchor amount:
+//   jobTypeId present → live catalogue quote (units/multipliers/add-ons)
+//   no jobTypeId      → ad-hoc custom request, sanity-capped.
 const MAX_ADHOC_TASK_CENTS = 10_000_000 // $100k — matches the manual-create cap
 
 export async function PATCH(
@@ -50,20 +53,34 @@ export async function PATCH(
       updates.instructions = parsed.data.instructions
     }
     if (parsed.data.amountCents !== undefined) {
-      // ── P5b: catalog authority + ad-hoc cap (see header comment) ──
+      // ── Catalogue authority + ad-hoc cap (see header comment) ──
       const task = await db.task.findUnique({
         where: { id },
-        select: { jobTypeId: true },
+        select: { jobTypeId: true, metadata: true },
       })
       if (task?.jobTypeId) {
-        const jobType = await db.serviceJobType.findUnique({
-          where: { id: task.jobTypeId },
-          select: { basePriceCents: true },
-        })
-        if (jobType) {
-          // Ops catalog price wins — the client-sent amount is ignored.
-          updates.amountCents = jobType.basePriceCents
-        } else {
+        // Carry the anchor quotation's field answers (units etc.) so the
+        // confirm-time re-price keeps the same job scope.
+        let fieldValues: Record<string, number> | undefined
+        let selectedAddOns: string[] | undefined
+        const meta = task.metadata as Record<string, unknown> | null
+        const carried = meta?.quotedConfig as Record<string, unknown> | undefined
+        if (carried && typeof carried === "object") {
+          const fv = carried.fieldValues
+          if (fv && typeof fv === "object" && !Array.isArray(fv)) {
+            fieldValues = fv as Record<string, number>
+          }
+          const sa = carried.selectedAddOns
+          if (Array.isArray(sa)) selectedAddOns = sa.filter((s): s is string => typeof s === "string")
+        }
+        const authority = await quoteJobType(task.jobTypeId, { fieldValues, selectedAddOns })
+        if (!authority.ok) {
+          if (authority.code === "INACTIVE") {
+            return NextResponse.json(
+              { error: authority.message, code: "JOB_TYPE_INACTIVE" },
+              { status: 403 }
+            )
+          }
           // Job type vanished (shouldn't happen — delete is referentially
           // guarded); reject rather than persist an unanchored price.
           return NextResponse.json(
@@ -71,6 +88,8 @@ export async function PATCH(
             { status: 409 }
           )
         }
+        // Live catalogue quote wins — the client-sent amount is ignored.
+        updates.amountCents = authority.quote.totalCents
       } else {
         // Ad-hoc predicted task (no catalog job type): keep the client
         // amount but sanity-cap it like the manual-create path.

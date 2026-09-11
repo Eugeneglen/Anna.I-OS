@@ -169,10 +169,14 @@ export async function GET() {
         totalJobTypes: categoryJobTypes.length,
         minPriceCents: priced.length > 0 ? Math.min(...priced) : 0,
         maxPriceCents: priced.length > 0 ? Math.max(...priced) : 0,
+        // ── Service/Pricing/Availability Authority ── derived ONLY from
+        // live job types; 0 = "no catalogue services in this category"
+        // (the Ops UI shows the empty state instead of a hard-coded
+        // CATEGORY_DEFAULTS number that never matches a real charge).
         avgPriceCents:
           priced.length > 0
             ? Math.round(priced.reduce((sum, p) => sum + p, 0) / priced.length)
-            : CATEGORY_DEFAULTS[cat as keyof typeof CATEGORY_DEFAULTS]?.amount || 0,
+            : 0,
       };
     });
 

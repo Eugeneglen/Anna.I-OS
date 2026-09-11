@@ -8,6 +8,10 @@ import { isCategoryActive } from "@/lib/get-active-categories"
 import { validateRedemption } from "@/lib/marketing/campaign-service"
 import { generateJobNo } from "@/lib/job-number"
 import { resolveHouseholdScope } from "@/lib/api-guards"
+import {
+  quoteJobType,
+  stampTaskAmounts,
+} from "@/lib/service-authority"
 
 const attachmentSchema = z.object({
   fileUrl: z.string(),
@@ -22,6 +26,11 @@ const createTaskSchema = z.object({
   category: z.nativeEnum(ServiceCategory),
   instructions: z.string().optional(),
   amountCents: z.number().int().positive(),
+  // ── Service/Pricing/Availability Authority ──
+  // Number of units for per-unit catalogue services (e.g. 2 aircon
+  // units). Used ONLY by the server-side quote engine — the client
+  // amountCents is never a pricing authority for catalogue services.
+  units: z.number().int().min(1).max(999).optional(),
   discountCode: z.string().optional(), // optional promo code
   recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
   scheduledStart: z.string().optional().refine(
@@ -126,7 +135,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { category, instructions, amountCents, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
+    const { category, instructions, amountCents, units, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
 
     // Category active guard — reject if category is currently unavailable
     const categoryActive = await isCategoryActive(category)
@@ -190,45 +199,59 @@ export async function POST(request: Request) {
       finalAmountCents = quotation.totalCents;
     }
 
-    // ── P5 (AUDIT-3): catalog price authority on manual task create ──
-    // Pricing precedence (Ops is the sole pricing authority — Principle B,
-    // enforced for the AI path in Wave 2-A A-2; this closes the manual
-    // HTTP path that still accepted ANY client-supplied amountCents):
+    // ── Service/Pricing/Availability Authority (supersedes P5/AUDIT-3) ──
+    // Pricing precedence — the Ops-managed catalogue is the sole authority:
     //   1. quotationId  → quotation.totalCents (server-calculated from the
-    //                     catalog by the quote calculator, includes add-ons)
-    //   2. jobTypeId    → ServiceJobType.basePriceCents from the catalog —
-    //                     the client-sent amountCents is IGNORED for priced
-    //                     job types. A tampered client can no longer create
-    //                     a SGD $5 task for a SGD $80 service.
-    //   3. neither      → ad-hoc amount (custom/no-catalog services), still
-    //                     client-supplied but sanity-capped.
+    //                     catalogue by calculateQuote at /api/quote —
+    //                     includes units, multipliers, surcharges, add-ons)
+    //   2. jobTypeId    → LIVE catalogue quote via calculateQuote() with the
+    //                     requested `units` (or the field defaults). The
+    //                     client-sent amountCents is IGNORED for catalogue
+    //                     services. Previously this path stamped the FLAT
+    //                     basePriceCents, silently dropping per-unit math
+    //                     (a 2-unit gas top-up was booked at the 1-unit
+    //                     price).
+    //   3. neither      → explicit off-catalogue "custom request": the
+    //                     client-stated amount is the household's budget
+    //                     for a non-catalogue job — sanity-capped and
+    //                     stamped metadata.pricingSource="custom_request"
+    //                     so it can never masquerade as catalogue pricing.
     if (jobTypeId && !quotationId) {
-      const jobType = await db.serviceJobType.findUnique({
-        where: { id: jobTypeId },
-        select: { basePriceCents: true, category: true, isActive: true, name: true },
-      });
-      if (!jobType) {
+      const authority = await quoteJobType(jobTypeId, { units });
+      if (!authority.ok && authority.code === "NOT_FOUND") {
         return NextResponse.json(
           { error: "Unknown job type", code: "JOB_TYPE_NOT_FOUND" },
           { status: 400 }
         );
       }
-      if (jobType.category !== category) {
+      if (authority.ok && authority.jobType.category !== category) {
         return NextResponse.json(
           {
-            error: `Job type "${jobType.name}" belongs to category ${jobType.category}, not ${category}`,
+            error: `Job type "${authority.jobType.name}" belongs to category ${authority.jobType.category}, not ${category}`,
             code: "JOB_TYPE_CATEGORY_MISMATCH",
           },
           { status: 400 }
         );
       }
-      if (!jobType.isActive) {
+      if (!authority.ok && authority.code === "INACTIVE") {
         return NextResponse.json(
-          { error: `Job type "${jobType.name}" is currently inactive`, code: "JOB_TYPE_INACTIVE" },
+          { error: authority.message, code: "JOB_TYPE_INACTIVE" },
           { status: 403 }
         );
       }
-      finalAmountCents = jobType.basePriceCents;
+      if (!authority.ok && authority.code === "UNITS_OUT_OF_RANGE") {
+        return NextResponse.json(
+          { error: authority.message, code: "UNITS_OUT_OF_RANGE" },
+          { status: 400 }
+        );
+      }
+      if (!authority.ok) {
+        return NextResponse.json(
+          { error: "Cannot price this service from the catalogue", code: "QUOTE_FAILED" },
+          { status: 400 }
+        );
+      }
+      finalAmountCents = authority.quote.totalCents;
     }
 
     // Ad-hoc tasks (no catalog job type, no quotation): the amount stays
@@ -298,6 +321,16 @@ export async function POST(request: Request) {
     let task;
     let lastCreateError: unknown = null;
     let redemptionFailureReason: string | null = null;
+    // ── Price-authority audit stamp ── records which authority priced
+    // this task (quotation | catalogue | custom_request). Snapshot rule:
+    // these amounts are frozen at creation; later Ops catalogue edits
+    // never retro-change them.
+    const pricingSource = quotationId
+      ? "quotation"
+      : jobTypeId
+        ? "catalogue"
+        : "custom_request";
+    const stamped = stampTaskAmounts(finalAmountCents, discountCents);
     for (let attempt = 0; attempt < MAX_JOB_NO_RETRIES; attempt++) {
       try {
         task = await db.$transaction(async (tx) => {
@@ -310,15 +343,19 @@ export async function POST(request: Request) {
               status: TaskStatus.CREATED,
               instructions: instructions ?? null,
               instructionsSource: "new",
-              amountCents: finalAmountCents,
-              discountCents,
+              amountCents: stamped.amountCents,
+              discountCents: stamped.discountCents,
               discountCodeId,
-              finalAmountCents: finalAmountCents - discountCents,
+              finalAmountCents: stamped.finalAmountCents,
               recurrencePattern: recurrencePattern ?? null,
               jobTypeId: jobTypeId ?? null,
               quotationId: quotationId ?? null,
               idempotencyKey: idempotencyKey ?? null,
               scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+              metadata: {
+                pricingSource,
+                ...(units !== undefined ? { units } : {}),
+              },
               ...(attachments && attachments.length > 0
                 ? {
                     attachments: {

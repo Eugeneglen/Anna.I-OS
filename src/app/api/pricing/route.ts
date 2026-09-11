@@ -55,9 +55,15 @@ export async function GET() {
       const isActive = activeSet.has(cat);
       const defaults = CATEGORY_DEFAULTS[cat as keyof typeof CATEGORY_DEFAULTS];
       const jobTypePrices = pricesByCategory.get(cat) ?? [];
+      // ── Service/Pricing/Availability Authority ──
+      // The price is derived ONLY from live active job types. No
+      // CATEGORY_DEFAULTS fallback: a category with no active catalogue
+      // services reports no price (null) — the UI must send the user to
+      // the catalogue/quote flow instead of pre-filling a hard-coded
+      // number that never matches an actual charge.
       const priceCents = jobTypePrices.length > 0
         ? Math.round(jobTypePrices.reduce((sum, p) => sum + p, 0) / jobTypePrices.length)
-        : (defaults?.amount || 0);
+        : null;
       return {
         category: cat,
         label: defaults?.label || cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -67,10 +73,10 @@ export async function GET() {
       };
     });
 
-    // Blended average across active categories only
-    const activePricing = categories.filter((c) => c.isActive);
+    // Blended average across active categories with a catalogue price
+    const activePricing = categories.filter((c) => c.isActive && typeof c.priceCents === "number");
     const blendedCents = activePricing.length > 0
-      ? Math.round(activePricing.reduce((sum, c) => sum + c.priceCents, 0) / activePricing.length)
+      ? Math.round(activePricing.reduce((sum, c) => sum + (c.priceCents as number), 0) / activePricing.length)
       : 0;
 
     return NextResponse.json({

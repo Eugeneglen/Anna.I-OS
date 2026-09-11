@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getHouseholdSession } from "@/lib/household-auth";
 import { getCommissionRate } from "@/lib/commission";
 import { recordEscrowHoldEffect } from "@/lib/payments/escrow-effects";
+import { calculateOrderTotal } from "@/lib/payments/calculations";
 import {
   NotificationChannel,
   NotificationEventType,
@@ -56,6 +57,8 @@ export async function PATCH(
                 householdId: true,
                 category: true,
                 amountCents: true,
+                discountCents: true,
+                finalAmountCents: true,
               },
             },
           },
@@ -109,7 +112,19 @@ export async function PATCH(
     });
 
     // ── When approved: create addon escrow entry ──
-    let newTotalCents = addon.booking.task.amountCents;
+    //
+    // Add-on money model (Service/Pricing/Availability Authority):
+    //   Vendor proposes → household approves → SERVER composes the final
+    //   total through calculateOrderTotal() (payments/calculations.ts —
+    //   "the authoritative figure all 4 roles should display"). The base
+    //   is the customer-approved task amount (finalAmountCents, falling
+    //   back to amountCents only for legacy rows), NOT the pre-discount
+    //   amount — so the quoted total matches what the household actually
+    //   approved and what escrow holds. The add-on itself remains a
+    //   separately attributable escrow event: the vendor never
+    //   overwrites the original service price or the approved booking
+    //   amount; each approved add-on adds its own ledger row.
+    let newTotalCents = addon.booking.task.finalAmountCents || addon.booking.task.amountCents;
     if (isApproved) {
       // Sum all approved addons for this booking
       const approvedAddons = await db.bookingAddon.findMany({
@@ -120,9 +135,11 @@ export async function PATCH(
         select: { amountCents: true },
       });
 
-      const addonTotalCents = approvedAddons.reduce((sum, a) => sum + a.amountCents, 0);
-      const baseAmountCents = addon.booking.task.amountCents;
-      newTotalCents = baseAmountCents + addonTotalCents;
+      const orderTotal = calculateOrderTotal({
+        baseAmountCents: addon.booking.task.finalAmountCents || addon.booking.task.amountCents,
+        addonAmountsCents: approvedAddons.map((a) => a.amountCents),
+      });
+      newTotalCents = orderTotal.orderTotalCents;
 
       // Create a new EscrowLedger entry for the addon amount
       // ── Commission single source of truth (FIX-1c) ──

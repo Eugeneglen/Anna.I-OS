@@ -519,6 +519,10 @@ async function _main() {
       householdId: household1.id, category: 'CLEANING', status: 'VERIFIED',
       instructions: 'Deep clean kitchen and bathrooms. Dog in the house — ring doorbell first.',
       instructionsSource: 'new', amountCents: 6800,
+      // Task-amount invariant (Service/Pricing/Availability Authority):
+      // every seeded task stamps finalAmountCents = amountCents − discounts.
+      finalAmountCents: 6800,
+      metadata: { pricingSource: 'custom_request' },
       createdAt: new Date(Date.now() - 7*24*60*60*1000),
       dispatchedAt: new Date(Date.now() - 7*24*60*60*1000 + 30*60*1000),
       inProgressAt: new Date(Date.now() - 7*24*60*60*1000 + 2*60*60*1000),
@@ -575,6 +579,8 @@ async function _main() {
       householdId: household2.id, category: 'LAUNDRY', status: 'ACCEPTED',
       instructions: 'Wash and fold. Separate whites and colours.',
       instructionsSource: 'new', amountCents: 4500,
+      finalAmountCents: 4500,
+      metadata: { pricingSource: 'custom_request' },
       createdAt: new Date(Date.now() - 2*60*60*1000),
       dispatchedAt: new Date(Date.now() - 1.5*60*60*1000),
       acceptedAt: new Date(Date.now() - 1*60*60*1000),
@@ -613,6 +619,8 @@ async function _main() {
       householdId: household3.id, category: 'AIRCON', status: 'CREATED',
       instructions: 'General servicing for 2 wall units. Filter cleaning.',
       instructionsSource: 'new', amountCents: 12000,
+      finalAmountCents: 12000,
+      metadata: { pricingSource: 'custom_request' },
     },
   })
 
@@ -638,6 +646,8 @@ async function _main() {
         instructions: t.instructions,
         instructionsSource: 'new',
         amountCents: t.amountCents,
+        finalAmountCents: t.amountCents,
+        metadata: { pricingSource: 'custom_request' },
         createdAt: new Date(Date.now() - t.hoursAgo * 60 * 60 * 1000),
         ...(t.scheduledStart ? { scheduledStart: new Date(t.scheduledStart) } : {}),
       },
