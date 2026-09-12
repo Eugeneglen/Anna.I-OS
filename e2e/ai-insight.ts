@@ -734,8 +734,23 @@ async function main() {
   // ── S7: VLM persistence ───────────────────────────────────
   section("S7 — VLM persistence: completion photo → verdict → human outcome; escrow untouched");
   {
-    // Complete task A2 (vendor A), then upload an "after" (completion) photo
+    // Upload the "after" (completion) photo FIRST, then complete task A2
+    // (vendor A). Order matters: the remote job-completion photo gate
+    // (require_verification_photos, default ON) requires ≥1 verification
+    // photo before `complete`. The "after" upload is also the VLM trigger,
+    // so the verdict flow below is unchanged.
     const bookingA2 = await db.booking.findFirst({ where: { taskId: C.taskA2 } });
+    const jpegBuf = await sharp({
+      create: { width: 160, height: 120, channels: 3, background: { r: 110, g: 150, b: 120 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const preForm = new FormData();
+    preForm.append("type", "after");
+    preForm.append("file0", new Blob([jpegBuf], { type: "image/jpeg" }), `p3-after-${TS}.jpg`);
+    const preUpload = await reqForm(vendorA, `/api/vendors/${C.vendorAId}/bookings/${bookingA2?.id}/photos`, preForm);
+    eq("S7", "Completion photo uploaded (gate satisfied before complete)", preUpload.status, 200, `count=${preUpload.data?.count}`);
+
     const complete = await req(vendorA, "PATCH", `/api/vendors/${C.vendorAId}/bookings/${bookingA2?.id}`, {
       action: "complete",
       completionNotes: "Phase 3 VLM fixture — cleaned thoroughly",
@@ -744,17 +759,7 @@ async function main() {
     const t2 = await db.task.findUnique({ where: { id: C.taskA2 } });
     eq("S7", "Task A2 COMPLETED", t2?.status, "COMPLETED");
 
-    // Generate a real JPEG and upload it as an "after" completion photo
-    const jpegBuf = await sharp({
-      create: { width: 160, height: 120, channels: 3, background: { r: 110, g: 150, b: 120 } },
-    })
-      .jpeg()
-      .toBuffer();
-    const form = new FormData();
-    form.append("type", "after");
-    form.append("file0", new Blob([jpegBuf], { type: "image/jpeg" }), `p3-after-${TS}.jpg`);
-    const upload = await reqForm(vendorA, `/api/vendors/${C.vendorAId}/bookings/${bookingA2?.id}/photos`, form);
-    eq("S7", "Completion photo uploaded", upload.status, 200, `count=${upload.data?.count}`);
+    const upload = preUpload; // alias: the "after" photo uploaded before complete
 
     // The upload triggers fire-and-forget VLM analysis — poll for the verdict
     const photo = await db.verificationPhoto.findFirst({

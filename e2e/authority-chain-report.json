@@ -1,0 +1,652 @@
+{
+  "suite": "authority-chain",
+  "layer": "1 — deterministic (LIVE_AUTH not set: zero provider calls; LLM checks deferred to Layers 2/3)",
+  "liveAuthRequested": false,
+  "startedAt": "2026-09-12T03:06:09.289Z",
+  "finishedAt": "2026-09-12T03:06:17.325Z",
+  "aiProviderAvailable": null,
+  "liveProviderCalls": 0,
+  "totals": {
+    "pass": 97,
+    "fail": 0
+  },
+  "sections": {
+    "SETUP": {
+      "pass": 4,
+      "fail": 0
+    },
+    "S1": {
+      "pass": 13,
+      "fail": 0
+    },
+    "S2": {
+      "pass": 10,
+      "fail": 0
+    },
+    "S3": {
+      "pass": 10,
+      "fail": 0
+    },
+    "S4": {
+      "pass": 6,
+      "fail": 0
+    },
+    "S5": {
+      "pass": 4,
+      "fail": 0
+    },
+    "S6": {
+      "pass": 8,
+      "fail": 0
+    },
+    "S7": {
+      "pass": 7,
+      "fail": 0
+    },
+    "S8": {
+      "pass": 18,
+      "fail": 0
+    },
+    "S10": {
+      "pass": 5,
+      "fail": 0
+    },
+    "S11": {
+      "pass": 6,
+      "fail": 0
+    },
+    "S12": {
+      "pass": 1,
+      "fail": 0
+    },
+    "S13": {
+      "pass": 5,
+      "fail": 0
+    }
+  },
+  "failures": [],
+  "checks": [
+    {
+      "suite": "SETUP",
+      "name": "Ops admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "SETUP",
+      "name": "Household A registered + session",
+      "pass": true,
+      "detail": "hh=wtstmq"
+    },
+    {
+      "suite": "SETUP",
+      "name": "AIRCON vendor created + vendor login",
+      "pass": true,
+      "detail": "vendor=t5w7ww"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Catalogue fixtures present (gas-topup $40/unit, chemical-wash, standard-service)",
+      "pass": true,
+      "detail": "gas=4000c/unit"
+    },
+    {
+      "suite": "S1",
+      "name": "Catalogue lists Gas Top-up at $40/unit",
+      "pass": true,
+      "detail": "base=4000c"
+    },
+    {
+      "suite": "S1",
+      "name": "Quote for 2 units = $80 (calculateQuote)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Booking created (201)",
+      "pass": true,
+      "detail": "jobNo=AI-00000023"
+    },
+    {
+      "suite": "S1",
+      "name": "Task amount = SERVER catalogue quote ($80), client $1 IGNORED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Task finalAmountCents stamped (invariant)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Task linked to the SPECIFIC jobType (aircon-gas-topup)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Task metadata.pricingSource = catalogue",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Task metadata.units = 2",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Dispatched to AIRCON vendor",
+      "pass": true,
+      "detail": "booking=r0bd00"
+    },
+    {
+      "suite": "S1",
+      "name": "Vendor accept → escrow HELD at the TASK amount ($80)",
+      "pass": true,
+      "detail": "escrow=8000c commission=800c"
+    },
+    {
+      "suite": "S1",
+      "name": "Vendor schedule shows the BOOKED SERVICE (Gas Top-up), not a generic category",
+      "pass": true,
+      "detail": "service=\"Gas Top-up\""
+    },
+    {
+      "suite": "S1",
+      "name": "Vendor schedule approvedAmountCents = $80",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S1",
+      "name": "Vendor schedule unitLabel present (per unit)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Ops price change accepted ($40 → $45/unit)",
+      "pass": true,
+      "detail": "{\"success\":true}"
+    },
+    {
+      "suite": "S2",
+      "name": "User catalogue shows $45",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "New quote for 2 units = $90",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Pricing API reflects live catalogue (avg moves)",
+      "pass": true,
+      "detail": "avg=10700c"
+    },
+    {
+      "suite": "S2",
+      "name": "New booking priced at NEW catalogue ($90)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Vendor-shared quote engine returns $90 for 2 units",
+      "pass": true,
+      "detail": "9000c"
+    },
+    {
+      "suite": "S2",
+      "name": "SNAPSHOT: existing booking keeps the originally agreed $80 (amountCents)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "SNAPSHOT: existing booking finalAmountCents still $80",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "SNAPSHOT: existing escrow still holds $80",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S2",
+      "name": "Ask Anna pricing tool reports the NEW price ($45/unit)",
+      "pass": true,
+      "detail": "{\"service\":\"Gas Top-up\",\"slug\":\"aircon-gas-topup\",\"category\":\"AIRCON\",\"exists\":true,\"available\":true,\"unitLabel\":\"per un"
+    },
+    {
+      "suite": "S3",
+      "name": "Ops disables Gas Top-up",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "User catalogue no longer lists Gas Top-up",
+      "pass": true,
+      "detail": "listed=false"
+    },
+    {
+      "suite": "S3",
+      "name": "Quote for the disabled service is blocked",
+      "pass": true,
+      "detail": "status=400"
+    },
+    {
+      "suite": "S3",
+      "name": "New booking blocked (403 JOB_TYPE_INACTIVE)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Blocked booking carries the authority code",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S3",
+      "name": "Ask Anna create_task REFUSES the disabled service (no card, no task)",
+      "pass": true,
+      "detail": "No active Anna.I catalogue service matches \"gas top-up\" in AIRCON. Available: Standard Service (aircon-standard-service), Chemical Wash (air"
+    },
+    {
+      "suite": "S3",
+      "name": "Service status: exists BUT inactive (distinct from not-offered)",
+      "pass": true,
+      "detail": "exists=true active=false"
+    },
+    {
+      "suite": "S3",
+      "name": "Vendor AI catalogue does not present it as bookable",
+      "pass": true,
+      "detail": "listed=false"
+    },
+    {
+      "suite": "S3",
+      "name": "Historical task intact (amount/jobType/status preserved)",
+      "pass": true,
+      "detail": "jobNo=AI-00000023"
+    },
+    {
+      "suite": "S3",
+      "name": "Vendor history still shows the booked Gas Top-up ($80)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Ops re-enables Gas Top-up",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "User catalogue lists Gas Top-up again ($45)",
+      "pass": true,
+      "detail": "base=4500c"
+    },
+    {
+      "suite": "S4",
+      "name": "Quote works again (1 unit = $45)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "New booking priced at catalogue ($45)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S4",
+      "name": "Ask Anna create_task offers the card again",
+      "pass": true,
+      "detail": "Book Gas Top-up (Aircon) for 13 Sept 2026 at SGD 45.00 (Anna.I catalogue price)?"
+    },
+    {
+      "suite": "S4",
+      "name": "Vendor AI catalogue lists it again",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Matcher: 'gas top-up' → aircon-gas-topup (NOT the first-sorted standard service)",
+      "pass": true,
+      "detail": "{\"match\":{\"jobTypeId\":\"cmtxmfrwc003llau3tghij5rr\",\"category\":\"AIRCON\",\"name\":\"Gas Top-up\","
+    },
+    {
+      "suite": "S5",
+      "name": "Matcher: 'chemical wash' → aircon-chemical-wash",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S5",
+      "name": "Generic request (primary:true) resolves the category's primary service deterministically",
+      "pass": true,
+      "detail": "Book Standard Service (Aircon) for 13 Sept 2026 at SGD 50.00 (Anna.I catalogue price)?"
+    },
+    {
+      "suite": "S5",
+      "name": "Category-only draft REFUSES blind booking, lists the active services",
+      "pass": true,
+      "detail": "A specific catalogue service is required to book. Ask the household which service they want (or pass primary:t"
+    },
+    {
+      "suite": "S6",
+      "name": "Historical task booked at $50",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Historical task completed + verified (rebookable)",
+      "pass": true,
+      "detail": "status=VERIFIED"
+    },
+    {
+      "suite": "S6",
+      "name": "Pricing tool returns $55.00 (historical $50 never substituted)",
+      "pass": true,
+      "detail": "{\"service\":\"Gas Top-up\",\"slug\":\"aircon-gas-topup\",\"category\":\"AIRCON\",\"exists\":true,\"available\":true,\"unitLabe"
+    },
+    {
+      "suite": "S6",
+      "name": "Rebook accepted",
+      "pass": true,
+      "detail": "status=201"
+    },
+    {
+      "suite": "S6",
+      "name": "Rebooked task re-priced at CURRENT catalogue ($55)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Rebooked task keeps the jobType + stamped final",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Rebooked finalAmountCents = $55",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S6",
+      "name": "Original $50 task unchanged (snapshot)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Base booking accepted at $55",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Vendor add-on proposed (pending)",
+      "pass": true,
+      "detail": "status=201"
+    },
+    {
+      "suite": "S7",
+      "name": "Agreed base price untouched by the proposal",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Household approval accepted",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "suite": "S7",
+      "name": "Server-composed total = approved base + add-on ($55 + $18 = $73)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S7",
+      "name": "Escrow: base ($55) and add-on ($18) are separate attributable events",
+      "pass": true,
+      "detail": "held=[5500,1800]"
+    },
+    {
+      "suite": "S7",
+      "name": "Original service price NOT overwritten by the add-on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Unauthenticated quote → 401",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Unauthenticated task create → 401",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Unauthenticated ops config → 401/403",
+      "pass": true,
+      "detail": "status=401"
+    },
+    {
+      "suite": "S8",
+      "name": "Unauthenticated rebook → 401",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Unauthenticated addon approve → 401/403/404",
+      "pass": true,
+      "detail": "status=401"
+    },
+    {
+      "suite": "S8",
+      "name": "Ops session on /api/quote (household-only) → 401/403",
+      "pass": true,
+      "detail": "status=401"
+    },
+    {
+      "suite": "S8",
+      "name": "Foreign household addon approve → 403/404 (never 200)",
+      "pass": true,
+      "detail": "status=404"
+    },
+    {
+      "suite": "S8",
+      "name": "Cross-household booking: session scope wins (task NOT in A)",
+      "pass": true,
+      "detail": "session-scoped by construction"
+    },
+    {
+      "suite": "S8",
+      "name": "Booked task belongs to the SESSION household (B), not the hinted A",
+      "pass": true,
+      "detail": "owner=6nu76g"
+    },
+    {
+      "suite": "S8",
+      "name": "Foreign vendor acting on another vendor's booking → 403/404",
+      "pass": true,
+      "detail": "status=403"
+    },
+    {
+      "suite": "S8",
+      "name": "Manipulated jobTypeId (nonexistent) → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "…with authority code JOB_TYPE_NOT_FOUND",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Manipulated jobTypeId (wrong category) → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "…with authority code JOB_TYPE_CATEGORY_MISMATCH",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Manipulated amount ($0.01 for 2 units) IGNORED → $110",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Malformed units (0) → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S8",
+      "name": "Malformed units (negative) → 400",
+      "pass": true,
+      "detail": "status=400"
+    },
+    {
+      "suite": "S8",
+      "name": "Malformed units (fractional) → 400",
+      "pass": true,
+      "detail": "status=400"
+    },
+    {
+      "suite": "S10",
+      "name": "/api/pricing LAUNDRY price = live job-type average (not CATEGORY_DEFAULTS)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "category_price_* write action RETIRED (400)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "Task-amount invariant (final = amount − discount) holds on ALL rows",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "stampTaskAmounts: amount=8000, discount=500 → final=7500",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S10",
+      "name": "listActiveJobTypes returns ONLY active services",
+      "pass": true,
+      "detail": "active=5 all=5"
+    },
+    {
+      "suite": "S11",
+      "name": "Vendor AI job shows the BOOKED SERVICE (Gas Top-up), never a generic category",
+      "pass": true,
+      "detail": "service=\"Gas Top-up\""
+    },
+    {
+      "suite": "S11",
+      "name": "get_job_details: specific service + customer-approved amount ($80)",
+      "pass": true,
+      "detail": "service=Gas Top-up amount=SGD $80.00"
+    },
+    {
+      "suite": "S11",
+      "name": "Vendor catalogue access is READ-ONLY public card data (name/price/units)",
+      "pass": true,
+      "detail": "scope=public catalogue, vendor's categories, read-only count=5"
+    },
+    {
+      "suite": "S11",
+      "name": "Vendor catalogue scoped to the vendor's categories (AIRCON only)",
+      "pass": true,
+      "detail": "categories=[\"AIRCON\"]"
+    },
+    {
+      "suite": "S11",
+      "name": "Out-of-scope category request REFUSED",
+      "pass": true,
+      "detail": "Category CLEANING is outside this vendor's service categories (AIRCON)"
+    },
+    {
+      "suite": "S11",
+      "name": "Vendor catalogue shows the live gas top-up price ($55)",
+      "pass": true,
+      "detail": "price=SGD $55.00"
+    },
+    {
+      "suite": "S12",
+      "name": "Tool contract: gas top-up listed with $55 base + leak detection add-on",
+      "pass": true,
+      "detail": "[{\"key\":\"leak_detection\",\"label\":\"Leak Detection\",\"price\":\"SGD $30.00\"}]"
+    },
+    {
+      "suite": "S13",
+      "name": "Ops price double-apply → price unchanged",
+      "pass": true,
+      "detail": "price=5500c (was 5500c)"
+    },
+    {
+      "suite": "S13",
+      "name": "quoteJobType deterministic (same inputs → same total)",
+      "pass": true,
+      "detail": "total=11000c"
+    },
+    {
+      "suite": "S13",
+      "name": "Addon approval replay REFUSED (409, already approved)",
+      "pass": true,
+      "detail": "status=409 addon=approved"
+    },
+    {
+      "suite": "S13",
+      "name": "No duplicate escrow event on replay",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "S13",
+      "name": "idempotencyKey double-submit → same task, one row",
+      "pass": true,
+      "detail": "t1=rmr8jr t2=rmr8jr"
+    }
+  ]
+}

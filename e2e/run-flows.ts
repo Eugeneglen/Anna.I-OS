@@ -85,6 +85,38 @@ function captureCookies(res: Response, actor: Actor) {
     else actor.jar[name] = value;
   }
 }
+// ── Service/Pricing/Availability Authority suite adaptation ──
+// Remote 46a3d91 ships the job-completion photo gate (PlatformConfig
+// "require_verification_photos", DEFAULT TRUE): a booking cannot be
+// completed without at least one verification photo. The lifecycle flows
+// below now upload a minimal "before" photo before `complete` — the real
+// product flow. type="before" never triggers the VLM analysis path, so
+// this suite stays provider-independent.
+const MINIMAL_JPEG_B64 =
+  "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAYACADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAQF/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8ApATMoAAAAAB//9k=";
+
+async function uploadGatePhoto(actor: Actor, bookingId: string): Promise<{ status: number; data: any }> {
+  const jpeg = Uint8Array.from(atob(MINIMAL_JPEG_B64), (c) => c.charCodeAt(0));
+  const form = new FormData();
+  form.append("type", "before");
+  form.append("file0", new Blob([jpeg], { type: "image/jpeg" }), `e2e-gate-${Date.now()}.jpg`);
+  const cookie = Object.entries(actor.jar).map(([k, v]) => `${k}=${v}`).join("; ");
+  const headers: Record<string, string> = {};
+  if (cookie) headers["cookie"] = cookie;
+  if (actor.bearer) headers["authorization"] = `Bearer ${actor.bearer}`;
+  const res = await fetch(`${BASE}/api/vendors/${C.vendorId}/bookings/${bookingId}/photos`, {
+    method: "POST",
+    headers,
+    body: form,
+    signal: AbortSignal.timeout(90_000),
+  });
+  captureCookies(res, actor);
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: res.status, data };
+}
+
 async function req(actor: Actor, method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["content-type"] = "application/json";
@@ -355,6 +387,12 @@ async function vendorAccept(bookingId: string) {
   return req(vendor, "PATCH", `/api/vendors/${C.vendorId}/bookings/${bookingId}`, { action: "accept" });
 }
 async function vendorComplete(bookingId: string, notes = "E2E completion notes") {
+  // Job-completion photo gate (remote 46a3d91 feature, default ON):
+  // upload a minimal "before" verification photo so `complete` passes.
+  const up = await uploadGatePhoto(vendor, bookingId);
+  if (up.status !== 200) {
+    log(`  [GATE] photo upload failed ${up.status}: ${JSON.stringify(up.data ?? {}).slice(0, 180)}`);
+  }
   return req(vendor, "PATCH", `/api/vendors/${C.vendorId}/bookings/${bookingId}`, { action: "complete", completionNotes: notes });
 }
 async function householdVerify(taskId: string, bookingId: string) {
