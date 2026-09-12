@@ -5,7 +5,7 @@ import {
   type VendorToolCallResult,
 } from "@/lib/vendor-ai-tools";
 import { getVendorSession } from "@/lib/vendor-auth";
-import { getZAI } from "@/lib/zai";
+import { getZAI, isProviderError, PROVIDER_UNAVAILABLE_MESSAGE } from "@/lib/zai";
 import { vendorHasAiAccess } from "@/lib/vendor-rbac";
 import { buildVendorContext, renderContextForPrompt } from "@/lib/ai-context";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
@@ -105,6 +105,10 @@ interface ToolCall {
 // ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // AUTH-4: hoisted so the provider-failure catch can correlate the
+  // audit chain and vendor scope even when the outage happens mid-turn.
+  let chainId: string | null = null;
+  let vendorId: string | null = null;
   try {
     // Authenticate vendor
     const session = await getVendorSession();
@@ -115,7 +119,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const vendorId = session.vendorId;
+    vendorId = session.vendorId;
 
     // ── AI Wave 2-A (A-5): LLM cost cap — this endpoint was unmetered. ──
     const rlKey = `vendor-ai:vendor:${vendorId}`;
@@ -167,7 +171,7 @@ export async function POST(request: NextRequest) {
     const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
 
     // ── Phase 3: audit chain (request stage) ──
-    const chainId = newAiChainId();
+    chainId = newAiChainId();
     await logAiEvent({
       stage: "ai_request",
       chainId,
@@ -299,6 +303,37 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[VendorAI] Error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
+
+    // AUTH-4 (provider-failure contract): a provider outage is not an
+    // application failure — degrade gracefully with the exact fallback
+    // sentence instead of a raw 500. Vendor AI tools are read-only, so
+    // an outage mid-turn cannot have executed anything.
+    if (isProviderError(error)) {
+      try {
+        await logAiEvent({
+          stage: "ai_recommendation",
+          // fresh chain when the outage pre-empted chain creation
+          chainId: chainId ?? newAiChainId(),
+          action: "ai.vendor_ai.response",
+          scope: { vendorId: vendorId ?? undefined, surface: "vendor-ai" },
+          detail: {
+            response: PROVIDER_UNAVAILABLE_MESSAGE,
+            degraded: true,
+            providerError: msg.slice(0, 200),
+          },
+          entityType: "vendor",
+          entityId: vendorId ?? undefined,
+        });
+      } catch {
+        // best-effort audit
+      }
+      return NextResponse.json({
+        response: PROVIDER_UNAVAILABLE_MESSAGE,
+        degraded: true,
+        providerUnavailable: true,
+      });
+    }
+
     return NextResponse.json(
       { error: `Failed to process your request: ${msg}` },
       { status: 500 }

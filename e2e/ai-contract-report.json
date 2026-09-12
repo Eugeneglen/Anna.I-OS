@@ -1,0 +1,883 @@
+{
+  "suite": "ai-contract",
+  "layer": "2 — AI contract tests (provider-independent, deterministic fake-model responses)",
+  "liveProviderCalls": 0,
+  "stubDir": "/tmp/anna-llm-stub",
+  "startedAt": "2026-09-12T03:05:45.009Z",
+  "finishedAt": "2026-09-12T03:06:03.514Z",
+  "totals": {
+    "pass": 123,
+    "fail": 0
+  },
+  "sections": {
+    "SETUP": {
+      "pass": 6,
+      "fail": 0
+    },
+    "A1": {
+      "pass": 5,
+      "fail": 0
+    },
+    "A2": {
+      "pass": 5,
+      "fail": 0
+    },
+    "A3": {
+      "pass": 6,
+      "fail": 0
+    },
+    "A4": {
+      "pass": 4,
+      "fail": 0
+    },
+    "B1": {
+      "pass": 5,
+      "fail": 0
+    },
+    "B2": {
+      "pass": 4,
+      "fail": 0
+    },
+    "B3": {
+      "pass": 5,
+      "fail": 0
+    },
+    "B4": {
+      "pass": 4,
+      "fail": 0
+    },
+    "B4b": {
+      "pass": 4,
+      "fail": 0
+    },
+    "B5": {
+      "pass": 3,
+      "fail": 0
+    },
+    "B6": {
+      "pass": 3,
+      "fail": 0
+    },
+    "B7": {
+      "pass": 7,
+      "fail": 0
+    },
+    "B8": {
+      "pass": 3,
+      "fail": 0
+    },
+    "C1": {
+      "pass": 5,
+      "fail": 0
+    },
+    "C2": {
+      "pass": 4,
+      "fail": 0
+    },
+    "C3": {
+      "pass": 4,
+      "fail": 0
+    },
+    "C4": {
+      "pass": 3,
+      "fail": 0
+    },
+    "C5": {
+      "pass": 3,
+      "fail": 0
+    },
+    "C6": {
+      "pass": 2,
+      "fail": 0
+    },
+    "C7": {
+      "pass": 2,
+      "fail": 0
+    },
+    "C8": {
+      "pass": 5,
+      "fail": 0
+    },
+    "D1": {
+      "pass": 3,
+      "fail": 0
+    },
+    "D2": {
+      "pass": 3,
+      "fail": 0
+    },
+    "D3": {
+      "pass": 3,
+      "fail": 0
+    },
+    "D4": {
+      "pass": 2,
+      "fail": 0
+    },
+    "D5": {
+      "pass": 2,
+      "fail": 0
+    },
+    "E0": {
+      "pass": 2,
+      "fail": 0
+    },
+    "E1": {
+      "pass": 4,
+      "fail": 0
+    },
+    "E2": {
+      "pass": 5,
+      "fail": 0
+    },
+    "E3": {
+      "pass": 3,
+      "fail": 0
+    },
+    "E4": {
+      "pass": 4,
+      "fail": 0
+    }
+  },
+  "failures": [],
+  "checks": [
+    {
+      "suite": "SETUP",
+      "name": "Ops admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "SETUP",
+      "name": "Household A registered + session",
+      "pass": true,
+      "detail": "hh=gi6ijf"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Household B registered + session",
+      "pass": true,
+      "detail": "hh=n8fkpq"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Household C registered + session",
+      "pass": true,
+      "detail": "hh=uona2a"
+    },
+    {
+      "suite": "SETUP",
+      "name": "AIRCON vendor created + vendor login",
+      "pass": true,
+      "detail": "vendor=nfm4zu"
+    },
+    {
+      "suite": "SETUP",
+      "name": "Catalogue fixture (gas top-up $40/unit)",
+      "pass": true,
+      "detail": "id=hij5rr"
+    },
+    {
+      "suite": "A1",
+      "name": "Service lookup: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A1",
+      "name": "Service lookup: tool executed (dataUsed)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A1",
+      "name": "Tool result carries the LIVE catalogue (Gas Top-up present)",
+      "pass": true,
+      "detail": "turn={\"count\":38,\"services\":[{\"jobTypeId\":\"cmtxmfrw8003hlau3d8zeiiqu\",\"category\":\"AIR"
+    },
+    {
+      "suite": "A1",
+      "name": "No booking card for a lookup question",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A1",
+      "name": "A1 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "A2",
+      "name": "Pricing: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A2",
+      "name": "Pricing: tool executed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A2",
+      "name": "Tool result carries the authoritative price (SGD $40.00, quote-engine formatted)",
+      "pass": true,
+      "detail": "turn={\"service\":\"Gas Top-up\",\"slug\":\"aircon-gas-topup\",\"category\":\"AIRCON\",\"exists\":true,\"available\":true,\"unitLabe"
+    },
+    {
+      "suite": "A2",
+      "name": "No booking card for a price question",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A2",
+      "name": "A2 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "A3",
+      "name": "Booking: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A3",
+      "name": "Booking card returned (approval gate)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A3",
+      "name": "Card amount = SERVER catalogue quote (2 × $40 = $80)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A3",
+      "name": "Card links the SPECIFIC jobType (aircon-gas-topup)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A3",
+      "name": "NO task created before user confirmation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A3",
+      "name": "A3 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "suite": "A4",
+      "name": "Clarification: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A4",
+      "name": "Clarification relayed verbatim",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A4",
+      "name": "No tools used",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "A4",
+      "name": "A4 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "suite": "B1",
+      "name": "Unknown service: HTTP 200 (chat stays alive)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B1",
+      "name": "Unknown service: NO booking card",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B1",
+      "name": "Unknown service: NO task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B1",
+      "name": "Tool result explains the refusal (no active catalogue match)",
+      "pass": true,
+      "detail": "turn=\"No active Anna.I catalogue service matches \\\"plasma-cleaning\\\" in AIRCON. Available: Stan"
+    },
+    {
+      "suite": "B1",
+      "name": "B1 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "B2",
+      "name": "Invented service: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B2",
+      "name": "Tool result: deterministic 'does not offer' — never a price, never availability",
+      "pass": true,
+      "detail": "turn={\"service\":\"teleport-massage\",\"exists\":false,\"available\":false,\"note\":\"Anna.I does not offer this service. Do "
+    },
+    {
+      "suite": "B2",
+      "name": "No card for an invented service",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B2",
+      "name": "B2 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "B3",
+      "name": "Invented price: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B3",
+      "name": "Invented price: NO booking card at the fake price",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B3",
+      "name": "Invented price: NO task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B3",
+      "name": "Server-side truth preserved in the tool record (SGD $80.00 total, quote-engine formatted)",
+      "pass": true,
+      "detail": "turn={\"service\":\"Gas Top-up\",\"slug\":\"aircon-gas-topup\",\"category\":\"AIRCON\",\"exists\":true,\"available\":true,\"unitLabel\":\"per unit\",\"units"
+    },
+    {
+      "suite": "B3",
+      "name": "B3 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "B4",
+      "name": "Model-supplied amount: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B4",
+      "name": "Card IGNORES model amount — server quote ($80)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B4",
+      "name": "Model-supplied householdId never embedded in the card",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B4",
+      "name": "B4 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "suite": "B4b",
+      "name": "Tampered card confirmation: HTTP 200 (chat alive)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B4b",
+      "name": "Tampered amount REFUSED (catalogue re-verification)",
+      "pass": true,
+      "detail": "error=The service catalogue changed since you approved this booking (service removed o"
+    },
+    {
+      "suite": "B4b",
+      "name": "Tampered card: NO task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B4b",
+      "name": "B4b served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "suite": "B5",
+      "name": "Malformed tool args: HTTP 200 (no 500)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B5",
+      "name": "Malformed args → clean tool-level error, chat continues",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B5",
+      "name": "B5 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "B6",
+      "name": "Invalid tool name: HTTP 200 (no 500)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B6",
+      "name": "Invalid tool → tool-level error recorded, not a crash",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B6",
+      "name": "B6 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "B7",
+      "name": "Household-injection: card still built (session-scoped executor)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B7",
+      "name": "Card carries no householdId (server identity only)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B7",
+      "name": "Confirmation executed",
+      "pass": true,
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmtxsz2kk01f7lafrnuu8llis\",\"job"
+    },
+    {
+      "suite": "B7",
+      "name": "Task created under the SESSION household (injected id ignored)",
+      "pass": true,
+      "detail": "hh=uona2a"
+    },
+    {
+      "suite": "B7",
+      "name": "Task priced by the catalogue ($40, 1 unit)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B7",
+      "name": "Exactly one task created by the injection attempt",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B7",
+      "name": "B7 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "suite": "B8",
+      "name": "Conflicting narration: card stays at the server quote ($80)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B8",
+      "name": "Model's conflicting text is narration only (displayed, never executed)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "B8",
+      "name": "B8 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "C1",
+      "name": "429→retry→success: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C1",
+      "name": "User receives the real answer (retry per policy)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C1",
+      "name": "Exactly 2 gateway attempts (1×429 + 1×ok)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C1",
+      "name": "Attempt log: rate_limit then ok",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C1",
+      "name": "No task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C2",
+      "name": "Tool-round 429→retry: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C2",
+      "name": "NO duplicate tool execution (1 TOOL turn despite retry)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C2",
+      "name": "Exactly 3 gateway attempts (tool round + 429 + ok)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C2",
+      "name": "No task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C3",
+      "name": "Persistent 429: HTTP 200 (not a 500)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C3",
+      "name": "Exact graceful fallback sentence (never a guess)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C3",
+      "name": "Degraded flag set",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C3",
+      "name": "3 attempts then stop (bounded retry)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C4",
+      "name": "Persistent 500: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C4",
+      "name": "Exact graceful fallback sentence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C4",
+      "name": "Server error retried (3 attempts)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C5",
+      "name": "Timeout→retry→success: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C5",
+      "name": "Timeout recovered within bounds (<15s)",
+      "pass": true,
+      "detail": "723ms"
+    },
+    {
+      "suite": "C5",
+      "name": "Attempt log: timeout then ok",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C6",
+      "name": "Network-unavailable: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C6",
+      "name": "Exact graceful fallback sentence (do NOT guess)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C7",
+      "name": "Empty response: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C7",
+      "name": "Deterministic clarification fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C8",
+      "name": "C8 card built",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C8",
+      "name": "Narration outage: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C8",
+      "name": "Action result reported truthfully (executed BEFORE the outage)",
+      "pass": true,
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmtxsz9ch01iplafrybpn"
+    },
+    {
+      "suite": "C8",
+      "name": "Fallback sentence + deterministic success summary (never misreported)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "C8",
+      "name": "The task exists exactly once (execution is not duplicated by narration retry)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D1",
+      "name": "Ops AI valid: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D1",
+      "name": "Ops tool executed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D1",
+      "name": "D1 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "D2",
+      "name": "Ops AI provider-500: HTTP 200 (was raw 500)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D2",
+      "name": "Exact graceful fallback sentence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D2",
+      "name": "Degraded flag set",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D3",
+      "name": "Vendor AI valid: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D3",
+      "name": "Vendor tool executed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D3",
+      "name": "D3 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "suite": "D4",
+      "name": "Vendor AI provider-429: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D4",
+      "name": "Exact graceful fallback sentence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D5",
+      "name": "Vendor AI empty: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "D5",
+      "name": "Deterministic clarification fallback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E0",
+      "name": "Idempotent double-submit → ONE task row",
+      "pass": true,
+      "detail": "t1=aticw7 t2=aticw7 rows=1"
+    },
+    {
+      "suite": "E0",
+      "name": "Idempotent task priced by catalogue ($40)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E1",
+      "name": "Escrow HELD at the task amount ($40)",
+      "pass": true,
+      "detail": "escrow=4000c"
+    },
+    {
+      "suite": "E1",
+      "name": "Dispute opened (escrow DISPUTED)",
+      "pass": true,
+      "detail": "state=DISPUTED"
+    },
+    {
+      "suite": "E1",
+      "name": "Dispute case builds deterministically",
+      "pass": true,
+      "detail": "hh=uona2a"
+    },
+    {
+      "suite": "E1",
+      "name": "Policy computes partial_refund bounds (code, not LLM)",
+      "pass": true,
+      "detail": "bounds=[1,4000]"
+    },
+    {
+      "suite": "E2",
+      "name": "Oversized refund REJECTED with 422 (bounds error)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E2",
+      "name": "Rejection names the enforceable bounds",
+      "pass": true,
+      "detail": "body={\"error\":\"refundAmountCents must be an integer within [1, 4000] — got 99999900\",\"code\":\"AMOUNT_OUT_OF_BOUNDS\"}"
+    },
+    {
+      "suite": "E2",
+      "name": "Brief untouched by the rejected decision",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E2",
+      "name": "NO refund row created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E2",
+      "name": "Escrow untouched (no financial action)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E3",
+      "name": "Unconfirmed refund-class decision: 409",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E3",
+      "name": "409 explains the required confirmation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E3",
+      "name": "Brief still untouched",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E4",
+      "name": "In-bounds confirmed decision executes (200)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E4",
+      "name": "Brief APPROVED (human decision recorded)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "suite": "E4",
+      "name": "Refund executed at EXACTLY the approved amount (never more)",
+      "pass": true,
+      "detail": "refund=1001c approved=1001c"
+    },
+    {
+      "suite": "E4",
+      "name": "Partial refund recorded on the entry; dispute stays open for the remainder",
+      "pass": true,
+      "detail": "state=DISPUTED refundedCents=1001c (held 4000c)"
+    }
+  ]
+}

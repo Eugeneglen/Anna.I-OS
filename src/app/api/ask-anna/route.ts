@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ANNA_TOOLS, executeToolCall, type ToolCallResult } from "@/lib/nlu-tools";
-import { getZAI } from "@/lib/zai";
+import { getZAI, isProviderError, PROVIDER_UNAVAILABLE_MESSAGE } from "@/lib/zai";
 import { getHouseholdSession } from "@/lib/household-auth";
 import {
   checkRateLimit,
@@ -442,22 +442,38 @@ export async function POST(request: NextRequest) {
         entityId: conversationId,
       });
 
-      const completion = await zai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: `You are Anna.I. The user confirmed an action. Report the result concisely. If it succeeded, confirm the action with relevant details. If it failed, explain what went wrong.`,
-          },
-          {
-            role: "user",
-            content: `I confirmed this action. Result: ${JSON.stringify(result)}`,
-          },
-        ],
-        thinking: { type: "disabled" },
-      });
+      // AUTH-4 (provider-failure contract): the action has ALREADY
+      // executed at this point — a provider outage during narration must
+      // never misreport it. Fall back to a deterministic summary of the
+      // REAL result; never guess, never claim failure of a completed
+      // action (and never claim success of a failed one).
+      let responseText: string;
+      try {
+        const completion = await zai.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: `You are Anna.I. The user confirmed an action. Report the result concisely. If it succeeded, confirm the action with relevant details. If it failed, explain what went wrong.`,
+            },
+            {
+              role: "user",
+              content: `I confirmed this action. Result: ${JSON.stringify(result)}`,
+            },
+          ],
+          thinking: { type: "disabled" },
+        });
 
-      const responseText =
-        completion.choices[0]?.message?.content || "Action completed.";
+        responseText =
+          completion.choices[0]?.message?.content || "Action completed.";
+      } catch (narrationError) {
+        console.error("[AskAnna] Confirm-pass narration failed:", narrationError);
+        responseText = result.success
+          ? "The action completed successfully."
+          : "The action could not be completed.";
+        if (isProviderError(narrationError)) {
+          responseText = `${PROVIDER_UNAVAILABLE_MESSAGE} ${responseText}`;
+        }
+      }
       await recordTurn({ conversationId, role: "ASSISTANT", content: responseText });
       await logAiEvent({
         stage: "ai_recommendation",
@@ -729,6 +745,47 @@ export async function POST(request: NextRequest) {
       // The original error matters more than the audit write.
     }
     const msg = error instanceof Error ? error.message : "Unknown error";
+
+    // AUTH-4 (provider-failure contract): a provider outage (429 / 5xx /
+    // timeout / network) is NOT a product failure. Anna degrades
+    // gracefully — the exact fallback sentence, never a guess, and never
+    // an unsafe action: every write tool was card-gated upstream, so an
+    // outage mid-turn cannot have executed anything that was not already
+    // user-confirmed. Application errors (DB etc.) still fail loud.
+    if (isProviderError(error)) {
+      try {
+        if (conversationId) {
+          await recordTurn({
+            conversationId,
+            role: "ASSISTANT",
+            content: PROVIDER_UNAVAILABLE_MESSAGE,
+          });
+        }
+        await logAiEvent({
+          stage: "ai_recommendation",
+          chainId,
+          action: "ai.ask_anna.response",
+          scope: { householdId: session?.householdId, surface: "ask-anna" },
+          detail: {
+            response: PROVIDER_UNAVAILABLE_MESSAGE,
+            degraded: true,
+            providerError: msg.slice(0, 200),
+          },
+          entityType: conversationId ? "ai_conversation" : "ai",
+          entityId: conversationId ?? undefined,
+        });
+      } catch {
+        // best-effort audit — the graceful response matters more
+      }
+      return NextResponse.json({
+        response: PROVIDER_UNAVAILABLE_MESSAGE,
+        degraded: true,
+        providerUnavailable: true,
+        conversationId,
+        chainId,
+      });
+    }
+
     return NextResponse.json(
       { error: `Failed to process your request: ${msg}` },
       { status: 500 }

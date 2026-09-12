@@ -6,7 +6,7 @@ import {
 } from "@/lib/ops-ai-tools";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { getUserPermissions } from "@/lib/permissions";
-import { getZAI } from "@/lib/zai";
+import { getZAI, isProviderError, PROVIDER_UNAVAILABLE_MESSAGE } from "@/lib/zai";
 import {
   checkRateLimit,
   rateLimitResponsePayload,
@@ -123,6 +123,9 @@ interface ToolCall {
 // ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // AUTH-4: hoisted so the provider-failure catch can correlate the
+  // audit chain even when the outage happens mid-turn.
+  let chainId: string | null = null;
   try {
     // ── L4 AI governance (Phase 1): requires ai:recommend ──
     // The Ops AI generates advisory output — exactly the ai:recommend
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
     const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
 
     // ── Phase 3: audit chain (request stage; actor = the ops user) ──
-    const chainId = newAiChainId();
+    chainId = newAiChainId();
     await logAiEvent({
       stage: "ai_request",
       chainId,
@@ -329,6 +332,35 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[OpsAI] Error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
+
+    // AUTH-4 (provider-failure contract): a provider outage is not an
+    // application failure — degrade gracefully with the exact fallback
+    // sentence instead of a raw 500. Ops AI tools are read-only, so an
+    // outage mid-turn cannot have executed anything.
+    if (isProviderError(error)) {
+      try {
+        await logAiEvent({
+          stage: "ai_recommendation",
+          // fresh chain when the outage pre-empted chain creation
+          chainId: chainId ?? newAiChainId(),
+          action: "ai.ops_ai.response",
+          scope: { surface: "ops-ai" },
+          detail: {
+            response: PROVIDER_UNAVAILABLE_MESSAGE,
+            degraded: true,
+            providerError: msg.slice(0, 200),
+          },
+        });
+      } catch {
+        // best-effort audit
+      }
+      return NextResponse.json({
+        response: PROVIDER_UNAVAILABLE_MESSAGE,
+        degraded: true,
+        providerUnavailable: true,
+      });
+    }
+
     return NextResponse.json(
       { error: `Failed to process your request: ${msg}` },
       { status: 500 }
