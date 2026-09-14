@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/lib/db";
 import { getVendorSession } from "@/lib/vendor-auth";
+import { requireVendorPermission } from "@/lib/vendor-guard";
+import {
+  createAddonProposalSchema,
+  isAddonProposalAllowedStatus,
+} from "@/lib/addon-schema";
 import {
   NotificationChannel,
   NotificationEventType,
@@ -9,10 +13,10 @@ import {
   RecipientType,
 } from "@prisma/client";
 
-const createAddonSchema = z.object({
-  description: z.string().min(1).max(500),
-  amountCents: z.number().int().positive().max(10000000),
-});
+// F-7 (Item 8): the shared add-on validation envelope lives in
+// src/lib/addon-schema.ts — one payload schema + one booking-status
+// allowlist for BOTH the vendor-session route and the share-link route,
+// so the same financial event is validated identically on every surface.
 
 export async function POST(
   request: Request,
@@ -35,9 +39,28 @@ export async function POST(
       );
     }
 
-    // ── Parse body ──
+    // ── F-7 (Item 8): v_bookings:addon RBAC gate ──
+    // Custom roles must carry v_bookings:addon to propose charges. The
+    // seeded SYSTEM vendor roles (vendor_super_admin / vendor_admin) are
+    // grandfathered — they predate this permission and demo flows rely on
+    // them proposing add-ons without a new permission row.
+    const vendorRow = await db.vendor.findUnique({
+      where: { id: vendorId },
+      select: { roleRel: { select: { slug: true } } },
+    });
+    const roleSlug = vendorRow?.roleRel?.slug ?? "";
+    const SYSTEM_VENDOR_ROLE_SLUGS = new Set([
+      "vendor_super_admin",
+      "vendor_admin",
+    ]);
+    if (!SYSTEM_VENDOR_ROLE_SLUGS.has(roleSlug)) {
+      const permAuth = await requireVendorPermission("v_bookings", "addon");
+      if (!permAuth.success) return permAuth.response;
+    }
+
+    // ── Parse body (shared envelope) ──
     const body = await request.json();
-    const parsed = createAddonSchema.safeParse(body);
+    const parsed = createAddonProposalSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -79,10 +102,11 @@ export async function POST(
       );
     }
 
-    if (booking.status !== "accepted" && booking.status !== "in_progress") {
+    // ── F-7 (Item 8): shared booking-status allowlist (same as share route) ──
+    if (!isAddonProposalAllowedStatus(booking.status)) {
       return NextResponse.json(
         {
-          error: `Cannot add charges to a booking with status "${booking.status}". Booking must be accepted or in_progress.`,
+          error: `Cannot add charges to a booking with status "${booking.status}". Booking must be assigned, accepted or in_progress.`,
         },
         { status: 409 }
       );

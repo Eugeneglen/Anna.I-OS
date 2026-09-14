@@ -226,8 +226,17 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!hasMinRole(session.role, "ADMIN")) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    // ── F-9 (Item 8): config writes are gated by the config:configure
+    // PERMISSION, not the coarse role string. Previously "Admin only"
+    // (hasMinRole) — a role with the permission but a non-ADMIN title was
+    // denied, and the RBAC matrix was dead config. Coordinators hold only
+    // config:view and are correctly denied; super_admin is seeded with
+    // every permission and is unaffected (demo compatibility).
+    if (!(await hasPermission(session, "config", "configure"))) {
+      return NextResponse.json(
+        { error: "Forbidden — config:configure permission required" },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
@@ -384,6 +393,16 @@ export async function POST(req: NextRequest) {
         addOns: ServiceJobTypeT["addOns"];
         sortOrder?: number;
       };
+      // ── F-10 (Item 8): category is validated against the enum ──
+      // Custom/unknown categories previously fell through to Prisma and
+      // produced a raw 500. The catalogue taxonomy is closed: only the
+      // platform's categories exist.
+      if (!CATEGORIES.includes(category as never)) {
+        return NextResponse.json(
+          { error: `Unknown category "${category}" — valid categories: ${CATEGORIES.join(", ")}` },
+          { status: 400 }
+        );
+      }
       const existing = await db.serviceJobType.findUnique({ where: { slug } });
       if (existing) {
         return NextResponse.json({ error: `Slug "${slug}" already exists` }, { status: 409 });
@@ -409,14 +428,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, jobType });
 
     } else if (action === "update_job_type") {
-      const { id, name, slug, description, basePriceCents, unitLabel, pricingRules, requiredFields, addOns, sortOrder, isActive } = body as {
+      const { id, name, slug, description, basePriceCents, unitLabel, pricingRules, requiredFields, addOns, sortOrder, isActive, category } = body as {
         id: string; name?: string; slug?: string; description?: string;
         basePriceCents?: number; unitLabel?: string;
         pricingRules?: ServiceJobTypeT["pricingRules"];
         requiredFields?: ServiceJobTypeT["requiredFields"];
         addOns?: ServiceJobTypeT["addOns"];
-        sortOrder?: number; isActive?: boolean;
+        sortOrder?: number; isActive?: boolean; category?: string;
       };
+      // ── F-10 (Item 8): unknown id → 404, not a raw 500 from Prisma ──
+      const target = await db.serviceJobType.findUnique({ where: { id }, select: { id: true } });
+      if (!target) {
+        return NextResponse.json({ error: "Job type not found" }, { status: 404 });
+      }
+      // ── F-10 (Item 8): category edits are ACCEPTED + validated (they were
+      // silently dropped before — the operator's save reported success but
+      // the row kept its old category). Same closed enum as create.
+      if (category !== undefined) {
+        if (!CATEGORIES.includes(category as never)) {
+          return NextResponse.json(
+            { error: `Unknown category "${category}" — valid categories: ${CATEGORIES.join(", ")}` },
+            { status: 400 }
+          );
+        }
+      }
       if (slug) {
         const existing = await db.serviceJobType.findFirst({ where: { slug, NOT: { id } } });
         if (existing) {
@@ -429,6 +464,7 @@ export async function POST(req: NextRequest) {
       }
       const updateData: Record<string, unknown> = {};
       if (name !== undefined) updateData.name = name;
+      if (category !== undefined) updateData.category = category;
       if (slug !== undefined) updateData.slug = slug;
       if (description !== undefined) updateData.description = description;
       if (basePriceCents !== undefined) updateData.basePriceCents = basePriceCents;

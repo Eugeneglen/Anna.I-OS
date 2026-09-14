@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isShareLinkExpired, shareLinkExpiredError } from "@/lib/share-link";
-import { z } from "zod";
+import {
+  createAddonProposalSchema,
+  isAddonProposalAllowedStatus,
+} from "@/lib/addon-schema";
 import {
   NotificationChannel,
   NotificationEventType,
@@ -9,17 +12,10 @@ import {
   RecipientType,
 } from "@prisma/client";
 
-const createAddonSchema = z.object({
-  description: z
-    .string()
-    .min(3, "Description must be at least 3 characters")
-    .max(500, "Description must be under 500 characters"),
-  amountCents: z
-    .number()
-    .int("Amount must be a whole number")
-    .min(50, "Minimum charge is $0.50")
-    .max(1_000_000, "Maximum charge is $10,000"),
-});
+// F-7 (Item 8): the payload schema + booking-status allowlist are shared
+// with the vendor-session route via src/lib/addon-schema.ts — one
+// envelope, identical validation on every surface that proposes the same
+// financial event. (This route previously declared its own copy.)
 
 // ── GET: list existing addons ──
 export async function GET(
@@ -97,8 +93,8 @@ export async function POST(
       return NextResponse.json({ error: shareLinkExpiredError() }, { status: 410 });
     }
 
-    // Only allow addons on active bookings
-    if (!["assigned", "accepted", "in_progress"].includes(booking.status)) {
+    // Only allow addons on active bookings (F-7: shared allowlist)
+    if (!isAddonProposalAllowedStatus(booking.status)) {
       return NextResponse.json(
         {
           error:
@@ -108,9 +104,9 @@ export async function POST(
       );
     }
 
-    // ── Validate body ──
+    // ── Validate body (shared envelope) ──
     const body = await request.json();
-    const parsed = createAddonSchema.safeParse(body);
+    const parsed = createAddonProposalSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
