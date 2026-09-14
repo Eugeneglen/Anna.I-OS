@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   OPS_AI_TOOLS,
   executeOpsToolCall,
+  OPS_VENDOR_PERFORMANCE_WINDOW,
   type OpsToolCallResult,
 } from "@/lib/ops-ai-tools";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { getUserPermissions } from "@/lib/permissions";
 import { getZAI, isProviderError, PROVIDER_UNAVAILABLE_MESSAGE } from "@/lib/zai";
+import { ROUTING_WEIGHTS } from "@/lib/routing";
+import { getCommissionRate } from "@/lib/commission";
+import { TaskStatus } from "@prisma/client";
+import {
+  VENDOR_ACCEPTANCE_TIMEOUT_MINUTES,
+  MAX_MATCH_ATTEMPTS,
+} from "@/lib/constants";
 import {
   checkRateLimit,
   rateLimitResponsePayload,
@@ -41,11 +49,11 @@ CORE RESPONSIBILITIES:
 4. EXPLAINING — Explain routing/autonomy decisions in rule-based terms (which rule fired, what threshold met). NEVER say "the AI decided" without the underlying rule.
 5. REPORTING — Assemble metrics for weekly ops review, tied to financial figures where relevant
 
-BOOKING LIFECYCLE — the platform's core state machine (11 TaskStatus states):
+BOOKING LIFECYCLE — the platform's core state machine ({TASK_STATUS_COUNT} TaskStatus states):
 - PREDICTED → CREATED → MATCHING → ACCEPTED/SCHEDULED → IN_PROGRESS → COMPLETED → VERIFIED → ESCROW_RELEASED
 - Terminal states: DISPUTED, CANCELLED
 - Escrow is HELD at vendor acceptance (not at booking creation)
-- Platform commission: 10% of task amount
+- Platform commission: {COMMISSION_RATE}% of task amount
 
 DISPUTE FLOW:
 - Household raises dispute → Task → DISPUTED, Escrow → DISPUTED, active booking cancelled, autonomy promotion paused
@@ -56,8 +64,8 @@ DISPUTE FLOW:
 CANCELLATION: Only ADMIN can cancel non-predicted tasks (PATCH /api/ops/bookings/[id] action: cancel). Vendor rejection/timeout cancels the booking but task stays MATCHING (auto-re-routes).
 
 VENDOR ASSIGNMENT (Routing Engine scores vendors):
-- Base 100, Affinity +15/+5 (cap +30), Rating +avg×3 (cap +15), Dispute -20, Reassignment -5, Utilisation -util×10, Zone +10, Recent +5
-- Accept timeout: 15 minutes. Max match attempts: 5 before ops escalation.
+- Base {ROUTING_BASE}, Affinity +{AFFINITY_FIRST}/+{AFFINITY_PER_ADDITIONAL} (cap +{AFFINITY_CAP}), Rating +avg×{RATING_MULTIPLIER} (cap +{RATING_CAP}), Dispute {DISPUTE_PENALTY}, Reassignment {REASSIGNMENT_PENALTY}, Utilisation -util×{UTILISATION_MULTIPLIER}, Zone +{ZONE_BONUS}, Recent +{RECENT_BONUS}
+- Accept timeout: {TIMEOUT_MINUTES} minutes. Max match attempts: {MAX_ATTEMPTS} before ops escalation.
 
 AUTONOMY LADDER (provisional thresholds):
 - L1: Manual dispatch | L2: Vendor suggestions | L3: Auto-match | L4: Predictive scheduling | L5: Full auto-verify
@@ -75,7 +83,41 @@ HARD BOUNDARIES:
 - Never share vendor data with another vendor, or household data with another household
 - Never present autonomy thresholds as locked when marked provisional
 - Never use non-Base-Case financial scenarios without labelling them
-- Currency: SGD (e.g., SGD $68.00)`;
+- Currency: SGD (e.g., SGD $68.00)
+
+SERVICE CATALOGUE / PRICING (P2-3, Item 8):
+- You have NO service-catalogue or pricing lookup tool — catalogue and price questions are NOT answerable from this console or from your memory.
+- The catalogue authority is the Ops → Job Types catalogue (Ops console → Config → Job Types). Direct the operator there; never quote a service, price, or availability from memory.
+- Transaction figures your tools DO expose (task amounts, escrow ledger entries, MRR aggregates) are actual money history — not catalogue prices. Never present a historical or aggregate figure as the current price of a service.`;
+
+// ─────────────────────────────────────────────────────────────
+// F-6 (Item 8): grounded prompt assembly — every operational figure the
+// Ops AI narrates (TaskStatus count, commission, routing weights, accept
+// timeout, match attempts) is DERIVED from the live authorities (the
+// Prisma enum, getCommissionRate, ROUTING_WEIGHTS, constants) so the
+// narrated rules can never drift from the executed ones.
+// ─────────────────────────────────────────────────────────────
+
+export async function buildOpsSystemPrompt(): Promise<string> {
+  const commissionRate = await getCommissionRate();
+  const taskStatusCount = Object.keys(TaskStatus).length;
+  return SYSTEM_PROMPT
+    .replace("{TASK_STATUS_COUNT}", String(taskStatusCount))
+    .replace("{COMMISSION_RATE}", String(commissionRate))
+    .replace("{ROUTING_BASE}", String(ROUTING_WEIGHTS.base))
+    .replace("{AFFINITY_FIRST}", String(ROUTING_WEIGHTS.affinityFirst))
+    .replace("{AFFINITY_PER_ADDITIONAL}", String(ROUTING_WEIGHTS.affinityPerAdditional))
+    .replace("{AFFINITY_CAP}", String(ROUTING_WEIGHTS.affinityCap))
+    .replace("{RATING_MULTIPLIER}", String(ROUTING_WEIGHTS.ratingMultiplier))
+    .replace("{RATING_CAP}", String(ROUTING_WEIGHTS.ratingCap))
+    .replace("{DISPUTE_PENALTY}", String(ROUTING_WEIGHTS.disputePenalty))
+    .replace("{REASSIGNMENT_PENALTY}", String(ROUTING_WEIGHTS.reassignmentPenalty))
+    .replace("{UTILISATION_MULTIPLIER}", String(ROUTING_WEIGHTS.utilisationMultiplier))
+    .replace("{ZONE_BONUS}", String(ROUTING_WEIGHTS.zoneMatchBonus))
+    .replace("{RECENT_BONUS}", String(ROUTING_WEIGHTS.recentCompletionBonus))
+    .replace("{TIMEOUT_MINUTES}", String(VENDOR_ACCEPTANCE_TIMEOUT_MINUTES))
+    .replace("{MAX_ATTEMPTS}", String(MAX_MATCH_ATTEMPTS));
+}
 
 // ─────────────────────────────────────────────────────────────
 // A-6: RBAC resolution — which tools may this session use?
@@ -193,7 +235,7 @@ export async function POST(request: NextRequest) {
     // is permitted to see. ──
     const scopedContext = await buildOpsContext();
     const contextBlock = renderContextForPrompt(scopedContext);
-    const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
+    const systemMessage = `${await buildOpsSystemPrompt()}\n\n${contextBlock}`;
 
     // ── Phase 3: audit chain (request stage; actor = the ops user) ──
     chainId = newAiChainId();

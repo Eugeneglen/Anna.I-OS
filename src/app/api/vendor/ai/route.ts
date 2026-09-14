@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   VENDOR_AI_TOOLS,
   executeVendorToolCall,
+  VENDOR_PERFORMANCE_WINDOW,
   type VendorToolCallResult,
 } from "@/lib/vendor-ai-tools";
 import { getVendorSession } from "@/lib/vendor-auth";
@@ -9,6 +10,12 @@ import { getZAI, isProviderError, PROVIDER_UNAVAILABLE_MESSAGE } from "@/lib/zai
 import { vendorHasAiAccess } from "@/lib/vendor-rbac";
 import { buildVendorContext, renderContextForPrompt } from "@/lib/ai-context";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
+import { getCommissionRate } from "@/lib/commission";
+import { getRequireVerificationPhotos } from "@/lib/platform-config";
+import {
+  VENDOR_ACCEPTANCE_TIMEOUT_MINUTES,
+  MAX_MATCH_ATTEMPTS,
+} from "@/lib/constants";
 import {
   checkRateLimit,
   rateLimitResponsePayload,
@@ -38,29 +45,29 @@ DATA SCOPE:
 You do NOT have: other vendors' data, full household profiles, ops-level routing/dispute data
 
 BOOKING LIFECYCLE — how a job progresses:
-- Vendor receives dispatch → ACCEPT (within 15 min) → START WORK → COMPLETE → Household VERIFIES photos → ESCROW RELEASED → payout
-- If rejected or timeout: booking cancelled, system auto-routes to next vendor (up to 5 attempts)
-- Escrow: HELD when vendor accepts, RELEASED after household verifies photos. Platform takes 10% commission.
+- Vendor receives dispatch → ACCEPT (within {TIMEOUT_MINUTES} minutes) → START WORK → COMPLETE → Household VERIFIES photos → ESCROW RELEASED → payout
+- If rejected or timeout: booking cancelled, system auto-routes to next vendor (up to {MAX_ATTEMPTS} attempts)
+- Escrow: HELD when vendor accepts, RELEASED after household verifies photos. Platform commission: {COMMISSION_RATE}%.
 
 PHOTO VERIFICATION REQUIREMENTS:
 - Before photos: capture the area/job site before starting work
 - After photos: capture completed work from same angles
 - Household reviews and must approve before escrow is released
-- This step is MANDATORY — never suggest skipping it
+{PHOTO_VERIFICATION_BLOCK}
 
 PAYOUT PROCESS:
 1. Complete the job and mark it as done
 2. Upload before/after verification photos
 3. Household reviews and verifies the photos
-4. Escrow released → payout processed (amount minus 10% platform commission)
-Typical timeline: 1-3 business days after household verification
+4. Escrow released → payout processed (your approved amount minus the {COMMISSION_RATE}% platform commission)
+Payout timing follows escrow release — state the ledger status, never invent a timeline.
 
 CORE RESPONSIBILITIES:
 - JOB GUIDANCE: Walk vendor through job requirements — arrival window, task scope, household-specific instructions. Job amounts you state are the CUSTOMER-APPROVED amounts from your context/tools, never a generic category figure.
 - VERIFICATION SUPPORT: Guide through photo requirements — what to capture, why, what happens after
 - PAYMENT TRANSPARENCY: Explain escrow/payout status and timing plainly
 - SME DISPATCH: For HQ contacts, help route jobs to right staff based on availability/skill
-- PERFORMANCE CLARITY: Explain performance score based on actual metrics (last 20 jobs, not vague summary)
+- PERFORMANCE CLARITY: Explain performance score based on actual metrics (last {PERFORMANCE_WINDOW} completed jobs, not vague summary)
 
 SERVICE / PRICING / AVAILABILITY AUTHORITY (non-negotiable):
 - For questions about what Anna.I services exist, what they cost, or what is currently bookable, use the get_catalog_services tool (the public catalogue, scoped to your categories) — never answer from memory.
@@ -89,6 +96,28 @@ HARD BOUNDARIES:
 interface VendorAiRequest {
   message: string;
   conversationId?: string;
+}
+
+// ── F-6 (Item 8): grounded prompt assembly ──
+// Every operational figure the prompt narrates (accept timeout, match
+// attempts, commission rate, photo-verification requirement, performance
+// window) is DERIVED per request from the live authorities (constants,
+// getCommissionRate, getRequireVerificationPhotos, the tool module's own
+// window) — the prompt can never drift from the engine that enforces them.
+export async function buildVendorSystemPrompt(): Promise<string> {
+  const [commissionRate, requirePhotos] = await Promise.all([
+    getCommissionRate(),
+    getRequireVerificationPhotos(),
+  ]);
+  const photoVerificationBlock = requirePhotos
+    ? "- This step is MANDATORY — never suggest skipping it (Ops currently requires verification photos for completion)."
+    : "- Ops currently does NOT require verification photos for completion, but uploading before/after photos still speeds up household verification — recommend them.";
+  return SYSTEM_PROMPT
+    .replace("{TIMEOUT_MINUTES}", String(VENDOR_ACCEPTANCE_TIMEOUT_MINUTES))
+    .replace("{MAX_ATTEMPTS}", String(MAX_MATCH_ATTEMPTS))
+    .replace(/{COMMISSION_RATE}/g, String(commissionRate))
+    .replace("{PHOTO_VERIFICATION_BLOCK}", photoVerificationBlock)
+    .replace("{PERFORMANCE_WINDOW}", String(VENDOR_PERFORMANCE_WINDOW));
 }
 
 interface ToolCall {
@@ -168,7 +197,7 @@ export async function POST(request: NextRequest) {
     // excluded BEFORE the LLM ever sees a prompt). ──
     const scopedContext = await buildVendorContext(vendorId);
     const contextBlock = renderContextForPrompt(scopedContext);
-    const systemMessage = `${SYSTEM_PROMPT}\n\n${contextBlock}`;
+    const systemMessage = `${await buildVendorSystemPrompt()}\n\n${contextBlock}`;
 
     // ── Phase 3: audit chain (request stage) ──
     chainId = newAiChainId();

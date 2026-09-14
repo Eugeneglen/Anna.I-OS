@@ -8,6 +8,13 @@
 
 import { CATEGORY_DEFAULTS, type ServiceCategory } from "./types";
 
+/**
+ * OPS_VENDOR_PERFORMANCE_WINDOW (F-6, Item 8) — the number of recent
+ * completed bookings the Ops vendor-performance tool narrates. Exported
+ * so the Ops AI prompt and the tool surface derive from ONE constant.
+ */
+export const OPS_VENDOR_PERFORMANCE_WINDOW = 10;
+
 // ─────────────────────────────────────────────────────────────
 // Tool Definitions (OpenAI-compatible function calling format)
 // ─────────────────────────────────────────────────────────────
@@ -497,7 +504,7 @@ async function executeVendorDetail(
     db.booking.findMany({
       where: { vendorId, status: "completed" },
       orderBy: { completedAt: "desc" },
-      take: 10,
+      take: OPS_VENDOR_PERFORMANCE_WINDOW,
       select: {
         id: true,
         rating: true,

@@ -8,6 +8,7 @@ import {
   RATE_LIMITS,
 } from "@/lib/rate-limit";
 import { getOpsSession } from "@/lib/ops-auth";
+import { getCommissionRate } from "@/lib/commission";
 import { buildHouseholdContext, renderContextForPrompt } from "@/lib/ai-context";
 import { getOrCreateConversation, recordTurn, getRecentTurns, type MemoryTurn } from "@/lib/ai-conversation";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
@@ -62,7 +63,7 @@ AUTHORITATIVE SCOPED DATA: Every request includes a server-generated data block 
 BOOKING LIFECYCLE — what happens after a task is created:
 - CREATED → MATCHING (vendor being found) → ACCEPTED (vendor confirmed, escrow held) → IN_PROGRESS (vendor working) → COMPLETED → VERIFIED (household approves photos) → ESCROW RELEASED (payment to vendor)
 - During matching, vendor identity is hidden until they accept
-- 10% platform commission on each task
+- {COMMISSION_LINE} on each task
 
 AUTONOMY AWARENESS:
 - L1–2 (Manual): You're confirming and suggesting — household is still Manager. Present options, ask for confirmation.
@@ -105,7 +106,15 @@ HARD BOUNDARIES:
 // dates (a live audit test produced "11 Jan 2024" on a 2026 server). The
 // current date/time (Asia/Singapore) is now injected per request so
 // relative dates resolve to real ones.
-function buildSystemPrompt(): string {
+//
+// ── F-6 (Item 8): commission grounding. The hard-coded "10% platform
+// commission" literal is replaced by the {COMMISSION_LINE} placeholder,
+// filled per request from the Ops-controlled commission authority
+// (getCommissionRate) so the narrated rate can never drift from the rate
+// the escrow ledger actually stamps.
+async function buildSystemPrompt(): Promise<string> {
+  const commissionRate = await getCommissionRate();
+  const commissionLine = `${commissionRate}% platform commission`;
   const now = new Date();
   const dateLine = now
     .toLocaleString("en-SG", {
@@ -119,7 +128,7 @@ function buildSystemPrompt(): string {
       hour12: false,
     })
     .replace(",", " ·");
-  return `${SYSTEM_PROMPT}
+  return `${SYSTEM_PROMPT.replace("{COMMISSION_LINE}", commissionLine)}
 
 CURRENT DATE & TIME: ${dateLine} (Asia/Singapore, UTC+8). Resolve every relative date ("today", "tomorrow", "next Friday", "this weekend") against THIS date. When calling create_task, pass scheduledDate as YYYY-MM-DD derived from this date — never from memory or guesses.
 
@@ -339,9 +348,10 @@ export async function POST(request: NextRequest) {
     // is the remote branch's buildSystemPrompt() (Wave 2-A date grounding),
     // so the extension composes on top of the FULL certified base.
     const multimodalActive = !!photoAnalysis || inputModality === "voice";
+    const baseSystemPrompt = await buildSystemPrompt();
     const systemMessage = multimodalActive
-      ? `${buildSystemPrompt()}${MULTIMODAL_SYSTEM_PROMPT_EXTENSION}\n\n${contextBlock}`
-      : `${buildSystemPrompt()}\n\n${contextBlock}`;
+      ? `${baseSystemPrompt}${MULTIMODAL_SYSTEM_PROMPT_EXTENSION}\n\n${contextBlock}`
+      : `${baseSystemPrompt}\n\n${contextBlock}`;
 
     // LLM-visible user turn: the customer's words + the server-VERIFIED
     // analysis block when a photo is attached (composed server-side — the

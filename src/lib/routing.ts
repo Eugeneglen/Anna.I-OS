@@ -7,30 +7,54 @@ import { db } from "@/lib/db"
 import { VendorSuggestion, ScoreBreakdown } from "@/lib/types"
 import { VendorStatus } from "@prisma/client"
 
+/** 
+ * ROUTING_WEIGHTS (F-6, Item 8) — the single scoring-factor table.
+ * The routing engine AND the Ops AI prompt both derive from this object,
+ * so the narrated scoring rules can never drift from the executed ones.
+ */
+export const ROUTING_WEIGHTS = {
+  base: 100,
+  affinityFirst: 15,
+  affinityPerAdditional: 5,
+  affinityCap: 30,
+  ratingMultiplier: 3,
+  ratingCap: 15,
+  disputePenalty: -20,
+  reassignmentPenalty: -5,
+  utilisationThreshold: 0.5,
+  utilisationMultiplier: 10,
+  zoneMatchBonus: 10,
+  recentCompletionBonus: 5,
+  recentCompletionDays: 7,
+} as const;
+
 /** Base score every vendor starts with */
-const BASE_SCORE = 100
+const BASE_SCORE = ROUTING_WEIGHTS.base
 
 /** Affinity: +15 if has prior bookings, +5 per additional (cap +30 total) */
 function calcAffinityBonus(bookingCount: number): number {
   if (bookingCount <= 0) return 0
   // First booking gives +15, each additional gives +5, capped at +30
-  return Math.min(15 + Math.max(0, bookingCount - 1) * 5, 30)
+  return Math.min(
+    ROUTING_WEIGHTS.affinityFirst + Math.max(0, bookingCount - 1) * ROUTING_WEIGHTS.affinityPerAdditional,
+    ROUTING_WEIGHTS.affinityCap,
+  )
 }
 
 /** Rating: avgRating * 3, capped at +15 */
 function calcRatingBonus(avgRating: number | null): number {
   if (avgRating === null || avgRating === undefined) return 0
-  return Math.min(avgRating * 3, 15)
+  return Math.min(avgRating * ROUTING_WEIGHTS.ratingMultiplier, ROUTING_WEIGHTS.ratingCap)
 }
 
 /** Dispute: -20 per dispute */
 function calcDisputePenalty(disputeCount: number): number {
-  return -20 * disputeCount
+  return ROUTING_WEIGHTS.disputePenalty * disputeCount
 }
 
 /** Reassignment: -5 per reassignment */
 function calcReassignmentPenalty(reassignmentCount: number): number {
-  return -5 * reassignmentCount
+  return ROUTING_WEIGHTS.reassignmentPenalty * reassignmentCount
 }
 
 /** Utilisation: penalise if >50% daily capacity, -(todayBookings / dailyCapacity * 10) */
@@ -39,8 +63,8 @@ function calcUtilisationPenalty(
   dailyCapacity: number
 ): number {
   const utilisation = todayBookings / dailyCapacity
-  if (utilisation <= 0.5) return 0
-  return -(utilisation * 10)
+  if (utilisation <= ROUTING_WEIGHTS.utilisationThreshold) return 0
+  return -(utilisation * ROUTING_WEIGHTS.utilisationMultiplier)
 }
 
 /** Zone match: +10 if vendor zones overlap with household postal code prefix */
@@ -56,7 +80,7 @@ function calcZoneMatchBonus(
   const matched = vendorZones.some(
     (zone) => zone.trim().slice(0, 2) === prefix
   )
-  return matched ? 10 : 0
+  return matched ? ROUTING_WEIGHTS.zoneMatchBonus : 0
 }
 
 /** Recent completion: +5 if last completed within 7 days */
@@ -65,7 +89,7 @@ function calcRecentCompletionBonus(lastCompletedAt: Date | null): number {
   const now = new Date()
   const diffMs = now.getTime() - lastCompletedAt.getTime()
   const diffDays = diffMs / (1000 * 60 * 60 * 24)
-  return diffDays <= 7 ? 5 : 0
+  return diffDays <= ROUTING_WEIGHTS.recentCompletionDays ? ROUTING_WEIGHTS.recentCompletionBonus : 0
 }
 
 /** Build a human-readable reason string from the score breakdown */

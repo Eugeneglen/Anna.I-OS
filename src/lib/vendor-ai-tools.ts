@@ -8,6 +8,15 @@
 // ============================================================
 
 import { CATEGORY_DEFAULTS, type ServiceCategory } from "./types";
+import { pickPrimaryEscrowEntry } from "./escrow-display";
+
+/**
+ * VENDOR_PERFORMANCE_WINDOW (F-6, Item 8) — the number of recent
+ * completed jobs the performance / recent-bookings tools narrate.
+ * Exported so the Vendor AI prompt and the tool surface derive from ONE
+ * constant (the prompt's "last N jobs" is this N — never a second literal).
+ */
+export const VENDOR_PERFORMANCE_WINDOW = 10;
 
 // ─────────────────────────────────────────────────────────────
 // Tool Definitions (OpenAI-compatible function calling format)
@@ -286,9 +295,12 @@ async function executeGetJobDetails(
       },
       escrowEntries: {
         select: {
+          id: true,
           amountCents: true,
           vendorPayoutCents: true,
           state: true,
+          heldAt: true,
+          bookingId: true,
           releasedAt: true,
         },
       },
@@ -335,7 +347,19 @@ async function executeGetJobDetails(
       unitLabel: booking.task.jobType?.unitLabel ?? null,
       scheduledTime: fmtDateTime(booking.scheduledStart),
       approvedAmount: sgd(booking.task.finalAmountCents || booking.task.amountCents),
-      yourPayout: sgd(booking.escrowEntries[0]?.vendorPayoutCents ?? Math.round((booking.task.finalAmountCents || booking.task.amountCents) * 0.9)),
+      // ── F-6 (Item 8): payout narrated from the LEDGER ──
+      // The primary live escrow entry's vendorPayoutCents IS the payout
+      // (held-amount minus the commission stamped at accept — whatever
+      // commission rate was actually in force when the hold was created).
+      // The old fallback (amount × 0.9) invented a 10%-commission figure
+      // the ledger never wrote; when no live entry exists the honest answer
+      // is "not yet held", never a fabricated amount.
+      yourPayout: (() => {
+        const primary = pickPrimaryEscrowEntry(booking.escrowEntries);
+        return primary?.vendorPayoutCents != null
+          ? sgd(primary.vendorPayoutCents)
+          : "Not yet held (escrow not created)";
+      })(),
       instructions: booking.task.instructions || null,
       customer: booking.task.household.name,
       address: `${booking.task.household.address}${booking.task.household.unitNumber ? ` #${booking.task.household.unitNumber}` : ""}`,
@@ -645,7 +669,7 @@ async function executeGetPerformance(
         rating: { not: null },
       },
       orderBy: { completedAt: "desc" },
-      take: 10,
+      take: VENDOR_PERFORMANCE_WINDOW,
       select: {
         rating: true,
         completedAt: true,
@@ -693,7 +717,7 @@ async function executeGetRecentBookings(
   const bookings = await db.booking.findMany({
     where: { vendorId, status: "completed" },
     orderBy: { completedAt: "desc" },
-    take: 10,
+    take: VENDOR_PERFORMANCE_WINDOW,
     include: {
       task: {
         select: {
