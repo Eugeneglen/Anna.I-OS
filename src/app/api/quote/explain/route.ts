@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getZAI } from "@/lib/zai";
 import { getHouseholdSession } from "@/lib/household-auth";
+import { quoteJobType } from "@/lib/service-authority";
 import {
   checkRateLimit,
   rateLimitResponsePayload,
@@ -106,17 +107,50 @@ export async function POST(request: NextRequest) {
           cached: true,
         });
       }
-    } else {
-      // Inline explanation from form data
+    } else if (body.jobTypeId) {
+      // ── P2-2 (Item 8): SERVER-AUTHORITATIVE re-quote ──
+      // The narration is grounded in a fresh quoteJobType() run against
+      // the LIVE catalogue. The client's totalCents / breakdown are NEVER
+      // read into the context — a tampered client figure cannot reach the
+      // LLM's narration of the price.
+      const quote = await quoteJobType(body.jobTypeId, {
+        fieldValues: body.fieldValues ?? {},
+        selectedAddOns: body.selectedAddOns ?? [],
+      });
+      if (!quote.ok && quote.code === "NOT_FOUND") {
+        return NextResponse.json(
+          { error: "Job type not found" },
+          { status: 404 }
+        );
+      }
+      if (!quote.ok) {
+        return NextResponse.json(
+          { error: quote.message || "Cannot quote this service from the catalogue", code: quote.code },
+          { status: 400 }
+        );
+      }
       contextData = {
-        jobTypeName: body.jobTypeName || "Service",
-        category: body.category || "GENERAL",
-        totalCents: body.totalCents || 0,
-        breakdown: body.breakdown || [],
-        selectedAddOns: body.selectedAddOns || [],
-        addOns: body.addOns || [],
-        fieldValues: body.fieldValues || {},
+        jobTypeName: quote.jobType.name,
+        category: quote.jobType.category,
+        totalCents: quote.quote.totalCents,
+        breakdown: quote.quote.breakdown as unknown as Array<{ label: string; amountCents: number }>,
+        selectedAddOns: body.selectedAddOns ?? [],
+        addOns: [],
+        fieldValues: body.fieldValues ?? {},
       };
+    } else {
+      // ── P2-2 (Item 8): NO AUTHORITY → refuse ──
+      // Client-supplied figures alone (jobTypeName + totalCents +
+      // breakdown) are NOT a pricing authority — narrating them would let
+      // any client put ANY number in the AI's mouth. The old
+      // custom-amount decoy fed exactly this path.
+      return NextResponse.json(
+        {
+          error: "An explanation requires an authoritative quote — pass quotationId or jobTypeId. Client-supplied totals cannot be narrated.",
+          code: "NO_AUTHORITY",
+        },
+        { status: 400 }
+      );
     }
 
     // Format the breakdown for the LLM
@@ -158,7 +192,7 @@ Explain what this covers and why it costs what it does. Be specific and helpful.
 
     const explanation =
       completion.choices[0]?.message?.content ||
-      "This quotation covers the selected service. The price reflects standard market rates for Singapore.";
+      "This quotation covers the selected service at the price shown — the breakdown above is exactly what you are paying for and why.";
 
     // Cache the explanation on the quotation record if we have an ID
     if (body.quotationId) {

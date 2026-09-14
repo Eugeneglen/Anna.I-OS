@@ -12,8 +12,6 @@ import {
   Calculator,
   SlidersHorizontal,
   PlusCircle,
-  PencilLine,
-  RotateCcw,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -111,7 +109,7 @@ function DynamicField({
 export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDiscountCents = 0 }: QuoteBuilderProps) {
   // Ref to the latest onQuoteChange — lets us invoke the parent's latest
   // callback WITHOUT putting it in the effect deps. Audit proposal A: the
-  // old `[quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents, onQuoteChange]`
+  // old `[quoteResult, fieldValues, selectedAddOns, onQuoteChange]`
   // deps array meant that any time BookingForm re-created `handleQuoteChange`
   // (e.g. because promoApplied flipped), this effect re-fired and reset
   // promo state. Decoupling them kills the silent-reset loop.
@@ -133,8 +131,6 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
 
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [useCustomAmount, setUseCustomAmount] = useState(false);
-  const [customCents, setCustomCents] = useState(0);
 
   // AI Explanation state
   const [explanation, setExplanation] = useState<string | null>(null);
@@ -168,18 +164,15 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
     );
   }, [jobType, fieldValues, selectedAddOns]);
 
-  // Notify parent of quote changes (include custom amount when active)
+  // Notify parent of quote changes
+  // ── P2-2 (Item 8): the custom-amount override is GONE — the quoted
+  // total is the ONLY amount this builder ever reports (the server
+  // re-quotes it authoritatively at booking anyway; the old "Enter
+  // custom amount" toggle only ever produced a client-side figure the
+  // booking API would silently discard).
   useEffect(() => {
-    if (useCustomAmount) {
-      const customResult: QuoteResult = {
-        ...quoteResult,
-        totalCents: customCents,
-      };
-      onQuoteChangeRef.current(customResult, fieldValues, selectedAddOns);
-    } else {
-      onQuoteChangeRef.current(quoteResult, fieldValues, selectedAddOns);
-    }
-  }, [quoteResult, fieldValues, selectedAddOns, useCustomAmount, customCents]);
+    onQuoteChangeRef.current(quoteResult, fieldValues, selectedAddOns);
+  }, [quoteResult, fieldValues, selectedAddOns]);
 
   // Auto-explain with debounce when quote changes
   useEffect(() => {
@@ -207,18 +200,15 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
     setExplanationError(false);
 
     try {
+      // ── P2-2 (Item 8): the explanation request is GROUNDED — send the
+      // jobTypeId (+ fieldValues/add-ons so the server can re-quote) and let
+      // /api/quote/explain re-compute the price server-side. Client totals
+      // and breakdowns are never sent: the narration must come from the
+      // authoritative quote, not from anything this component displays.
       const payload: Record<string, unknown> = {
-        jobTypeName: jobType.name,
-        category: jobType.category,
-        totalCents: quoteResult.totalCents,
-        breakdown: quoteResult.breakdown,
+        jobTypeId: jobType.id,
         fieldValues,
         selectedAddOns,
-        addOns: jobType.addOns.map((a) => ({
-          key: a.key,
-          label: a.label,
-          priceCents: a.priceCents,
-        })),
       };
 
       // Include quotationId if we have one (for caching)
@@ -246,7 +236,7 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
     }
   }
 
-  const displayCents = useCustomAmount ? customCents : quoteResult.totalCents;
+  const displayCents = quoteResult.totalCents;
 
   return (
     <div className="space-y-5 anna-fade-in">
@@ -349,21 +339,7 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
             Audit proposal G §1: previously the breakdown only appeared
             above the Book Now button. */}
         <div className="px-4 pb-3 space-y-1">
-          {useCustomAmount ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--anna-muted)]">SGD $</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={(customCents / 100).toFixed(2)}
-                onChange={(e) =>
-                  setCustomCents(Math.round(parseFloat(e.target.value) * 100))
-                }
-                className="flex-1 bg-[var(--anna-white)]/60 border border-[var(--anna-sage)]/30 rounded-lg px-3 py-1.5 font-data text-2xl font-bold text-[var(--anna-sage-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--anna-sage)]/30"
-              />
-            </div>
-          ) : appliedDiscountCents > 0 ? (
+          {appliedDiscountCents > 0 ? (
             <>
               <div className="font-data text-sm font-medium text-[var(--anna-muted)] line-through">
                 {formatSgd(displayCents)}
@@ -422,32 +398,6 @@ export function QuoteBuilder({ jobType, onQuoteChange, quotationId, appliedDisco
           </div>
         )}
 
-        {/* Custom amount toggle */}
-        <div className="border-t border-[var(--anna-sage)]/15 px-4 py-2.5">
-          <button
-            onClick={() => {
-              if (useCustomAmount) {
-                setUseCustomAmount(false);
-              } else {
-                setCustomCents(quoteResult.totalCents);
-                setUseCustomAmount(true);
-              }
-            }}
-            className="text-[10px] text-[var(--anna-muted)] hover:text-[var(--anna-slate)] transition-colors flex items-center gap-1"
-          >
-            {useCustomAmount ? (
-              <>
-                <RotateCcw size={10} />
-                Reset to quoted price
-              </>
-            ) : (
-              <>
-                <PencilLine size={10} />
-                Enter custom amount
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* ── AI Explanation Section ── */}

@@ -520,12 +520,18 @@ export function BookingForm({
               const val = parseFloat(e.target.value);
               setAmountCents(Number.isFinite(val) && val >= 0 ? Math.round(val * 100) : 0);
             }}
+            // ── P2-2 (Item 8): the amount is LOCKED while a catalogue job
+            // type is selected — the server re-quotes it authoritatively
+            // and silently discards client figures for catalogue services,
+            // so an editable field only ever manufactured a decoy number.
+            // (Custom-request budget entry stays available off-catalogue.)
+            disabled={!!selectedJobType}
             className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
           />
         </div>
         {quoteResult ? (
           <p className="text-[10px] text-[var(--anna-muted)]">
-            Auto-calculated from {selectedJobType?.name}. Edit to override.
+            Quoted by Anna.I from {selectedJobType?.name} — the confirmed price is set at booking from the live catalogue.
           </p>
         ) : (
           <p className="text-[10px] text-[var(--anna-muted)]">

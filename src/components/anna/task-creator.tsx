@@ -322,12 +322,18 @@ export function TaskCreator() {
                 onChange={(e) =>
                   setAmountCents(Math.round(parseFloat(e.target.value) * 100))
                 }
+                // ── P2-2 (Item 8): the amount is LOCKED while a catalogue
+                // job type is selected — the server re-quotes it
+                // authoritatively and discards client figures for catalogue
+                // services. (Custom-request budget entry stays available
+                // off-catalogue.)
+                disabled={!!selectedJobType}
                 className="pl-14 rounded-xl border-[var(--anna-border)] bg-[var(--anna-white)] font-data text-sm focus-visible:ring-[var(--anna-sage)]/30"
               />
             </div>
             {quoteResult ? (
               <p className="text-[10px] text-[var(--anna-muted)]">
-                Auto-calculated from {selectedJobType?.name}. Edit to override.
+                Quoted by Anna.I from {selectedJobType?.name} — the confirmed price is set at booking from the live catalogue.
               </p>
             ) : (
               <p className="text-[10px] text-[var(--anna-muted)]">
