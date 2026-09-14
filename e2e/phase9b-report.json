@@ -1,0 +1,182 @@
+{
+  "suite": "phase9b-sec",
+  "layer": "Section B dynamic probes (Phases 7, 8, 11, 12)",
+  "startedAt": "2026-09-14T03:35:33.728Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789356923433.db",
+  "totals": {
+    "pass": 27,
+    "fail": 0
+  },
+  "findingsCount": 0,
+  "findings": [],
+  "codeReview": [
+    "Phase 9 (DB consistency): escrow release path (src/lib/escrow/execute-action.ts:143-335) runs inside db.$transaction with state-GUARDED updates (where state=HELD — F19 race hardening): a concurrent loser's updateMany matches 0 rows. Refund service (src/lib/payments/refund-service.ts:154) and task-cancel (src/lib/task-cancel-service.ts:130) are $transaction-wrapped with idempotency keys. If the process dies mid-transaction, SQLite/Prisma rolls the transaction back (atomic); notifications written inside the same transaction roll back with it.",
+    "Phase 7 (webhook duplicate delivery): /api/billing/webhook has NO processed-event-ID store, but every handler is state-idempotent (checkout handler early-returns on existing subscription+stripeSubscriptionId; subscription.updated/deleted/invoice.paid handlers are upsert-style state sets; no notification.create side effects in the webhook). Duplicate Stripe delivery converges to the same state. P3 observability note: a processed-event table would give audit evidence of redelivery (queued as technical debt).",
+    "Phase 10 (secrets): tracked .env in the remote lineage contains GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET (dev value) since commit d300888 — ALREADY EXPOSED in remote history. Section B remediation: untrack .env + gitignore + rotation advisory (owner must rotate the Google OAuth secret and set a real NEXTAUTH_SECRET before any external exposure). No NEXT_PUBLIC_* variables expose secrets (client bundle exposes only public catalogue data).",
+    "Phase 7 (AI action idempotency): the AI confirmation-card flow has no replay token (double-confirming creates a second task at the re-verified price) — KNOWN gap, honestly documented in authority-chain S13, = carry-forward #10 (NLU confirm-pass), deferred to Section C per Phase 17."
+  ],
+  "checks": [
+    {
+      "flow": "SETUP",
+      "name": "Ops admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household + session",
+      "pass": true,
+      "detail": "hh=cs0vhl"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Vendor created + login",
+      "pass": true,
+      "detail": "vendor=zbsuzh"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Catalogue fixture",
+      "pass": true,
+      "detail": "gas=4000c"
+    },
+    {
+      "flow": "SB1",
+      "name": "Task creation: same idempotencyKey → same task, one row",
+      "pass": true,
+      "detail": "rows=1 t1=201 t2=200"
+    },
+    {
+      "flow": "SB1",
+      "name": "Escrow release: duplicate → rejected, payout unchanged",
+      "pass": true,
+      "detail": "r1=200 r2=409 payout=3600→3600"
+    },
+    {
+      "flow": "SB1",
+      "name": "Add-on proposal on accepted booking → created",
+      "pass": true,
+      "detail": "HTTP 201"
+    },
+    {
+      "flow": "SB1",
+      "name": "Add-on approval: replay → rejected, no double charge",
+      "pass": true,
+      "detail": "a1=200 a2=409 entries=2→2"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT same-key task creation → exactly one row",
+      "pass": true,
+      "detail": "rows=1 statuses=201/200 ids c5ud4w/c5ud4w"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT release → exactly-once payout (guard holds)",
+      "pass": true,
+      "detail": "statuses=200/409 released=1 payoutSum=3600 (expected 3600 once)"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT same-key refund → exactly one refund row",
+      "pass": true,
+      "detail": "statuses=200/200 refunds=1 cum=1000"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT accept → single accepted state, single escrow set",
+      "pass": true,
+      "detail": "statuses=200/200 booking=accepted escrows=1"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT add-on approval → single charge",
+      "pass": true,
+      "detail": "statuses=409/200 addon=approved newEscrowEntries=1"
+    },
+    {
+      "flow": "SB2",
+      "name": "CONCURRENT same-email register → exactly one account, no 500s",
+      "pass": true,
+      "detail": "statuses=200/409 members=1 households=1"
+    },
+    {
+      "flow": "SB3",
+      "name": "Malformed JSON body → 4xx (not 500)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Quote with null fieldValues → 4xx",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Quote with nested object unitCount → 4xx",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Quote with string unitCount → 4xx",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Quote with huge unitCount → 4xx (range bound)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Add-on oversized description → 4xx (500-char max)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB3",
+      "name": "Task create with injected nested fields → accepted-but-ignored (zod strips unknown keys)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB4",
+      "name": "Escrow action on nonexistent task → 4xx (no 500)",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "flow": "SB4",
+      "name": "Invalid escrow action enum → 4xx",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "flow": "SB4",
+      "name": "Negative refund amount → 4xx",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB4",
+      "name": "Invalid booking action → 4xx (no 500)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB4",
+      "name": "Quote with unknown jobTypeId → 4xx",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "SB4",
+      "name": "Ops household detail with invalid id → 4xx (no 500)",
+      "pass": true,
+      "detail": "HTTP 404"
+    }
+  ]
+}
