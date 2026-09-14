@@ -116,8 +116,8 @@ function captureCookies(res: Response, actor: Actor) {
     if (idx > 0) actor.jar[pair.slice(0, idx)] = pair.slice(idx + 1);
   }
 }
-async function req(actor: Actor | null, method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {
-  const headers: Record<string, string> = {};
+async function req(actor: Actor | null, method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; data: any }> {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (actor) {
     const cookie = Object.entries(actor.jar).map(([k, v]) => `${k}=${v}`).join("; ");
     if (cookie) headers.Cookie = cookie;
@@ -227,8 +227,14 @@ const GAS_PRICE_CHANGED = 4500; // $45/unit (T2)
 // ────────────────────────────────────────────────────────────
 // DB snapshot / restore
 // ────────────────────────────────────────────────────────────
-const dbFile = "/home/z/my-project/db/custom.db";
-const backupFile = `/home/z/my-project/db/backups/auth-${TS}.db`;
+// Derive from the ACTIVE DATABASE_URL (worktree-aware). The previous
+// hard-coded /home/z/my-project path silently snapshotted/restored the
+// WRONG file when the suite ran against another checkout (e.g. the
+// /home/z/wt-item8 worktree), leaving the suite's catalogue-price
+// mutations (S6: $50/$55) in the test DB and corrupting later suites.
+const dbFile = (process.env.DATABASE_URL ?? "file:/home/z/my-project/db/custom.db").replace(/^file:/, "");
+const dbDir = dbFile.slice(0, dbFile.lastIndexOf("/"));
+const backupFile = `${dbDir}/backups/auth-${TS}.db`;
 
 // ────────────────────────────────────────────────────────────
 // Main
@@ -237,7 +243,7 @@ async function main() {
   log(`━━━ AUTHORITY-CHAIN · ${new Date().toISOString()} ━━━`);
 
   // ── DB snapshot before (restored at the end) ──
-  execSync(`mkdir -p /home/z/my-project/db/backups && cp ${dbFile} ${backupFile}`);
+  execSync(`mkdir -p ${dbDir}/backups && cp ${dbFile} ${backupFile}`);
 
   const hhA = newActor("household-A");
   const ops = newActor("ops-admin");
@@ -262,7 +268,7 @@ async function main() {
         email: C.hhEmail,
         password: C.hhPassword,
         householdName: `Auth Family A ${TS}`,
-      });
+      }, { "x-forwarded-for": `10.3.${(TS % 250) + 1}.1` }); // P9A-F06 limiter: per-run unique source IP
       const sess = await req(hhA, "GET", "/api/household/session");
       C.householdId = dig(sess.data, "household.id", "member.householdId", "session.householdId", "householdId") ?? "";
       C.memberId = dig(sess.data, "member.id", "session.memberId", "memberId") ?? "";
@@ -762,7 +768,7 @@ async function main() {
         email: `auth-hh-b-${TS}@anna.test`,
         password: C.hhPassword,
         householdName: `Auth Family B ${TS}`,
-      });
+      }, { "x-forwarded-for": `10.3.${(TS % 250) + 1}.1` }); // P9A-F06 limiter: per-run unique source IP
       const foreignAddon = await req(hhB, "PATCH", `/api/bookings/${C.s7BookingId}/addons/whatever`, { action: "approve" });
       check("S8", "Foreign household addon approve → 403/404 (never 200)", foreignAddon.status === 403 || foreignAddon.status === 404, `status=${foreignAddon.status}`);
 

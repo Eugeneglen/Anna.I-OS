@@ -117,8 +117,8 @@ async function uploadGatePhoto(actor: Actor, bookingId: string): Promise<{ statu
   return { status: res.status, data };
 }
 
-async function req(actor: Actor, method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {
-  const headers: Record<string, string> = {};
+async function req(actor: Actor, method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; data: any }> {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (body !== undefined) headers["content-type"] = "application/json";
   const cookie = Object.entries(actor.jar).map(([k, v]) => `${k}=${v}`).join("; ");
   if (cookie) headers["cookie"] = cookie;
@@ -317,7 +317,7 @@ async function setup() {
     email: C.hhEmail,
     password: C.hhPassword,
     householdName: C.hhName,
-  });
+  }, { "x-forwarded-for": `10.2.${(TS % 250) + 1}.1` }); // P9A-F06 limiter: per-run unique source IP
   check("SETUP", "Household register (201/200)", reg.status === 201 || reg.status === 200, `status=${reg.status}`);
   const sess = await req(hh, "GET", "/api/household/session");
   C.householdId = dig(sess.data, "household.id", "member.householdId", "session.householdId", "householdId") ?? "";

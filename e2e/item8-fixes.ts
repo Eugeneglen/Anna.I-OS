@@ -103,8 +103,8 @@ function captureCookies(res: Response, actor: Actor) {
     if (idx > 0) actor.jar[pair.slice(0, idx)] = pair.slice(idx + 1);
   }
 }
-async function req(actor: Actor | null, method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {
-  const headers: Record<string, string> = {};
+async function req(actor: Actor | null, method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; data: any }> {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (actor) {
     const cookie = Object.entries(actor.jar).map(([k, v]) => `${k}=${v}`).join("; ");
     if (cookie) headers.Cookie = cookie;
@@ -204,7 +204,7 @@ async function main() {
         email: C.hhEmail,
         password: C.hhPassword,
         householdName: `Item8 Family ${TS}`,
-      });
+      }, { "x-forwarded-for": `10.1.${(TS % 250) + 1}.1` }); // P9A-F06 limiter: per-run unique source IP
       const sess = await req(hh, "GET", "/api/household/session");
       C.householdId = dig(sess.data, "household.id", "member.householdId", "session.householdId", "householdId") ?? "";
       check("SETUP", "Household registered + session", reg.status <= 201 && !!C.householdId, `hh=${C.householdId.slice(-6)}`);

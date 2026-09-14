@@ -95,8 +95,8 @@ function captureCookies(res: Response, actor: Actor) {
     if (idx > 0) actor.jar[pair.slice(0, idx)] = pair.slice(idx + 1);
   }
 }
-async function req(actor: Actor | null, method: string, p: string, body?: unknown): Promise<{ status: number; data: any }> {
-  const headers: Record<string, string> = {};
+async function req(actor: Actor | null, method: string, p: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; data: any }> {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (actor) {
     const cookie = Object.entries(actor.jar).map(([k, v]) => `${k}=${v}`).join("; ");
     if (cookie) headers.Cookie = cookie;
@@ -207,8 +207,13 @@ const C = {
 };
 const GAS_PRICE = 4000; // $40/unit (seed)
 
-const dbFile = "/home/z/my-project/db/custom.db";
-const backupFile = `/home/z/my-project/db/backups/contract-${TS}.db`;
+// Derive from the ACTIVE DATABASE_URL (worktree-aware) — same fix as
+// authority-chain: the hard-coded /home/z/my-project path snapshotted and
+// "restored" the WRONG file when running against another checkout, leaving
+// this suite's mutations in the test DB.
+const dbFile = (process.env.DATABASE_URL ?? "file:/home/z/my-project/db/custom.db").replace(/^file:/, "");
+const dbDir = dbFile.slice(0, dbFile.lastIndexOf("/"));
+const backupFile = `${dbDir}/backups/contract-${TS}.db`;
 
 async function askAnna(actor: Actor, message: string, confirmAction?: unknown): Promise<{ status: number; data: any }> {
   return req(actor, "POST", "/api/ask-anna", { message, ...(confirmAction ? { confirmAction } : {}) });
@@ -230,7 +235,7 @@ async function main() {
   log(`━━━ AI-CONTRACT (LAYER 2 · provider-independent) · ${new Date().toISOString()} ━━━`);
   log(`stub dir: ${STUB_DIR}`);
 
-  execSync(`mkdir -p /home/z/my-project/db/backups && cp ${dbFile} ${backupFile}`);
+  execSync(`mkdir -p ${dbDir}/backups && cp ${dbFile} ${backupFile}`);
   stubEnable(); // from here until finally: every LLM call is scripted
 
   const hhA = newActor("household-A");
@@ -256,7 +261,7 @@ async function main() {
           email,
           password: C.hhPassword,
           householdName: `Contract Family ${name} ${TS}`,
-        });
+        }, { "x-forwarded-for": `10.4.${(TS % 250) + 1}.1` }); // P9A-F06 limiter: per-run unique source IP
         const sess = await req(actor, "GET", "/api/household/session");
         const hid = dig(sess.data, "household.id", "member.householdId", "session.householdId", "householdId") ?? "";
         if (name === "A") C.householdAId = hid;
