@@ -272,7 +272,7 @@ async function main() {
       check("N2", "Both racers respond 200 (fail-closed to neither)", k1.status === 200 && k2.status === 200, `statuses=${k1.status}/${k2.status}`);
       check("N2", "Both racers report the SAME taskId", kt1 === kt2 && !!kt1, `#1=${String(kt1).slice(-8)} #2=${String(kt2).slice(-8)}`);
       const replayFlags = [k1.data?.actionResult?.idempotentReplay, k2.data?.actionResult?.idempotentReplay];
-      check("N2", "At least one racer reconciled as idempotentReplay", replayFlags.some((f) => f === true), `flags=${JSON.stringify(replayFlags)}`);
+      check("N2", "Exactly ONE racer reconciled as idempotentReplay (P95-POL-F5: exactly-one, not some)", replayFlags.filter((f) => f === true).length === 1, `flags=${JSON.stringify(replayFlags)}`);
 
       const rows = await tasksByMarker(N2);
       eq("N2", "DB: exactly ONE task survived the race", rows.length, 1, `jobNo=${rows[0]?.jobNo}`);

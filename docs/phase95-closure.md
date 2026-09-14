@@ -45,7 +45,7 @@ All commands: `cd /home/z/wt-item8 && DATABASE_URL=file:/home/z/wt-item8/db/cust
 
 **The Phase 9 report's "690 checks" figure is INCORRECT.** The seven Phase 9
 suites sum to **809** (143+97+303+123+101+27+15); 690 is not the sum of any
-subset of the suite counts (e.g. the six pre-9A suites sum to 666; +27 =
+subset of the suite counts (e.g. the four pre-9A suites sum to 666; +27 =
 693; +15 = 681; none equal 690). No suite is double-counted above — each
 count comes from that suite's own report JSON `totals` field, and the
 suites are disjoint (different files, different record arrays). The

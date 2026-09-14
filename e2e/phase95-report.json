@@ -1,8 +1,8 @@
 {
   "suite": "phase95-sec",
   "layer": "Phase 9.5 — NLU confirm-pass replay (CF#10) dynamic proofs",
-  "startedAt": "2026-09-14T05:47:25.805Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/p95-1789364845805.db",
+  "startedAt": "2026-09-14T06:06:32.015Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/p95-1789365992015.db",
   "totals": {
     "pass": 54,
     "fail": 0
@@ -27,19 +27,19 @@
       "flow": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=gxmgdy"
+      "detail": "hh=jmbcvo"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=qs55f8"
+      "detail": "hh=u56wx8"
     },
     {
       "flow": "SETUP",
       "name": "AIRCON vendor created + login",
       "pass": true,
-      "detail": "vendor=cxl8pu"
+      "detail": "vendor=dr5nkj"
     },
     {
       "flow": "SETUP",
@@ -51,7 +51,7 @@
       "flow": "N1",
       "name": "Draft pass: card returned (approval gate)",
       "pass": true,
-      "detail": "chainId=4334a6be"
+      "detail": "chainId=9f924da9"
     },
     {
       "flow": "N1",
@@ -63,7 +63,7 @@
       "flow": "N1",
       "name": "Confirm #1: HTTP 200, task created",
       "pass": true,
-      "detail": "taskId=qoikojmr"
+      "detail": "taskId=i4b20por"
     },
     {
       "flow": "N1",
@@ -81,7 +81,7 @@
       "flow": "N1",
       "name": "Confirm #2: SAME taskId returned",
       "pass": true,
-      "detail": "#1=qoikojmr #2=qoikojmr"
+      "detail": "#1=i4b20por #2=i4b20por"
     },
     {
       "flow": "N1",
@@ -117,7 +117,7 @@
       "flow": "N2",
       "name": "Draft pass: second card returned",
       "pass": true,
-      "detail": "chainId=6d57ada1"
+      "detail": "chainId=126a7d1e"
     },
     {
       "flow": "N2",
@@ -129,11 +129,11 @@
       "flow": "N2",
       "name": "Both racers report the SAME taskId",
       "pass": true,
-      "detail": "#1=gz33045a #2=gz33045a"
+      "detail": "#1=186vjxe1 #2=186vjxe1"
     },
     {
       "flow": "N2",
-      "name": "At least one racer reconciled as idempotentReplay",
+      "name": "Exactly ONE racer reconciled as idempotentReplay (P95-POL-F5: exactly-one, not some)",
       "pass": true,
       "detail": "flags=[null,true]"
     },
@@ -255,7 +255,7 @@
       "flow": "N5",
       "name": "Unrelated card books its OWN task",
       "pass": true,
-      "detail": "taskId=x34utll7"
+      "detail": "taskId=lzzjeys9"
     },
     {
       "flow": "N5",
@@ -267,7 +267,7 @@
       "flow": "N5",
       "name": "Different task id from the N1 card's task",
       "pass": true,
-      "detail": "N5=x34utll7 vs N1=qoikojmr"
+      "detail": "N5=lzzjeys9 vs N1=i4b20por"
     },
     {
       "flow": "N5",
@@ -279,13 +279,13 @@
       "flow": "N6",
       "name": "Cross-household chainId reuse still books (no false replay hit)",
       "pass": true,
-      "detail": "B task=hexquyvx"
+      "detail": "B task=s9n44o03"
     },
     {
       "flow": "N6",
       "name": "B's booking belongs to B's household (session authority)",
       "pass": true,
-      "detail": "hh=qs55f8"
+      "detail": "hh=u56wx8"
     },
     {
       "flow": "N6",
@@ -303,7 +303,7 @@
       "flow": "N6",
       "name": "Key scoping: the same chainId legitimately exists under TWO households",
       "pass": true,
-      "detail": "households=gxmgdy,qs55f8"
+      "detail": "households=jmbcvo,u56wx8"
     },
     {
       "flow": "N6",
