@@ -1,10 +1,10 @@
 {
   "suite": "phase9a-sec",
   "layer": "Section A dynamic audit probes (Phases 1–6)",
-  "startedAt": "2026-09-14T02:37:33.100Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789353434297.db",
+  "startedAt": "2026-09-14T03:03:33.588Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789354994396.db",
   "totals": {
-    "pass": 95,
+    "pass": 99,
     "fail": 2
   },
   "findingsCount": 2,
@@ -13,7 +13,7 @@
       "id": "P9A-F01",
       "flow": "S2",
       "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
-      "detail": "anon PATCH /api/households/vcn8jr/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)"
+      "detail": "anon PATCH /api/households/h0jwxf/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)"
     },
     {
       "id": "P9A-F02",
@@ -51,25 +51,25 @@
       "flow": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=ixb2q7 reg=200"
+      "detail": "hh=wxbkot reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=vcn8jr reg=200"
+      "detail": "hh=h0jwxf reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Vendor A created + login",
       "pass": true,
-      "detail": "vendor=nh1alv"
+      "detail": "vendor=6tcw30"
     },
     {
       "flow": "SETUP",
       "name": "Vendor B created + login",
       "pass": true,
-      "detail": "vendor=kg3l96"
+      "detail": "vendor=yyp75x"
     },
     {
       "flow": "SETUP",
@@ -255,7 +255,7 @@
       "flow": "S2",
       "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
       "pass": false,
-      "detail": "anon PATCH /api/households/vcn8jr/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)",
+      "detail": "anon PATCH /api/households/h0jwxf/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)",
       "finding": "P9A-F01"
     },
     {
@@ -291,6 +291,30 @@
     },
     {
       "flow": "S2",
+      "name": "Household detail gated (minimal role → 403, households:view)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Legitimate households:view holder (coordinator) detail → 200",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S2",
+      "name": "Legitimate analytics:view holder (coordinator) intelligence → 200",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S2",
+      "name": "Coordinator-tier dispatch still functional → 200",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S2",
       "name": "LEGACY GATE: RBAC coordinator PATCH /api/ops/bookings → 403 (string-ADMIN gate)",
       "pass": true,
       "detail": "HTTP 403 — documents the legacy hard role gate (coordinator denied despite RBAC perms; carry-forward item)"
@@ -317,7 +341,7 @@
       "flow": "S3",
       "name": "GET /api/vendors leaks no passwordHash",
       "pass": true,
-      "detail": "10932B"
+      "detail": "11646B"
     },
     {
       "flow": "S3",

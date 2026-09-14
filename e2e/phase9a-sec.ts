@@ -376,6 +376,24 @@ async function main() {
       check("S2", "Global dispatch gated on COORDINATOR tier (analyst → 403)", e3.status === 403, `HTTP ${e3.status}`);
     }
 
+    // ── P9A-F07 (Section A police remediation, police finding #1): the
+    // household DETAIL route was session-only PII (emails/phones/addresses),
+    // blunt-ending the F03 export gate. Now households:view-gated — verified
+    // both directions. Positive-path probes below close police finding #3.
+    const d1 = await req(minimal, "GET", `/api/ops/households/${C.hhBId}`);
+    if (d1.status === 200) {
+      finding("P9A-F07", "S2", "Household detail PII route session-only",
+        `Minimal zero-permission role GET /api/ops/households/HH-B → HTTP 200 (member PII readable without households:view — the export gate was bypassable via this sibling route)`);
+    } else {
+      check("S2", "Household detail gated (minimal role → 403, households:view)", d1.status === 403, `HTTP ${d1.status}`);
+    }
+    const d1b = await req(coordinator, "GET", `/api/ops/households/${C.hhBId}`);
+    check("S2", "Legitimate households:view holder (coordinator) detail → 200", d1b.status === 200, `HTTP ${d1b.status}`);
+    const e2b = await req(coordinator, "GET", "/api/ops/households/intelligence");
+    check("S2", "Legitimate analytics:view holder (coordinator) intelligence → 200", e2b.status === 200, `HTTP ${e2b.status}`);
+    const e3b = await req(coordinator, "POST", "/api/ops/notifications/dispatch", {});
+    check("S2", "Coordinator-tier dispatch still functional → 200", e3b.status === 200, `HTTP ${e3b.status}`);
+
     // — legacy hard role-string gate (documented carry-forward) —
     const l1 = await req(coordinator, "PATCH", `/api/ops/bookings/${bookingBId}`, { status: "confirmed" });
     check("S2", "LEGACY GATE: RBAC coordinator PATCH /api/ops/bookings → 403 (string-ADMIN gate)", l1.status === 403,

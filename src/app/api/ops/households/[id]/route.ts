@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import { logAction } from "@/lib/audit-log";
 import { stripMemberSecrets } from "@/lib/sanitize";
 import { validateSgPhone } from "@/lib/phone-validation";
@@ -32,6 +33,20 @@ export async function GET(
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── P9A-F07 (Section A police remediation, finding #1) ──
+    // This PII detail route (member emails/phones/addresses, task + vendor
+    // contacts) was session-only: any ops session — including custom roles
+    // with no data permissions — could read any household's full profile,
+    // blunt-ending the P9A-F03 export gate. Now matches the list route
+    // (/api/ops/households): households:view required.
+    const viewAllowed = await hasPermission(session, "households", "view");
+    if (!viewAllowed) {
+      return NextResponse.json(
+        { error: "Forbidden — household detail requires households:view" },
+        { status: 403 }
+      );
     }
 
     const { id } = await params;
