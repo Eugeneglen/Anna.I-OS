@@ -209,6 +209,10 @@ export interface ToolCallResult {
   requiresConfirmation?: boolean;
   confirmationMessage?: string;
   confirmationAction?: Record<string, unknown>;
+  /** CF#10 (Phase 9.5): true when a write tool returned a PREVIOUS
+   *  execution's result (same card confirmed again) instead of
+   *  executing a second time. */
+  idempotentReplay?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -274,6 +278,30 @@ function fmtDateTime(d: Date): string {
 // Write Tools (require confirmation)
 // ─────────────────────────────────────────────────────────────
 
+/** CF#10 (Phase 9.5): shape a REPLAYED create_task result exactly like
+ *  a fresh success — the caller sees the booking that actually exists. */
+function replayTaskData(task: {
+  id: string;
+  jobNo: string | null;
+  category: string;
+  amountCents: number;
+  scheduledStart: Date | null;
+  recurrencePattern: unknown;
+  metadata: unknown;
+}): Record<string, unknown> {
+  const meta = (task.metadata ?? {}) as { jobTypeName?: string };
+  const recurrence = (task.recurrencePattern ?? {}) as { type?: string };
+  return {
+    taskId: task.id,
+    jobNo: task.jobNo,
+    category: task.category,
+    jobTypeName: meta.jobTypeName ?? "service",
+    amount: sgd(task.amountCents),
+    scheduledDate: task.scheduledStart ? fmtDate(task.scheduledStart) : "",
+    recurrence: recurrence.type ?? "ONE_OFF",
+  };
+}
+
 async function executeCreateTask(
   args: Record<string, unknown>,
   householdId: string,
@@ -298,9 +326,49 @@ async function executeCreateTask(
   const primary = args.primary === true;
   const units = typeof args.units === "number" && Number.isFinite(args.units) ? args.units : undefined;
 
+  // ── CF#10 (Phase 9.5): NLU confirm-pass replay idempotency ──
+  // The route injects the AI card's deterministic chainId here as the
+  // task idempotency key (confirm pass only). A repeated confirmation
+  // of the SAME card (double-click, network retry, stale tab) must
+  // return the existing task, never a second booking. Scope is
+  // (householdId, key): a different household, or a different card
+  // (new chainId), is unaffected. Deliberately NO 60-second window
+  // (unlike POST /api/tasks, whose client-derived content-hash key
+  // legitimately allows a fresh task after 60s): the chainId names ONE
+  // card approval, so a same-key request is ALWAYS a duplicate, and a
+  // new booking always arrives through a NEW card with a NEW chainId.
+  const idempotencyKey =
+    typeof args.idempotencyKey === "string" &&
+    args.idempotencyKey.length > 0 &&
+    args.idempotencyKey.length <= 64
+      ? args.idempotencyKey
+      : undefined;
+
   // Validate category
   if (!CATEGORY_DEFAULTS[category]) {
     return { success: false, toolName: "create_task", error: `Unknown service category: ${category}` };
+  }
+
+  // ── CF#10 (Phase 9.5): idempotent replay BEFORE the catalogue
+  // re-verification below. If THIS card (chainId) already produced a
+  // task for this household, the booking EXISTS — a replay must report
+  // the real prior outcome (its task, at its already-approved price),
+  // even if the catalogue has since drifted. A tampered replay that
+  // reuses a card's chainId likewise gets the ORIGINAL booking
+  // reported back, never a second execution.
+  if (executeWrites && idempotencyKey) {
+    const existing = await db.task.findFirst({
+      where: { householdId, idempotencyKey },
+      orderBy: { createdAt: "asc" },
+    });
+    if (existing) {
+      return {
+        success: true,
+        toolName: "create_task",
+        data: replayTaskData(existing),
+        idempotentReplay: true,
+      };
+    }
   }
 
   // ── Police (POLICE-1, must-fix #2): on the CONFIRM pass the user has
@@ -485,6 +553,8 @@ async function executeCreateTask(
   const MAX_JOB_NO_RETRIES = 5;
   let task: { id: string; jobNo: string | null } | null = null;
   let lastCreateError: unknown = null;
+  // (CF#10 note: the task.create data below stores idempotencyKey — see
+  // the key contract comment above the pre-check.)
   for (let attempt = 0; attempt < MAX_JOB_NO_RETRIES; attempt++) {
     try {
       task = await db.$transaction(async (tx) => {
@@ -509,6 +579,7 @@ async function executeCreateTask(
               pricingSource: "catalogue",
               ...(units !== undefined ? { units } : {}),
             },
+            ...(idempotencyKey ? { idempotencyKey } : {}),
           },
           select: { id: true, jobNo: true },
         });
@@ -527,6 +598,41 @@ async function executeCreateTask(
   }
   if (!task) {
     throw lastCreateError ?? new Error("Could not allocate a job number after retries");
+  }
+
+  // ── CF#10 (Phase 9.5): concurrent same-card race — mirrors the
+  // P9B-F01 post-create reconciliation in POST /api/tasks. The replay
+  // lookup above is check-then-create: two parallel confirms of the
+  // SAME card both miss it and both create. There is no DB unique
+  // constraint on idempotencyKey, so reconcile post-create: the OLDER
+  // task wins; the racing duplicate self-deletes BEFORE dispatch,
+  // escrow, or automation ever fire for it (all of those happen
+  // strictly after this response) and the response reports the
+  // original booking. No time window — see the key contract above.
+  if (idempotencyKey) {
+    const twins = await db.task.findMany({
+      where: { householdId, idempotencyKey },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (twins.length > 1 && twins[0].id !== task.id) {
+      await db.task.delete({ where: { id: task.id } }).catch(() => {
+        // best-effort — an orphan duplicate row is ops-visible and is
+        // never dispatched/escrowed (reconciliation precedes automation)
+      });
+      const original = await db.task.findFirst({
+        where: { householdId, idempotencyKey },
+        orderBy: { createdAt: "asc" },
+      });
+      if (original) {
+        return {
+          success: true,
+          toolName: "create_task",
+          data: replayTaskData(original),
+          idempotentReplay: true,
+        };
+      }
+    }
   }
 
   // Ensure autonomy record exists

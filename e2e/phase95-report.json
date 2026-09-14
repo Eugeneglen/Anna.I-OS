@@ -1,0 +1,345 @@
+{
+  "suite": "phase95-sec",
+  "layer": "Phase 9.5 — NLU confirm-pass replay (CF#10) dynamic proofs",
+  "startedAt": "2026-09-14T05:47:25.805Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/p95-1789364845805.db",
+  "totals": {
+    "pass": 54,
+    "fail": 0
+  },
+  "findingsCount": 0,
+  "findings": [],
+  "codeReview": [
+    "CF#10 fix (Phase 9.5): src/app/api/ask-anna/route.ts threads the AI card's deterministic chainId into the confirm-pass tool args as args.idempotencyKey (auth remains session-based — the key grants no authority);",
+    "src/lib/nlu-tools.ts executeCreateTask: (1) pre-create replay lookup on (householdId, idempotencyKey) placed BEFORE the catalogue re-verification so an existing booking is reported even if the catalogue drifted; (2) the key is stored on Task.idempotencyKey at creation; (3) post-create reconciliation mirrors P9B-F01 (POST /api/tasks) — older task wins, racing duplicate self-deletes BEFORE dispatch/escrow/automation fire;",
+    "No 60s window by design (unlike POST /api/tasks): the chainId names ONE card approval, so a same-key confirm is always a duplicate; a NEW booking always arrives through a NEW card with a NEW chainId (N5 proves separate cards → separate tasks);",
+    "Scope: (householdId, idempotencyKey) — cross-household key reuse neither blocks nor leaks (N6); no DB unique constraint (multi-replica deployments would need one — same documented limitation as POST /api/tasks);",
+    "Money-authority/maker-checker untouched: the card's approved jobTypeId+amountCents is still re-verified against the live catalogue on every FRESH execution (N7); the replay path only REPORTS the already-executed booking."
+  ],
+  "checks": [
+    {
+      "flow": "SETUP",
+      "name": "Ops admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household A registered + session",
+      "pass": true,
+      "detail": "hh=gxmgdy"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household B registered + session",
+      "pass": true,
+      "detail": "hh=qs55f8"
+    },
+    {
+      "flow": "SETUP",
+      "name": "AIRCON vendor created + login",
+      "pass": true,
+      "detail": "vendor=cxl8pu"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Catalogue fixture (gas top-up $40/unit)",
+      "pass": true,
+      "detail": "id=hij5rr"
+    },
+    {
+      "flow": "N1",
+      "name": "Draft pass: card returned (approval gate)",
+      "pass": true,
+      "detail": "chainId=4334a6be"
+    },
+    {
+      "flow": "N1",
+      "name": "Card carries the server-approved catalogue price ($40)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "Confirm #1: HTTP 200, task created",
+      "pass": true,
+      "detail": "taskId=qoikojmr"
+    },
+    {
+      "flow": "N1",
+      "name": "Confirm #1: no replay flag (fresh execution)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "Confirm #2: HTTP 200 (chat alive)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "Confirm #2: SAME taskId returned",
+      "pass": true,
+      "detail": "#1=qoikojmr #2=qoikojmr"
+    },
+    {
+      "flow": "N1",
+      "name": "Confirm #2: marked idempotentReplay",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "DB: exactly ONE task for the card",
+      "pass": true,
+      "detail": "jobNo=AI-00000044"
+    },
+    {
+      "flow": "N1",
+      "name": "Task row stores chainId as idempotencyKey",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "Task priced at the catalogue amount",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N1",
+      "name": "N1 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "flow": "N2",
+      "name": "Draft pass: second card returned",
+      "pass": true,
+      "detail": "chainId=6d57ada1"
+    },
+    {
+      "flow": "N2",
+      "name": "Both racers respond 200 (fail-closed to neither)",
+      "pass": true,
+      "detail": "statuses=200/200"
+    },
+    {
+      "flow": "N2",
+      "name": "Both racers report the SAME taskId",
+      "pass": true,
+      "detail": "#1=gz33045a #2=gz33045a"
+    },
+    {
+      "flow": "N2",
+      "name": "At least one racer reconciled as idempotentReplay",
+      "pass": true,
+      "detail": "flags=[null,true]"
+    },
+    {
+      "flow": "N2",
+      "name": "DB: exactly ONE task survived the race",
+      "pass": true,
+      "detail": "jobNo=AI-00000045"
+    },
+    {
+      "flow": "N2",
+      "name": "N2 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=2 [ok,ok]"
+    },
+    {
+      "flow": "N3",
+      "name": "Pre-escrow: zero escrow rows (escrow forms at accept)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Dispatch accepted",
+      "pass": true,
+      "detail": "HTTP 201"
+    },
+    {
+      "flow": "N3",
+      "name": "Vendor accept: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Exactly ONE escrow row for the double-confirmed card",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Escrow holds the catalogue amount (no double-charge)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Escrow state HELD",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Post-escrow replay: HTTP 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Post-escrow replay returns the SAME task",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Replay changed nothing: still 1 task row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "Replay changed nothing: still exactly 1 escrow row, still HELD",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N3",
+      "name": "N3 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "flow": "N4",
+      "name": "Replay result is a full success payload (not an error)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N4",
+      "name": "Replay result carries the ORIGINAL taskId",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N4",
+      "name": "Replay result carries the ORIGINAL jobNo",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N4",
+      "name": "Replay result carries the booked amount",
+      "pass": true,
+      "detail": "amount=SGD $40.00"
+    },
+    {
+      "flow": "N4",
+      "name": "N4 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "flow": "N5",
+      "name": "New draft → new card with a DIFFERENT chainId",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N5",
+      "name": "Unrelated card books its OWN task",
+      "pass": true,
+      "detail": "taskId=x34utll7"
+    },
+    {
+      "flow": "N5",
+      "name": "DB: exactly ONE task for the new card",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N5",
+      "name": "Different task id from the N1 card's task",
+      "pass": true,
+      "detail": "N5=x34utll7 vs N1=qoikojmr"
+    },
+    {
+      "flow": "N5",
+      "name": "N5 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "flow": "N6",
+      "name": "Cross-household chainId reuse still books (no false replay hit)",
+      "pass": true,
+      "detail": "B task=hexquyvx"
+    },
+    {
+      "flow": "N6",
+      "name": "B's booking belongs to B's household (session authority)",
+      "pass": true,
+      "detail": "hh=qs55f8"
+    },
+    {
+      "flow": "N6",
+      "name": "B's row is NOT A's task",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N6",
+      "name": "A's original task untouched (A still has exactly 1 row for the marker)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N6",
+      "name": "Key scoping: the same chainId legitimately exists under TWO households",
+      "pass": true,
+      "detail": "households=gxmgdy,qs55f8"
+    },
+    {
+      "flow": "N6",
+      "name": "...and each household holds exactly ONE of them",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N6",
+      "name": "N6 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    },
+    {
+      "flow": "N7",
+      "name": "Tampered card + chainId: HTTP 200 (chat alive)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N7",
+      "name": "Tampered amount REFUSED (catalogue re-verification)",
+      "pass": true,
+      "detail": "error=The service catalogue changed since you approved this booking (service"
+    },
+    {
+      "flow": "N7",
+      "name": "Tampered card: NO task created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "N7",
+      "name": "N7 served by stub (0 live calls)",
+      "pass": true,
+      "detail": "stub attempts=1 [ok]"
+    }
+  ]
+}

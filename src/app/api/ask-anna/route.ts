@@ -380,8 +380,15 @@ export async function POST(request: NextRequest) {
 
     // ── Handle confirmation flow (human decision → execution → result) ──
     if (confirmAction) {
+      // CF#10 (Phase 9.5): the card's chainId doubles as the task
+      // idempotency key — a repeated confirmation of the SAME card
+      // returns the existing task instead of booking again. chainId
+      // still grants NO authority here (auth is session-based); the
+      // key is scoped by householdId inside the executor.
+      let confirmedChainId: string | null = null;
       if (typeof confirmAction.chainId === "string" && confirmAction.chainId.length <= 64) {
-        chainId = confirmAction.chainId; // correlation only — auth is session-based
+        chainId = confirmAction.chainId; // correlation + idempotency key — authority stays session-based
+        confirmedChainId = confirmAction.chainId;
       }
 
       await logAiEvent({
@@ -419,7 +426,9 @@ export async function POST(request: NextRequest) {
       try {
         result = await executeToolCall(
           confirmAction.toolName,
-          confirmAction.action,
+          confirmedChainId
+            ? { ...confirmAction.action, idempotencyKey: confirmedChainId }
+            : confirmAction.action,
           householdId,
           true // executeWrites = true
         );
