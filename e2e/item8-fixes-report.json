@@ -1,8 +1,8 @@
 {
   "suite": "item8-fixes",
   "layer": "1 — deterministic (zero provider calls)",
-  "startedAt": "2026-09-14T00:36:12.527Z",
-  "finishedAt": "2026-09-14T00:36:33.213Z",
+  "startedAt": "2026-09-14T02:34:42.558Z",
+  "finishedAt": "2026-09-14T02:35:01.528Z",
   "liveProviderCalls": 0,
   "totals": {
     "pass": 143,
@@ -78,19 +78,19 @@
       "suite": "SETUP",
       "name": "Household registered + session",
       "pass": true,
-      "detail": "hh=v34dcs"
+      "detail": "hh=a6u9ub"
     },
     {
       "suite": "SETUP",
       "name": "Vendor 1 created + login",
       "pass": true,
-      "detail": "vendor=b7bn36"
+      "detail": "vendor=lrvrk0"
     },
     {
       "suite": "SETUP",
       "name": "Vendor 2 created + login",
       "pass": true,
-      "detail": "vendor=jkieel"
+      "detail": "vendor=fyvl4q"
     },
     {
       "suite": "SETUP",
@@ -216,7 +216,7 @@
       "suite": "R1",
       "name": "Catalogue task created",
       "pass": true,
-      "detail": "task=l6d1w2"
+      "detail": "task=ijtivz"
     },
     {
       "suite": "R1",
@@ -492,7 +492,7 @@
       "suite": "R8",
       "name": "Rematch setup: vendor1 hold exists",
       "pass": true,
-      "detail": "entry=owi1lo"
+      "detail": "entry=foqcoa"
     },
     {
       "suite": "R8",
@@ -504,7 +504,7 @@
       "suite": "R8",
       "name": "Rematch: new live hold for booking2",
       "pass": true,
-      "detail": "entry=nevz35"
+      "detail": "entry=spficz"
     },
     {
       "suite": "R8",
@@ -762,7 +762,7 @@
       "suite": "R11",
       "name": "Ops-created CARE household → 200",
       "pass": true,
-      "detail": "hh=6flpzi"
+      "detail": "hh=5vcqrv"
     },
     {
       "suite": "R11",

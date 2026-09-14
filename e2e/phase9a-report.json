@@ -1,0 +1,611 @@
+{
+  "suite": "phase9a-sec",
+  "layer": "Section A dynamic audit probes (Phases 1–6)",
+  "startedAt": "2026-09-14T02:37:33.100Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789353434297.db",
+  "totals": {
+    "pass": 95,
+    "fail": 2
+  },
+  "findingsCount": 2,
+  "findings": [
+    {
+      "id": "P9A-F01",
+      "flow": "S2",
+      "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
+      "detail": "anon PATCH /api/households/vcn8jr/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)"
+    },
+    {
+      "id": "P9A-F02",
+      "flow": "S2",
+      "name": "Subscription cancel-request has no ownership check (path id vs session)",
+      "detail": "HH-A session PATCH /households/HH-B/subscription → HTTP 500 (not 401/403 — path householdId never validated against the session; currently 500s on the broken create; carry-forward #1 → Section C)"
+    }
+  ],
+  "checks": [
+    {
+      "flow": "SETUP",
+      "name": "Ops demo admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Analyst (RBAC level 1) login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Coordinator (RBAC level 2) login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Minimal (zero-permission) ops role login",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household A registered + session",
+      "pass": true,
+      "detail": "hh=ixb2q7 reg=200"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household B registered + session",
+      "pass": true,
+      "detail": "hh=vcn8jr reg=200"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Vendor A created + login",
+      "pass": true,
+      "detail": "vendor=nh1alv"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Vendor B created + login",
+      "pass": true,
+      "detail": "vendor=kg3l96"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Catalogue fixture (gas-topup $40/unit)",
+      "pass": true,
+      "detail": "id=hij5rr"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET tasks list → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET notifications → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon POST quote → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET ops users → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET ops escrow → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET vendor staff → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon POST billing checkout → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon POST ask-anna AI → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET vendor A schedule (other-tenant) → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon GET household A profile → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon POST ops config write → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "anon PATCH task escrow action → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S1",
+      "name": "invalid share token → 404",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A GET /api/tasks?householdId=HH-B → no B tasks leaked",
+      "pass": true,
+      "detail": "HTTP 200, rows=0, leak=false"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A PATCH household B profile → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A GET autonomy of B → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A GET household-graph of B → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A PATCH /households/B/profile → rejected",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "flow": "S2",
+      "name": "HH-A PATCH B's booking → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Vendor A GET vendor B schedule → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Vendor A GET vendor B earnings → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Vendor A accept B's booking → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Vendor A add-on on B's booking → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Vendor A GET vendor B staff → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Analyst GET /api/ops/users → 403 (users:view)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Analyst POST /api/ops/households → 403 (households:create)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Coordinator POST /api/ops/config → 403 (config:configure, F-9)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Analyst PATCH /api/ops/escrow → 403 (tier gate)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Analyst GET /api/ops/ensure-passwords → 403 (super_admin)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
+      "pass": false,
+      "detail": "anon PATCH /api/households/vcn8jr/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)",
+      "finding": "P9A-F01"
+    },
+    {
+      "flow": "S2",
+      "name": "Subscription cancel-request has no ownership check (path id vs session)",
+      "pass": false,
+      "detail": "HH-A session PATCH /households/HH-B/subscription → HTTP 500 (not 401/403 — path householdId never validated against the session; currently 500s on the broken create; carry-forward #1 → Section C)",
+      "finding": "P9A-F02"
+    },
+    {
+      "flow": "S2",
+      "name": "Single-household export gated (coordinator w/o households:export → 403)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Legitimate export role (data_analyst holds households:export) → 200",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S2",
+      "name": "Intelligence gated on analytics:view (minimal role → 403)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "Global dispatch gated on COORDINATOR tier (analyst → 403)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S2",
+      "name": "LEGACY GATE: RBAC coordinator PATCH /api/ops/bookings → 403 (string-ADMIN gate)",
+      "pass": true,
+      "detail": "HTTP 403 — documents the legacy hard role gate (coordinator denied despite RBAC perms; carry-forward item)"
+    },
+    {
+      "flow": "S3",
+      "name": "Register role-injection ignored (member stays OWNER, not ADMIN)",
+      "pass": true,
+      "detail": "reg=200"
+    },
+    {
+      "flow": "S3",
+      "name": "Register tier/price injection ignored (HOME/800 module-stamped)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S3",
+      "name": "GET /api/ops/users leaks no passwordHash",
+      "pass": true,
+      "detail": "4171B"
+    },
+    {
+      "flow": "S3",
+      "name": "GET /api/vendors leaks no passwordHash",
+      "pass": true,
+      "detail": "10932B"
+    },
+    {
+      "flow": "S3",
+      "name": "super_admin role grant by non-super-admin → blocked",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "flow": "S3",
+      "name": "HH self-PATCH cannot escalate memberRole",
+      "pass": true,
+      "detail": "role=OWNER"
+    },
+    {
+      "flow": "S4",
+      "name": "Tampered task amountCents=100c ignored → escrow 4000c (catalogue authority)",
+      "pass": true,
+      "detail": "HTTP 201"
+    },
+    {
+      "flow": "S4",
+      "name": "Quote out-of-range unitCount=99 → rejected",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Quote zero unitCount → rejected",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Quote negative unitCount → rejected",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Quote tampered totalCents field ignored (server computes)",
+      "pass": true,
+      "detail": "HTTP 400 total=undefined"
+    },
+    {
+      "flow": "S4",
+      "name": "HH PATCH booking status=completed → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S4",
+      "name": "HH PATCH booking status=escrow_released → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S4",
+      "name": "Add-on amountCents=0 → rejected (min $0.50)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Add-on amountCents=$20k → rejected (max $10k)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Add-on description too short → rejected (3-char min)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S4",
+      "name": "Tier upgrade stamps module price 6800c (client priceCents=1 ignored)",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S4",
+      "name": "Probe self-clean: tier restored to HOME/800",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S4",
+      "name": "S4 t2 booking accepted for escrow probe",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S4",
+      "name": "Direct escrow money-field PATCH rejected (action-gated)",
+      "pass": true,
+      "detail": "HTTP 400"
+    },
+    {
+      "flow": "S5",
+      "name": "L1 accept → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Duplicate accept → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "L1 start (F-1) → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Duplicate start → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "Complete before start → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "L2 accept → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "L2 verification photo upload → 2xx",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S5",
+      "name": "L1 complete → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Duplicate complete → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "L1 verify → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Duplicate verify → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "L1 escrow release → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Duplicate release → rejected, no double payout",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "Add-on on ESCROW_RELEASED booking → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "Start on released booking → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "L3 cancel → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S5",
+      "name": "Accept after CANCELLED → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S5",
+      "name": "Re-dispatch of cancelled task → rejected (rematch guard)",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S6",
+      "name": "Release before verification → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S6",
+      "name": "Dispute raised → 200",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S6",
+      "name": "Release while DISPUTED → rejected",
+      "pass": true,
+      "detail": "HTTP 409"
+    },
+    {
+      "flow": "S6",
+      "name": "Maker-checker: unconfirmed refund → 409",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S6",
+      "name": "Confirmed partial refund $10 → 200",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S6",
+      "name": "Refund row count after confirmed refund",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S6",
+      "name": "Duplicate refund (same key) → no double refund",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S6",
+      "name": "Over-bound second refund rejected (refund ≤ escrow remainder)",
+      "pass": true,
+      "detail": "HTTP 400 refunds=1 cum=1000"
+    },
+    {
+      "flow": "S6",
+      "name": "L4 released after refund-adjusted payout",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "S6",
+      "name": "Refund after ESCROW_RELEASED → rejected, no refund row",
+      "pass": true,
+      "detail": "HTTP 409 refunds=1"
+    },
+    {
+      "flow": "S6",
+      "name": "Webhook unsigned event NOT processed (demo: 200 no-op before processing; prod code path fail-closed 400/500)",
+      "pass": true,
+      "detail": "HTTP 200 body={\"received\":true}"
+    },
+    {
+      "flow": "S6",
+      "name": "Webhook garbage signature NOT processed (same demo no-op contract)",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S6",
+      "name": "ensure-users inert when table non-empty",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "flow": "S6",
+      "name": "Register rate limit engages (429 on rapid burst)",
+      "pass": true,
+      "detail": "429 observed"
+    }
+  ]
+}

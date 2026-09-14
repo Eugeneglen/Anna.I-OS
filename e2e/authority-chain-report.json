@@ -2,8 +2,8 @@
   "suite": "authority-chain",
   "layer": "1 — deterministic (LIVE_AUTH not set: zero provider calls; LLM checks deferred to Layers 2/3)",
   "liveAuthRequested": false,
-  "startedAt": "2026-09-14T00:36:43.372Z",
-  "finishedAt": "2026-09-14T00:36:51.031Z",
+  "startedAt": "2026-09-14T02:35:01.690Z",
+  "finishedAt": "2026-09-14T02:35:08.614Z",
   "aiProviderAvailable": null,
   "liveProviderCalls": 0,
   "totals": {
@@ -76,13 +76,13 @@
       "suite": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=al0ks5"
+      "detail": "hh=0qospw"
     },
     {
       "suite": "SETUP",
       "name": "AIRCON vendor created + vendor login",
       "pass": true,
-      "detail": "vendor=yt8xul"
+      "detail": "vendor=yd3lvn"
     },
     {
       "suite": "SETUP",
@@ -106,7 +106,7 @@
       "suite": "S1",
       "name": "Booking created (201)",
       "pass": true,
-      "detail": "jobNo=AI-00000011"
+      "detail": "jobNo=AI-00000018"
     },
     {
       "suite": "S1",
@@ -142,7 +142,7 @@
       "suite": "S1",
       "name": "Dispatched to AIRCON vendor",
       "pass": true,
-      "detail": "booking=nyb231"
+      "detail": "booking=y1lyd4"
     },
     {
       "suite": "S1",
@@ -280,7 +280,7 @@
       "suite": "S3",
       "name": "Historical task intact (amount/jobType/status preserved)",
       "pass": true,
-      "detail": "jobNo=AI-00000011"
+      "detail": "jobNo=AI-00000018"
     },
     {
       "suite": "S3",
@@ -490,7 +490,7 @@
       "suite": "S8",
       "name": "Booked task belongs to the SESSION household (B), not the hinted A",
       "pass": true,
-      "detail": "owner=biextz"
+      "detail": "owner=xk9p8v"
     },
     {
       "suite": "S8",
@@ -646,7 +646,7 @@
       "suite": "S13",
       "name": "idempotencyKey double-submit → same task, one row",
       "pass": true,
-      "detail": "t1=whxk3f t2=whxk3f"
+      "detail": "t1=kgxeb3 t2=kgxeb3"
     }
   ]
 }
