@@ -3,8 +3,8 @@
   "layer": "2 — AI contract tests (provider-independent, deterministic fake-model responses)",
   "liveProviderCalls": 0,
   "stubDir": "/tmp/anna-llm-stub",
-  "startedAt": "2026-09-14T04:07:42.094Z",
-  "finishedAt": "2026-09-14T04:08:00.827Z",
+  "startedAt": "2026-09-14T04:27:44.931Z",
+  "finishedAt": "2026-09-14T04:28:04.004Z",
   "totals": {
     "pass": 123,
     "fail": 0
@@ -151,25 +151,25 @@
       "suite": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=aeuj52"
+      "detail": "hh=66658e"
     },
     {
       "suite": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=93m4sf"
+      "detail": "hh=zr76xy"
     },
     {
       "suite": "SETUP",
       "name": "Household C registered + session",
       "pass": true,
-      "detail": "hh=yejqzu"
+      "detail": "hh=gc922b"
     },
     {
       "suite": "SETUP",
       "name": "AIRCON vendor created + vendor login",
       "pass": true,
-      "detail": "vendor=wnoqjc"
+      "detail": "vendor=0516xv"
     },
     {
       "suite": "SETUP",
@@ -481,13 +481,13 @@
       "suite": "B7",
       "name": "Confirmation executed",
       "pass": true,
-      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0q2fdf00nkmhjtfm8i8grb\",\"job"
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0qs7p500nkmhyh8cs2xa4q\",\"job"
     },
     {
       "suite": "B7",
       "name": "Task created under the SESSION household (injected id ignored)",
       "pass": true,
-      "detail": "hh=yejqzu"
+      "detail": "hh=gc922b"
     },
     {
       "suite": "B7",
@@ -631,7 +631,7 @@
       "suite": "C5",
       "name": "Timeout recovered within bounds (<15s)",
       "pass": true,
-      "detail": "760ms"
+      "detail": "725ms"
     },
     {
       "suite": "C5",
@@ -679,7 +679,7 @@
       "suite": "C8",
       "name": "Action result reported truthfully (executed BEFORE the outage)",
       "pass": true,
-      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0q2m8700r2mhjtuzrk"
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0qseon00r2mhyhqdzd"
     },
     {
       "suite": "C8",
@@ -775,7 +775,7 @@
       "suite": "E0",
       "name": "Idempotent double-submit → ONE task row",
       "pass": true,
-      "detail": "t1=6udjpg t2=6udjpg rows=1"
+      "detail": "t1=4du527 t2=4du527 rows=1"
     },
     {
       "suite": "E0",
@@ -799,7 +799,7 @@
       "suite": "E1",
       "name": "Dispute case builds deterministically",
       "pass": true,
-      "detail": "hh=yejqzu"
+      "detail": "hh=gc922b"
     },
     {
       "suite": "E1",

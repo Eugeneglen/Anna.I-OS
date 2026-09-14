@@ -1,0 +1,122 @@
+{
+  "suite": "phase9c-sec",
+  "layer": "Section C dynamic probes (Phases 13, 14, 17)",
+  "startedAt": "2026-09-14T04:28:55.951Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9c-1789360130229.db",
+  "totals": {
+    "pass": 15,
+    "fail": 0
+  },
+  "findingsCount": 0,
+  "findings": [],
+  "codeReview": [
+    "[CF#1] subscription cancel-request auth/ownership — FIXED in Section C (P9A-F01/F02/P9C): household session + ownership + channel + idempotent duplicate guard. Classification: security. Residual: none.",
+    "[CF#2] Ops dispute card VOIDED — largely resolved by Item 8 P2-1 (booking-detail-sheet uses live-entry aggregation, REFUNDED/VOIDED contribute 0 to payout/commission; VOIDED excluded from primary pick). Classification: financial-display. Residual: refunded-total line sums ALL entries' refundCents (correct semantics — cumulative refunds).",
+    "[CF#3] AI dispute VOIDED — FIXED in Section C (case-builder orderTotal excludes VOIDED). Classification: financial (advisory refund bounds). Verified live (SC2).",
+    "[CF#4] legacy hasMinRole / string-ADMIN gates (ops bookings/[id] PATCH, ops households/[id] PATCH) — REMAIN. Classification: technical debt (over-strict, denies legitimate RBAC roles; never under-permissive). Fix requires an RBAC-completion pass across ops routes (permission mapping for every action) — recommended as its own change with full ops regression. NOT a production blocker (fails closed).",
+    "[CF#5] webhook retrieve-failure fallback — REMAIN by design: when Stripe subscription retrieval fails, the module price is the fallback with a loud divergence warning (F-5 charge-truth sync preferred). Classification: reliability P3. Fix requires a retry/quarantine queue for failed retrievals — deferred with documentation.",
+    "[CF#6] raw escrow-entry selection in the dispute case-builder (disputedEntries[0]) — REMAIN. Classification: technical debt P3: dispute-specific selection is semantically intentional (the case is about the disputed entry); edge case is multiple simultaneous disputes (first wins).",
+    "[CF#7] all-VOIDED escrow — RESOLVED by Item 8 (pickPrimaryEscrowEntry: live-first, all-VOIDED acceptable last resort; displays handle it).",
+    "[CF#8] vendor AI schedule pricing — VERIFIED OK: vendor-ai-tools narrates the customer-APPROVED amount (task.finalAmountCents || amountCents) — server-authoritative fields, never model-invented. Classification: resolved/no-issue (P3 note: narration only).",
+    "[CF#9] Ops pending-release pricing — the ops escrow surfaces were wired to live entries in Item 8 P2-1 (booking-detail-sheet verified); the escrow action dialog operates on the entry being actioned (per-entry truth). Classification: financial-display, believed resolved; recommend a UI spot-check in the next manual QA pass.",
+    "[CF#10] NLU confirm-pass (AI confirmation-card replay creates a second task) — REMAIN. Classification: reliability P2 (money does not move until dispatch+accept; price is server-quoted; household can cancel). Honestly documented in authority-chain S13 as a known limitation. Recommended fix: thread the card's chainId as the task-creation idempotencyKey — a card/confirm contract change requiring its own ai-contract update cycle.",
+    "[CF#11] non-atomic quotation (task create + quotation ACCEPTED update are separate writes) — REMAIN. Classification: data-integrity P3: a crash between the two leaves a DRAFT quotation with an existing task; the F-3 PRICE_STALE re-quote guard ensures price correctness on any later action. Reconciliation via a sweep or transactional update recommended later.",
+    "[CF#12] taxonomy duplication (category strings vs category table legacy) — REMAIN. Classification: technical debt P3; no security/financial impact (display + filter only).",
+    "[CF#13] E2E residue (test entities accumulate in the demo DB) — REMAIN. Classification: technical debt P3, demo-environment only. Mitigations in place: per-suite snapshot restores (authority/ai-contract), self-cleaning probes (phase9a tier), per-run unique emails/keys.",
+    "[CF#14] dynamic subscription pricing — the F-5 module (HOME 800/CARE 6800) is the single application authority; 'dynamic' (runtime-configurable) pricing is a roadmap feature, not a defect. Classification: technical debt/roadmap. Ops price overrides are deliberately NOT supported (module authority by design).",
+    "[Phase 15] Failure recovery: payment adapter is NoOp (ledger-authoritative, adapter failures logged as reconciliation cases); Stripe live failures at checkout fail closed (F-5 mismatch); webhook processing errors return 200-with-error-log (Stripe retry suppression — documented); AI provider failures degrade gracefully with bounded retries (ai-contract C3-C5); process death mid-transaction rolls back (SQLite atomic). Recovery for the NoOp payment model is manual reconciliation — acceptable for the demo stage, must be revisited with a real gateway.",
+    "[Phase 16] Production configuration: dev fallbacks exist for JWT secrets (OPS_JWT_SECRET, household/vendor JWT) and CRON_SECRET (closed in prod when unset — verified in Section A); register rate limiter is in-memory per-process (documented); no HTTPS/CORS/backup/monitoring configuration exists in-repo (deployment concerns — Railway config out of scope); db pool default; health endpoint = GET /api/ai-status (public probe). Production blockers: rotate secrets (see docs/phase9-secrets.md), set real secrets, trusted-proxy rate-limit keying."
+  ],
+  "checks": [
+    {
+      "flow": "SETUP",
+      "name": "Ops admin login",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household A registered",
+      "pass": true,
+      "detail": "hh=9se4qr"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Household B registered",
+      "pass": true,
+      "detail": "hh=nvyj7n"
+    },
+    {
+      "flow": "SETUP",
+      "name": "Vendor + catalogue fixture",
+      "pass": true,
+      "detail": "vendor=2l9v8b gas=4000c"
+    },
+    {
+      "flow": "SC1",
+      "name": "anon → 401 (auth added)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SC1",
+      "name": "HH-A on HH-B's path → 403 (ownership added)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SC1",
+      "name": "owner (HH-B) → 200 + notification row WITH channel",
+      "pass": true,
+      "detail": "HTTP 200 notif=0→1 channel=WHATSAPP"
+    },
+    {
+      "flow": "SC1",
+      "name": "duplicate request → idempotent (no stacked notifications)",
+      "pass": true,
+      "detail": "HTTP 200 rows=1"
+    },
+    {
+      "flow": "SC1",
+      "name": "invalid action → 400",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "flow": "SC2",
+      "name": "Scenario: base + addon escrow entries formed",
+      "pass": true,
+      "detail": "entries=4000/DISPUTED,600/DISPUTED"
+    },
+    {
+      "flow": "SC2",
+      "name": "case orderTotalCashCents excludes VOIDED entries",
+      "pass": true,
+      "detail": "caseTotal=4000 liveSum=4000 voidedSum(excluded)=600"
+    },
+    {
+      "flow": "SC3",
+      "name": "Injection in instructions: price stays catalogue 4000c",
+      "pass": true,
+      "detail": "metadata.pricingSource=catalogue"
+    },
+    {
+      "flow": "SC3",
+      "name": "AI-era tool context: task list scoped to session household",
+      "pass": true,
+      "detail": "rows=2"
+    },
+    {
+      "flow": "SC4",
+      "name": "Escrow release path writes AuditLog rows",
+      "pass": true,
+      "detail": "recent escrow audit rows=16 sample=ESCROW_RELEASE/hz4mpu"
+    },
+    {
+      "flow": "SC4",
+      "name": "Refund actions auditable (rows within the last hour from earlier probes)",
+      "pass": true,
+      "detail": "refund-audit rows=10 (deterministic presence verified by code review: execute-action.ts + refund-service.ts logAction on every money action)"
+    }
+  ]
+}

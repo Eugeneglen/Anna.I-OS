@@ -1,8 +1,8 @@
 {
   "suite": "phase9b-sec",
   "layer": "Section B dynamic probes (Phases 7, 8, 11, 12)",
-  "startedAt": "2026-09-14T04:08:42.652Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789358912731.db",
+  "startedAt": "2026-09-14T04:28:49.820Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789360118713.db",
   "totals": {
     "pass": 27,
     "fail": 0
@@ -26,13 +26,13 @@
       "flow": "SETUP",
       "name": "Household + session",
       "pass": true,
-      "detail": "hh=mxsn9b"
+      "detail": "hh=fydygn"
     },
     {
       "flow": "SETUP",
       "name": "Vendor created + login",
       "pass": true,
-      "detail": "vendor=a6jn0a"
+      "detail": "vendor=24lk7c"
     },
     {
       "flow": "SETUP",
@@ -68,7 +68,7 @@
       "flow": "SB2",
       "name": "CONCURRENT same-key task creation → exactly one row",
       "pass": true,
-      "detail": "rows=1 statuses=201/200 ids 79zrb9/79zrb9"
+      "detail": "rows=1 statuses=201/200 ids xdbjby/xdbjby"
     },
     {
       "flow": "SB2",
@@ -86,7 +86,7 @@
       "flow": "SB2",
       "name": "CONCURRENT accept → single accepted state, single escrow set",
       "pass": true,
-      "detail": "statuses=200/200 booking=accepted escrows=1"
+      "detail": "statuses=200/409 booking=accepted escrows=1"
     },
     {
       "flow": "SB2",

@@ -1,27 +1,14 @@
 {
   "suite": "phase9a-sec",
   "layer": "Section A dynamic audit probes (Phases 1–6)",
-  "startedAt": "2026-09-14T04:08:24.891Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789358881111.db",
+  "startedAt": "2026-09-14T04:28:27.685Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789360084142.db",
   "totals": {
-    "pass": 99,
-    "fail": 2
+    "pass": 101,
+    "fail": 0
   },
-  "findingsCount": 2,
-  "findings": [
-    {
-      "id": "P9A-F01",
-      "flow": "S2",
-      "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
-      "detail": "anon PATCH /api/households/oj3e40/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)"
-    },
-    {
-      "id": "P9A-F02",
-      "flow": "S2",
-      "name": "Subscription cancel-request has no ownership check (path id vs session)",
-      "detail": "HH-A session PATCH /households/HH-B/subscription → HTTP 500 (not 401/403 — path householdId never validated against the session; currently 500s on the broken create; carry-forward #1 → Section C)"
-    }
-  ],
+  "findingsCount": 0,
+  "findings": [],
   "checks": [
     {
       "flow": "SETUP",
@@ -51,25 +38,25 @@
       "flow": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=mpzk3q reg=200"
+      "detail": "hh=9mcgxf reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=oj3e40 reg=200"
+      "detail": "hh=j3k9z8 reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Vendor A created + login",
       "pass": true,
-      "detail": "vendor=836vim"
+      "detail": "vendor=jaql5i"
     },
     {
       "flow": "SETUP",
       "name": "Vendor B created + login",
       "pass": true,
-      "detail": "vendor=ux1ba1"
+      "detail": "vendor=jjytyk"
     },
     {
       "flow": "SETUP",
@@ -253,17 +240,15 @@
     },
     {
       "flow": "S2",
-      "name": "No-auth subscription cancel-request route processes anonymous cross-tenant input",
-      "pass": false,
-      "detail": "anon PATCH /api/households/oj3e40/subscription {request_cancel} → HTTP 500 (NOT 401/403 — no session check; route read B's subscription and attempted a write; notification create currently crashes: Prisma `channel` arg missing; notif rows 2→2; the auth+ownership fix is carry-forward #1, scheduled for Section C remediation)",
-      "finding": "P9A-F01"
+      "name": "anon subscription cancel-request → rejected",
+      "pass": true,
+      "detail": "HTTP 401, notif 2→2"
     },
     {
       "flow": "S2",
-      "name": "Subscription cancel-request has no ownership check (path id vs session)",
-      "pass": false,
-      "detail": "HH-A session PATCH /households/HH-B/subscription → HTTP 500 (not 401/403 — path householdId never validated against the session; currently 500s on the broken create; carry-forward #1 → Section C)",
-      "finding": "P9A-F02"
+      "name": "HH-A cancel-request on B's subscription → rejected",
+      "pass": true,
+      "detail": "HTTP 403"
     },
     {
       "flow": "S2",
