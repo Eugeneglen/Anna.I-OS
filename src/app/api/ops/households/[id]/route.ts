@@ -39,8 +39,9 @@ export async function GET(
     // This PII detail route (member emails/phones/addresses, task + vendor
     // contacts) was session-only: any ops session — including custom roles
     // with no data permissions — could read any household's full profile,
-    // blunt-ending the P9A-F03 export gate. Now matches the list route
-    // (/api/ops/households): households:view required.
+    // blunt-ending the P9A-F03 export gate. Now requires the established
+    // households:view read permission (as held by data_analyst, coordinator,
+    // operations, super_admin via the RBAC seed).
     const viewAllowed = await hasPermission(session, "households", "view");
     if (!viewAllowed) {
       return NextResponse.json(

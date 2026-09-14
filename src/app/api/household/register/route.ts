@@ -12,7 +12,13 @@ export async function POST(req: NextRequest) {
     // ── P9A-F06 (Phase 9, Section A) ──
     // Unbounded anonymous registration was a spam surface (each call mints a
     // Household + FamilyMember + Subscription row). 5 registrations per 10
-    // minutes per IP — same fixed-window limiter used by ops auth/marketing.
+    // minutes per source — same fixed-window limiter used by ops auth/marketing.
+    // LIMITATION (P9A police finding #2, documented disposition): the key is
+    // the FIRST x-forwarded-for entry (client-suppliable) and the counter is
+    // per-process — this is defense-in-depth against naive floods (the same
+    // shared helper as 6 pre-existing routes), NOT a hard per-IP guarantee.
+    // Trusted-proxy / real-client-IP keying is queued for Phase 10/16
+    // production-configuration work.
     const rlKey = `register:${clientIpFromHeaders(req.headers)}`;
     if (!checkRateLimit(rlKey, 5, 600_000)) {
       return NextResponse.json(
