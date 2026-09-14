@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Phase 9.5: the secrets-free template is deliberately tracked so fresh
+# clones know which variables local development needs (docs/phase95-oauth-forensics.md).
+!.env.example
 
 # vercel
 .vercel
