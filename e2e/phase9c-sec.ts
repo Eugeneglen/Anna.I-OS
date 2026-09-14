@@ -221,10 +221,18 @@ async function main() {
     await req(vA, "PATCH", `/api/vendors/${C.vendorId}/bookings/${b?.id}`, { action: "accept" });
     const taskDb = await db.task.findUnique({ where: { id: taskId }, include: { escrowEntries: true } });
     eq("SC3", "Injection in instructions: price stays catalogue 4000c", taskDb?.escrowEntries[0]?.amountCents, GAS_PRICE, `metadata.pricingSource=${dig(taskDb, "metadata.pricingSource")}`);
-    // Cross-tenant context: household A's task list never shows B's tasks
+    // Cross-tenant context: household B OWNS a task; household A's task list
+    // must never include it (positive evidence, not vacuous absence)
+    const tb = await req(hhB, "POST", "/api/tasks", {
+      householdId: C.hhBId, category: "AIRCON", jobTypeId: C.gasJobTypeId,
+      amountCents: 100, fieldValues: { unitCount: 1 }, instructions: `p9c B-task ${TS}`,
+      scheduledStart: new Date(Date.now() + 26 * 3600 * 1000).toISOString(),
+      idempotencyKey: `p9c-btask-${TS}`,
+    });
+    const tbId = dig(tb.data, "task.id", "id") ?? "";
     const tasksA = await req(hhA, "GET", "/api/tasks");
     const list = dig(tasksA.data, "tasks") ?? [];
-    check("SC3", "AI-era tool context: task list scoped to session household", !list.some((x: any) => x.householdId === C.hhBId), `rows=${Array.isArray(list) ? list.length : "?"}`);
+    check("SC3", "Task list scoped to session household (B's owned task absent from A's list)", !!tbId && !list.some((x: any) => x.id === tbId), `A-rows=${Array.isArray(list) ? list.length : "?"} bTask=${tbId.slice(-6)}`);
   }
 
   // ═══════════ SC4 — PHASE 14 AUDIT LOGGING ═══════════
@@ -252,8 +260,26 @@ async function main() {
       orderBy: { createdAt: "desc" }, take: 20,
     });
     check("SC4", "Escrow release path writes AuditLog rows", auditRows.length > 0, `recent escrow audit rows=${auditRows.length} sample=${auditRows[0] ? `${auditRows[0].action}/${auditRows[0].entityId?.slice(-6)}` : "none"}`);
-    const refundAudit = await db.auditLog.count({ where: { action: { contains: "refund" }, createdAt: { gte: new Date(Date.now() - 60 * 60_000) } } });
-    check("SC4", "Refund actions auditable (rows within the last hour from earlier probes)", refundAudit >= 0, `refund-audit rows=${refundAudit} (deterministic presence verified by code review: execute-action.ts + refund-service.ts logAction on every money action)`);
+
+    // refund audit: dispute + refund a second task, then count refund-action rows
+    const t2 = await req(hhA, "POST", "/api/tasks", {
+      householdId: C.hhAId, category: "AIRCON", jobTypeId: C.gasJobTypeId,
+      amountCents: 100, fieldValues: { unitCount: 1 }, instructions: `p9c auditrf ${TS}`,
+      scheduledStart: new Date(Date.now() + 26 * 3600 * 1000).toISOString(),
+      idempotencyKey: `p9c-auditrf-${TS}`,
+    });
+    const t2Id = dig(t2.data, "task.id", "id") ?? "";
+    await req(hhA, "POST", `/api/tasks/${t2Id}/dispatch`, { vendorId: C.vendorId, scheduledStart: new Date(Date.now() + 26 * 3600 * 1000).toISOString() });
+    const b2 = await db.booking.findFirst({ where: { taskId: t2Id } });
+    await req(vA, "PATCH", `/api/vendors/${C.vendorId}/bookings/${b2?.id}`, { action: "accept" });
+    const esc2 = await db.escrowLedger.findFirst({ where: { taskId: t2Id } });
+    await req(hhA, "PATCH", `/api/tasks/${t2Id}/escrow`, { action: "dispute", reason: "p9c refund audit" });
+    const rf = await req(ops, "PATCH", `/api/ops/escrow/${esc2?.id}`, { action: "partial_refund", refundAmountCents: 500, resolution: "p9c refund audit", idempotencyKey: `p9c-rfa-${TS}`, refundConfirmed: true });
+    const refundAuditRows = await db.auditLog.findMany({
+      where: { createdAt: { gte: new Date(Date.now() - 5 * 60_000) }, action: { contains: "refund" } },
+      orderBy: { createdAt: "desc" }, take: 10,
+    });
+    check("SC4", "Refund action writes AuditLog rows (live)", rf.status === 200 && refundAuditRows.length > 0, `refund=${rf.status} refund-audit rows=${refundAuditRows.length} sample=${refundAuditRows[0] ? `${refundAuditRows[0].action}/${refundAuditRows[0].entityId?.slice(-6)}` : "none"}`);
   }
 
   // ═══════════ CODE-REVIEW CLASSIFICATIONS (Phase 17 + 15/16) ═══════════
@@ -277,7 +303,7 @@ async function main() {
   );
 
   // ═══════════ REPORT ═══════════
-  const totals = { pass: records.filter((r) => r.pass).length, fail: records.filter((r) => !r.r ? false : !r.pass).length };
+  const totals = { pass: records.filter((r) => r.pass).length, fail: records.filter((r) => !r.pass).length };
   const report = {
     suite: "phase9c-sec",
     layer: "Section C dynamic probes (Phases 13, 14, 17)",

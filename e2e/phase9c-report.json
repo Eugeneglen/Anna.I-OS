@@ -1,8 +1,8 @@
 {
   "suite": "phase9c-sec",
   "layer": "Section C dynamic probes (Phases 13, 14, 17)",
-  "startedAt": "2026-09-14T04:28:55.951Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9c-1789360130229.db",
+  "startedAt": "2026-09-14T04:37:35.624Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9c-1789360648768.db",
   "totals": {
     "pass": 15,
     "fail": 0
@@ -38,19 +38,19 @@
       "flow": "SETUP",
       "name": "Household A registered",
       "pass": true,
-      "detail": "hh=9se4qr"
+      "detail": "hh=3d6f82"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered",
       "pass": true,
-      "detail": "hh=nvyj7n"
+      "detail": "hh=f2fd9u"
     },
     {
       "flow": "SETUP",
       "name": "Vendor + catalogue fixture",
       "pass": true,
-      "detail": "vendor=2l9v8b gas=4000c"
+      "detail": "vendor=qvqdos gas=4000c"
     },
     {
       "flow": "SC1",
@@ -102,21 +102,21 @@
     },
     {
       "flow": "SC3",
-      "name": "AI-era tool context: task list scoped to session household",
+      "name": "Task list scoped to session household (B's owned task absent from A's list)",
       "pass": true,
-      "detail": "rows=2"
+      "detail": "A-rows=2 bTask=0vy8jg"
     },
     {
       "flow": "SC4",
       "name": "Escrow release path writes AuditLog rows",
       "pass": true,
-      "detail": "recent escrow audit rows=16 sample=ESCROW_RELEASE/hz4mpu"
+      "detail": "recent escrow audit rows=12 sample=ESCROW_RELEASE/35mpji"
     },
     {
       "flow": "SC4",
-      "name": "Refund actions auditable (rows within the last hour from earlier probes)",
+      "name": "Refund action writes AuditLog rows (live)",
       "pass": true,
-      "detail": "refund-audit rows=10 (deterministic presence verified by code review: execute-action.ts + refund-service.ts logAction on every money action)"
+      "detail": "refund=200 refund-audit rows=2 sample=REFUND_CREDIT_ISSUED/hev0rb"
     }
   ]
 }

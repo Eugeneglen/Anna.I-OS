@@ -10,9 +10,10 @@ import { NotificationChannel, NotificationEventType, RecipientType } from "@pris
 // This route previously had NO authentication and NO ownership check: an
 // anonymous (or any cross-tenant) caller could drive the cancel-request
 // flow for ANY household by path id. Additionally the notification create
-// was invalid in TWO fields (no required `channel`; recipientType "HOUSEHOLD"
-// is not a RecipientType enum member — only HOUSEHOLD_MEMBER/VENDOR exist),
-// so the route 500'd after reading the target subscription. Fixed:
+// was invalid in THREE fields (unknown `metadata` argument — the model has
+// no metadata column; recipientType "HOUSEHOLD" is not an enum member; the
+// required `channel` was missing), so the route 500'd after reading the
+// target subscription. Fixed:
 //   1. household session required (401 otherwise)
 //   2. path id MUST match the session's householdId (403 otherwise)
 //   3. notification create uses valid enum values and fields (the model has
