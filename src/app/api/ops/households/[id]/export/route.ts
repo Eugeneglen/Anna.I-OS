@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import {
   HOME_TYPE_LABELS,
   HDB_SIZE_LABELS,
@@ -32,6 +33,20 @@ export async function GET(
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── P9A-F03 (Phase 9, Section A) ──
+    // Single-household PII export was session-only (any ops role could pull
+    // any household's full profile incl. member PII). Aligned with
+    // /api/ops/households/export-all, which already requires
+    // households:export (data_analyst+; coordinator/custom roles without it
+    // are denied).
+    const exportAllowed = await hasPermission(session, "households", "export");
+    if (!exportAllowed) {
+      return NextResponse.json(
+        { error: "Forbidden — household PII export requires households:export" },
+        { status: 403 }
+      );
     }
 
     const { id } = await params;

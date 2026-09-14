@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { getOpsSession } from "@/lib/ops-auth";
+import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
 import { processPendingNotifications } from "@/lib/notify/delivery";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -77,6 +77,17 @@ export async function POST(req: NextRequest) {
       const session = await getOpsSession();
       if (!session) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      // ── P9A-F05 (Phase 9, Section A) ──
+      // The ops path was session-only: ANY ops session (incl. the lowest
+      // data-analyst role) could trigger the global dispatch sweep. Global
+      // operational side-effects now require Coordinator tier — mirrors
+      // /api/ops/events/push. The cron-secret path is unchanged.
+      if (!hasMinRole(session.role, "COORDINATOR")) {
+        return NextResponse.json(
+          { error: "Forbidden — global notification dispatch requires Coordinator tier" },
+          { status: 403 }
+        );
       }
       opsUserId = session.userId;
     }

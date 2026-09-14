@@ -3,11 +3,24 @@ import { db } from "@/lib/db";
 import * as bcrypt from "bcryptjs";
 import { createHouseholdToken } from "@/lib/household-auth";
 import { getTierPriceCents } from "@/lib/subscription-pricing";
+import { checkRateLimit, clientIpFromHeaders } from "@/lib/rate-limit";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 export async function POST(req: NextRequest) {
   try {
+    // ── P9A-F06 (Phase 9, Section A) ──
+    // Unbounded anonymous registration was a spam surface (each call mints a
+    // Household + FamilyMember + Subscription row). 5 registrations per 10
+    // minutes per IP — same fixed-window limiter used by ops auth/marketing.
+    const rlKey = `register:${clientIpFromHeaders(req.headers)}`;
+    if (!checkRateLimit(rlKey, 5, 600_000)) {
+      return NextResponse.json(
+        { error: "Too many registrations from this network — please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { name, email, password, householdName } = await req.json();
 
     // Validate required fields

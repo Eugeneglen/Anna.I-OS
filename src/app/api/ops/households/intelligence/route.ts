@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
+import { hasPermission } from "@/lib/permissions";
 import { getProfileValue } from "@/lib/household-labels";
 
 // ──────────────────────────────────────────────────────────
 // GET /api/ops/households/intelligence
 // Aggregates onboarding intelligence across all households.
 // Used by the Ops Intelligence Dashboard.
-// Requires ops session (auth-gated).
+// Requires ops session + analytics:view (P9A-F04).
 // ──────────────────────────────────────────────────────────
 
 export async function GET(_req: NextRequest) {
@@ -15,6 +16,20 @@ export async function GET(_req: NextRequest) {
     const session = await getOpsSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ── P9A-F04 (Phase 9, Section A) ──
+    // This route was session-only (any ops session, incl. custom roles with
+    // no data permissions, could read every household's onboarding profile).
+    // Now gated on analytics:view — the established read permission for the
+    // intelligence/analytics dashboards (held by data_analyst, coordinator,
+    // operations, super_admin).
+    const analyticsAllowed = await hasPermission(session, "analytics", "view");
+    if (!analyticsAllowed) {
+      return NextResponse.json(
+        { error: "Forbidden — intelligence dashboard requires analytics:view" },
+        { status: 403 }
+      );
     }
 
     const households = await db.household.findMany({
