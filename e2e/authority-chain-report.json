@@ -2,8 +2,8 @@
   "suite": "authority-chain",
   "layer": "1 — deterministic (LIVE_AUTH not set: zero provider calls; LLM checks deferred to Layers 2/3)",
   "liveAuthRequested": false,
-  "startedAt": "2026-09-12T03:06:09.289Z",
-  "finishedAt": "2026-09-12T03:06:17.325Z",
+  "startedAt": "2026-09-14T00:36:43.372Z",
+  "finishedAt": "2026-09-14T00:36:51.031Z",
   "aiProviderAvailable": null,
   "liveProviderCalls": 0,
   "totals": {
@@ -76,13 +76,13 @@
       "suite": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=wtstmq"
+      "detail": "hh=al0ks5"
     },
     {
       "suite": "SETUP",
       "name": "AIRCON vendor created + vendor login",
       "pass": true,
-      "detail": "vendor=t5w7ww"
+      "detail": "vendor=yt8xul"
     },
     {
       "suite": "SETUP",
@@ -106,7 +106,7 @@
       "suite": "S1",
       "name": "Booking created (201)",
       "pass": true,
-      "detail": "jobNo=AI-00000023"
+      "detail": "jobNo=AI-00000011"
     },
     {
       "suite": "S1",
@@ -142,7 +142,7 @@
       "suite": "S1",
       "name": "Dispatched to AIRCON vendor",
       "pass": true,
-      "detail": "booking=r0bd00"
+      "detail": "booking=nyb231"
     },
     {
       "suite": "S1",
@@ -280,7 +280,7 @@
       "suite": "S3",
       "name": "Historical task intact (amount/jobType/status preserved)",
       "pass": true,
-      "detail": "jobNo=AI-00000023"
+      "detail": "jobNo=AI-00000011"
     },
     {
       "suite": "S3",
@@ -316,7 +316,7 @@
       "suite": "S4",
       "name": "Ask Anna create_task offers the card again",
       "pass": true,
-      "detail": "Book Gas Top-up (Aircon) for 13 Sept 2026 at SGD 45.00 (Anna.I catalogue price)?"
+      "detail": "Book Gas Top-up (Aircon) for 15 Sept 2026 at SGD 45.00 (Anna.I catalogue price)?"
     },
     {
       "suite": "S4",
@@ -340,7 +340,7 @@
       "suite": "S5",
       "name": "Generic request (primary:true) resolves the category's primary service deterministically",
       "pass": true,
-      "detail": "Book Standard Service (Aircon) for 13 Sept 2026 at SGD 50.00 (Anna.I catalogue price)?"
+      "detail": "Book Standard Service (Aircon) for 15 Sept 2026 at SGD 50.00 (Anna.I catalogue price)?"
     },
     {
       "suite": "S5",
@@ -490,7 +490,7 @@
       "suite": "S8",
       "name": "Booked task belongs to the SESSION household (B), not the hinted A",
       "pass": true,
-      "detail": "owner=6nu76g"
+      "detail": "owner=biextz"
     },
     {
       "suite": "S8",
@@ -646,7 +646,7 @@
       "suite": "S13",
       "name": "idempotencyKey double-submit → same task, one row",
       "pass": true,
-      "detail": "t1=rmr8jr t2=rmr8jr"
+      "detail": "t1=whxk3f t2=whxk3f"
     }
   ]
 }

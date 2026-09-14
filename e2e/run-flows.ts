@@ -500,14 +500,16 @@ async function flow1() {
   const escrowId = escrow?.id ?? "";
   await truthCheck({ flow, label: "escrow held", hh, vendor, ops, hhEmail: C.hhEmail, hhName: C.hhName, vendorId: C.vendorId, taskId });
 
-  // 7. job execution — the booking state machine intentionally allows only
-  // assigned→accepted→completed|cancelled via the portals ("in_progress" is
-  // reachable only through staff share-links). Verify the household cannot
-  // drive an illegal transition, then the vendor executes & completes.
-  const badProg = await req(hh, "PATCH", `/api/bookings/${bookingId}`, { status: "in_progress" });
-  eq(flow, "State machine: illegal transition accepted→in_progress rejected (409)", badProg.status, 409);
+  // 7. job execution — F-1 (Item 8): accepted→in_progress is now a LEGAL
+  // household-side transition (previously ALWAYS 409 — "in_progress" was
+  // reachable only through staff share-links, leaving the portal flow with
+  // an unreachable start state: photos and complete could never fire from
+  // the portal). The household drives the start here, then the vendor
+  // completes.
+  const hhStart = await req(hh, "PATCH", `/api/bookings/${bookingId}`, { status: "in_progress" });
+  eq(flow, "Household drives accepted→in_progress → 200 (F-1 unblocked)", hhStart.status, 200);
   const inprog = await dbTask(taskId);
-  check(flow, "Task unchanged after rejected transition", inprog?.status === "SCHEDULED" || inprog?.status === "ACCEPTED", `status=${inprog?.status}`);
+  check(flow, "Task IN_PROGRESS after the household start", inprog?.status === "IN_PROGRESS", `status=${inprog?.status}`);
   await truthCheck({ flow, label: "execution start", hh, vendor, ops, hhEmail: C.hhEmail, hhName: C.hhName, vendorId: C.vendorId, taskId });
 
   // 8. completion (vendor)
