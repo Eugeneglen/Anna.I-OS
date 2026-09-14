@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStripe, retrieveSubscription } from "@/lib/stripe";
+import { stripePriceCentsForTier, getTierPriceCents } from "@/lib/subscription-pricing";
+
+// ── F-5 (Item 8): extract the unit_amount a Stripe subscription actually
+// charges from its first price item — null when the subscription or its
+// amount is unreadable (the caller then falls back to the module price).
+function getSubscriptionUnitAmountCents(
+  sub: Stripe.Subscription | null
+): number | null {
+  if (!sub || !sub.items?.data?.length) return null;
+  const amount = sub.items.data[0]?.price?.unit_amount;
+  return typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+}
 
 // ── Disable Next.js body parsing so we can read the raw body for signature verification ──
 // In Next.js App Router, the raw body is available via req.text()
@@ -118,7 +130,22 @@ async function handleCheckoutComplete(event: Stripe.Event) {
 
   // ── Retrieve subscription details from Stripe ──
   const stripeSub = await retrieveSubscription(stripeSubscriptionId);
-  const priceCents = tier === "CARE" ? 6800 : 800;
+  // ── F-5 (Item 8): charge-truth sync ──
+  // Record the ACTUAL Stripe charge amount (price.unit_amount) whenever it
+  // is present; the module price is only the fallback (NoOp/demo flows,
+  // unexpected payload shapes). A divergence is WARNED loudly, never
+  // papered over — the checkout alignment check prevents divergence from
+  // starting in the normal path; one that appears anyway is recorded.
+  const liveUnitAmountCents = getSubscriptionUnitAmountCents(stripeSub);
+  const priceCents = stripePriceCentsForTier(liveUnitAmountCents, tier || "HOME");
+  if (
+    typeof liveUnitAmountCents === "number" &&
+    liveUnitAmountCents !== getTierPriceCents(tier || "HOME")
+  ) {
+    console.warn(
+      `[checkout.session.completed] STRIPE PRICE DIVERGENCE: household=${householdId} tier=${tier} module=${getTierPriceCents(tier || "HOME")}c actual-charge=${liveUnitAmountCents}c — recording the actual charge (row mirrors what Stripe really bills)`
+    );
+  }
 
   // ── Determine billing dates from Stripe ──
   const billingCycleStart = stripeSub
@@ -213,8 +240,19 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     ? new Date(subscription.current_period_end * 1000)
     : null;
 
-  // ── Calculate price cents from tier ──
-  const priceCents = tier === "CARE" ? 6800 : 800;
+  // ── F-5 (Item 8): charge-truth sync ── same rule as checkout-complete:
+  // the ACTUAL Stripe charge amount (price.unit_amount) wins when present,
+  // module price as fallback; divergence warned loudly, never hidden.
+  const liveUnitAmountCents = getSubscriptionUnitAmountCents(subscription);
+  const priceCents = stripePriceCentsForTier(liveUnitAmountCents, tier);
+  if (
+    typeof liveUnitAmountCents === "number" &&
+    liveUnitAmountCents !== getTierPriceCents(tier)
+  ) {
+    console.warn(
+      `[customer.subscription.updated] STRIPE PRICE DIVERGENCE: stripeSub=${stripeSubscriptionId} tier=${tier} module=${getTierPriceCents(tier)}c actual-charge=${liveUnitAmountCents}c — recording the actual charge (row mirrors what Stripe really bills)`
+    );
+  }
 
   await db.subscription.update({
     where: { id: localSub.id },

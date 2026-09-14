@@ -4,6 +4,7 @@ import { jwtDecrypt } from "jose";
 import hkdf from "@panva/hkdf";
 import { db } from "@/lib/db";
 import { createHouseholdToken } from "@/lib/household-auth";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -233,7 +234,9 @@ async function bridgeLogic(request: Request) {
             householdId: household.id,
             tier: "HOME",
             status: "ACTIVE",
-            priceCents: 800,
+            // ── F-5 (Item 8): the application-authoritative price from the
+            // subscription-pricing module — one declaration, every writer.
+            priceCents: getTierPriceCents("HOME"),
             billingCycleStart: new Date(),
             nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           },

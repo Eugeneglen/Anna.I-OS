@@ -7,6 +7,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -164,7 +165,7 @@ export function SubscriptionDetailSheet({
                     onClick={() => onAction("upgrade_tier", detail, true)}
                   >
                     <ArrowUpCircle size={16} />
-                    Upgrade to Care ({formatSgd(6800)}/mo)
+                    Upgrade to Care ({formatSgd(getTierPriceCents("CARE"))}/mo)
                   </Button>
                 )}
                 {detail.status === "ACTIVE" && detail.tier === "CARE" && (
@@ -174,7 +175,7 @@ export function SubscriptionDetailSheet({
                     onClick={() => onAction("downgrade_tier", detail, true)}
                   >
                     <ArrowDownCircle size={16} />
-                    Downgrade to Home ({formatSgd(800)}/mo)
+                    Downgrade to Home ({formatSgd(getTierPriceCents("HOME"))}/mo)
                   </Button>
                 )}
                 {detail.status === "ACTIVE" && (

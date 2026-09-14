@@ -1,6 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOpsSession, hasMinRole } from "@/lib/ops-auth";
+import {
+  RecipientType,
+  NotificationChannel,
+  NotificationEventType,
+  NotificationStatus,
+} from "@prisma/client";
+import { getTierPriceCents, formatTierMonthly } from "@/lib/subscription-pricing";
+
+// ── F-5 (Item 8): tier prices come from the single application authority ──
+// (subscription-pricing.ts). This local map previously re-declared the
+// figures — a second place to drift.
+const TIER_PRICES: Record<string, number> = {
+  HOME: getTierPriceCents("HOME"), // SGD $8/mo
+  CARE: getTierPriceCents("CARE"), // SGD $68/mo
+};
+
+/**
+ * ── Item 8 notification fix ──
+ * The previous notification create was TRIPLE-INVALID: recipientType
+ * "HOUSEHOLD" is not in the RecipientType enum (only HOUSEHOLD_MEMBER /
+ * VENDOR), the required `channel` was missing, and a `metadata` arg the
+ * Notification model does not have — Prisma threw, the whole PATCH 500'd
+ * AFTER the tier row was already written (torn write), and the household
+ * never got told. Now: one VALID notification per household member, copy
+ * derived from the pricing module.
+ */
+async function notifyHouseholdTierChange(
+  householdId: string,
+  subscriptionId: string,
+  title: string,
+  body: string
+): Promise<void> {
+  const members = await db.familyMember.findMany({
+    where: { householdId },
+    select: { id: true },
+  });
+  if (members.length === 0) return;
+  await db.notification.createMany({
+    data: members.map((member) => ({
+      householdId,
+      recipientType: RecipientType.HOUSEHOLD_MEMBER,
+      memberId: member.id,
+      channel: NotificationChannel.WEB_PUSH,
+      eventType: NotificationEventType.SYSTEM_ALERT,
+      title,
+      body,
+      status: NotificationStatus.PENDING,
+      referenceType: "subscription",
+      referenceId: subscriptionId,
+    })),
+  });
+}
 
 // ── PATCH /api/ops/subscriptions/[id] ──
 // Ops manages subscription: change tier, status, billing dates
@@ -68,23 +120,20 @@ export async function PATCH(
             from: "HOME",
             to: "CARE",
             householdName: subscription.household.name,
-            priceChange: { from: 800, to: 6800 },
+            priceChange: { from: getTierPriceCents("HOME"), to: getTierPriceCents("CARE") },
             notes: notes || null,
           },
         },
       });
 
-      // Create household notification
-      await db.notification.create({
-        data: {
-          householdId: subscription.householdId,
-          recipientType: "HOUSEHOLD",
-          eventType: "SYSTEM_ALERT",
-          title: "Subscription Upgraded",
-          body: `Your plan has been upgraded to Anna.I Care (SGD $68/mo). Enjoy premium eldercare companion bundles and priority support.`,
-          metadata: { subscriptionId: id, tier: "CARE" },
-        },
-      });
+      // Create household notification (Item 8 fix: valid recipient/channel,
+      // module-derived copy)
+      await notifyHouseholdTierChange(
+        subscription.householdId,
+        id,
+        "Subscription Upgraded",
+        `Your plan has been upgraded to Anna.I Care (${formatTierMonthly("CARE")}/mo). Enjoy premium eldercare companion bundles and priority support.`
+      );
 
       return NextResponse.json({ subscription: updated });
     }
@@ -124,22 +173,18 @@ export async function PATCH(
             from: "CARE",
             to: "HOME",
             householdName: subscription.household.name,
-            priceChange: { from: 6800, to: 800 },
+            priceChange: { from: getTierPriceCents("CARE"), to: getTierPriceCents("HOME") },
             notes: notes || null,
           },
         },
       });
 
-      await db.notification.create({
-        data: {
-          householdId: subscription.householdId,
-          recipientType: "HOUSEHOLD",
-          eventType: "SYSTEM_ALERT",
-          title: "Plan Changed",
-          body: `Your plan has been changed to Anna.I Home (SGD $8/mo). Care tier benefits are no longer active.`,
-          metadata: { subscriptionId: id, tier: "HOME" },
-        },
-      });
+      await notifyHouseholdTierChange(
+        subscription.householdId,
+        id,
+        "Plan Changed",
+        `Your plan has been changed to Anna.I Home (${formatTierMonthly("HOME")}/mo). Care tier benefits are no longer active.`
+      );
 
       return NextResponse.json({ subscription: updated });
     }
@@ -175,16 +220,12 @@ export async function PATCH(
         },
       });
 
-      await db.notification.create({
-        data: {
-          householdId: subscription.householdId,
-          recipientType: "HOUSEHOLD",
-          eventType: "SYSTEM_ALERT",
-          title: "Subscription Cancelled",
-          body: `Your Anna.I ${subscription.tier} subscription has been cancelled. You can reactivate at any time from Settings.`,
-          metadata: { subscriptionId: id, tier: subscription.tier },
-        },
-      });
+      await notifyHouseholdTierChange(
+        subscription.householdId,
+        id,
+        "Subscription Cancelled",
+        `Your Anna.I ${subscription.tier} subscription has been cancelled. You can reactivate at any time from Settings.`
+      );
 
       return NextResponse.json({ subscription: updated });
     }
@@ -221,16 +262,12 @@ export async function PATCH(
         },
       });
 
-      await db.notification.create({
-        data: {
-          householdId: subscription.householdId,
-          recipientType: "HOUSEHOLD",
-          eventType: "SYSTEM_ALERT",
-          title: "Subscription Reactivated",
-          body: `Welcome back! Your Anna.I ${updated.tier} subscription is now active again.`,
-          metadata: { subscriptionId: id, tier: updated.tier },
-        },
-      });
+      await notifyHouseholdTierChange(
+        subscription.householdId,
+        id,
+        "Subscription Reactivated",
+        `Welcome back! Your Anna.I ${updated.tier} subscription is now active again.`
+      );
 
       return NextResponse.json({ subscription: updated });
     }

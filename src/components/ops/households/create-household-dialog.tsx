@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
+import { formatSgd } from "@/lib/ops-format";
 
 // ============================================================
 // Anna.I — Ops Create Household Dialog
@@ -125,8 +127,8 @@ export function CreateHouseholdDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="HOME">Home ($8/mo)</SelectItem>
-                    <SelectItem value="CARE">Care ($20/mo)</SelectItem>
+                    <SelectItem value="HOME">Home ({formatSgd(getTierPriceCents("HOME"))}/mo)</SelectItem>
+                    <SelectItem value="CARE">Care ({formatSgd(getTierPriceCents("CARE"))}/mo)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

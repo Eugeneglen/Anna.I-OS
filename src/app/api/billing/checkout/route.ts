@@ -6,8 +6,10 @@ import {
   getOrCreateCustomer,
   getHomePriceId,
   getCarePriceId,
+  getPriceUnitAmountCents,
   isBillingEnabled,
 } from "@/lib/stripe";
+import { isStripeTierPriceAligned, getTierPriceCents } from "@/lib/subscription-pricing";
 import { headers } from "next/headers";
 
 /**
@@ -56,6 +58,28 @@ export async function POST(req: NextRequest) {
   if (!priceId) {
     return NextResponse.json(
       { error: `No Stripe price configured for ${tier} tier. Contact Ops.` },
+      { status: 503 }
+    );
+  }
+
+  // ── F-5 (Item 8): Stripe Price ↔ application price ALIGNMENT (fail-closed) ──
+  // The application displays the module price (HOME 800 / CARE 6800); the
+  // Stripe Price object is what a live checkout actually CHARGES. Before a
+  // session is ever created, retrieve the live Price and REFUSE when its
+  // amount is unreadable or diverges from the module — a misconfigured
+  // Stripe Price can never silently charge a different amount than the
+  // app displays. (Ordered after the isBillingEnabled demo short-circuit
+  // above so the NoOp/demo environment never hits the Stripe API.)
+  const liveUnitAmountCents = await getPriceUnitAmountCents(priceId);
+  if (!isStripeTierPriceAligned(liveUnitAmountCents, tier)) {
+    console.error(
+      `[/api/billing/checkout] STRIPE_PRICE_MISMATCH: tier=${tier} modulePrice=${getTierPriceCents(tier)}c stripePrice=${liveUnitAmountCents ?? "unreadable"}c priceId=${priceId} — refusing to create the checkout session`
+    );
+    return NextResponse.json(
+      {
+        error: "Subscription pricing is temporarily misconfigured. No charge was made — please contact Ops.",
+        code: "STRIPE_PRICE_MISMATCH",
+      },
       { status: 503 }
     );
   }

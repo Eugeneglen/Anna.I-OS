@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { formatSgd, type Subscription } from "@/lib/types";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 
 interface BillingSectionProps {
   sub: Subscription | undefined;
@@ -168,7 +169,7 @@ export function BillingSection({ sub, householdId }: BillingSectionProps) {
                     Premium eldercare companion bundles, priority support, and dedicated coordinator access.
                   </p>
                   <p className="text-xs font-data font-semibold text-[var(--anna-slate)] mt-1">
-                    SGD $68/mo
+                    {formatSgd(getTierPriceCents("CARE"))}/mo
                   </p>
                 </div>
               </div>
@@ -193,7 +194,7 @@ export function BillingSection({ sub, householdId }: BillingSectionProps) {
                 ) : (
                   <>
                     <CreditCard size={14} className="mr-1.5" />
-                    Upgrade to Care — SGD $68/mo
+                    Upgrade to Care — {formatSgd(getTierPriceCents("CARE"))}/mo
                   </>
                 )}
               </Button>

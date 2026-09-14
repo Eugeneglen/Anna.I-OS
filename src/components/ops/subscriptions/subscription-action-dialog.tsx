@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatSgd } from "@/lib/ops-format";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 import { TIER_STYLES, type SubItem } from "./subscription-styles";
 
 // ============================================================
@@ -116,10 +117,10 @@ export function SubscriptionNotesDialog({
           </DialogTitle>
           <DialogDescription className="text-[var(--anna-muted)]">
             {action === "upgrade_tier" && sub
-              ? `Upgrade ${sub.household.name} from Home (${formatSgd(800)}) to Care (${formatSgd(6800)})/mo`
+              ? `Upgrade ${sub.household.name} from Home (${formatSgd(getTierPriceCents("HOME"))}) to Care (${formatSgd(getTierPriceCents("CARE"))})/mo`
               : ""}
             {action === "downgrade_tier" && sub
-              ? `Downgrade ${sub.household.name} from Care (${formatSgd(6800)}) to Home (${formatSgd(800)})/mo`
+              ? `Downgrade ${sub.household.name} from Care (${formatSgd(getTierPriceCents("CARE"))}) to Home (${formatSgd(getTierPriceCents("HOME"))})/mo`
               : ""}
             {action === "cancel" && sub
               ? `Cancel ${sub.household.name}'s ${TIER_STYLES[sub.tier]?.label} subscription. The household will be notified.`

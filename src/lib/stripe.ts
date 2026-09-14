@@ -46,6 +46,31 @@ export function getPublishableKey(): string {
   return process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || process.env.STRIPE_PUBLISHABLE_KEY || "";
 }
 
+// ── Price inspection (F-5, Item 8) ──
+
+/**
+ * The live unit_amount (cents) of a Stripe Price, or null when it cannot
+ * be read (Stripe disabled, price missing, API error, non-numeric amount).
+ *
+ * The charge authority is the Stripe Price OBJECT — whatever it says is
+ * what a live checkout actually charges. Callers that display a price
+ * MUST compare this against the application-authoritative module price
+ * (subscription-pricing.ts) and fail closed on divergence — never
+ * silently charge a different amount than the app displays.
+ */
+export async function getPriceUnitAmountCents(priceId: string): Promise<number | null> {
+  const stripe = getStripe();
+  if (!stripe || !priceId) return null;
+  try {
+    const price = await stripe.prices.retrieve(priceId);
+    const amount = price?.unit_amount;
+    return typeof amount === "number" && Number.isFinite(amount) ? amount : null;
+  } catch (error) {
+    console.warn(`[stripe] getPriceUnitAmountCents: could not read Price ${priceId}:`, error);
+    return null;
+  }
+}
+
 // ── Customer helpers ──
 
 /**

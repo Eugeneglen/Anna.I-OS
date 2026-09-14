@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getOpsSession } from "@/lib/ops-auth";
 import { hasPermission } from "@/lib/permissions";
 import * as bcrypt from "bcryptjs";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 
 // POST /api/ops/households — Create a new household (ops-initiated)
 export async function POST(req: NextRequest) {
@@ -92,7 +93,11 @@ export async function POST(req: NextRequest) {
           householdId: hh.id,
           tier: tier as "HOME" | "CARE",
           status: "ACTIVE",
-          priceCents: tier === "HOME" ? 800 : 2000,
+          // ── F-5 (Item 8): the 2000 CARE outlier is dead — every tier
+          // write stamps the application-authoritative module price
+          // (HOME 800 / CARE 6800). This was the ONLY writer producing
+          // $20 CARE rows while every display said $68.
+          priceCents: getTierPriceCents((tier as "HOME" | "CARE") ?? "HOME"),
           billingCycleStart: new Date(),
           billingCycleEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

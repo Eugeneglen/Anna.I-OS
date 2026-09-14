@@ -3,6 +3,7 @@
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatSgd } from "@/lib/ops-format";
+import { getTierPriceCents } from "@/lib/subscription-pricing";
 
 // ============================================================
 // Anna.I — Ops Subscriptions Overview (KPI cards + filter bar)
@@ -49,12 +50,12 @@ export function SubscriptionSummaryCards({ summary }: SubscriptionSummaryCardsPr
       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Home Tier</p>
         <p className="text-2xl font-bold font-data text-[var(--anna-sage-dark)] mt-1">{summary.activeHome}</p>
-        <p className="text-xs text-[var(--anna-muted)] mt-0.5">{formatSgd(summary.activeHome * 800)}/mo</p>
+        <p className="text-xs text-[var(--anna-muted)] mt-0.5">{formatSgd(summary.activeHome * getTierPriceCents("HOME"))}/mo</p>
       </div>
       <div className="bg-[var(--anna-white)] rounded-2xl border border-[var(--anna-border)] p-4">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--anna-muted)]">Care Tier</p>
         <p className="text-2xl font-bold font-data text-purple-700 mt-1">{summary.activeCare}</p>
-        <p className="text-xs text-[var(--anna-muted)] mt-0.5">{formatSgd(summary.activeCare * 6800)}/mo</p>
+        <p className="text-xs text-[var(--anna-muted)] mt-0.5">{formatSgd(summary.activeCare * getTierPriceCents("CARE"))}/mo</p>
       </div>
     </div>
   );
