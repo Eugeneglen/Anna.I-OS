@@ -580,6 +580,42 @@ export async function POST(request: Request) {
       );
     }
 
+    // ── P9B-F01 (Phase 9, Section B): concurrent same-key creation race ──
+    // The 60-second replay lookup above is check-then-create: two parallel
+    // requests with the same (householdId, idempotencyKey) both miss it and
+    // both create (verified live: two tasks, two downstream escrows). There
+    // is no DB unique constraint on idempotencyKey (see the jobNo comment
+    // above), so reconcile post-create: if another task with the same key
+    // exists and is OLDER, this request is the racing duplicate — delete it
+    // (nothing depends on a just-created task: dispatch/escrow have not
+    // formed yet; attachments cascade) and return the original as an
+    // idempotent replay. Money-safe by construction: escrow forms only at
+    // dispatch+accept, which happens after this response. The older racer
+    // sees itself as the original and returns its own 201; the younger
+    // self-deletes. (Multi-replica deployments would additionally need a
+    // DB-level partial unique index — documented limitation, single-process
+    // deployment per src/lib/rate-limit.ts.)
+    if (idempotencyKey) {
+      const twins = await db.task.findMany({
+        where: { householdId, idempotencyKey },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      if (twins.length > 1 && twins[0].id !== task.id) {
+        await db.task.delete({ where: { id: task.id } }).catch(() => {
+          // best-effort removal — if it fails we still return the original,
+          // leaving an orphan duplicate row (visible to ops, never escrowed)
+        });
+        const originalTask = await db.task.findUnique({
+          where: { id: twins[0].id },
+          include: { attachments: true },
+        });
+        if (originalTask) {
+          return NextResponse.json({ task: originalTask, idempotentReplay: true }, { status: 200 });
+        }
+      }
+    }
+
     // If quotationId was provided, update the quotation status to ACCEPTED
     if (quotationId) {
       await db.quotation.update({

@@ -101,8 +101,16 @@ export async function PATCH(
     const now = new Date();
     const isApproved = action === "approve";
 
-    const updatedAddon = await db.bookingAddon.update({
-      where: { id: addonId },
+    // ── P9B-F04 (Phase 9, Section B): guarded transition ──
+    // The `addon.status !== "pending"` check above is check-then-write: two
+    // parallel approvals both pass it and both create an escrow entry
+    // (verified live: 200/200, two HELD rows — a double charge). The fix is
+    // the same F19 pattern the escrow core uses: the state transition itself
+    // is the guard — an atomic updateMany conditioned on status:"pending".
+    // Exactly one racer transitions (count=1) and proceeds to create the
+    // escrow entry; the loser gets count=0 → 409, no charge.
+    const transitioned = await db.bookingAddon.updateMany({
+      where: { id: addonId, status: "pending" },
       data: {
         status: isApproved ? "approved" : "rejected",
         approvedById: session.memberId,
@@ -110,6 +118,13 @@ export async function PATCH(
         rejectedAt: !isApproved ? now : null,
       },
     });
+    if (transitioned.count === 0) {
+      return NextResponse.json(
+        { error: `Addon is already processed and cannot be ${action}d (a concurrent request won)` },
+        { status: 409 }
+      );
+    }
+    const updatedAddon = await db.bookingAddon.findUnique({ where: { id: addonId } });
 
     // ── When approved: create addon escrow entry ──
     //
