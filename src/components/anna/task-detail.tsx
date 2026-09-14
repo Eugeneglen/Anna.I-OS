@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnnaStore } from "@/lib/store";
+import { pickPrimaryEscrowEntry, liveEscrowEntries } from "@/lib/escrow-display";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon, getCategoryLabel } from "./category-icon";
 import { StatusTimeline } from "./status-timeline";
@@ -533,7 +534,10 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
   if (!task) return null;
 
   const booking = task.bookings?.[0];
-  const escrow = task.escrowEntries?.[0];
+  // ── F-8 (Item 8): live-first primary entry — never the raw [0]. After a
+  // cancel → rematch the oldest entry is VOIDED and a NEW live hold exists;
+  // the old [0] pick displayed (and acted on) the dead entry.
+  const escrow = pickPrimaryEscrowEntry(task.escrowEntries ?? []) ?? undefined;
   const actions = actionButtons[task.status] || [];
 
   return (
@@ -1372,7 +1376,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         isSubmitting={escrowMutation.isPending}
         taskCategory={task.category}
         vendorName={booking?.vendor?.name}
-        amountCents={task.escrowEntries?.reduce((s, e) => s + (e.amountCents || 0), 0) || escrow?.amountCents || 0}
+        amountCents={liveEscrowEntries(task.escrowEntries ?? []).reduce((s, e) => s + (e.amountCents || 0), 0) || escrow?.amountCents || 0}
       />
 
       <EditPredictedDialog

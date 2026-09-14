@@ -33,6 +33,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { VendorPhotoUpload } from "./vendor-photo-upload";
 import { cn } from "@/lib/utils";
+import { liveEscrowEntries } from "@/lib/escrow-display";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
 import { payoutBaseCents } from "@/lib/payments/calculations";
 import type { VendorScheduleItem, VendorInfo } from "./vendor-schedule";
@@ -509,8 +510,15 @@ function VendorTaskDetailContent({
         // job value, commission and payout are all computed on the
         // pre-discount base. The customer-paid cash is shown as separate,
         // clearly-labeled context so the two figures are never confused.
-        const allEntries = b.escrowEntries && b.escrowEntries.length > 0
-          ? b.escrowEntries
+        // ── P2-1 (Item 8): aggregations run over LIVE, BOOKING-SCOPED entries ──
+        // The task-level list can carry a VOIDED hold from a cancelled
+        // rematch booking; its figures never zero out and would overstate
+        // every sum below. liveEscrowEntries scoped to THIS booking keeps
+        // its base + add-on entries and drops the dead hold (fallback to
+        // the booking's primary entry when the list is empty).
+        const liveBookingEntries = liveEscrowEntries(b.escrowEntries ?? [], { bookingId: b.id });
+        const allEntries = liveBookingEntries.length > 0
+          ? liveBookingEntries
           : [b.escrow];
         // Job value = payout base (pre-discount, incl. add-ons)
         const orderTotalCents = allEntries.reduce(

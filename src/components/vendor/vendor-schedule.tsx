@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CategoryIcon, getCategoryLabel } from "@/components/anna/category-icon";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { liveEscrowEntries } from "@/lib/escrow-display";
 import { formatSgd, formatDate, formatTime, type ServiceCategory } from "@/lib/types";
 import { vendorFetch } from "@/lib/vendor-fetch";
 import {
@@ -84,6 +85,8 @@ export interface VendorScheduleItem {
   escrowEntries?: {
     id: string;
     state: string;
+    bookingId?: string | null;
+    heldAt?: string | null;
     amountCents: number;
     originalAmountCents?: number;
     discountCents?: number;
@@ -228,7 +231,13 @@ function BookingCard({
           <ShieldCheck size={14} className="text-[var(--anna-sage-dark)] shrink-0" />
           <p className="text-[11px] font-medium text-[var(--anna-sage-dark)]">
             Payment released — {formatSgd(
-              (item.escrowEntries ?? []).reduce(
+              // ── P2-1 (Item 8): payout sum over LIVE, BOOKING-SCOPED entries ──
+              // The API returns the TASK-level entries (a cancel → rematch
+              // leaves a VOIDED hold in the list); the raw reduce summed the
+              // dead entry's payout too. liveEscrowEntries with THIS card's
+              // bookingId keeps the base + add-on entries of THIS booking
+              // and drops the VOIDED hold.
+              liveEscrowEntries(item.escrowEntries ?? [], { bookingId: item.id }).reduce(
                 (sum, e) => sum + (e.vendorPayoutCents || 0), 0
               ) || item.escrow.vendorPayoutCents
             )} payout

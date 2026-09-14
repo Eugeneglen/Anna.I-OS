@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import type { EscrowState } from "@/lib/types";
 import { formatSgd } from "@/lib/types";
 import { ShieldCheck, AlertTriangle, Clock, RotateCcw, XCircle } from "lucide-react";
+import { liveEscrowEntries } from "@/lib/escrow-display";
 
 const stateConfig: Record<
   EscrowState,
@@ -54,6 +55,9 @@ interface EscrowEntryInfo {
   refundCents?: number;
   commissionCents?: number;
   vendorPayoutCents?: number;
+  /** P2-1 (Item 8): entry state — present on live API shapes; legacy
+   *  callers without it pass through the live filter unchanged. */
+  state?: EscrowState;
 }
 
 interface EscrowBadgeProps {
@@ -76,37 +80,44 @@ export function EscrowBadge({
   const config = stateConfig[state];
   const Icon = config.icon;
 
-  // Compute order total from ALL entries (base + add-ons), or fall back
-  // to the single amountCents prop for backward compatibility.
-  const orderTotalCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + e.amountCents, 0)
+  // ── P2-1 (Item 8): aggregate over LIVE entries only ──
+  // A VOIDED hold (cancel → rematch) keeps its original figures —
+  // summing the raw list overstated every figure by the dead entry.
+  // REFUNDED stays (real money history). Entries without a state (legacy
+  // shapes) pass through unchanged.
+  const liveEntries = liveEscrowEntries(entries);
+
+  // Compute order total from ALL live entries (base + add-ons), or fall
+  // back to the single amountCents prop for backward compatibility.
+  const orderTotalCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + e.amountCents, 0)
     : amountCents ?? 0;
 
-  // Cumulative refund across all entries
-  const totalRefundCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + (e.refundCents || 0), 0)
+  // Cumulative refund across all live entries
+  const totalRefundCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + (e.refundCents || 0), 0)
     : 0;
 
-  // Sum commission + vendor payout across ALL entries so the household
+  // Sum commission + vendor payout across ALL live entries so the household
   // view matches the vendor + OPS views exactly.
-  const totalCommissionCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + (e.commissionCents || 0), 0)
+  const totalCommissionCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + (e.commissionCents || 0), 0)
     : 0;
-  const totalVendorPayoutCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + (e.vendorPayoutCents || 0), 0)
+  const totalVendorPayoutCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + (e.vendorPayoutCents || 0), 0)
     : 0;
 
   // Marketing discount totals (base entry carries the discount; addons = 0)
-  const totalDiscountCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + (e.discountCents || 0), 0)
+  const totalDiscountCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + (e.discountCents || 0), 0)
     : 0;
-  const totalOriginalCents = entries && entries.length > 0
-    ? entries.reduce((sum, e) => sum + (e.originalAmountCents || 0), 0)
+  const totalOriginalCents = liveEntries.length > 0
+    ? liveEntries.reduce((sum, e) => sum + (e.originalAmountCents || 0), 0)
     : 0;
   const hasDiscount = totalDiscountCents > 0 && totalOriginalCents > 0;
 
   const remainingCents = orderTotalCents - totalRefundCents;
-  const hasMultipleEntries = entries && entries.length > 1;
+  const hasMultipleEntries = liveEntries.length > 1;
   const hasRefund = totalRefundCents > 0;
   const isReleased = state === "RELEASED";
   const isRefunded = state === "REFUNDED";

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { requireVendorOwnership, requireVendorPermission, vendorJson } from "@/lib/vendor-guard"
+import { pickPrimaryEscrowEntry } from "@/lib/escrow-display"
 
 export async function GET(
   request: Request,
@@ -121,6 +122,8 @@ export async function GET(
               select: {
                 id: true,
                 state: true,
+                bookingId: true,
+                heldAt: true,
                 amountCents: true,
                 originalAmountCents: true,
                 discountCents: true,
@@ -128,6 +131,7 @@ export async function GET(
                 refundCents: true,
                 commissionCents: true,
                 vendorPayoutCents: true,
+                releasedAt: true,
                 disputeReason: true,
                 disputeResolution: true,
                 disputeResolvedAt: true,
@@ -210,7 +214,12 @@ export async function GET(
       // Task-level status and escrow info for dispute awareness
       taskStatus: b.task.status,
       taskDisputedAt: b.task.disputedAt,
-      escrow: b.task.escrowEntries[0] ?? null,
+      // ── F-8 (Item 8): the escrow entry this card should display/act on ──
+      // BOOKING-SCOPED and live-first via the shared selector — never the
+      // raw escrowEntries[0] (the OLDEST row). After a cancel → rematch the
+      // task's oldest entry is VOIDED and a NEW live hold exists for the
+      // rematch booking: [0] displayed (and acted on) the dead entry.
+      escrow: pickPrimaryEscrowEntry(b.task.escrowEntries, { bookingId: b.id }),
       // All escrow entries (base + add-ons) for full refund/remaining computation
       escrowEntries: b.task.escrowEntries ?? [],
     }))

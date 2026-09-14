@@ -17,6 +17,11 @@ import { EscrowActionDialog } from "@/components/ops/escrow-action-dialog";
 import { CompensationVoucherCard, type CompensationVoucher } from "@/components/ops/escrow/compensation-voucher-card";
 import { JobNoBadge } from "@/components/shared/job-no-badge";
 import {
+  liveEscrowEntries,
+  pickPrimaryEscrowEntry,
+  type EscrowEntryLike,
+} from "@/lib/escrow-display";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -204,8 +209,22 @@ export function BookingDetailSheet({
   const bookings = (task?.bookings as Record<string, unknown>[]) || [];
   const booking = bookings[0] as Record<string, unknown> | undefined;
   const vendor = booking?.vendor as Record<string, unknown> | undefined;
-  const allEscrowEntries = (task?.escrowEntries as Record<string, unknown>[]) || [];
-  const escrow = allEscrowEntries[0];
+  // ── P2-1 (Item 8): aggregations run over LIVE entries only ──
+  // After a cancel → rematch the task's oldest entry is VOIDED but keeps
+  // its original figures (voiding never zeroes them), so the raw-list
+  // reductions overstated order total / refund / payout by the dead hold.
+  // REFUNDED entries are real money history and stay.
+  const rawEscrowEntries = (task?.escrowEntries as Record<string, unknown>[]) || [];
+  const allEscrowEntries = liveEscrowEntries(
+    rawEscrowEntries as unknown as EscrowEntryLike[]
+  ) as unknown as Record<string, unknown>[];
+  // ── F-8 (Item 8): live-first primary selection — never the raw [0].
+  // (Deliberate: pre-filtering live BEFORE the pick means an all-VOIDED
+  // (cancelled) task shows no escrow block rather than a stale "Voided"
+  // headline — honest, matching the selector's live-first rule.)
+  const escrow = (pickPrimaryEscrowEntry(
+    allEscrowEntries as unknown as EscrowEntryLike[]
+  ) as unknown as Record<string, unknown> | null) ?? undefined;
   // Order Total = sum of ALL escrow entries (base + add-ons) — CUSTOMER CASH
   // (post-discount). Used for the escrow-action dialogs (refund caps are
   // cash-based) and the "held in escrow" display.
