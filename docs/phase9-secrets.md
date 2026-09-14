@@ -14,7 +14,7 @@ commit `d300888` (PHASE1-L4-1) containing:
 | Variable | Class | Exposure |
 | --- | --- | --- |
 | `GOOGLE_CLIENT_SECRET` | **OAuth client secret** (GOCSPX-… value, not reproduced here) | Committed to git; **already pushed to the remote** in the branch history |
-| `NEXTAUTH_SECRET` | Auth signing secret (dev-grade value `anna-local-nextauth-secret`) | Committed + pushed |
+| `NEXTAUTH_SECRET` | Auth signing secret (dev-grade placeholder, not reproduced here) | Committed + pushed |
 | `GOOGLE_CLIENT_ID` | Public identifier (low sensitivity) | Committed + pushed |
 | `DATABASE_URL` / `NEXTAUTH_URL` / `OPS_EVENTS_URL` | Local dev configuration | Committed + pushed |
 

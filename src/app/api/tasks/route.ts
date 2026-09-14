@@ -596,8 +596,14 @@ export async function POST(request: Request) {
     // DB-level partial unique index — documented limitation, single-process
     // deployment per src/lib/rate-limit.ts.)
     if (idempotencyKey) {
+      // (P9B police finding #1: the twins query MUST use the same 60-second
+      // window as the pre-create replay lookup above — the route's documented
+      // contract deliberately ALLOWS a same-key request after 60s to create a
+      // fresh task. Without the window, a >60s retry would silently delete
+      // its own new task and return the stale twin as a replay.)
+      const reconcileWindowStart = new Date(Date.now() - 60_000)
       const twins = await db.task.findMany({
-        where: { householdId, idempotencyKey },
+        where: { householdId, idempotencyKey, createdAt: { gte: reconcileWindowStart } },
         orderBy: { createdAt: "asc" },
         select: { id: true },
       });

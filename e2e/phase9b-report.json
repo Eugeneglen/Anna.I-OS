@@ -1,8 +1,8 @@
 {
   "suite": "phase9b-sec",
   "layer": "Section B dynamic probes (Phases 7, 8, 11, 12)",
-  "startedAt": "2026-09-14T03:35:33.728Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789356923433.db",
+  "startedAt": "2026-09-14T04:08:42.652Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789358912731.db",
   "totals": {
     "pass": 27,
     "fail": 0
@@ -26,13 +26,13 @@
       "flow": "SETUP",
       "name": "Household + session",
       "pass": true,
-      "detail": "hh=cs0vhl"
+      "detail": "hh=mxsn9b"
     },
     {
       "flow": "SETUP",
       "name": "Vendor created + login",
       "pass": true,
-      "detail": "vendor=zbsuzh"
+      "detail": "vendor=a6jn0a"
     },
     {
       "flow": "SETUP",
@@ -68,7 +68,7 @@
       "flow": "SB2",
       "name": "CONCURRENT same-key task creation → exactly one row",
       "pass": true,
-      "detail": "rows=1 statuses=201/200 ids c5ud4w/c5ud4w"
+      "detail": "rows=1 statuses=201/200 ids 79zrb9/79zrb9"
     },
     {
       "flow": "SB2",
@@ -92,7 +92,7 @@
       "flow": "SB2",
       "name": "CONCURRENT add-on approval → single charge",
       "pass": true,
-      "detail": "statuses=409/200 addon=approved newEscrowEntries=1"
+      "detail": "statuses=200/409 addon=approved newEscrowEntries=1"
     },
     {
       "flow": "SB2",
@@ -138,9 +138,9 @@
     },
     {
       "flow": "SB3",
-      "name": "Task create with injected nested fields → accepted-but-ignored (zod strips unknown keys)",
+      "name": "Task create with injected nested fields → rejected outright",
       "pass": true,
-      "detail": "HTTP 400"
+      "detail": "HTTP 400 (schema rejected unknown keys)"
     },
     {
       "flow": "SB4",
