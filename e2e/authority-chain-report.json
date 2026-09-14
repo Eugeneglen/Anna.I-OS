@@ -2,8 +2,8 @@
   "suite": "authority-chain",
   "layer": "1 — deterministic (LIVE_AUTH not set: zero provider calls; LLM checks deferred to Layers 2/3)",
   "liveAuthRequested": false,
-  "startedAt": "2026-09-14T04:21:11.415Z",
-  "finishedAt": "2026-09-14T04:21:19.293Z",
+  "startedAt": "2026-09-14T05:35:11.931Z",
+  "finishedAt": "2026-09-14T05:35:19.723Z",
   "aiProviderAvailable": null,
   "liveProviderCalls": 0,
   "totals": {
@@ -76,13 +76,13 @@
       "suite": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=its2il"
+      "detail": "hh=75t00r"
     },
     {
       "suite": "SETUP",
       "name": "AIRCON vendor created + vendor login",
       "pass": true,
-      "detail": "vendor=0g2nlw"
+      "detail": "vendor=paur5n"
     },
     {
       "suite": "SETUP",
@@ -142,7 +142,7 @@
       "suite": "S1",
       "name": "Dispatched to AIRCON vendor",
       "pass": true,
-      "detail": "booking=qq8wwc"
+      "detail": "booking=3nkuct"
     },
     {
       "suite": "S1",
@@ -490,7 +490,7 @@
       "suite": "S8",
       "name": "Booked task belongs to the SESSION household (B), not the hinted A",
       "pass": true,
-      "detail": "owner=54yuj4"
+      "detail": "owner=20ia74"
     },
     {
       "suite": "S8",
@@ -646,7 +646,7 @@
       "suite": "S13",
       "name": "idempotencyKey double-submit → same task, one row",
       "pass": true,
-      "detail": "t1=ghj3cb t2=ghj3cb"
+      "detail": "t1=8npmvm t2=8npmvm"
     }
   ]
 }

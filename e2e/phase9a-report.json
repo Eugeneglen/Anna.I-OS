@@ -1,8 +1,8 @@
 {
   "suite": "phase9a-sec",
   "layer": "Section A dynamic audit probes (Phases 1–6)",
-  "startedAt": "2026-09-14T04:28:27.685Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789360084142.db",
+  "startedAt": "2026-09-14T05:46:58.893Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789364796940.db",
   "totals": {
     "pass": 101,
     "fail": 0
@@ -38,25 +38,25 @@
       "flow": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=9mcgxf reg=200"
+      "detail": "hh=h8twcr reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=j3k9z8 reg=200"
+      "detail": "hh=yo7rfj reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Vendor A created + login",
       "pass": true,
-      "detail": "vendor=jaql5i"
+      "detail": "vendor=780jqw"
     },
     {
       "flow": "SETUP",
       "name": "Vendor B created + login",
       "pass": true,
-      "detail": "vendor=jjytyk"
+      "detail": "vendor=7osmgp"
     },
     {
       "flow": "SETUP",

@@ -1,8 +1,8 @@
 {
   "suite": "phase9b-sec",
   "layer": "Section B dynamic probes (Phases 7, 8, 11, 12)",
-  "startedAt": "2026-09-14T04:28:49.820Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789360118713.db",
+  "startedAt": "2026-09-14T05:47:13.623Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9b-1789364824068.db",
   "totals": {
     "pass": 27,
     "fail": 0
@@ -26,13 +26,13 @@
       "flow": "SETUP",
       "name": "Household + session",
       "pass": true,
-      "detail": "hh=fydygn"
+      "detail": "hh=jv72wc"
     },
     {
       "flow": "SETUP",
       "name": "Vendor created + login",
       "pass": true,
-      "detail": "vendor=24lk7c"
+      "detail": "vendor=lf1nca"
     },
     {
       "flow": "SETUP",
@@ -68,7 +68,7 @@
       "flow": "SB2",
       "name": "CONCURRENT same-key task creation → exactly one row",
       "pass": true,
-      "detail": "rows=1 statuses=201/200 ids xdbjby/xdbjby"
+      "detail": "rows=1 statuses=201/200 ids u99dtu/u99dtu"
     },
     {
       "flow": "SB2",
