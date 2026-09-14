@@ -97,6 +97,37 @@ export async function POST(request: Request) {
       jobType.requiredFields as unknown as JobTypeRequiredField[];
     const addOns = jobType.addOns as unknown as JobTypeAddOn[];
 
+    // ── F-4 (Item 8): dynamic-field RANGE validation ──
+    // Previously ANY numeric value was accepted and multiplied straight
+    // into the quotation (unitCount 99 → a $3,960 gas top-up; negative and
+    // zero counts flowed into per-unit math). The requiredFields' own
+    // min/max bounds are now enforced BEFORE the quote is calculated —
+    // the same bounds the server-side authority (service-authority)
+    // enforces on the units convenience param.
+    for (const field of requiredFields ?? []) {
+      const value = fieldValues[field.key];
+      if (value === undefined) continue; // absent → calculateQuote applies the field default
+      const isUnitField = pricingRules?.unitField === field.key;
+      const outOfRange =
+        (field.min !== undefined && value < field.min) ||
+        (field.max !== undefined && value > field.max) ||
+        (!Number.isInteger(value)) ||
+        value < 0;
+      if (outOfRange) {
+        const bound =
+          field.min !== undefined && field.max !== undefined
+            ? ` between ${field.min} and ${field.max}`
+            : "";
+        return NextResponse.json(
+          {
+            error: `"${field.label ?? field.key}" must be a whole number${bound} — received ${value}`,
+            code: isUnitField ? "UNITS_OUT_OF_RANGE" : "FIELD_OUT_OF_RANGE",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate the quote
     const result = calculateQuote(
       jobType.basePriceCents,

@@ -13,12 +13,15 @@ import { updateHouseholdCachedStats } from "@/lib/marketing/behaviour-engine"
 
 const ACTION_STATUS_MAP: Record<string, string> = {
   accept: "accepted",
+  // F-1 (Item 8): the start action — the vendor-side in_progress
+  // transition that unblocks the start → photos → complete portal flow.
+  start: "in_progress",
   complete: "completed",
   reject: "cancelled",
 }
 
 const patchVendorBookingSchema = z.object({
-  action: z.enum(["accept", "complete", "reject"]),
+  action: z.enum(["accept", "start", "complete", "reject"]),
   completionNotes: z.string().max(1000).optional(),
 })
 
@@ -59,8 +62,29 @@ export async function PATCH(
       complete: "complete",
       reject: "reject",
     }
-    const permAuth = await requireVendorPermission("v_bookings", permByAction[action])
-    if (!permAuth.success) return permAuth.response
+    // ── F-1 (Item 8): 'start' permission gate ──
+    // The seeded SYSTEM vendor roles (vendor_super_admin / vendor_admin)
+    // predate the start action and are grandfathered — demo flows rely on
+    // them accepting → starting → completing without a new permission row.
+    // Custom roles are held to the real permission: v_bookings:start.
+    const SYSTEM_VENDOR_ROLE_SLUGS = new Set([
+      "vendor_super_admin",
+      "vendor_admin",
+    ])
+    if (action === "start") {
+      const vendorRow = await db.vendor.findUnique({
+        where: { id: vendorId },
+        select: { roleRel: { select: { slug: true } } },
+      })
+      const roleSlug = vendorRow?.roleRel?.slug ?? ""
+      if (!SYSTEM_VENDOR_ROLE_SLUGS.has(roleSlug)) {
+        const startAuth = await requireVendorPermission("v_bookings", "start")
+        if (!startAuth.success) return startAuth.response
+      }
+    } else {
+      const permAuth = await requireVendorPermission("v_bookings", permByAction[action])
+      if (!permAuth.success) return permAuth.response
+    }
 
     // Fetch booking with task
     const booking = await db.booking.findUnique({
@@ -123,6 +147,11 @@ export async function PATCH(
 
     if (action === "accept") {
       updateData.acceptedAt = now
+    }
+
+    // F-1 (Item 8): start stamps the real work-start timestamp.
+    if (action === "start") {
+      updateData.actualStart = now
     }
 
     if (action === "complete") {
@@ -365,7 +394,52 @@ export async function PATCH(
     }
 
     // ────────────────────────────────────────────────
-    // COMPLETE: Vendor finishes → COMPLETED (works from accepted)
+    // START (F-1, Item 8): Vendor begins work → IN_PROGRESS
+    // ────────────────────────────────────────────────
+    if (action === "start") {
+      const task = booking.task
+      await db.task.update({
+        where: { id: task.id },
+        data: { status: TaskStatus.IN_PROGRESS, inProgressAt: now },
+      })
+
+      // Notify household members that the vendor has started
+      const members = await db.familyMember.findMany({
+        where: { householdId: task.householdId },
+        select: { id: true },
+      })
+      for (const member of members) {
+        await db.notification.create({
+          data: {
+            householdId: task.householdId,
+            recipientType: RecipientType.HOUSEHOLD_MEMBER,
+            memberId: member.id,
+            channel: NotificationChannel.WHATSAPP,
+            eventType: NotificationEventType.VENDOR_EN_ROUTE,
+            title: "Vendor Started Work",
+            body: `Your service provider has started working on your ${task.category.toLowerCase()} task.`,
+            status: NotificationStatus.PENDING,
+            referenceType: "booking",
+            referenceId: bookingId,
+          },
+        })
+      }
+
+      emitBookingStatusChanged({
+        id: bookingId,
+        status: "in_progress",
+        previousStatus: booking.status,
+        vendorName: undefined,
+        vendorId: auth.vendorId,
+        householdId: task.householdId,
+        category: task.category,
+      }).catch(() => {})
+
+      return NextResponse.json({ booking: updatedBooking })
+    }
+
+    // ────────────────────────────────────────────────
+    // COMPLETE: Vendor finishes → COMPLETED (works from accepted/in_progress)
     // ────────────────────────────────────────────────
     if (action === "complete") {
       // police-2b f4: guard the task transition on pre-completion status —

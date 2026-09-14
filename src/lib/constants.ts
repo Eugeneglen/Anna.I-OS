@@ -71,7 +71,11 @@ export const MAX_AUTONOMY_LEVEL = 5
 /** Valid booking status transitions */
 export const BOOKING_STATUS_TRANSITIONS: Record<string, string[]> = {
   assigned: ['accepted', 'cancelled'],
-  accepted: ['completed', 'cancelled'],
+  // F-1 (Item 8): accepted bookings can move to in_progress — the vendor
+  // 'start' action and the household-side PATCH both drive it, unblocking
+  // the previously-unreachable start → photos → complete portal flow.
+  accepted: ['in_progress', 'completed', 'cancelled'],
+  in_progress: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }

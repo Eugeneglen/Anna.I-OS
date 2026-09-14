@@ -31,6 +31,11 @@ const createTaskSchema = z.object({
   // units). Used ONLY by the server-side quote engine — the client
   // amountCents is never a pricing authority for catalogue services.
   units: z.number().int().min(1).max(999).optional(),
+  // ── F-3 (Item 8): dynamic-field answers for the no-quotation catalogue
+  // path — the AUTHORITATIVE values the server quotes from (the client
+  // cannot silently fall back to defaults by omitting them, and its
+  // amountCents is never read here).
+  fieldValues: z.record(z.string(), z.number()).optional(),
   discountCode: z.string().optional(), // optional promo code
   recurrencePattern: z.object({ type: z.string(), interval: z.number() }).nullable().optional(),
   scheduledStart: z.string().optional().refine(
@@ -135,7 +140,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { category, instructions, amountCents, units, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
+    const { category, instructions, amountCents, units, fieldValues, discountCode, recurrencePattern, scheduledStart, attachments, jobTypeId, quotationId, idempotencyKey } = parsed.data
 
     // Category active guard — reject if category is currently unavailable
     const categoryActive = await isCategoryActive(category)
@@ -196,6 +201,40 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
+      // ── F-3 (Item 8): quotation ↔ jobType linkage ──
+      // When the caller names BOTH a quotation and a jobTypeId, they must
+      // be the SAME service — a quotation for the gas top-up can never be
+      // used to book the chemical wash at the gas quote's price.
+      if (jobTypeId && jobTypeId !== quotation.jobTypeId) {
+        return NextResponse.json(
+          {
+            error: "The quotation does not belong to this job type — request a fresh quote for the service you are booking",
+            code: "QUOTATION_JOB_TYPE_MISMATCH",
+          },
+          { status: 400 }
+        );
+      }
+      // ── F-3 (Item 8): PRICE_STALE — the quotation is a SNAPSHOT ──
+      // Re-price the quotation's config against the CURRENT catalogue
+      // (the same authority that produced it). If the live price has moved
+      // since the household saw the quote, refuse: the displayed price and
+      // the booked price must never silently diverge.
+      const recheck = await quoteJobType(
+        quotation.jobTypeId,
+        {
+          fieldValues: (quotation.fieldValues as Record<string, number>) ?? {},
+          selectedAddOns: (quotation.selectedAddOns as string[]) ?? [],
+        }
+      );
+      if (recheck.ok && recheck.quote.totalCents !== quotation.totalCents) {
+        return NextResponse.json(
+          {
+            error: `The price of this service has changed since the quote was displayed (quoted SGD $${(quotation.totalCents / 100).toFixed(2)}, now SGD $${(recheck.quote.totalCents / 100).toFixed(2)}). Request a fresh quote to book at the current price.`,
+            code: "PRICE_STALE",
+          },
+          { status: 409 }
+        );
+      }
       finalAmountCents = quotation.totalCents;
     }
 
@@ -217,7 +256,7 @@ export async function POST(request: Request) {
     //                     stamped metadata.pricingSource="custom_request"
     //                     so it can never masquerade as catalogue pricing.
     if (jobTypeId && !quotationId) {
-      const authority = await quoteJobType(jobTypeId, { units });
+      const authority = await quoteJobType(jobTypeId, { units, fieldValues });
       if (!authority.ok && authority.code === "NOT_FOUND") {
         return NextResponse.json(
           { error: "Unknown job type", code: "JOB_TYPE_NOT_FOUND" },
