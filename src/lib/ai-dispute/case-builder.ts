@@ -270,7 +270,15 @@ export async function buildDisputeCase(taskId: string): Promise<DisputeCaseData 
     heldAt: e.heldAt?.toISOString() ?? null,
   }));
 
-  const orderTotalCashCents = escrowEntries.reduce((s, e) => s + e.amountCents, 0);
+  // ── Carry-forward #3 remediation (Phase 9, Section C) ──
+  // VOIDED entries (e.g. the stale leg after cancel → rematch) were never
+  // collected — including their amountCents in the ORDER TOTAL inflated the
+  // AI advisory's refund bounds (policy.ts caps partial refunds against
+  // orderTotalCashCents). Sum only LIVE money: exclude VOIDED. (REFUNDED
+  // entries stay in the total: their cash WAS collected, and their
+  // refundCents already nets out via totalRefundedCents → remainingCash.)
+  const liveEscrowEntries = escrowEntries.filter((e) => e.state !== "VOIDED");
+  const orderTotalCashCents = liveEscrowEntries.reduce((s, e) => s + e.amountCents, 0);
   const totalRefundedCents = escrowEntries.reduce((s, e) => s + (e.refundCents || 0), 0);
   const totalSubsidyReversedCents = escrowEntries.reduce(
     (s, e) => s + (e.subsidyReversedCents || 0),
