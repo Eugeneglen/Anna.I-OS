@@ -271,6 +271,25 @@ export function checkNarrationConsistency(
         }
       }
     }
+  } else {
+    // No linked vendor in the evidence — naming ANY real vendor is an
+    // invented identity (P11-F3 regression case: incomplete evidence must
+    // be narrated as a limitation, never resolved by fabrication).
+    const universe =
+      options.vendorNameUniverse ??
+      defaultVendorUniverseFromCase(caseData);
+    for (const other of universe) {
+      const name = other.trim();
+      if (!name || name.length < 4) continue;
+      if (text.includes(name)) {
+        contradictions.push({
+          check: "vendor-identity",
+          narration: name,
+          evidence: "no linked vendor in the evidence snapshot",
+        });
+        break;
+      }
+    }
   }
 
   return contradictions;
