@@ -166,29 +166,46 @@ export async function PATCH(
       updateData.cancelledAt = now
     }
 
-    const updatedBooking = await db.booking.update({
-      where: { id: bookingId },
-      data: updateData,
-      include: {
-        task: {
-          select: {
-            id: true,
-            jobNo: true,
-            category: true,
-            householdId: true,
-            amountCents: true,
-            discountCents: true,
-            finalAmountCents: true,
-            scheduledStart: true,
-            // Service/Pricing/Availability Authority: specific booked service
-            jobType: { select: { id: true, name: true, slug: true, unitLabel: true } },
+    // ── P11-F2: atomic booking acceptance ──
+    // Old behaviour committed booking.update(status=accepted) BEFORE the
+    // escrow transaction (and the task status update ran after it as a
+    // THIRD separate write). Under write contention the escrow transaction
+    // could fail after the booking write had already committed, leaving the
+    // invalid financial state booking=accepted + required escrow missing
+    // (live-reproduced: statuses=[409,500×5] booking=accepted escrows=0 —
+    // the exact Phase 11 finding). The accept branch now performs ALL of
+    // its state writes inside ONE transaction with status-guarded claims,
+    // so acceptance and escrow creation succeed together or fail together.
+    // Non-accept actions keep the previous single-write behaviour.
+    let updatedBooking:
+      | Awaited<ReturnType<typeof db.booking.update>>
+      | null = null
+
+    if (action !== "accept") {
+      updatedBooking = await db.booking.update({
+        where: { id: bookingId },
+        data: updateData,
+        include: {
+          task: {
+            select: {
+              id: true,
+              jobNo: true,
+              category: true,
+              householdId: true,
+              amountCents: true,
+              discountCents: true,
+              finalAmountCents: true,
+              scheduledStart: true,
+              // Service/Pricing/Availability Authority: specific booked service
+              jobType: { select: { id: true, name: true, slug: true, unitLabel: true } },
+            },
+          },
+          assignedStaff: {
+            select: { id: true, name: true, role: true },
           },
         },
-        assignedStaff: {
-          select: { id: true, name: true, role: true },
-        },
-      },
-    })
+      })
+    }
 
     // ────────────────────────────────────────────────
     // ACCEPT: Hold escrow, transition task → ACCEPTED/SCHEDULED
@@ -222,22 +239,51 @@ export async function PATCH(
       const commissionCents = Math.round((commissionBaseCents * commissionRate) / 100)
       const vendorPayoutCents = commissionBaseCents - commissionCents
 
+      // Determine if task should go to SCHEDULED directly (if it has a scheduledStart)
+      const hasSchedule = task.scheduledStart != null
+      const newTaskStatus = hasSchedule ? TaskStatus.SCHEDULED : TaskStatus.ACCEPTED
+      const taskUpdateData: Record<string, unknown> = {
+        status: newTaskStatus,
+        acceptedAt: now,
+      }
+      if (hasSchedule) {
+        taskUpdateData.scheduledAt = now
+      }
+
       // Hold escrow (this is the ONLY place escrow is created)
       //
-      // ── F19/E4: duplicate-escrow guard ──
+      // ── F19/E4 + P11-F2: atomic acceptance ──
       // Old behavior created a HELD entry unconditionally: cancel →
       // rematch → new accept left TWO live base entries for the task, and
       // the release path (releases ALL HELD entries) paid both — paper
-      // double payout. New rules, inside one transaction:
-      //   1. VOID stale HELD entries on this task that belong to OTHER
+      // double payout. Rules, inside one transaction:
+      //   1. Guarded booking claim — exactly one parallel accept can move
+      //      the booking out of its pre-check status (the pre-check
+      //      semantics "accepted → accepted is invalid" extended to the
+      //      race window); losers abort with a clean 409.
+      //   2. VOID stale HELD entries on this task that belong to OTHER
       //      bookings which are cancelled (their hold never left escrow as
       //      release or credit — VOIDED is excluded from the R3 ledger
       //      formula; nothing was actually paid in the pilot's NoOp ledger).
-      //   2. Never create a second live entry for THIS booking (parallel
-      //      accepts both pass the transition pre-check; SQLite tx
-      //      serialization means the second tx sees the first's entry).
-      await db.$transaction(async (tx) => {
-        const staleEntries = await tx.escrowLedger.findMany({
+      //   3. Never create a second live entry for THIS booking.
+      //   4. Guarded task claim — a concurrent household cancel that already
+      //      terminalised the task aborts the WHOLE transaction (booking
+      //      stays assigned, escrow untouched): acceptance must never
+      //      resurrect a cancelled task, and a failed claim must never
+      //      leave booking=accepted without escrow.
+      class ConcurrentAcceptError extends Error {}
+      try {
+        await db.$transaction(async (tx) => {
+          // (1) Guarded booking claim
+          const bookingClaim = await tx.booking.updateMany({
+            where: { id: bookingId, status: booking.status },
+            data: updateData,
+          })
+          if (bookingClaim.count === 0) {
+            throw new ConcurrentAcceptError()
+          }
+
+          const staleEntries = await tx.escrowLedger.findMany({
           where: {
             taskId: task.id,
             state: "HELD",
@@ -294,7 +340,59 @@ export async function PATCH(
           // AFTER this transaction commits (ledger-first, effect-layer).
           createdEscrowEntryId = escrowEntry.id;
         }
+
+        // (4) Guarded task claim
+        const taskClaim = await tx.task.updateMany({
+          where: { id: task.id, status: task.status },
+          data: taskUpdateData,
+        })
+        if (taskClaim.count === 0) {
+          throw new ConcurrentAcceptError()
+        }
+
+        // Post-claim booking row (same include as the non-accept path)
+        // for the response payload.
+        updatedBooking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            task: {
+              select: {
+                id: true,
+                jobNo: true,
+                category: true,
+                householdId: true,
+                amountCents: true,
+                discountCents: true,
+                finalAmountCents: true,
+                scheduledStart: true,
+                // Service/Pricing/Availability Authority: specific booked service
+                jobType: { select: { id: true, name: true, slug: true, unitLabel: true } },
+              },
+            },
+            assignedStaff: {
+              select: { id: true, name: true, role: true },
+            },
+          },
+        })
       })
+      } catch (error) {
+        if (error instanceof ConcurrentAcceptError) {
+          return NextResponse.json(
+            {
+              error:
+                "Booking state changed concurrently — nothing was accepted. Refresh and retry if still intended.",
+              code: "CONCURRENT_STATE_CHANGE",
+            },
+            { status: 409 }
+          )
+        }
+        // Any other failure (e.g. SQLite write-contention timeout) rolls
+        // the WHOLE transaction back: booking stays assigned, no escrow,
+        // task untouched — consistent and retryable. P11-F2: this is the
+        // fail-safe direction (previously the booking write had already
+        // committed, leaving booking=accepted + escrows=0).
+        throw error
+      }
 
       // ── Payment adapter effect (FIX-1c wiring) ──
       // Hold/authorize the customer payment through the provider-agnostic
@@ -310,21 +408,8 @@ export async function PATCH(
         });
       }
 
-      // Determine if task should go to SCHEDULED directly (if it has a scheduledStart)
-      const hasSchedule = task.scheduledStart != null
-      const newTaskStatus = hasSchedule ? TaskStatus.SCHEDULED : TaskStatus.ACCEPTED
-      const taskUpdateData: Record<string, unknown> = {
-        status: newTaskStatus,
-        acceptedAt: now,
-      }
-      if (hasSchedule) {
-        taskUpdateData.scheduledAt = now
-      }
-
-      await db.task.update({
-        where: { id: task.id },
-        data: taskUpdateData,
-      })
+      // P11-F2: task status + escrow + booking all committed together in
+      // the transaction above — the post-commit section is effects only.
 
       // Notify household: vendor accepted (NOW reveal vendor name)
       const members = await db.familyMember.findMany({
