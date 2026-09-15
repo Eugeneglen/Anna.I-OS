@@ -464,6 +464,12 @@ async function main() {
     // F3-3: status must not be contradicted
     const { row: r3 } = await regenerate(anomalyV.id, sim("Status check", `The task is currently in COMPLETED status. The linked vendor is ${caseV!.vendor!.name}.`));
     check("F3", "3. wrong status → fallback with disclosure", r3?.fallbackFromInvalid === true && String(r3?.body).includes("VERIFIED"), `fallback=${r3?.fallbackFromInvalid} (evidence status VERIFIED)`);
+    // Police N1 (P11H-2): multi-word status tokens (IN_PROGRESS,
+    // ESCROW_RELEASED) must match their prose forms too — the first
+    // implementation double-escaped the [\\s-]+ class and never matched.
+    const { row: r3b } = await regenerate(anomalyV.id, sim("Status check", `The task is currently in progress with the vendor. The linked vendor is ${caseV!.vendor!.name}.`));
+    check("F3", "3b. multi-word status token ('in progress' vs VERIFIED) → fallback with disclosure",
+      r3b?.fallbackFromInvalid === true && String(r3b?.body).includes("VERIFIED"), `fallback=${r3b?.fallbackFromInvalid}`);
 
     // F3-4: count must not be contradicted
     const openCount = caseV!.household.openTaskCount;

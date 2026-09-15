@@ -127,7 +127,7 @@ function dedupKeyFor(anomalyId: string): string {
 // scale, and the pure checker stays I/O-free for adversarial tests). ──
 let vendorUniverseCache: { names: string[]; at: number } | null = null;
 const VENDOR_UNIVERSE_TTL_MS = 60_000;
-async function getVendorNameUniverse(): Promise<string[]> {
+async function getVendorNameUniverse(): Promise<string[] | null> {
   if (vendorUniverseCache && Date.now() - vendorUniverseCache.at < VENDOR_UNIVERSE_TTL_MS) {
     return vendorUniverseCache.names;
   }
@@ -137,9 +137,11 @@ async function getVendorNameUniverse(): Promise<string[]> {
     vendorUniverseCache = { names, at: Date.now() };
     return names;
   } catch {
-    // Universe fetch failed → the pure checker still falls back to the
-    // anomaly-message-derived universe (the observed defect class).
-    return [];
+    // Police N2 (P11H-2): return NULL (not []) so the pure checker's
+    // `options.vendorNameUniverse ?? defaultVendorUniverseFromCase(case)`
+    // engages the anomaly-message-derived universe — an empty array is
+    // not nullish and would have silently disabled the identity check.
+    return null;
   }
 }
 
@@ -296,7 +298,9 @@ async function generateInsight(
         caseData,
         validation.recommendation.title,
         validation.recommendation.body,
-        { vendorNameUniverse: await getVendorNameUniverse() }
+        // Police N2: null (fetch failure) → undefined → the pure checker's
+        // anomaly-message-derived default universe engages.
+        { vendorNameUniverse: (await getVendorNameUniverse()) ?? undefined }
       );
       if (narrationContradictions.length > 0) {
         recommendation = contradictionFallback(narrationContradictions, caseData);

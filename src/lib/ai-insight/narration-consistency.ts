@@ -100,6 +100,17 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Police N1 (P11H-2): build a word-boundary matcher for a TaskStatus
+ * token WITHOUT double-escaping — the previous form ran the inserted
+ * [\s-]+ class through escapeRegExp, turning it into a literal and
+ * silently disabling multi-word tokens (IN_PROGRESS, ESCROW_RELEASED).
+ * Split on underscore, escape each literal part, re-join with the
+ * whitespace/hyphen class. */
+function taskStatusTokenRe(token: string): RegExp {
+  const pattern = token.split("_").map(escapeRegExp).join("[\\s-]+");
+  return new RegExp(`\\b${pattern}\\b`, "i");
+}
+
 /**
  * Check one narration (title + body) against its authoritative evidence.
  * Returns the list of contradictions (empty = consistent). PURE.
@@ -175,8 +186,7 @@ export function checkNarrationConsistency(
   if (taskStatus) {
     const mentioned = new Set<string>();
     for (const token of TASK_STATUS_TOKENS) {
-      const re = new RegExp(`\\b${escapeRegExp(token.replace(/_/g, "[\\s-]+"))}\\b`, "i");
-      if (re.test(text)) mentioned.add(token);
+      if (taskStatusTokenRe(token).test(text)) mentioned.add(token);
     }
     if (mentioned.size > 0 && !mentioned.has(taskStatus)) {
       contradictions.push({
@@ -188,8 +198,7 @@ export function checkNarrationConsistency(
   } else {
     // No task in the evidence — narrating task status details is invention.
     for (const token of TASK_STATUS_TOKENS) {
-      const re = new RegExp(`\\b${escapeRegExp(token.replace(/_/g, "[\\s-]+"))}\\b`, "i");
-      if (re.test(text)) {
+      if (taskStatusTokenRe(token).test(text)) {
         contradictions.push({
           check: "task-status",
           narration: token,
