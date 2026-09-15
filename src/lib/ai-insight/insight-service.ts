@@ -15,6 +15,11 @@ import {
   InsightLlmError,
   type CallInsightLlmOptions,
 } from "./llm";
+import {
+  checkNarrationConsistency,
+  contradictionFallback,
+  type NarrationContradiction,
+} from "./narration-consistency";
 import { logAiEvent, newAiChainId } from "@/lib/ai-audit";
 import { ensureDisputeCaseBrief } from "@/lib/ai-dispute/brief-service";
 import type { OpsSession } from "@/lib/ops-auth";
@@ -114,6 +119,28 @@ async function logStage(
 
 function dedupKeyFor(anomalyId: string): string {
   return `anomaly:${anomalyId}`;
+}
+
+// ── P11-F3: vendor-name universe for the narration/evidence consistency
+// check, fetched once per sweep window (60s cache — mirrors the
+// getCommissionRate config-cache pattern; vendor tables are small at demo
+// scale, and the pure checker stays I/O-free for adversarial tests). ──
+let vendorUniverseCache: { names: string[]; at: number } | null = null;
+const VENDOR_UNIVERSE_TTL_MS = 60_000;
+async function getVendorNameUniverse(): Promise<string[]> {
+  if (vendorUniverseCache && Date.now() - vendorUniverseCache.at < VENDOR_UNIVERSE_TTL_MS) {
+    return vendorUniverseCache.names;
+  }
+  try {
+    const rows = await db.vendor.findMany({ select: { name: true } });
+    const names = rows.map((r) => r.name);
+    vendorUniverseCache = { names, at: Date.now() };
+    return names;
+  } catch {
+    // Universe fetch failed → the pure checker still falls back to the
+    // anomaly-message-derived universe (the observed defect class).
+    return [];
+  }
 }
 
 /**
@@ -251,17 +278,32 @@ async function generateInsight(
     allowedActions: policy.allowedChoices,
   });
 
-  // 5. LLM (advisory) → 6. strict validation.
+  // 5. LLM (advisory) → 6. strict validation → 6b. P11-F3 narration/
+  // evidence consistency (a policy-valid response whose FACTS contradict
+  // the authoritative evidence snapshot is replaced with the safe
+  // contradiction fallback — never persisted as fact).
   let recommendation;
   let fallback = false;
   let modelVersion: string | null = null;
+  let narrationContradictions: NarrationContradiction[] = [];
 
   try {
     const call = await callInsightLlm(caseData, policy, { simulate: options.simulate });
     modelVersion = call.modelVersion;
     const validation = validateInsightRecommendation(call.raw, policy);
     if (validation.ok) {
-      recommendation = validation.recommendation;
+      narrationContradictions = checkNarrationConsistency(
+        caseData,
+        validation.recommendation.title,
+        validation.recommendation.body,
+        { vendorNameUniverse: await getVendorNameUniverse() }
+      );
+      if (narrationContradictions.length > 0) {
+        recommendation = contradictionFallback(narrationContradictions, caseData);
+        fallback = true;
+      } else {
+        recommendation = validation.recommendation;
+      }
     } else {
       recommendation = monitorOnlyFallback(validation.error);
       fallback = true;
@@ -334,6 +376,9 @@ async function generateInsight(
     title: recommendation.title,
     confidence: recommendation.confidence,
     modelVersion,
+    narrationContradictions: narrationContradictions.length
+      ? narrationContradictions.map((c) => ({ check: c.check, narration: c.narration, evidence: c.evidence }))
+      : undefined,
   });
 
   return {
