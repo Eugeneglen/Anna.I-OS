@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { guardTaskAccess, guardErrorResponse } from "@/lib/api-guards";
-import { cancelTask } from "@/lib/task-cancel-service";
+import {
+  cancelTask,
+  CANCEL_OWNER_ONLY_MESSAGE,
+} from "@/lib/task-cancel-service";
 
 // ── F18 (C6 / policy R3): household-initiated task cancellation ──
 //
@@ -45,10 +48,14 @@ export async function POST(
     // refund pipeline (HELD → REFUNDED + REFUND_CREDIT), so within the
     // household it is restricted to the OWNER. MEMBERs previously had
     // identical authority to the OWNER on every action (roles cosmetic).
-    // Ops actors are unaffected (COORDINATOR+ tier above). ──
+    // Ops actors are unaffected (COORDINATOR+ tier above).
+    // P11-F1: the message now comes from task-cancel-service (the shared
+    // policy owner) so the route, the AI tool layer and the service can
+    // never drift apart. The service ALSO enforces the rule — this early
+    // check is defense-in-depth with identical behaviour. ──
     if (actor.kind === "household" && actor.memberRole !== "OWNER") {
       return NextResponse.json(
-        { error: "Only the household owner can cancel a task. Please ask the owner to do this." },
+        { error: CANCEL_OWNER_ONLY_MESSAGE },
         { status: 403 }
       );
     }
@@ -68,7 +75,7 @@ export async function POST(
       actor:
         actor.kind === "ops"
           ? { kind: "ops", userId: actor.userId, name: actor.session.name }
-          : { kind: "household", householdId: actor.householdId },
+          : { kind: "household", householdId: actor.householdId, memberRole: actor.memberRole },
     });
 
     if (!outcome.ok) {

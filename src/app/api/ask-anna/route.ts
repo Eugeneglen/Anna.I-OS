@@ -424,13 +424,18 @@ export async function POST(request: NextRequest) {
       // audit stages above — success AND failure are recorded.)
       let result: ToolCallResult;
       try {
+        // P11-F1: thread the session member's role so write tools enforce
+        // the SAME authorization as the canonical routes (cancel_task is
+        // OWNER-only — P8). The role comes from the JWT session, never
+        // from the request body.
         result = await executeToolCall(
           confirmAction.toolName,
           confirmedChainId
             ? { ...confirmAction.action, idempotencyKey: confirmedChainId }
             : confirmAction.action,
           householdId,
-          true // executeWrites = true
+          true, // executeWrites = true
+          session.memberRole
         );
       } catch (error) {
         console.error(
@@ -622,7 +627,10 @@ export async function POST(request: NextRequest) {
       // confirmation-card flow is unaffected.
         let result: ToolCallResult;
         try {
-          result = await executeToolCall(toolName, args, householdId, false);
+          // P11-F1: session memberRole threaded here too — the proposal
+          // pass must refuse an unauthorized write (e.g. MEMBER cancel)
+          // BEFORE a confirmation card is ever offered.
+          result = await executeToolCall(toolName, args, householdId, false, session.memberRole);
         } catch (error) {
           console.error(`[AskAnna] Tool ${toolName} threw:`, error);
           const msg = error instanceof Error ? error.message : "Unknown error";

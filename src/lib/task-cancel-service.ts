@@ -45,7 +45,26 @@ export type CancelActor =
   // via: "ask-anna" when the household confirmed the action through the
   // AI assistant (recorded in the audit metadata — AI actions must be
   // attributable).
-  | { kind: "household"; householdId: string; via?: string };
+  //
+  // P11-F1: memberRole is REQUIRED and enforced below — household
+  // cancellation is OWNER-only (P8), and the rule must hold on EVERY
+  // path (canonical route AND the Ask Anna cancel_task tool). The AI
+  // layer must never grant greater authority than the canonical action.
+  | { kind: "household"; householdId: string; memberRole: string; via?: string };
+
+// ── P11-F1: the canonical OWNER-only cancellation policy, exported so the
+// canonical route, the Ask Anna tool layer and this service all enforce
+// the IDENTICAL rule and message (one policy, one text, no drift). ──
+export const CANCEL_OWNER_ONLY_MESSAGE =
+  "Only the household owner can cancel a task. Please ask the owner to do this.";
+export const CANCEL_MEMBER_NOT_ALLOWED_CODE = "MEMBER_NOT_ALLOWED";
+
+/** P11-F1: canonical household-role gate for cancellation. Ops actors are
+ * exempt (their tier is checked by the route guard); household actors must
+ * be the OWNER (P8 — cancel triggers the refund pipeline). */
+export function isHouseholdCancelAllowed(memberRole: string): boolean {
+  return memberRole === "OWNER";
+}
 
 export interface CancelTaskSuccess {
   task: unknown; // full Task row (response parity with the old route)
@@ -97,6 +116,20 @@ export async function cancelTask(opts: {
       ok: false,
       status: 403,
       error: "Forbidden — this task belongs to another household",
+    };
+  }
+
+  // ── P11-F1: OWNER-only within the household (canonical P8 rule, now
+  // enforced in the SHARED service so the AI cancel_task tool can never
+  // exceed the canonical route's authority). Fail-closed: a household
+  // actor that does not present role=OWNER is refused — callers cannot
+  // opt out by omitting the role. ──
+  if (actor.kind === "household" && !isHouseholdCancelAllowed(actor.memberRole)) {
+    return {
+      ok: false,
+      status: 403,
+      error: CANCEL_OWNER_ONLY_MESSAGE,
+      code: CANCEL_MEMBER_NOT_ALLOWED_CODE,
     };
   }
 
@@ -322,6 +355,7 @@ export async function cancelTask(opts: {
             zeroCashTerminalized: zeroCashTerminalized.length,
             cancelledBookings: liveBookings.length,
             actorType: actor.kind,
+            actorMemberRole: actor.kind === "household" ? actor.memberRole : undefined,
             actorHouseholdId: actor.kind === "household" ? actor.householdId : undefined,
             via: actor.kind === "household" ? actor.via : undefined,
             // Two-way refund split (this cancellation)

@@ -6,7 +6,12 @@
 // ============================================================
 
 import { CATEGORY_DEFAULTS, type ServiceCategory } from "./types";
-import { CANCELLABLE_STATUSES, cancelTask } from "./task-cancel-service";
+import {
+  CANCELLABLE_STATUSES,
+  cancelTask,
+  CANCEL_OWNER_ONLY_MESSAGE,
+  isHouseholdCancelAllowed,
+} from "./task-cancel-service";
 import { generateJobNo } from "./job-number";
 import type { ServiceJobType } from "@prisma/client";
 
@@ -223,13 +228,18 @@ export async function executeToolCall(
   toolName: string,
   args: Record<string, unknown>,
   householdId: string,
-  executeWrites: boolean = false
+  executeWrites: boolean = false,
+  /** P11-F1: the SESSION member's role (e.g. "OWNER"/"MEMBER"). Required
+   * for authority parity on write tools — cancel_task is OWNER-only
+   * (P8), exactly like the canonical route. Fail-closed: the cancel
+   * executor refuses when the role is not OWNER. */
+  memberRole: string = ""
 ): Promise<ToolCallResult> {
   switch (toolName) {
     case "create_task":
       return executeCreateTask(args, householdId, executeWrites);
     case "cancel_task":
-      return executeCancelTask(args, householdId, executeWrites);
+      return executeCancelTask(args, householdId, executeWrites, memberRole);
     case "get_available_services":
       return executeGetAvailableServices(args);
     case "get_service_pricing":
@@ -847,7 +857,8 @@ function resolveScheduledStart(args: Record<string, unknown>): {
 async function executeCancelTask(
   args: Record<string, unknown>,
   householdId: string,
-  executeWrites: boolean
+  executeWrites: boolean,
+  memberRole: string
 ): Promise<ToolCallResult> {
   const { db } = await import("@/lib/db");
 
@@ -869,6 +880,20 @@ async function executeCancelTask(
   }
   if (task.householdId !== householdId) {
     return { success: false, toolName: "cancel_task", error: "This task belongs to a different household" };
+  }
+
+  // ── P11-F1: OWNER-only, same as the canonical route (P8). Enforced on
+  // BOTH passes — the proposal pass (executeWrites=false) refuses before
+  // a confirmation card is ever offered, and the confirm pass refuses
+  // again (the shared service re-enforces it too — fail-closed, three
+  // layers, one policy). Default memberRole="" can never pass the check,
+  // so a caller that forgets to thread the session role is refused. ──
+  if (!isHouseholdCancelAllowed(memberRole)) {
+    return {
+      success: false,
+      toolName: "cancel_task",
+      error: CANCEL_OWNER_ONLY_MESSAGE,
+    };
   }
 
   // ── AI Wave 2-A (A-4): use the SAME cancellable-status list as the
@@ -893,10 +918,13 @@ async function executeCancelTask(
   // POST /api/tasks/[id]/cancel). The old inline code just set
   // status back to "CREATED", skipping the CANCELLED state machine,
   // refund-as-credit, voucher restore, notifications and events.
+  // P11-F1: the session memberRole is threaded into the actor so the
+  // service's OWNER-only enforcement (canonical P8 rule) applies to the
+  // AI path exactly as it does to the route. ──
   const outcome = await cancelTask({
     taskId,
     reason,
-    actor: { kind: "household", householdId, via: "ask-anna" },
+    actor: { kind: "household", householdId, memberRole, via: "ask-anna" },
   });
 
   if (!outcome.ok) {
