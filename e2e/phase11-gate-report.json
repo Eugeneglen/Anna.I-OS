@@ -1,9 +1,9 @@
 {
   "suite": "phase11-gate",
   "layer": "Phase 11 §H development gate — F1 authorization / F2 atomicity / F3 narration consistency",
-  "startedAt": "2026-09-15T11:05:39.407Z",
+  "startedAt": "2026-09-15T12:04:56.667Z",
   "baseline": "5e0a3d2 + F1 (d46006c) + F2 (6fed083) + F3 (6f28baa lineage)",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase11gate-1789470291234.db",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase11gate-1789473840217.db",
   "totals": {
     "pass": 48,
     "fail": 0
@@ -27,13 +27,13 @@
       "flow": "SETUP",
       "name": "Household A registered",
       "pass": true,
-      "detail": "hh=e0yg0z"
+      "detail": "hh=mxos16"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered",
       "pass": true,
-      "detail": "hh=5z2snc"
+      "detail": "hh=hnd99y"
     },
     {
       "flow": "SETUP",
@@ -45,7 +45,7 @@
       "flow": "SETUP",
       "name": "Vendor + catalogue fixture",
       "pass": true,
-      "detail": "vendor=068mpt"
+      "detail": "vendor=swtdki"
     },
     {
       "flow": "F1",
@@ -195,19 +195,13 @@
       "flow": "F2",
       "name": "4/5/6/7. concurrent round 3: no torn state (accepted⇒exactly one escrow), no duplicates, no orphans, at most one 2xx",
       "pass": true,
-      "detail": "statuses=[500,500,500,500,500,500] booking=assigned escrows=0 (HELD=0)"
-    },
-    {
-      "flow": "F2",
-      "name": "4/5. all-failed round recovery: retry accepts cleanly (exactly one escrow)",
-      "pass": true,
-      "detail": "HTTP 200 escrows=1"
+      "detail": "statuses=[200,500,500,500,500,500] booking=accepted escrows=1 (HELD=1)"
     },
     {
       "flow": "F2",
       "name": "4/5. concurrency summary: at most one 2xx winner per round (no double-200), zero-torn, zero-duplicate, zero-orphan",
       "pass": true,
-      "detail": "attempts=18 winners=3 failures=16 torn=0 dupEscrow=0 orphan=0 rounds=[r1:[200,500,500,500,500,500] booking=accepted escrows=1 | r2:[200,500,500,500,500,500] booking=accepted escrows=1 | r3:[500,500,500,500,500,500] booking=assigned escrows=0]"
+      "detail": "attempts=18 winners=3 failures=15 torn=0 dupEscrow=0 orphan=0 rounds=[r1:[200,500,500,500,500,500] booking=accepted escrows=1 | r2:[200,500,500,500,500,500] booking=accepted escrows=1 | r3:[200,500,500,500,500,500] booking=accepted escrows=1]"
     },
     {
       "flow": "F2",
@@ -237,7 +231,7 @@
       "flow": "F3",
       "name": "fixtures: case V has vendor + task; case N has neither",
       "pass": true,
-      "detail": "V.vendor=P11GVendor 1789470291234 N.vendor=null"
+      "detail": "V.vendor=P11GVendor 1789473840217 N.vendor=null"
     },
     {
       "flow": "F3",
@@ -256,6 +250,12 @@
       "name": "3. wrong status → fallback with disclosure",
       "pass": true,
       "detail": "fallback=true (evidence status VERIFIED)"
+    },
+    {
+      "flow": "F3",
+      "name": "3b. multi-word status token ('in progress' vs VERIFIED) → fallback with disclosure",
+      "pass": true,
+      "detail": "fallback=true"
     },
     {
       "flow": "F3",
