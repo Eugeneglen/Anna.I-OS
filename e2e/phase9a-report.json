@@ -1,8 +1,8 @@
 {
   "suite": "phase9a-sec",
   "layer": "Section A dynamic audit probes (Phases 1–6)",
-  "startedAt": "2026-09-14T05:46:58.893Z",
-  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789364796940.db",
+  "startedAt": "2026-09-15T11:13:02.998Z",
+  "dbBackup": "/home/z/wt-item8/db/backups/phase9a-1789470761699.db",
   "totals": {
     "pass": 101,
     "fail": 0
@@ -38,31 +38,31 @@
       "flow": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=h8twcr reg=200"
+      "detail": "hh=hqs1gg reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=yo7rfj reg=200"
+      "detail": "hh=694o3c reg=200"
     },
     {
       "flow": "SETUP",
       "name": "Vendor A created + login",
       "pass": true,
-      "detail": "vendor=780jqw"
+      "detail": "vendor=masfqp"
     },
     {
       "flow": "SETUP",
       "name": "Vendor B created + login",
       "pass": true,
-      "detail": "vendor=7osmgp"
+      "detail": "vendor=1rwqtd"
     },
     {
       "flow": "SETUP",
       "name": "Catalogue fixture (gas-topup $40/unit)",
       "pass": true,
-      "detail": "id=hij5rr"
+      "detail": "id=3rnoaq"
     },
     {
       "flow": "S1",
@@ -326,7 +326,7 @@
       "flow": "S3",
       "name": "GET /api/vendors leaks no passwordHash",
       "pass": true,
-      "detail": "8783B"
+      "detail": "7361B"
     },
     {
       "flow": "S3",

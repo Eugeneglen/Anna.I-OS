@@ -1,28 +1,100 @@
 {
   "suite": "live-smoke",
   "layer": "3 — live provider smoke (opt-in, budgeted)",
-  "skipped": true,
-  "status": "DEFERRED — provider under extended rate-limiting",
-  "reason": "Two spaced single probes (gateway-retried, 3 bounded attempts each) both returned HTTP 429 \"Too many requests, please try again later\"; zero live successes observed since dev-server boot (51 live attempts, all 429, all from the background insight-sweep cron — every test in this session ran provider-independent or through the stub). Per the no-hammering directive, the budgeted live smoke run is deferred until the provider recovers.",
-  "probeEvidence": [
-    { "at": "2026-09-12T03:29:12Z", "result": "FAILED after 2094ms (incl. bounded retries)", "error": "API request failed with status 429: Too many requests, please try again later" },
-    { "at": "2026-09-12T03:40:05Z", "afterQuietWindowMs": 600000, "result": "FAILED after 1987ms", "error": "API request failed with status 429: Too many requests, please try again later" }
-  ],
-  "fieldConfirmation": {
-    "source": "Real-user live test through the browser (LIVE-VERIFY-1), 2026-09-12T03:45:56Z–03:47:40Z",
-    "summary": "User sent 5 AskAnna messages across 2 conversations (incl. a booking request). All 15 gateway attempts (3 per request, bounded backoff) returned 429. Every request returned HTTP 200 with the exact degraded fallback sentence, turns persisted, full request→error→response audit chain, and ZERO tasks created (writes are card-gated; no card can exist without the model). This is the AUTH-4 provider-unavailable contract confirmed live by a real user under a genuine outage.",
-    "tasksCreatedDuringTest": 0
+  "skipped": false,
+  "liveProviderCalls": 10,
+  "budget": "≤ 10 live model calls (+ bounded gateway retries only on provider transients)",
+  "providerHealthy": true,
+  "startedAt": "2026-09-15T16:02:56.064Z",
+  "finishedAt": "2026-09-15T16:03:21.766Z",
+  "totals": {
+    "pass": 9,
+    "fail": 0
   },
-  "postApprovalProbes": [
-    { "at": "2026-09-12T03:48:30Z", "purpose": "screenshot read (vision)", "result": "429 rate_limit" },
-    { "at": "2026-09-12T03:52:30Z", "purpose": "screenshot read (vision), after 90s quiet", "result": "429 rate_limit" }
-  ],
-  "liveProviderCallsThisSession": 2,
-  "liveProviderSuccessesThisSession": 0,
-  "liveProviderCallsDuringSuites": 0,
-  "howToRunWhenHealthy": "LIVE_SMOKE=1 bun e2e/live-smoke.ts  (budget ≤10 live calls; refuses to run while the LLM stub is ACTIVE)",
-  "recordOnExecution": ["provider status", "timestamp", "model", "call count", "success/failure", "latency", "any 429/5xx", "service lookup accuracy", "price accuracy", "booking accuracy", "Vendor AI", "Ops AI", "adversarial grounding", "multi-turn", "voice ASR"],
-  "finishedAt": "2026-09-12T03:41:00Z",
-  "reportUpdatedAt": "2026-09-12T04:05:00Z",
-  "scenarios": []
+  "avgLatencyMs": 2035,
+  "rateLimited429": 0,
+  "degradedResponses": 0,
+  "scenarios": [
+    {
+      "id": "S1",
+      "name": "Offers: 'Do you offer gas top-up?'",
+      "liveCalls": 1,
+      "latencyMs": 2843,
+      "status": 200,
+      "pass": true,
+      "note": "grounded answer ( Yes, we do offer gas top-up! It's available as a specific a…)"
+    },
+    {
+      "id": "S2",
+      "name": "Price: 'How much is gas top-up?'",
+      "liveCalls": 1,
+      "latencyMs": 1458,
+      "status": 200,
+      "pass": true,
+      "note": "mentions live catalogue price $40"
+    },
+    {
+      "id": "S3a",
+      "name": "Booking card for 2 units (server price)",
+      "liveCalls": 1,
+      "latencyMs": 990,
+      "status": 200,
+      "pass": true,
+      "note": "amount=8000c expected=8000c"
+    },
+    {
+      "id": "S3b",
+      "name": "Confirm → task created at server price",
+      "liveCalls": 1,
+      "latencyMs": 1084,
+      "status": 200,
+      "pass": true,
+      "note": "task=AI-00000001 amount=8000c"
+    },
+    {
+      "id": "S4",
+      "name": "Ops AI platform question",
+      "liveCalls": 1,
+      "latencyMs": 5103,
+      "status": 200,
+      "pass": true,
+      "note": "tools=get_platform_summary"
+    },
+    {
+      "id": "S5",
+      "name": "Vendor AI 'my jobs today'",
+      "liveCalls": 1,
+      "latencyMs": 2119,
+      "status": 200,
+      "pass": true,
+      "note": "tool=true mentionsGasTopUp=true (job-name grounding detail recorded, tool usage is the gate)"
+    },
+    {
+      "id": "S6",
+      "name": "Adversarial: invented service (no hallucinated offer/booking)",
+      "liveCalls": 1,
+      "latencyMs": 2738,
+      "status": 200,
+      "pass": true,
+      "note": "card=false newTask=false sample=\" I don't see underwater basket weaving in our current service catalogu\""
+    },
+    {
+      "id": "S7",
+      "name": "Multi-turn continuity (follow-up answer)",
+      "liveCalls": 2,
+      "latencyMs": 1526,
+      "status": 200,
+      "pass": true,
+      "note": "conv=reused followUp=\" Based on the current catalogue, the cheapest cleaning servi\""
+    },
+    {
+      "id": "S8",
+      "name": "Voice transcription smoke (ASR)",
+      "liveCalls": 1,
+      "latencyMs": 457,
+      "status": 200,
+      "pass": true,
+      "note": "transcript=\"My aircon is leaking water from the indoor unit, please help\""
+    }
+  ]
 }

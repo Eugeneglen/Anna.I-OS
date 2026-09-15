@@ -1,5 +1,5 @@
-Anna.I OS E2E Business Workflow Tests — 2026-09-14T05:45:38.662Z
-BASE=http://localhost:3000  run-id=1789364738659
+Anna.I OS E2E Business Workflow Tests — 2026-09-15T11:11:52.413Z
+BASE=http://localhost:3000  run-id=1789470712409
 
 
 ━━━ SETUP — ops login, user account, vendor onboarding ━━━
@@ -10,13 +10,13 @@ BASE=http://localhost:3000  run-id=1789364738659
   [HTTP] POST /api/household/register → 200
   ✓ Household register (201/200) — status=200
   [HTTP] GET /api/household/session → 200
-  ✓ Household session → householdId + memberId — hh=az6cn2 member=qd224b
+  ✓ Household session → householdId + memberId — hh=eq5lyp member=kb7sl9
   ✓ New household onboardingStep = 0
   [HTTP] POST /api/ops/vendors → 201
-  ✓ Ops vendor intake creates vendor — vendor=ubgvm1 status=PENDING
+  ✓ Ops vendor intake creates vendor — vendor=6q6ke3 status=PENDING
   [HTTP] GET /api/vendors?category=CLEANING → 200
   ✓ PENDING vendor NOT visible in public browse
-  [HTTP] PATCH /api/ops/vendors/cmu0tkcz2009qmhkehoubgvm1 → 200
+  [HTTP] PATCH /api/ops/vendors/cmu2knr2n009qox92tr6q6ke3 → 200
   ✓ Ops activates vendor — status=200
   [HTTP] GET /api/vendors?category=CLEANING → 200
   ✓ ACTIVE vendor visible in public browse (user discovery)
@@ -44,15 +44,15 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ Quotation created ($80 base + $8 pet-hair add-on) — total=8800c
   ✓ Quotation total = 8800c
   [HTTP] POST /api/tasks → 201
-  ✓ Booking created from quotation (task CREATED) — jobNo=AI-00000018
+  ✓ Booking created from quotation (task CREATED) — jobNo=AI-00000008
   [HTTP] POST /api/tasks → 200
   ✓ Idempotent re-submit returns SAME task (no duplicate booking)
   ✓ DB: task CREATED + quotation ACCEPTED
-  [HTTP] POST /api/tasks/cmu0tkdis00a2mhkewt6d1131/dispatch → 201
+  [HTTP] POST /api/tasks/cmu2knrgr00a2ox92hb8gbmeb/dispatch → 201
   ✓ Dispatch → task MATCHING
-  ✓ Dispatch → booking assigned to vendor — booking=kt0jho
+  ✓ Dispatch → booking assigned to vendor — booking=d0qger
   ✓ Vendor notified of new booking (TASK_DISPATCHED)
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkdmb00a4mhkejckt0jho → 200
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2knrj600a4ox92esd0qger → 200
   ✓ Vendor accepts job (payment held in escrow) — status=200
   ✓ DB: task accepted/scheduled after vendor acceptance — status=SCHEDULED
   ✓ Escrow HELD created on acceptance (the payment seam) — 8800c
@@ -60,183 +60,183 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ Commission 10% = 880c
   ✓ Vendor payout = 7920c
   ⟤ TRUTH CHECK [escrow held] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkdis00a2mhkewt6d1131 → 200
+  [HTTP] GET /api/tasks/cmu2knrgr00a2ox92hb8gbmeb → 200
   ✓ [escrow held] USER task status = DB task status — status=SCHEDULED
   ✓ [escrow held] USER escrow entry count = DB
-  ✓ [escrow held] USER escrow 6j93e9 state = DB
-  ✓ [escrow held] USER escrow 6j93e9 amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [escrow held] USER escrow 2kq6cu state = DB
+  ✓ [escrow held] USER escrow 2kq6cu amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [escrow held] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [escrow held] VENDOR schedule booking count = DB — jobNo=AI-00000018 bookings=1
-  ✓ [escrow held] VENDOR booking kt0jho status = DB
-  ✓ [escrow held] VENDOR booking kt0jho task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [escrow held] VENDOR schedule booking count = DB — jobNo=AI-00000008 bookings=1
+  ✓ [escrow held] VENDOR booking d0qger status = DB
+  ✓ [escrow held] VENDOR booking d0qger task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [escrow held] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 7920c
   ✓ [escrow held] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 0c
   ✓ [escrow held] VENDOR earnings.totalRefunded = DB Σ refundCents — 0c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [escrow held] OPS ledger entries for task = DB
-  ✓ [escrow held] OPS escrow 6j93e9 state = DB
-  ✓ [escrow held] OPS escrow 6j93e9 amount = DB
-  ✓ [escrow held] OPS escrow 6j93e9 payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [escrow held] OPS escrow 2kq6cu state = DB
+  ✓ [escrow held] OPS escrow 2kq6cu amount = DB
+  ✓ [escrow held] OPS escrow 2kq6cu payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [escrow held] OPS bookings rows for task = DB
-  ✓ [escrow held] OPS booking kt0jho status = DB
-  [HTTP] PATCH /api/bookings/cmu0tkdmb00a4mhkejckt0jho → 200
+  ✓ [escrow held] OPS booking d0qger status = DB
+  [HTTP] PATCH /api/bookings/cmu2knrj600a4ox92esd0qger → 200
   ✓ Household drives accepted→in_progress → 200 (F-1 unblocked)
   ✓ Task IN_PROGRESS after the household start — status=IN_PROGRESS
   ⟤ TRUTH CHECK [execution start] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkdis00a2mhkewt6d1131 → 200
+  [HTTP] GET /api/tasks/cmu2knrgr00a2ox92hb8gbmeb → 200
   ✓ [execution start] USER task status = DB task status — status=IN_PROGRESS
   ✓ [execution start] USER escrow entry count = DB
-  ✓ [execution start] USER escrow 6j93e9 state = DB
-  ✓ [execution start] USER escrow 6j93e9 amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [execution start] USER escrow 2kq6cu state = DB
+  ✓ [execution start] USER escrow 2kq6cu amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [execution start] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [execution start] VENDOR schedule booking count = DB — jobNo=AI-00000018 bookings=1
-  ✓ [execution start] VENDOR booking kt0jho status = DB
-  ✓ [execution start] VENDOR booking kt0jho task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [execution start] VENDOR schedule booking count = DB — jobNo=AI-00000008 bookings=1
+  ✓ [execution start] VENDOR booking d0qger status = DB
+  ✓ [execution start] VENDOR booking d0qger task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [execution start] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 7920c
   ✓ [execution start] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 0c
   ✓ [execution start] VENDOR earnings.totalRefunded = DB Σ refundCents — 0c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [execution start] OPS ledger entries for task = DB
-  ✓ [execution start] OPS escrow 6j93e9 state = DB
-  ✓ [execution start] OPS escrow 6j93e9 amount = DB
-  ✓ [execution start] OPS escrow 6j93e9 payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [execution start] OPS escrow 2kq6cu state = DB
+  ✓ [execution start] OPS escrow 2kq6cu amount = DB
+  ✓ [execution start] OPS escrow 2kq6cu payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [execution start] OPS bookings rows for task = DB
-  ✓ [execution start] OPS booking kt0jho status = DB
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkdmb00a4mhkejckt0jho → 200
+  ✓ [execution start] OPS booking d0qger status = DB
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2knrj600a4ox92esd0qger → 200
   ✓ Vendor completes job → task COMPLETED
   ✓ Completion notes recorded
-  [HTTP] POST /api/tasks/cmu0tkdis00a2mhkewt6d1131/verify → 200
+  [HTTP] POST /api/tasks/cmu2knrgr00a2ox92hb8gbmeb/verify → 200
   ✓ Household verifies work → task VERIFIED
-  [HTTP] PATCH /api/tasks/cmu0tkdis00a2mhkewt6d1131/escrow → 200
+  [HTTP] PATCH /api/tasks/cmu2knrgr00a2ox92hb8gbmeb/escrow → 200
   ✓ Escrow released → task ESCROW_RELEASED
   ✓ Escrow state RELEASED with payout
   ✓ Vendor payout credited (earnings = 7920c)
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ VENDOR environment earnings.totalEarned = 7920c
   ⟤ TRUTH CHECK [payout released] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkdis00a2mhkewt6d1131 → 200
+  [HTTP] GET /api/tasks/cmu2knrgr00a2ox92hb8gbmeb → 200
   ✓ [payout released] USER task status = DB task status — status=ESCROW_RELEASED
   ✓ [payout released] USER escrow entry count = DB
-  ✓ [payout released] USER escrow 6j93e9 state = DB
-  ✓ [payout released] USER escrow 6j93e9 amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [payout released] USER escrow 2kq6cu state = DB
+  ✓ [payout released] USER escrow 2kq6cu amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [payout released] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [payout released] VENDOR schedule booking count = DB — jobNo=AI-00000018 bookings=1
-  ✓ [payout released] VENDOR booking kt0jho status = DB
-  ✓ [payout released] VENDOR booking kt0jho task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [payout released] VENDOR schedule booking count = DB — jobNo=AI-00000008 bookings=1
+  ✓ [payout released] VENDOR booking d0qger status = DB
+  ✓ [payout released] VENDOR booking d0qger task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [payout released] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 0c
   ✓ [payout released] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 7920c
   ✓ [payout released] VENDOR earnings.totalRefunded = DB Σ refundCents — 0c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [payout released] OPS ledger entries for task = DB
-  ✓ [payout released] OPS escrow 6j93e9 state = DB
-  ✓ [payout released] OPS escrow 6j93e9 amount = DB
-  ✓ [payout released] OPS escrow 6j93e9 payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [payout released] OPS escrow 2kq6cu state = DB
+  ✓ [payout released] OPS escrow 2kq6cu amount = DB
+  ✓ [payout released] OPS escrow 2kq6cu payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [payout released] OPS bookings rows for task = DB
-  ✓ [payout released] OPS booking kt0jho status = DB
+  ✓ [payout released] OPS booking d0qger status = DB
   ✓ OPS record: ESCROW_RELEASE audit log entry exists (household release now audited)
 
 ━━━ FLOW 2 · Add-on ━━━
   [HTTP] POST /api/tasks → 201
-  [HTTP] POST /api/tasks/cmu0tkibr00avmhke8lg3m8fq/dispatch → 201
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkife00axmhkemegs8quu → 200
+  [HTTP] POST /api/tasks/cmu2knwji00avox92gmm7s6g8/dispatch → 201
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2knwmu00axox92ob2knl52 → 200
   ✓ Original order escrow HELD 6000c
-  [HTTP] POST /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkife00axmhkemegs8quu/addons → 201
+  [HTTP] POST /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2knwmu00axox92ob2knl52/addons → 201
   ✓ Vendor proposes add-on ($15) — status=201
   ✓ User notified of add-on request (ADDON_REQUESTED)
-  [HTTP] GET /api/bookings/cmu0tkife00axmhkemegs8quu/addons → 200
+  [HTTP] GET /api/bookings/cmu2knwmu00axox92ob2knl52/addons → 200
   ✓ USER sees pending add-on
-  [HTTP] PATCH /api/bookings/cmu0tkife00axmhkemegs8quu/addons/cmu0tkiwt00bbmhkex63lrcgk → 200
+  [HTTP] PATCH /api/bookings/cmu2knwmu00axox92ob2knl52/addons/cmu2knx6i00bbox925uebkjub → 200
   ✓ Household approves add-on — status=200
   ✓ New HELD escrow entry created for add-on
   ✓ Add-on escrow commission 150c
   ✓ Add-on escrow payout 1350c
   ✓ Revised total held in escrow = 7500c
-  [HTTP] GET /api/tasks/cmu0tkibr00avmhke8lg3m8fq → 200
+  [HTTP] GET /api/tasks/cmu2knwji00avox92gmm7s6g8 → 200
   ✓ USER task view shows approved add-on
   ⟤ TRUTH CHECK [addon approved (revised total)] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkibr00avmhke8lg3m8fq → 200
+  [HTTP] GET /api/tasks/cmu2knwji00avox92gmm7s6g8 → 200
   ✓ [addon approved (revised total)] USER task status = DB task status — status=SCHEDULED
   ✓ [addon approved (revised total)] USER escrow entry count = DB
-  ✓ [addon approved (revised total)] USER escrow g17nnf state = DB
-  ✓ [addon approved (revised total)] USER escrow g17nnf amount = DB
-  ✓ [addon approved (revised total)] USER escrow dp8nag state = DB
-  ✓ [addon approved (revised total)] USER escrow dp8nag amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [addon approved (revised total)] USER escrow mjpf45 state = DB
+  ✓ [addon approved (revised total)] USER escrow mjpf45 amount = DB
+  ✓ [addon approved (revised total)] USER escrow nv838u state = DB
+  ✓ [addon approved (revised total)] USER escrow nv838u amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [addon approved (revised total)] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [addon approved (revised total)] VENDOR schedule booking count = DB — jobNo=AI-00000019 bookings=1
-  ✓ [addon approved (revised total)] VENDOR booking gs8quu status = DB
-  ✓ [addon approved (revised total)] VENDOR booking gs8quu task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [addon approved (revised total)] VENDOR schedule booking count = DB — jobNo=AI-00000009 bookings=1
+  ✓ [addon approved (revised total)] VENDOR booking 2knl52 status = DB
+  ✓ [addon approved (revised total)] VENDOR booking 2knl52 task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [addon approved (revised total)] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 6750c
   ✓ [addon approved (revised total)] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 7920c
   ✓ [addon approved (revised total)] VENDOR earnings.totalRefunded = DB Σ refundCents — 0c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [addon approved (revised total)] OPS ledger entries for task = DB
-  ✓ [addon approved (revised total)] OPS escrow g17nnf state = DB
-  ✓ [addon approved (revised total)] OPS escrow g17nnf amount = DB
-  ✓ [addon approved (revised total)] OPS escrow g17nnf payout = DB
-  ✓ [addon approved (revised total)] OPS escrow dp8nag state = DB
-  ✓ [addon approved (revised total)] OPS escrow dp8nag amount = DB
-  ✓ [addon approved (revised total)] OPS escrow dp8nag payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [addon approved (revised total)] OPS escrow mjpf45 state = DB
+  ✓ [addon approved (revised total)] OPS escrow mjpf45 amount = DB
+  ✓ [addon approved (revised total)] OPS escrow mjpf45 payout = DB
+  ✓ [addon approved (revised total)] OPS escrow nv838u state = DB
+  ✓ [addon approved (revised total)] OPS escrow nv838u amount = DB
+  ✓ [addon approved (revised total)] OPS escrow nv838u payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [addon approved (revised total)] OPS bookings rows for task = DB
-  ✓ [addon approved (revised total)] OPS booking gs8quu status = DB
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkife00axmhkemegs8quu → 200
-  [HTTP] POST /api/tasks/cmu0tkibr00avmhke8lg3m8fq/verify → 200
-  [HTTP] PATCH /api/tasks/cmu0tkibr00avmhke8lg3m8fq/escrow → 200
+  ✓ [addon approved (revised total)] OPS booking 2knl52 status = DB
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2knwmu00axox92ob2knl52 → 200
+  [HTTP] POST /api/tasks/cmu2knwji00avox92gmm7s6g8/verify → 200
+  [HTTP] PATCH /api/tasks/cmu2knwji00avox92gmm7s6g8/escrow → 200
   ✓ All escrows released (base + add-on)
   ✓ Vendor payout includes add-on (cumulative earned = 14670c)
   ⟤ TRUTH CHECK [payout incl. add-on] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkibr00avmhke8lg3m8fq → 200
+  [HTTP] GET /api/tasks/cmu2knwji00avox92gmm7s6g8 → 200
   ✓ [payout incl. add-on] USER task status = DB task status — status=ESCROW_RELEASED
   ✓ [payout incl. add-on] USER escrow entry count = DB
-  ✓ [payout incl. add-on] USER escrow g17nnf state = DB
-  ✓ [payout incl. add-on] USER escrow g17nnf amount = DB
-  ✓ [payout incl. add-on] USER escrow dp8nag state = DB
-  ✓ [payout incl. add-on] USER escrow dp8nag amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [payout incl. add-on] USER escrow mjpf45 state = DB
+  ✓ [payout incl. add-on] USER escrow mjpf45 amount = DB
+  ✓ [payout incl. add-on] USER escrow nv838u state = DB
+  ✓ [payout incl. add-on] USER escrow nv838u amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [payout incl. add-on] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [payout incl. add-on] VENDOR schedule booking count = DB — jobNo=AI-00000019 bookings=1
-  ✓ [payout incl. add-on] VENDOR booking gs8quu status = DB
-  ✓ [payout incl. add-on] VENDOR booking gs8quu task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [payout incl. add-on] VENDOR schedule booking count = DB — jobNo=AI-00000009 bookings=1
+  ✓ [payout incl. add-on] VENDOR booking 2knl52 status = DB
+  ✓ [payout incl. add-on] VENDOR booking 2knl52 task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [payout incl. add-on] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 0c
   ✓ [payout incl. add-on] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 14670c
   ✓ [payout incl. add-on] VENDOR earnings.totalRefunded = DB Σ refundCents — 0c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [payout incl. add-on] OPS ledger entries for task = DB
-  ✓ [payout incl. add-on] OPS escrow g17nnf state = DB
-  ✓ [payout incl. add-on] OPS escrow g17nnf amount = DB
-  ✓ [payout incl. add-on] OPS escrow g17nnf payout = DB
-  ✓ [payout incl. add-on] OPS escrow dp8nag state = DB
-  ✓ [payout incl. add-on] OPS escrow dp8nag amount = DB
-  ✓ [payout incl. add-on] OPS escrow dp8nag payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [payout incl. add-on] OPS escrow mjpf45 state = DB
+  ✓ [payout incl. add-on] OPS escrow mjpf45 amount = DB
+  ✓ [payout incl. add-on] OPS escrow mjpf45 payout = DB
+  ✓ [payout incl. add-on] OPS escrow nv838u state = DB
+  ✓ [payout incl. add-on] OPS escrow nv838u amount = DB
+  ✓ [payout incl. add-on] OPS escrow nv838u payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [payout incl. add-on] OPS bookings rows for task = DB
-  ✓ [payout incl. add-on] OPS booking gs8quu status = DB
+  ✓ [payout incl. add-on] OPS booking 2knl52 status = DB
 
 ━━━ FLOW 3 · Refund ━━━
   [HTTP] POST /api/tasks → 201
-  [HTTP] POST /api/tasks/cmu0tkmso00bvmhke7x4vcngz/dispatch → 201
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkn5v00bxmhke6pms289o → 200
+  [HTTP] POST /api/tasks/cmu2ko15s00bvox9268sbyn0m/dispatch → 201
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2ko1hu00bxox924fs3f5cv → 200
   ✓ Order paid into escrow (HELD 8000c)
-  [HTTP] PATCH /api/tasks/cmu0tkmso00bvmhke7x4vcngz/escrow → 200
+  [HTTP] PATCH /api/tasks/cmu2ko15s00bvox9268sbyn0m/escrow → 200
   ✓ Dispute raised → task DISPUTED, escrow DISPUTED
   ✓ User-side effect: autonomy promotion paused during dispute
-  [HTTP] PATCH /api/ops/escrow/cmu0tknuj00c5mhke7slqivcd → 409 :: {"error":"Refund actions require explicit confirmation — re-submit with refundConfirmed: true after reviewing the amount and reason.","action":"partial_refund","requiresConfirmation":true}
+  [HTTP] PATCH /api/ops/escrow/cmu2ko1vy00c5ox92x9c3hw2o → 409 :: {"error":"Refund actions require explicit confirmation — re-submit with refundConfirmed: true after reviewing the amount and reason.","action":"partial_refund","requiresConfirmation":true}
   ✓ Maker-checker: unconfirmed refund blocked (409)
-  [HTTP] PATCH /api/ops/escrow/cmu0tknuj00c5mhke7slqivcd → 200
+  [HTTP] PATCH /api/ops/escrow/cmu2ko1vy00c5ox92x9c3hw2o → 200
   ✓ Ops issues partial refund $30 — status=200
-  ✓ Provider refund recorded (Stripe seam: NoOp dev provider) — stripeId=noop_refund_e2e-pr-1789364738659 status=succeeded
+  ✓ Provider refund recorded (Stripe seam: NoOp dev provider) — stripeId=noop_refund_e2e-pr-1789470712409 status=succeeded
   ✓ Refund has succeeded provider status
   ✓ Escrow refundCents cumulative = 3000c
   ✓ Escrow recomputed payout on remainder = 4500c
@@ -245,94 +245,94 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ Refund-credit voucher issued to user wallet (origin REFUND_CREDIT)
   [HTTP] GET /api/household/vouchers → 200
   ✓ USER wallet shows the refund-credit voucher
-  [HTTP] PATCH /api/ops/escrow/cmu0tknuj00c5mhke7slqivcd → 200
+  [HTTP] PATCH /api/ops/escrow/cmu2ko1vy00c5ox92x9c3hw2o → 200
   ✓ Refund idempotency: replay does not double-refund — replayStatus=200
-  [HTTP] PATCH /api/ops/escrow/cmu0tknuj00c5mhke7slqivcd → 200
+  [HTTP] PATCH /api/ops/escrow/cmu2ko1vy00c5ox92x9c3hw2o → 200
   ✓ Ops resolves dispute (dismiss, keep remainder) — status=200
   ✓ Cross-env truth: dispute anomaly auto-closed on settlement (no stale alerts) — status=RESOLVED
   ✓ Escrow back to HELD after ops resolution
   ✓ Autonomy unpaused after resolution
-  [HTTP] POST /api/tasks/cmu0tkmso00bvmhke7x4vcngz/verify → 200
-  [HTTP] PATCH /api/tasks/cmu0tkmso00bvmhke7x4vcngz/escrow → 200
+  [HTTP] POST /api/tasks/cmu2ko15s00bvox9268sbyn0m/verify → 200
+  [HTTP] PATCH /api/tasks/cmu2ko15s00bvox9268sbyn0m/escrow → 200
   ✓ Terminal: task ESCROW_RELEASED with adjusted payout
   ✓ Vendor payout net of refund (cumulative earned = 19170c)
   ✓ Vendor earnings totalRefunded shows 3000c
   ⓘ household cached totals: orders=3 spent=22800c (final amounts: 8800+7500+8000=24300c, refunded 3000c → net 21300c)
   ✓ OPS record: PARTIAL_REFUND audit log entry exists
   ⟤ TRUTH CHECK [post-refund payout] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkmso00bvmhke7x4vcngz → 200
+  [HTTP] GET /api/tasks/cmu2ko15s00bvox9268sbyn0m → 200
   ✓ [post-refund payout] USER task status = DB task status — status=ESCROW_RELEASED
   ✓ [post-refund payout] USER escrow entry count = DB
-  ✓ [post-refund payout] USER escrow lqivcd state = DB
-  ✓ [post-refund payout] USER escrow lqivcd amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [post-refund payout] USER escrow c3hw2o state = DB
+  ✓ [post-refund payout] USER escrow c3hw2o amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [post-refund payout] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [post-refund payout] VENDOR schedule booking count = DB — jobNo=AI-00000020 bookings=1
-  ✓ [post-refund payout] VENDOR booking ms289o status = DB
-  ✓ [post-refund payout] VENDOR booking ms289o task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [post-refund payout] VENDOR schedule booking count = DB — jobNo=AI-00000010 bookings=1
+  ✓ [post-refund payout] VENDOR booking s3f5cv status = DB
+  ✓ [post-refund payout] VENDOR booking s3f5cv task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [post-refund payout] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 0c
   ✓ [post-refund payout] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 19170c
   ✓ [post-refund payout] VENDOR earnings.totalRefunded = DB Σ refundCents — 3000c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [post-refund payout] OPS ledger entries for task = DB
-  ✓ [post-refund payout] OPS escrow lqivcd state = DB
-  ✓ [post-refund payout] OPS escrow lqivcd amount = DB
-  ✓ [post-refund payout] OPS escrow lqivcd payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [post-refund payout] OPS escrow c3hw2o state = DB
+  ✓ [post-refund payout] OPS escrow c3hw2o amount = DB
+  ✓ [post-refund payout] OPS escrow c3hw2o payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [post-refund payout] OPS bookings rows for task = DB
-  ✓ [post-refund payout] OPS booking ms289o status = DB
+  ✓ [post-refund payout] OPS booking s3f5cv status = DB
 
 ━━━ FLOW 4 · Dispute ━━━
   [HTTP] POST /api/tasks → 201
-  [HTTP] POST /api/tasks/cmu0tkq9o00dqmhkenk98usrd/dispatch → 201
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkqjr00dsmhke9cmc579t → 200
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkqjr00dsmhke9cmc579t → 200
+  [HTTP] POST /api/tasks/cmu2ko4h000doox92v6kory14/dispatch → 201
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2ko4o500dqox92zbtaz874 → 200
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2ko4o500dqox92zbtaz874 → 200
   ✓ Order executed → task COMPLETED before dispute
-  [HTTP] PATCH /api/tasks/cmu0tkq9o00dqmhkenk98usrd/escrow → 200
+  [HTTP] PATCH /api/tasks/cmu2ko4h000doox92v6kory14/escrow → 200
   ✓ User disputes → task DISPUTED, escrow DISPUTED (completed booking stays completed)
   ✓ Vendor notified (DISPUTE_RAISED)
-  [HTTP] GET /api/ops/escrow?state=DISPUTED&search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?state=DISPUTED&search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ OPS review: disputed escrow surfaced in ledger (state=DISPUTED)
   ✓ OPS summary counts DISPUTED escrow
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ Vendor earnings hold disputed payout as pending — pending=8100c
-  [HTTP] PATCH /api/ops/escrow/cmu0tkqv200e0mhkef33lldt1 → 200
+  [HTTP] PATCH /api/ops/escrow/cmu2ko4xx00dyox92mb1tcktm → 200
   ✓ Ops settles dispute with full refund — status=200
   ✓ Escrow resolution → REFUNDED (full)
   ✓ Terminal order status → DISPUTE_CLOSED
   ✓ Payout & commission zeroed after full refund
   ✓ Full refund event recorded ($90)
-  [HTTP] POST /api/tasks/cmu0tkq9o00dqmhkenk98usrd/verify → 409 :: {"error":"Task must be COMPLETED to verify — current status is DISPUTE_CLOSED"}
+  [HTTP] POST /api/tasks/cmu2ko4h000doox92v6kory14/verify → 409 :: {"error":"Task must be COMPLETED to verify — current status is DISPUTE_CLOSED"}
   ✓ Terminal status enforced: verify rejected on DISPUTE_CLOSED (409)
-  [HTTP] PATCH /api/tasks/cmu0tkq9o00dqmhkenk98usrd/escrow → 409 :: {"error":"Task must be VERIFIED to release escrow — current status is DISPUTE_CLOSED"}
+  [HTTP] PATCH /api/tasks/cmu2ko4h000doox92v6kory14/escrow → 409 :: {"error":"Task must be VERIFIED to release escrow — current status is DISPUTE_CLOSED"}
   ✓ Terminal status enforced: release rejected (409)
   ✓ Autonomy unpaused after terminal resolution
   ✓ Cross-env truth: dispute anomaly auto-closed on terminal settlement — status=RESOLVED
   ✓ OPS record: DISPUTE_REFUNDED audit log entry exists
   ⟤ TRUTH CHECK [dispute settled (terminal)] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkq9o00dqmhkenk98usrd → 200
+  [HTTP] GET /api/tasks/cmu2ko4h000doox92v6kory14 → 200
   ✓ [dispute settled (terminal)] USER task status = DB task status — status=DISPUTE_CLOSED
   ✓ [dispute settled (terminal)] USER escrow entry count = DB
-  ✓ [dispute settled (terminal)] USER escrow 3lldt1 state = DB
-  ✓ [dispute settled (terminal)] USER escrow 3lldt1 amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [dispute settled (terminal)] USER escrow 1tcktm state = DB
+  ✓ [dispute settled (terminal)] USER escrow 1tcktm amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [dispute settled (terminal)] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [dispute settled (terminal)] VENDOR schedule booking count = DB — jobNo=AI-00000021 bookings=1
-  ✓ [dispute settled (terminal)] VENDOR booking mc579t status = DB
-  ✓ [dispute settled (terminal)] VENDOR booking mc579t task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [dispute settled (terminal)] VENDOR schedule booking count = DB — jobNo=AI-00000011 bookings=1
+  ✓ [dispute settled (terminal)] VENDOR booking taz874 status = DB
+  ✓ [dispute settled (terminal)] VENDOR booking taz874 task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [dispute settled (terminal)] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 0c
   ✓ [dispute settled (terminal)] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 19170c
   ✓ [dispute settled (terminal)] VENDOR earnings.totalRefunded = DB Σ refundCents — 12000c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [dispute settled (terminal)] OPS ledger entries for task = DB
-  ✓ [dispute settled (terminal)] OPS escrow 3lldt1 state = DB
-  ✓ [dispute settled (terminal)] OPS escrow 3lldt1 amount = DB
-  ✓ [dispute settled (terminal)] OPS escrow 3lldt1 payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [dispute settled (terminal)] OPS escrow 1tcktm state = DB
+  ✓ [dispute settled (terminal)] OPS escrow 1tcktm amount = DB
+  ✓ [dispute settled (terminal)] OPS escrow 1tcktm payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [dispute settled (terminal)] OPS bookings rows for task = DB
-  ✓ [dispute settled (terminal)] OPS booking mc579t status = DB
+  ✓ [dispute settled (terminal)] OPS booking taz874 status = DB
 
 ━━━ FLOW 5 · Voucher/Promotion ━━━
   [HTTP] POST /api/ops/marketing/segments → 201
@@ -344,8 +344,8 @@ BASE=http://localhost:3000  run-id=1789364738659
   [HTTP] POST /api/ops/marketing/process-issuance-job → 200
   ✓ Voucher issuance job completes
   [HTTP] GET /api/household/vouchers → 200
-  ✓ Targeted user: voucher lands in wallet (CLAIMED) — code=9Y9FQLKU
-  ✓ Voucher code surfaced to user at checkout — code=9Y9FQLKU
+  ✓ Targeted user: voucher lands in wallet (CLAIMED) — code=LR98PJ7B
+  ✓ Voucher code surfaced to user at checkout — code=LR98PJ7B
   ✓ User notified (VOUCHER_ISSUED)
   [HTTP] GET /api/household/vouchers/eligible?orderValueCents=10000&category=CLEANING → 200
   ✓ Checkout shows voucher as eligible for order — eligible=3
@@ -357,37 +357,37 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ Voucher marked USED at checkout
   ✓ CodeRedemption audit row bound to task — applied=2000c
   ✓ Campaign redemption counter incremented
-  [HTTP] POST /api/tasks/cmu0tkufb00frmhkeq32rt79y/dispatch → 201
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkuig00fzmhkew514wx7e → 200
+  [HTTP] POST /api/tasks/cmu2ko8q100frox92h3t05iki/dispatch → 201
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2ko8so00fzox922vtwinoi → 200
   ✓ Escrow holds post-discount cash 8000c
   ✓ Escrow records original (pre-discount) 10000c
   ✓ Escrow records discount 2000c funded by PLATFORM
   ✓ Commission on full job value (payout base) = 1000c
   ✓ Vendor payout on full value = 9000c (platform absorbs subsidy)
   ⟤ TRUTH CHECK [discounted escrow held] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkufb00frmhkeq32rt79y → 200
+  [HTTP] GET /api/tasks/cmu2ko8q100frox92h3t05iki → 200
   ✓ [discounted escrow held] USER task status = DB task status — status=SCHEDULED
   ✓ [discounted escrow held] USER escrow entry count = DB
-  ✓ [discounted escrow held] USER escrow 08r9r0 state = DB
-  ✓ [discounted escrow held] USER escrow 08r9r0 amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [discounted escrow held] USER escrow h5u5my state = DB
+  ✓ [discounted escrow held] USER escrow h5u5my amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [discounted escrow held] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [discounted escrow held] VENDOR schedule booking count = DB — jobNo=AI-00000022 bookings=1
-  ✓ [discounted escrow held] VENDOR booking 14wx7e status = DB
-  ✓ [discounted escrow held] VENDOR booking 14wx7e task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [discounted escrow held] VENDOR schedule booking count = DB — jobNo=AI-00000012 bookings=1
+  ✓ [discounted escrow held] VENDOR booking twinoi status = DB
+  ✓ [discounted escrow held] VENDOR booking twinoi task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [discounted escrow held] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 9000c
   ✓ [discounted escrow held] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 19170c
   ✓ [discounted escrow held] VENDOR earnings.totalRefunded = DB Σ refundCents — 12000c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [discounted escrow held] OPS ledger entries for task = DB
-  ✓ [discounted escrow held] OPS escrow 08r9r0 state = DB
-  ✓ [discounted escrow held] OPS escrow 08r9r0 amount = DB
-  ✓ [discounted escrow held] OPS escrow 08r9r0 payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [discounted escrow held] OPS escrow h5u5my state = DB
+  ✓ [discounted escrow held] OPS escrow h5u5my amount = DB
+  ✓ [discounted escrow held] OPS escrow h5u5my payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [discounted escrow held] OPS bookings rows for task = DB
-  ✓ [discounted escrow held] OPS booking 14wx7e status = DB
-  [HTTP] POST /api/tasks/cmu0tkufb00frmhkeq32rt79y/cancel → 200
+  ✓ [discounted escrow held] OPS booking twinoi status = DB
+  [HTTP] POST /api/tasks/cmu2ko8q100frox92h3t05iki/cancel → 200
   ✓ User cancels discounted order pre-completion — status=200
   ✓ Escrow → REFUNDED (user's money back)
   ✓ Payout/commission zeroed on cancellation
@@ -419,16 +419,16 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ Conversion: discount applied (1000c)
   ✓ Conversion: final total 4000c
   ✓ Attribution: order linked to campaign (multi-touch row) — touchpoint=VOUCHER_USED
-  [HTTP] POST /api/tasks/cmu0tkwm700hmmhke2rji0d8b/dispatch → 201
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkwo500humhkekzcga0tc → 200
-  [HTTP] PATCH /api/vendors/cmu0tkcz2009qmhkehoubgvm1/bookings/cmu0tkwo500humhkekzcga0tc → 200
-  [HTTP] POST /api/tasks/cmu0tkwm700hmmhke2rji0d8b/verify → 200
-  [HTTP] PATCH /api/tasks/cmu0tkwm700hmmhke2rji0d8b/escrow → 200
+  [HTTP] POST /api/tasks/cmu2koavs00hmox92p4cxu39l/dispatch → 201
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2koayb00huox925mkspfnp → 200
+  [HTTP] PATCH /api/vendors/cmu2knr2n009qox92tr6q6ke3/bookings/cmu2koayb00huox925mkspfnp → 200
+  [HTTP] POST /api/tasks/cmu2koavs00hmox92p4cxu39l/verify → 200
+  [HTTP] PATCH /api/tasks/cmu2koavs00hmox92p4cxu39l/escrow → 200
   ✓ Conversion order completed & paid out
   ✓ Campaign events: VOUCHER_REDEEMED logged
-  [HTTP] GET /api/ops/marketing/cmu0tkwki00h3mhkepo9navod/performance → 200
+  [HTTP] GET /api/ops/marketing/cmu2koau200h3ox92l3owmb0t/performance → 200
   ✓ ROI tracking: campaign performance endpoint — status=200
-  ⓘ performance payload: {"funnel":{"targetAudienceSize":1,"vouchersIssued":1,"vouchersViewed":0,"vouchersRedeemed":1,"ordersGenerated":1,"ordersCompleted":1,"revenueGeneratedCents":4000,"discountGivenCents":1000,"netRevenueCents":3000,"totalDiscountCents":1000,"customerReactivation":{"lapsedCustomersReactivated":0,"newCustomersAcquired":0},"timeline":[{"date":"2026-09-14","event":"VOUCHER_REDEEMED","count":1},{"date":"20
+  ⓘ performance payload: {"funnel":{"targetAudienceSize":1,"vouchersIssued":1,"vouchersViewed":0,"vouchersRedeemed":1,"ordersGenerated":1,"ordersCompleted":1,"revenueGeneratedCents":4000,"discountGivenCents":1000,"netRevenueCents":3000,"totalDiscountCents":1000,"customerReactivation":{"lapsedCustomersReactivated":0,"newCustomersAcquired":0},"timeline":[{"date":"2026-09-15","event":"VOUCHER_REDEEMED","count":1},{"date":"20
   ✓ Funnel: vouchers issued = 1 (targeted 1)
   ✓ Funnel: vouchers redeemed = 1 (conversion)
   ✓ Funnel: orders generated = 1
@@ -438,28 +438,28 @@ BASE=http://localhost:3000  run-id=1789364738659
   ✓ ROI net revenue = 3000c
   ✓ Voucher terminal state USED
   ⟤ TRUTH CHECK [marketing conversion order] — user × vendor × ops × DB
-  [HTTP] GET /api/tasks/cmu0tkwm700hmmhke2rji0d8b → 200
+  [HTTP] GET /api/tasks/cmu2koavs00hmox92p4cxu39l → 200
   ✓ [marketing conversion order] USER task status = DB task status — status=ESCROW_RELEASED
   ✓ [marketing conversion order] USER escrow entry count = DB
-  ✓ [marketing conversion order] USER escrow lmnr7d state = DB
-  ✓ [marketing conversion order] USER escrow lmnr7d amount = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/schedule?search=E2E%20Alpha%201789364738659 → 200
+  ✓ [marketing conversion order] USER escrow tgdyoj state = DB
+  ✓ [marketing conversion order] USER escrow tgdyoj amount = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/schedule?search=E2E%20Alpha%201789470712409 → 200
   ✓ [marketing conversion order] VENDOR schedule search endpoint healthy (200) — status=200
-  ✓ [marketing conversion order] VENDOR schedule booking count = DB — jobNo=AI-00000023 bookings=1
-  ✓ [marketing conversion order] VENDOR booking cga0tc status = DB
-  ✓ [marketing conversion order] VENDOR booking cga0tc task status = DB
-  [HTTP] GET /api/vendors/cmu0tkcz2009qmhkehoubgvm1/earnings → 200
+  ✓ [marketing conversion order] VENDOR schedule booking count = DB — jobNo=AI-00000013 bookings=1
+  ✓ [marketing conversion order] VENDOR booking kspfnp status = DB
+  ✓ [marketing conversion order] VENDOR booking kspfnp task status = DB
+  [HTTP] GET /api/vendors/cmu2knr2n009qox92tr6q6ke3/earnings → 200
   ✓ [marketing conversion order] VENDOR earnings.pendingPayout = DB Σ payout(HELD+DISPUTED) — 0c
   ✓ [marketing conversion order] VENDOR earnings.totalEarned = DB Σ payout(RELEASED) — 23670c
   ✓ [marketing conversion order] VENDOR earnings.totalRefunded = DB Σ refundCents — 20000c
-  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789364738659%40anna.test&limit=100 → 200
+  [HTTP] GET /api/ops/escrow?search=e2e-alpha%2B1789470712409%40anna.test&limit=100 → 200
   ✓ [marketing conversion order] OPS ledger entries for task = DB
-  ✓ [marketing conversion order] OPS escrow lmnr7d state = DB
-  ✓ [marketing conversion order] OPS escrow lmnr7d amount = DB
-  ✓ [marketing conversion order] OPS escrow lmnr7d payout = DB
-  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789364738659&limit=100 → 200
+  ✓ [marketing conversion order] OPS escrow tgdyoj state = DB
+  ✓ [marketing conversion order] OPS escrow tgdyoj amount = DB
+  ✓ [marketing conversion order] OPS escrow tgdyoj payout = DB
+  [HTTP] GET /api/ops/bookings?search=E2E%20Alpha%201789470712409&limit=100 → 200
   ✓ [marketing conversion order] OPS bookings rows for task = DB
-  ✓ [marketing conversion order] OPS booking cga0tc status = DB
+  ✓ [marketing conversion order] OPS booking kspfnp status = DB
 
 ━━━━━━━━━ SUMMARY ━━━━━━━━━
 SETUP                                          pass=10  fail=0

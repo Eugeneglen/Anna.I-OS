@@ -1,8 +1,8 @@
 {
   "suite": "item8-fixes",
   "layer": "1 — deterministic (zero provider calls)",
-  "startedAt": "2026-09-14T05:34:48.597Z",
-  "finishedAt": "2026-09-14T05:35:07.090Z",
+  "startedAt": "2026-09-15T11:11:26.617Z",
+  "finishedAt": "2026-09-15T11:11:45.071Z",
   "liveProviderCalls": 0,
   "totals": {
     "pass": 143,
@@ -78,19 +78,19 @@
       "suite": "SETUP",
       "name": "Household registered + session",
       "pass": true,
-      "detail": "hh=bhdjm2"
+      "detail": "hh=hro4iq"
     },
     {
       "suite": "SETUP",
       "name": "Vendor 1 created + login",
       "pass": true,
-      "detail": "vendor=k8n104"
+      "detail": "vendor=xbi24u"
     },
     {
       "suite": "SETUP",
       "name": "Vendor 2 created + login",
       "pass": true,
-      "detail": "vendor=5ylvdi"
+      "detail": "vendor=kl5le8"
     },
     {
       "suite": "SETUP",
@@ -102,7 +102,7 @@
       "suite": "SETUP",
       "name": "Subscription baseline snapshot (demo rows, expect HOME/800 only)",
       "pass": true,
-      "detail": "rows=6"
+      "detail": "rows=4"
     },
     {
       "suite": "R6",
@@ -216,7 +216,7 @@
       "suite": "R1",
       "name": "Catalogue task created",
       "pass": true,
-      "detail": "task=indh5q"
+      "detail": "task=a5lw31"
     },
     {
       "suite": "R1",
@@ -492,7 +492,7 @@
       "suite": "R8",
       "name": "Rematch setup: vendor1 hold exists",
       "pass": true,
-      "detail": "entry=e6s4m0"
+      "detail": "entry=1mrkb8"
     },
     {
       "suite": "R8",
@@ -504,7 +504,7 @@
       "suite": "R8",
       "name": "Rematch: new live hold for booking2",
       "pass": true,
-      "detail": "entry=csrmjc"
+      "detail": "entry=e7qf2r"
     },
     {
       "suite": "R8",
@@ -762,7 +762,7 @@
       "suite": "R11",
       "name": "Ops-created CARE household → 200",
       "pass": true,
-      "detail": "hh=prigg2"
+      "detail": "hh=2ny7lp"
     },
     {
       "suite": "R11",
@@ -804,7 +804,7 @@
       "suite": "R11",
       "name": "Seeded subscriptions keep their exact prices (no accidental repricing)",
       "pass": true,
-      "detail": "rows=6/6"
+      "detail": "rows=4/4"
     },
     {
       "suite": "R11",
@@ -822,7 +822,7 @@
       "suite": "R11",
       "name": "Ops subscriptions listing + summary intact",
       "pass": true,
-      "detail": "totalActive=8 totalMrr=18400c"
+      "detail": "totalActive=6 totalMrr=16800c"
     },
     {
       "suite": "R12",
@@ -906,7 +906,7 @@
       "suite": "DEMO",
       "name": "Seeded vendors/households/job-types present",
       "pass": true,
-      "detail": "vendors=9 households=8 jobTypes=38 demoVendors=3"
+      "detail": "vendors=7 households=6 jobTypes=38 demoVendors=3"
     },
     {
       "suite": "DEMO",
@@ -924,7 +924,7 @@
       "suite": "DEMO",
       "name": "Seeded demo subscriptions intact (HOME/800/A ACTIVE)",
       "pass": true,
-      "detail": "rows=6"
+      "detail": "rows=4"
     }
   ]
 }

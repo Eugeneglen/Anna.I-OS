@@ -3,8 +3,8 @@
   "layer": "2 — AI contract tests (provider-independent, deterministic fake-model responses)",
   "liveProviderCalls": 0,
   "stubDir": "/tmp/anna-llm-stub",
-  "startedAt": "2026-09-14T05:46:13.043Z",
-  "finishedAt": "2026-09-14T05:46:32.341Z",
+  "startedAt": "2026-09-15T11:12:21.951Z",
+  "finishedAt": "2026-09-15T11:12:41.502Z",
   "totals": {
     "pass": 123,
     "fail": 0
@@ -151,31 +151,31 @@
       "suite": "SETUP",
       "name": "Household A registered + session",
       "pass": true,
-      "detail": "hh=bqykip"
+      "detail": "hh=d7uvsl"
     },
     {
       "suite": "SETUP",
       "name": "Household B registered + session",
       "pass": true,
-      "detail": "hh=ahmvil"
+      "detail": "hh=zsctpi"
     },
     {
       "suite": "SETUP",
       "name": "Household C registered + session",
       "pass": true,
-      "detail": "hh=uvhnna"
+      "detail": "hh=b4g4nj"
     },
     {
       "suite": "SETUP",
       "name": "AIRCON vendor created + vendor login",
       "pass": true,
-      "detail": "vendor=7emrz7"
+      "detail": "vendor=y5cwzu"
     },
     {
       "suite": "SETUP",
       "name": "Catalogue fixture (gas top-up $40/unit)",
       "pass": true,
-      "detail": "id=hij5rr"
+      "detail": "id=3rnoaq"
     },
     {
       "suite": "A1",
@@ -193,7 +193,7 @@
       "suite": "A1",
       "name": "Tool result carries the LIVE catalogue (Gas Top-up present)",
       "pass": true,
-      "detail": "turn={\"count\":38,\"services\":[{\"jobTypeId\":\"cmtxmfrw8003hlau3d8zeiiqu\",\"category\":\"AIR"
+      "detail": "turn={\"count\":38,\"services\":[{\"jobTypeId\":\"cmu2ivyg6003hox2wa9lb6fel\",\"category\":\"AIR"
     },
     {
       "suite": "A1",
@@ -481,13 +481,13 @@
       "suite": "B7",
       "name": "Confirmation executed",
       "pass": true,
-      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0tl49i00nkmhkeluo0hug1\",\"job"
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu2koeqo00nkox92nfkx5n0n\",\"job"
     },
     {
       "suite": "B7",
       "name": "Task created under the SESSION household (injected id ignored)",
       "pass": true,
-      "detail": "hh=uvhnna"
+      "detail": "hh=b4g4nj"
     },
     {
       "suite": "B7",
@@ -631,7 +631,7 @@
       "suite": "C5",
       "name": "Timeout recovered within bounds (<15s)",
       "pass": true,
-      "detail": "667ms"
+      "detail": "657ms"
     },
     {
       "suite": "C5",
@@ -679,7 +679,7 @@
       "suite": "C8",
       "name": "Action result reported truthfully (executed BEFORE the outage)",
       "pass": true,
-      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu0tlb0p00r2mhke44zw"
+      "detail": "result={\"success\":true,\"toolName\":\"create_task\",\"data\":{\"taskId\":\"cmu2kolnv00r2ox925j3t"
     },
     {
       "suite": "C8",
@@ -775,7 +775,7 @@
       "suite": "E0",
       "name": "Idempotent double-submit → ONE task row",
       "pass": true,
-      "detail": "t1=45y7cr t2=45y7cr rows=1"
+      "detail": "t1=v98cph t2=v98cph rows=1"
     },
     {
       "suite": "E0",
@@ -799,7 +799,7 @@
       "suite": "E1",
       "name": "Dispute case builds deterministically",
       "pass": true,
-      "detail": "hh=uvhnna"
+      "detail": "hh=b4g4nj"
     },
     {
       "suite": "E1",
